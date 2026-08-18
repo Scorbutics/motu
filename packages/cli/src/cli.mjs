@@ -12,6 +12,7 @@ import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
 import { fixturesRecordCommand } from './commands/fixtures.mjs';
+import { lagoonPublishCommand, lagoonServeCommand } from './commands/lagoon.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
 import { color } from './lib/util.mjs';
@@ -45,6 +46,8 @@ ${color.bold('Usage:')}
   motu archipelago verify <id>                      boot the whole region in the lagoon + config checks
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
+  motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
+  motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
   motu skills list                                  list the skills this motu checkout ships
@@ -54,6 +57,19 @@ ${color.bold('verify flags:')}
   --no-runtime    skip the lagoon mount entirely (static + config checks only)
   --standalone    the island is intentionally not in an archipelago (no membership warning)
   --json          machine-readable report
+
+${color.bold('lagoon serve flags:')}
+  --port <n>      port to listen on (default 8817)
+  --host          also serve on your LAN, to open it on a phone on the same wifi
+  --no-build      serve the last published artifact instead of rebuilding
+  ${color.dim('takes the same target/--fit flags as publish. Ctrl-C to stop.')}
+
+${color.bold('lagoon publish flags:')}
+  --archipelago <id>   publish one archipelago instead of an island
+  --fit <native|legacy>  legacy-fit strategy for a single-island target
+  --out <path>         write somewhere other than .motu/publish/ (keep it stable to keep one URL)
+  --json          machine-readable report
+  ${color.dim('no target => every archipelago, with the switcher. Always mock-backed: an artifact has no backend.')}
 
 ${color.bold('integrate flags:')}
   --archipelago <id>   (required) target archipelago id
@@ -112,6 +128,14 @@ async function main() {
     if (sub === 'install') return skillsInstallCommand(parse(rest));
     if (sub === 'list') return skillsListCommand(argv);
     console.error(color.red(`unknown: motu skills ${sub ?? ''}`));
+    console.log(USAGE);
+    process.exit(2);
+  }
+
+  if (group === 'lagoon') {
+    if (sub === 'publish') return lagoonPublishCommand(argv);
+    if (sub === 'serve') return lagoonServeCommand(argv);
+    console.error(color.red(`unknown: motu lagoon ${sub ?? ''}`));
     console.log(USAGE);
     process.exit(2);
   }

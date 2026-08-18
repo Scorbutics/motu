@@ -21,3 +21,4 @@ motu-runtime/src/main/resources/dev/motu/assets/bridge.js
 .vscode/
 .DS_Store
 *.swp
+.motu/

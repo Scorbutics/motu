@@ -15,6 +15,10 @@ function motuIsolation() {
   }
 }
 
+// One-chunk build target for `motu lagoon publish`: 'lagoon' (focused single target) | 'main'
+// (the archipelago switcher). Unset => the normal two-entry, code-split build.
+const SINGLE_FILE = process.env.MOTU_SINGLEFILE === 'lagoon' ? 'lagoon' : process.env.MOTU_SINGLEFILE === 'main' ? 'main' : '';
+
 // Standalone SPA composition root. It runs the SAME components as the embedded bridge, but against
 // the real legacy backend via a single-origin dev proxy — NOT CORS. The browser talks only to
 // https://localhost:5173; Vite forwards /api/* to the running WildFly.
@@ -44,11 +48,18 @@ export default defineConfig({
     __MOTU_ISOLATION__: JSON.stringify(motuIsolation()),
   },
   build: {
+    // MOTU_SINGLEFILE=lagoon|main builds ONE entry as ONE chunk, so `motu lagoon publish` can inline
+    // the whole app into a single HTML file. A normal build splits the shared angular-host chunk out
+    // and links it by URL — which cannot work in a static artifact, where nothing serves /assets/*.
+    ...(SINGLE_FILE ? { cssCodeSplit: false, assetsInlineLimit: 100_000_000 } : {}),
     rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-        lagoon: resolve(__dirname, 'lagoon.html'),
-      },
+      input: SINGLE_FILE
+        ? { [SINGLE_FILE]: resolve(__dirname, SINGLE_FILE === 'lagoon' ? 'lagoon.html' : 'index.html') }
+        : {
+            main: resolve(__dirname, 'index.html'),
+            lagoon: resolve(__dirname, 'lagoon.html'),
+          },
+      ...(SINGLE_FILE ? { output: { inlineDynamicImports: true } } : {}),
     },
   },
   server: {

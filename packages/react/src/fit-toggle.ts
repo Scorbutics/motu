@@ -2,7 +2,7 @@
 // native end-design and the legacy soft-migration footprint (each island reshapes to blend into the
 // host). It sets the `fit` attribute on every <motu-archipelago>, which fans it out to the islands —
 // the "turn the whole archipelago" control; a per-island override lives in the debug overlay. Renders
-// as a compact chip in the shared top-right toolbar.
+// as a compact chip in the shared floating toolbar.
 
 import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS } from '@motu/core';
 import type { MotuFit } from '@motu/core';
@@ -42,7 +42,7 @@ function applyFit(fit: MotuFit): void {
 }
 
 /**
- * Mount a compact chip (in the shared top-right toolbar) that flips the whole page between native (end
+ * Mount a compact chip (in the shared floating toolbar) that flips the whole page between native (end
  * design) and legacy fit (the intermediate soft-migration view). LIVE (no reload): sets the `fit`
  * attribute on every region and persists the choice. New regions (e.g. a lagoon archipelago switcher)
  * inherit the current fit via a MutationObserver.

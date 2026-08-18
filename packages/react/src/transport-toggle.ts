@@ -1,6 +1,6 @@
 // A small, project-agnostic transport switcher for standalone/preview composition roots. It resolves
 // which transport mode to use (URL ?transport= → localStorage → build default → mock) and renders a
-// compact chip in the shared top-right toolbar so a human can flip modes in the browser without
+// compact chip in the shared floating toolbar so a human can flip modes in the browser without
 // editing code. It has NO knowledge of any particular backend/app — the root wires the transports.
 
 import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS } from '@motu/core';
@@ -42,7 +42,7 @@ export function resolveTransportMode(buildDefault = ''): TransportMode {
 /**
  * Mount a floating switch so a human can flip transports without editing code or restarting the dev
  * server. Switching persists the choice (localStorage) and reloads so the new transport is wired at
- * the composition root. Renders as a compact chip in the shared top-right toolbar.
+ * the composition root. Renders as a compact chip in the shared floating toolbar.
  */
 export function mountTransportToggle(mode: TransportMode): void {
   const other: TransportMode = mode === 'http' ? 'mock' : 'http';

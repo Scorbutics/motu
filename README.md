@@ -232,6 +232,28 @@ check needs Chromium once: `cd packages/cli && npx playwright install chromium`.
 host-fed store values (channels + `provide()`) into request-keyed fixtures, so a real backend session can
 seed the lagoon offline (the debug overlay has a matching record button for ad-hoc human capture).
 
+`motu lagoon publish [island]` (or `--archipelago <id>`; no target = every archipelago with the
+switcher) builds the lagoon as ONE self-contained HTML file under `.motu/publish/`, which an agent then
+publishes as an Artifact — a hosted page. That gives a link you can open on a phone with no dev server,
+no tunnel and no backend running: the same React components, still interactive, driven by fixtures.
+The build is forced to `MOTU_TRANSPORT=mock` because nothing serves `/api` behind a static page, and to
+a single chunk (`MOTU_SINGLEFILE`, see the lagoon's `vite.config.ts`) because nothing serves
+`/assets/*.js` either. Republishing the same file path redeploys the same URL, so a link already open
+on your phone keeps working. It is a checkpoint mechanism, not a dev loop — there is no HMR; rebuild
+and republish (~2s) to see new work.
+
+`motu lagoon serve [island]` builds that same artifact and serves it over http instead of writing it —
+the way to LOOK at what you are about to publish when the Artifact tool is not available. It takes the
+same target and `--fit` flags, plus `--port <n>` (default 8817), `--host` to also bind your LAN so a
+phone on the same wifi can open it, and `--no-build` to serve the last published artifact as-is. It
+restores the `<!doctype>`/`<html>`/`<head>` skeleton that `publish` strips (the artifact host supplies
+its own) — without it the page gets no viewport meta and renders desktop-width on a phone, which is the
+one device this is for. It is also the only check that exercises the artifact rather than the source:
+`pnpm dev:lagoon` serves through vite with the dev proxy, so it never proves the inlining worked or that
+the page survives with no `/assets/` and no backend behind it. For a phone that is NOT on your wifi, the
+command prints an ssh one-liner (`ssh -R 80:localhost:8817 nokey@localhost.run`) — it deliberately does
+not run it for you: that URL is public while it lives.
+
 The judgement half comes in two skills: `island-extract`
 ([`.github/agents/island-extract.agent.md`](.github/agents/island-extract.agent.md), `/island-extract`)
 lifts an existing *ocean* component into an island; `island-create`
@@ -304,7 +326,7 @@ dev-proxy, using your own session cookie). It defaults to **mock** so agents get
 no setup. Pick the transport in three layers, most specific first:
 
 - `?transport=http` / `?transport=mock` in the URL — flips and remembers the choice for that browser.
-- The floating pill in the bottom-right of the page — a one-click switch (persisted, reloads).
+- The floating pill in the corner toolbar — a one-click switch (persisted, reloads).
 - `MOTU_TRANSPORT=http|mock pnpm dev:lagoon` — sets the dev/build default (unset = mock).
 
 To browse live data, log in once at `https://localhost:8443/api`, then open the lagoon app

@@ -67,10 +67,20 @@ export const fixtures: Fixture[] = [
     // Functional stub: FILTER the dataset by the search criteria, so typing a filter narrows the list
     // live (search-ng -> store.criteria -> member-results re-fetch -> filtered). Any input works, not
     // just pre-recorded ones — which is what makes reactive behaviour verifiable in the lagoon.
+    // PAGED on purpose: a small page size means the lagoon exercises the real paging paths offline —
+    // Prev/Next on the desktop table and "Load more" on the phone card list.
     response: (args: unknown[]) => {
+      const page = Number(args[0]) || 0;
       const criteria = (args[1] as Record<string, unknown>) ?? {};
-      const list = rows.filter((r) => matchesCriteria(r, criteria));
-      return { list, first: '0', perPage: '20', size: String(list.length) };
+      const matched = rows.filter((r) => matchesCriteria(r, criteria));
+      const perPage = 8;
+      const first = page * perPage;
+      return {
+        list: matched.slice(first, first + perPage),
+        first: String(first),
+        perPage: String(perPage),
+        size: String(matched.length),
+      };
     },
   },
 ];

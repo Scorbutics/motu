@@ -212,6 +212,15 @@
   line-height: 1;
 }
 .gm-chip__x:hover { background: color-mix(in srgb, var(--_accent) 30%, transparent); }
+/* Clear-all reads as a chip-shaped action, not a filter: no fill, muted until pressed. */
+.gm-chip--clear {
+  background: transparent;
+  border-color: var(--_border);
+  color: var(--_muted);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.gm-chip--clear:hover { color: var(--_primary-strong); border-color: color-mix(in srgb, var(--_accent) 40%, transparent); }
 
 /* Results table */
 .gm-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
@@ -259,6 +268,46 @@
 .gm-pill--premium { background: color-mix(in srgb, var(--_accent) 18%, transparent); color: #a2482f; }
 .gm-pill--standard { background: color-mix(in srgb, var(--_primary) 12%, transparent); color: var(--_primary-strong); }
 .gm-pill--none { background: #f1ede6; color: var(--_muted); font-weight: 600; }
+
+/* ------------------------------------------------------------------------ phone card list ----
+   Below 720px the table is replaced (in the component, not by CSS) with this card list: a squeezed
+   6-column grid truncates every identity field, while a card fits all of them at readable size. */
+.gm-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.gm-card {
+  position: relative;
+  background: var(--_surface);
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius-sm);
+  overflow: hidden;
+}
+.gm-card.is-selected { box-shadow: inset 3px 0 0 var(--_accent); background: color-mix(in srgb, var(--_accent) 8%, transparent); }
+.gm-card.is-suspended { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--_muted) 55%, transparent); }
+/* The whole card is one tap target. */
+.gm-card__hit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gm-card__hit:active { background: color-mix(in srgb, var(--_accent) 10%, transparent); }
+.gm-card__top { display: flex; align-items: center; gap: 8px; }
+.gm-card__name { font-weight: 700; font-size: 15px; color: var(--_text); }
+/* The plan pill always sits at the trailing edge, whatever else the top line carries. */
+.gm-card__top .gm-pill { margin-left: auto; flex: none; }
+.gm-card__top .gm-tag { margin-left: 0; }
+.gm-card__email { color: var(--_primary-strong); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.gm-card__meta { color: var(--_muted); font-size: 12px; }
+.gm-card--skel { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+/* "Load more" replaces the pager on the phone list. */
+.gm-more { margin-top: 12px; }
 
 /* Toolbar / count / pagination */
 .gm-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
@@ -511,30 +560,44 @@
    the two lowest-priority table columns so the identity columns stay readable. Applies in both
    isolation modes (the sheet is adopted in shadow, injected in light) and is inert in the gallery. */
 @media (max-width: 720px) {
-  .gm-arch { margin: 14px auto; padding: 0 12px 84px; gap: 12px; }
-  /* Toolbar stacks: search, chips and actions each take the full width instead of sharing one row. */
-  .gm-arch__toolbar { flex-direction: column; align-items: stretch; }
-  .gm-arch__toolbar > motu-island { width: 100%; }
-  /* The chips island's row flex-basis (200px) would become 200px of HEIGHT once stacked — reset it
-     (child-combinator specificity so it wins over the base .gm-arch__grow across both sheet copies). */
-  .gm-arch__toolbar > .gm-arch__grow { flex: 0 0 auto; }
-  /* Actions lift out of the toolbar into a floating chip cluster (bottom-right FABs) so they stay
-     reachable without eating a row; the island's slot collapses since its content leaves the flow. */
-  .gm-actions {
-    position: fixed;
-    right: 14px;
-    bottom: 16px;
-    z-index: 40;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 10px;
+  .gm-arch { margin: 14px auto; padding: 0 12px 24px; gap: 12px; }
+
+  /* THE FILTER BAR. Everything that steers the list — the Filters trigger, the active-filter chips
+     and the page actions — stays INLINE in one sticky bar at the top of the region instead of
+     floating over the content. Two rows: controls, then the chips (which are the consequence of the
+     controls, so they belong next to them, not adrift above the results panel). */
+  .gm-arch__toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 -12px;
+    padding: 8px 12px;
+    /* Opaque on purpose: a backdrop-filter (or any filter/transform) here would make this bar the
+       containing block for the filter SHEET, which is position:fixed to the viewport. */
+    background: var(--_bg, #fff);
+    border-bottom: 1px solid color-mix(in srgb, var(--_border) 70%, transparent);
   }
-  .gm-actions .gm-btn {
-    flex: 0 0 auto;
-    border-radius: 999px;
-    padding: 11px 16px;
-    box-shadow: 0 6px 20px color-mix(in srgb, var(--_accent) 32%, rgba(16, 42, 67, 0.3));
+  .gm-arch__toolbar > motu-island { width: auto; flex: 0 0 auto; }
+  /* The chips island takes the whole second row (order pushes it below the controls) and scrolls
+     sideways rather than growing the bar. */
+  .gm-arch__toolbar > .gm-arch__grow {
+    order: 1;
+    flex: 1 0 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  .gm-arch__toolbar > .gm-arch__grow::-webkit-scrollbar { display: none; }
+  .gm-chips { flex-wrap: nowrap; }
+  .gm-chip { flex: 0 0 auto; }
+  /* Actions ride the bar as compact buttons — no floating FAB stack over the list. */
+  .gm-actions { margin-left: auto; gap: 8px; }
+  .gm-actions .gm-btn { flex: 0 0 auto; padding: 8px 12px; font-size: 13px; }
+
   /* Results header: count + pager wrap; the pager takes its own full-width row. */
   .gm-toolbar { flex-wrap: wrap; }
   .gm-pager { margin-left: 0; width: 100%; justify-content: space-between; }
@@ -542,17 +605,12 @@
   .gm-panel__body { padding: 12px; }
   :host([data-motu-theme="motu"]) .gm-hero, .motu-root[data-motu-theme="motu"] .gm-hero { padding: 16px 18px; }
 
-  /* Filters: a floating chip (bottom-left, mirroring the action FABs) that opens a slide-up BOTTOM
-     SHEET. The desktop inline/popover branch is overridden into a fixed dialog; the island's slot
-     collapses since both the trigger and the sheet leave the flow. `--open` (from vm.open) drives it. */
+  /* Filters: an inline pill in the sticky bar that opens a slide-up BOTTOM SHEET. The desktop
+     inline/popover branch is overridden into a fixed dialog; only the SHEET leaves the flow.
+     `--open` (from vm.open) drives it. */
   .gm-filterbar .gm-filter-trigger {
     display: inline-flex;
-    position: fixed;
-    left: 14px;
-    bottom: 16px;
-    z-index: 41;
     border-radius: 999px;
-    box-shadow: 0 6px 20px rgba(16, 42, 67, 0.24);
   }
   .gm-filterbar .gm-popover-backdrop {
     display: none;
@@ -596,10 +654,4 @@
   .gm-filterbar .gm-popover__foot { display: flex; }
 }
 
-@media (max-width: 520px) {
-  /* Drop 'Joined' + 'Chapter' so 'Plan/Email/Last name/First name' stay legible without a squeeze. */
-  .gm-table th:nth-child(5), .gm-table td:nth-child(5),
-  .gm-table th:nth-child(6), .gm-table td:nth-child(6) { display: none; }
-  .gm-table thead th, .gm-table tbody td { padding: 9px 10px; }
-}
 

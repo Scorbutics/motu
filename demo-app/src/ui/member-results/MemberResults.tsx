@@ -44,6 +44,30 @@ function fmtDate(row: MemberRow): string {
   return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/**
+ * Narrow-viewport flag. The phone layout is a CARD LIST, not a squeezed table — that is a markup
+ * difference, not a styling one, so it branches here rather than in CSS (the same way the island
+ * branches on `fit`). Falls back to "wide" when matchMedia is unavailable (SSR / happy-dom mounts).
+ */
+function useNarrow(query = '(max-width: 720px)'): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia(query);
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, [query]);
+  return narrow;
+}
+
+/** Card title: the human name, falling back to the email when a row carries no name at all. */
+function displayName(row: MemberRow): string {
+  const name = [firstString(row, ['firstname']), firstString(row, ['surname'])].filter(Boolean).join(' ').trim();
+  return name || firstString(row, ['email']) || '—';
+}
+
 function PlanPill({ row }: { row: MemberRow }) {
   const plan = String(row['plan'] ?? '');
   if (!plan) return <span className="gm-pill gm-pill--none">—</span>;
@@ -61,11 +85,14 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
   const dataIn = members != null;
   const [page, setPage] = useState(0);
   const [fetched, setFetched] = useState<Page>(EMPTY_PAGE);
+  // Rows accumulated across pages — the phone list APPENDS via "Load more" instead of paging.
+  const [stacked, setStacked] = useState<MemberRow[]>([]);
   const [status, setStatus] = useState<Status>(dataIn ? 'idle' : 'loading');
   const [selected, setSelected] = useState<string | undefined>();
   const seq = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const criteriaJson = JSON.stringify(criteria ?? {});
+  const narrow = useNarrow();
 
   useEffect(() => {
     if (!dataIn) setPage(0);
@@ -80,6 +107,7 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
         if (mine !== seq.current) return;
         const next = toPage(res as MemberPage);
         setFetched(next);
+        setStacked((prev) => (page === 0 ? next.rows : [...prev, ...next.rows]));
         setStatus('idle');
         onCount?.(next.size);
       })
@@ -90,7 +118,11 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
       });
   }, [criteriaJson, page, dataIn]);
 
-  const view = dataIn ? toPage(members as MemberPage) : fetched;
+  const base = dataIn ? toPage(members as MemberPage) : fetched;
+  // The phone list shows everything loaded so far; the host owns paging in data-in mode, so there we
+  // keep rendering exactly the page we were handed.
+  const stackMode = narrow && !dataIn;
+  const view: Page = stackMode ? { ...base, rows: stacked } : base;
   const effectiveStatus: Status = dataIn ? 'idle' : status;
   const perPage = view.perPage || 20;
   const currentPage = dataIn ? Math.floor(view.first / perPage) : page;
@@ -145,6 +177,9 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
               </>
             )}
           </span>
+          {/* Prev/Next is a poor touch target at the top of a scrolled list — the phone list appends
+              with "Load more" under the cards instead (see below). */}
+          {!stackMode && (
           <div className="gm-pager">
             <button type="button" className="gm-btn" disabled={!canPrev} onClick={goPrev}>
               ‹ Prev
@@ -156,6 +191,7 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
               Next ›
             </button>
           </div>
+          )}
         </div>
 
         {effectiveStatus === 'forbidden' && (
@@ -171,7 +207,66 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
           </div>
         )}
 
-        {effectiveStatus !== 'forbidden' && effectiveStatus !== 'error' && (
+        {effectiveStatus !== 'forbidden' && effectiveStatus !== 'error' && narrow && (
+          <>
+            <ul className="gm-cards">
+              {effectiveStatus === 'loading' &&
+                view.rows.length === 0 &&
+                Array.from({ length: 5 }).map((_, i) => (
+                  <li key={`sc${i}`} className="gm-card gm-card--skel">
+                    <div className="gm-skel" style={{ width: '52%' }} />
+                    <div className="gm-skel" style={{ width: '78%' }} />
+                    <div className="gm-skel" style={{ width: '40%' }} />
+                  </li>
+                ))}
+
+              {effectiveStatus === 'idle' && view.rows.length === 0 && (
+                <li className="gm-state">
+                  <strong>No members found</strong>
+                  Try adjusting your filters.
+                </li>
+              )}
+
+              {view.rows.map((row, i) => {
+                const id = rowId(row);
+                const suspended = row['status'] === 'suspended';
+                return (
+                  <li
+                    key={id ?? i}
+                    className={[
+                      'gm-card',
+                      id && id === selected ? 'is-selected' : '',
+                      suspended ? 'is-suspended' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {/* One button = one tap target for the whole card (≥44px), same intent as a row click. */}
+                    <button type="button" className="gm-card__hit" onClick={() => open(row)}>
+                      <span className="gm-card__top">
+                        <span className="gm-card__name">{displayName(row)}</span>
+                        {suspended && <span className="gm-tag">suspended</span>}
+                        <PlanPill row={row} />
+                      </span>
+                      <span className="gm-card__email">{firstString(row, ['email']) ?? '—'}</span>
+                      <span className="gm-card__meta">
+                        {firstString(row, ['coordinator']) ?? '—'} · Joined {fmtDate(row)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {stackMode && canNext && (
+              <button type="button" className="gm-btn gm-btn--block gm-more" onClick={goNext}>
+                {effectiveStatus === 'loading' ? 'Loading…' : `Load more (${view.size - view.rows.length} left)`}
+              </button>
+            )}
+          </>
+        )}
+
+        {effectiveStatus !== 'forbidden' && effectiveStatus !== 'error' && !narrow && (
           <div className="gm-scroll" ref={scrollRef}>
             <table className="gm-table">
               <thead>

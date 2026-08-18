@@ -38,6 +38,12 @@ export function MemberFilterChips({ criteria, onCriteriaChanged }: MemberFilterC
           </button>
         </span>
       ))}
+      {/* With more than one filter applied, clearing them one by one is three taps on a phone. */}
+      {entries.length > 1 && (
+        <button type="button" className="gm-chip gm-chip--clear" onClick={() => onCriteriaChanged?.({})}>
+          Clear all
+        </button>
+      )}
     </div>
   );
 }

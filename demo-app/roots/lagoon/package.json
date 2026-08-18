@@ -1,0 +1,28 @@
+{
+  "name": "@demo-app/lagoon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "focus": "vite --open /lagoon.html",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@motu/adapter-angularjs": "workspace:*",
+    "@motu/contract": "workspace:*",
+    "@motu/core": "workspace:*",
+    "@motu/debug-overlay": "workspace:*",
+    "@motu/react": "workspace:*",
+    "@motu/runtime": "workspace:*",
+    "demo-app": "workspace:*",
+    "angular": "^1.8.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10"
+  }
+}

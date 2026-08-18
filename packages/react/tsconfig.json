@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": [],
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/react.tsbuildinfo"
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,10 @@
+export { angularHttpChannel, angularScopeChannel, angularHostScopeChannel } from './channels.js';
+export type { HttpChannelSpec, ScopeChannelSpec, HostScopeChannelSpec } from './channels.js';
+export { angularHostBridge } from './host-bridge.js';
+export type { AngularHostBridgeOptions } from './host-bridge.js';
+export { defineAngularElement, watchHostScope } from './element.js';
+export type { AngularElementSpec, DefineAngularElementOptions, AdoptContext, WatchHostScopeOptions } from './element.js';
+export { provideAngularHost, motuAngularInjector } from './host.js';
+export type { ProvideAngularHostOptions } from './host.js';
+export { installMotuProvide } from './provide.js';
+export type { InstallMotuProvideOptions } from './provide.js';

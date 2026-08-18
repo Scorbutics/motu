@@ -1,0 +1,24 @@
+/* Ambient ocean cascade — the lagoon's stand-in for the host app's stylesheet (layer 1). Two jobs:
+
+   1. Publish the --x-* TOKEN CONTRACT that shadow-isolated islands read across the boundary (the same
+      values `absorbHostTheme` samples live in the bridge), so isolated islands adopt the ocean's
+      palette/shape offline.
+   2. Set the ambient TYPOGRAPHY that light islands INHERIT (the legacy skin uses font/colour: inherit),
+      scoped to the region mount so it never fights the lagoon's own toolbar/switcher chrome.
+
+   These are PLACEHOLDER values for a generic older enterprise host — a muted violet primary, square
+   corners, a system UI font. Replace them with whatever your own ocean publishes (or capture it); the
+   point is the contract, not these particular colours. */
+:root {
+  --x-color-primary: #5b4a8a;
+  --x-color-primary-strong: #43356a;
+  --x-border: #d3cede;
+  --x-radius: 2px;
+}
+
+#lagoon-root {
+  font-family: "Segoe UI", Tahoma, Verdana, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #3a3540;
+}

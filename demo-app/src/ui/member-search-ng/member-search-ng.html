@@ -1,0 +1,56 @@
+<div class="gm-filterbar" ng-class="{ 'gm-filterbar--inline': vm.isInline(), 'gm-filterbar--open': vm.open }">
+  <button
+    type="button"
+    class="gm-btn gm-filter-trigger"
+    ng-click="vm.open = !vm.open"
+    aria-expanded="{{vm.open}}"
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 5h18M6 12h12M10 19h4" />
+    </svg>
+    Filters
+    <span class="gm-badge" ng-if="vm.activeCount() > 0">{{vm.activeCount()}}</span>
+  </button>
+
+  <!-- Panel stays MOUNTED (no ng-if on the wrapper) so the mobile bottom sheet can transition on
+       open/close — an ng-if'd element has no frame to animate from/to. Visibility is CSS-driven:
+       inline shows it in place; desktop popover hides it until open (min-width rule); mobile slides
+       it as a sheet. The fields still render lazily (inline or open), so the schema is only walked
+       once the panel is actually shown. -->
+  <div class="gm-filterbar__panel">
+    <div class="gm-popover-backdrop" ng-click="vm.open = false"></div>
+    <div class="gm-popover" role="dialog" aria-label="Member filters">
+      <!-- Grabber handle (mobile bottom sheet only): drag it down to progressively dismiss the sheet. -->
+      <div class="gm-sheet-handle" aria-hidden="true"></div>
+      <div class="gm-popover__head">
+        <span>Filters</span>
+        <button type="button" class="gm-popover__reset" ng-click="vm.reset()">Reset all</button>
+      </div>
+      <div class="gm-popover__body">
+        <!-- A2: schema-piloted, rendered by plain AngularJS (ng-repeat + ng-model) — no form-widget
+             library. The fields come from vm.config and bind to the island's OWN `draft` model, never
+             the legacy `search` model. Gated on vm.fieldsReady + open/inline so nothing renders before
+             a config is resolved and the panel is actually shown. -->
+        <div class="gm-fields" ng-if="vm.fieldsReady && (vm.isInline() || vm.open)">
+          <label class="gm-field" ng-repeat="field in vm.config.fields track by field.name">
+            <span class="gm-label">{{field.label}}</span>
+            <!-- The static empty <option> is AngularJS's placeholder slot: it is what shows while the
+                 model is unset, instead of a blank "unknown option". -->
+            <select
+              class="gm-select"
+              ng-if="field.options"
+              ng-model="draft[field.name]"
+              ng-options="option.value as option.label for option in field.options"
+            >
+              <option value="">{{field.placeholder || 'Any'}}</option>
+            </select>
+            <input class="gm-input" ng-if="!field.options" type="text" ng-model="draft[field.name]" />
+          </label>
+        </div>
+      </div>
+      <div class="gm-popover__foot">
+        <button type="button" class="gm-btn gm-btn--primary" ng-click="vm.open = false">Done</button>
+      </div>
+    </div>
+  </div>
+</div>

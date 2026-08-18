@@ -1,0 +1,23 @@
+{
+  "name": "@demo-app/bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "watch:console": "MOTU_DEBUG=1 MOTU_CONSOLE_DEVDIST=../../../../ocean/web-console/src/main/webapp/devserver/dist vite build --watch"
+  },
+  "dependencies": {
+    "@motu/adapter-angularjs": "workspace:*",
+    "@motu/core": "workspace:*",
+    "@motu/debug-overlay": "workspace:*",
+    "@motu/react": "workspace:*",
+    "@motu/runtime": "workspace:*",
+    "demo-app": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

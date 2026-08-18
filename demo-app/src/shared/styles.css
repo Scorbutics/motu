@@ -1,0 +1,605 @@
+/* Styles for every motu island. In shadow isolation this sheet is adopted into the shadow root; in
+   light isolation it is injected once globally and the island root carries a `.motu-root` marker.
+   That is why every host-scoped rule targets `:where(:host, .motu-root)` (bare `:host` is inert in
+   light DOM) — one sheet, both modes. Namespaced tokens with standalone fallbacks let the bridge
+   adopt the legacy look (via theme-adapters) without reopening isolation. */
+:where(:host, .motu-root) {
+  /* LEGACY skin (default): match the host — inherit its font/colour, flat surfaces, no gradients.
+     This is what renders when embedded in the legacy app BY DESIGN. The vibrant look is opt-in. */
+  --_primary: var(--x-color-primary, #4f4368);
+  --_primary-strong: var(--x-color-primary-strong, color-mix(in srgb, var(--_primary) 82%, #000));
+  --_accent: var(--x-color-primary, #4f4368);
+  --_grad: var(--_primary);
+  --_grad-soft: color-mix(in srgb, var(--_primary) 8%, #fff);
+  --_font: inherit;
+  --_radius: var(--x-radius, 2px);
+  --_radius-sm: 2px;
+  --_surface: #fffdfa;
+  --_bg: transparent;
+  --_border: var(--x-border, #d3cede);
+  --_muted: #7a7469;
+  --_text: inherit;
+  --_shadow: none;
+  --_shadow-hover: none;
+  display: block;
+  font-family: var(--_font);
+  font-size: 14px;
+  color: var(--_text);
+}
+
+/* MOTU skin (opt-in island design): teal gradients, terracotta accent, rounded cards, soft shadows. */
+:host([data-motu-theme="motu"]), .motu-root[data-motu-theme="motu"] {
+  --_primary: #0f766e;
+  --_primary-strong: #0b544e;
+  --_accent: #e07a5f;
+  --_grad: linear-gradient(135deg, var(--_primary) 0%, #1ba58f 100%);
+  --_grad-soft: linear-gradient(135deg,
+      color-mix(in srgb, var(--_primary) 10%, #fff) 0%,
+      color-mix(in srgb, var(--_accent) 14%, #fff) 100%);
+  --_font: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --_radius: 14px;
+  --_radius-sm: 9px;
+  --_bg: #f6f4f0;
+  --_text: #22302c;
+  --_shadow: 0 1px 2px rgba(18, 46, 40, 0.06), 0 10px 28px rgba(18, 46, 40, 0.08);
+  --_shadow-hover: 0 2px 6px rgba(18, 46, 40, 0.09), 0 16px 40px rgba(18, 46, 40, 0.14);
+}
+
+:where(:host, .motu-root),
+:where(:host, .motu-root) *,
+:where(:host, .motu-root) *::before,
+:where(:host, .motu-root) *::after {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------- legacy company-lookup demo ---- */
+.motu-lookup { position: relative; }
+.motu-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius-sm);
+  font: inherit;
+}
+.motu-input:focus {
+  outline: none;
+  border-color: var(--_primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--_primary) 25%, transparent);
+}
+.motu-note { padding: 6px 2px; color: var(--_muted); font-size: 13px; }
+.motu-results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 240px; overflow: auto; }
+.motu-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--_radius-sm);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.motu-row:hover { background: color-mix(in srgb, var(--_primary) 12%, transparent); }
+.motu-selected { margin-top: 10px; padding: 8px 10px; background: color-mix(in srgb, var(--_primary) 10%, transparent); border-radius: var(--_radius-sm); font-size: 13px; }
+
+/* ------------------------------------------------------------------------- member archipelago ---- */
+/* Page header ("hero"): plain title in the legacy skin, vibrant banner in the motu skin. */
+.gm-hero { display: flex; align-items: center; gap: 16px; color: var(--_text); }
+.gm-hero__icon { display: none; }
+.gm-hero__title { margin: 0; font-size: 20px; font-weight: 700; }
+.gm-hero__sub { margin: 2px 0 0; color: var(--_muted); font-size: 13px; }
+.gm-hero__badge { display: none; }
+
+:host([data-motu-theme="motu"]) .gm-hero, .motu-root[data-motu-theme="motu"] .gm-hero {
+  padding: 22px 28px; border-radius: var(--_radius); color: #fff;
+  background: var(--_grad); box-shadow: var(--_shadow);
+}
+:host([data-motu-theme="motu"]) .gm-hero__icon, .motu-root[data-motu-theme="motu"] .gm-hero__icon {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 12px; background: rgba(255, 255, 255, 0.18); font-size: 20px;
+}
+:host([data-motu-theme="motu"]) .gm-hero__title, .motu-root[data-motu-theme="motu"] .gm-hero__title { font-size: 22px; letter-spacing: 0.2px; }
+:host([data-motu-theme="motu"]) .gm-hero__sub, .motu-root[data-motu-theme="motu"] .gm-hero__sub { color: #fff; opacity: 0.85; }
+:host([data-motu-theme="motu"]) .gm-hero__badge, .motu-root[data-motu-theme="motu"] .gm-hero__badge {
+  display: inline-block; margin-left: auto; font-size: 12px;
+  background: rgba(255, 255, 255, 0.16); padding: 6px 12px; border-radius: 999px;
+}
+
+.gm-panel {
+  background: var(--_surface);
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius);
+  box-shadow: var(--_shadow);
+  overflow: hidden;
+}
+.gm-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  background: var(--_grad);
+  color: #fff;
+}
+.gm-panel__head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.gm-panel__head .gm-sub { margin-left: auto; font-size: 12px; opacity: 0.85; font-weight: 500; }
+.gm-panel__body { padding: 16px 18px; }
+
+.gm-field { display: block; margin-bottom: 14px; }
+.gm-field:last-child { margin-bottom: 0; }
+.gm-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--_muted);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.gm-input,
+.gm-select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius-sm);
+  font: inherit;
+  color: var(--_text);
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.gm-input:focus,
+.gm-select:focus {
+  outline: none;
+  border-color: var(--_accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--_accent) 22%, transparent);
+}
+
+.gm-btn {
+  appearance: none;
+  border: 1px solid var(--_border);
+  background: #fff;
+  color: var(--_text);
+  padding: 9px 14px;
+  border-radius: var(--_radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.gm-btn:hover { background: #f4f1ea; }
+.gm-btn:active { transform: translateY(1px); }
+.gm-btn--primary {
+  border: 0;
+  color: #fff;
+  background: var(--_grad);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--_accent) 30%, transparent);
+}
+.gm-btn--primary:hover { filter: brightness(1.05); background: var(--_grad); }
+.gm-btn--block { width: 100%; }
+.gm-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Chips summarising active filters */
+.gm-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0; }
+.gm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--_primary-strong);
+  background: var(--_grad-soft);
+  border: 1px solid color-mix(in srgb, var(--_accent) 22%, transparent);
+}
+.gm-chip__key { opacity: 0.7; font-weight: 500; }
+.gm-chip__x {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--_accent) 16%, transparent);
+  color: var(--_primary-strong);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.gm-chip__x:hover { background: color-mix(in srgb, var(--_accent) 30%, transparent); }
+
+/* Results table */
+.gm-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.gm-table th,
+.gm-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-table thead th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--_muted);
+  font-weight: 700;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--_border);
+  background: color-mix(in srgb, var(--_primary) 5%, #fff);
+}
+.gm-table tbody td { padding: 12px; border-bottom: 1px solid color-mix(in srgb, var(--_border) 60%, transparent); }
+.gm-table tbody tr { cursor: pointer; transition: background 0.12s, box-shadow 0.12s; }
+.gm-table tbody tr:hover { background: color-mix(in srgb, var(--_accent) 6%, transparent); }
+.gm-table tbody tr.is-selected { background: color-mix(in srgb, var(--_accent) 10%, transparent); box-shadow: inset 3px 0 0 var(--_accent); }
+.gm-primary-cell { font-weight: 600; color: var(--_primary-strong); }
+/* Inline marker for a row-level state that has no column of its own (e.g. a suspended member). */
+.gm-tag {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--_muted) 16%, transparent);
+  color: var(--_muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.gm-muted { color: var(--_muted); }
+
+.gm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.gm-pill--premium { background: color-mix(in srgb, var(--_accent) 18%, transparent); color: #a2482f; }
+.gm-pill--standard { background: color-mix(in srgb, var(--_primary) 12%, transparent); color: var(--_primary-strong); }
+.gm-pill--none { background: #f1ede6; color: var(--_muted); font-weight: 600; }
+
+/* Toolbar / count / pagination */
+.gm-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.gm-count { font-size: 13px; color: var(--_muted); }
+.gm-count b { color: var(--_text); }
+.gm-pager { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.gm-pager__info { font-size: 12px; color: var(--_muted); min-width: 90px; text-align: center; }
+
+/* States */
+.gm-state { padding: 28px 12px; text-align: center; color: var(--_muted); }
+.gm-state strong { display: block; color: var(--_text); margin-bottom: 4px; }
+
+/* Skeleton loading rows */
+.gm-skel-row td { padding: 12px; border-bottom: 1px solid color-mix(in srgb, var(--_border) 60%, transparent); }
+.gm-skel {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f1ece4 25%, #e3dbcf 37%, #f1ece4 63%);
+  background-size: 400% 100%;
+  animation: gm-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes gm-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gm-skel { animation: none; }
+}
+
+/* The list fills to the viewport bottom (max-height set imperatively by the component's auto-fit)
+   only when the host opts in via --gm-scroll-fit — the legacy skin and the embedded preview do.
+   Unbounded (standalone) it just grows and the page scrolls. Auto-hide scrollbar on hover. */
+.gm-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+.gm-scroll:hover,
+.gm-scroll:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--_muted) 45%, transparent) transparent;
+}
+.gm-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.gm-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+.gm-scroll:hover::-webkit-scrollbar-thumb,
+.gm-scroll:focus-within::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--_muted) 45%, transparent);
+}
+
+/* Embedded in the legacy fixed-viewport layout, a manually-toggled island's list must fit rather
+   than overflow — opt into auto-fit. The motu preview opts in from the archipelago element. */
+:host([data-motu-theme="legacy"]), .motu-root[data-motu-theme="legacy"] {
+  --gm-scroll-fit: 1;
+}
+
+/* ================================================================ LEGACY FIT (footprint compat) ==
+   The second, orthogonal axis to the skin above. `data-motu-fit="legacy"` makes an island adopt the
+   host's FOOTPRINT — full width of its slot, flat surfaces, legacy density — independent of colour.
+   `data-motu-legacy` (declared at registration) selects the per-strategy primitive so most islands
+   need ZERO component code; only 'structural' islands (search) render their own legacy DOM branch. */
+:host([data-motu-fit="legacy"]), .motu-root[data-motu-fit="legacy"] {
+  /* A legacy slot is a fixed-width vertical rail: fill it, and let lists auto-fit the viewport. */
+  display: block;
+  width: 100%;
+  --gm-scroll-fit: 1;
+}
+
+/* fill/structural: block islands (header, results, the search rail's panel) go full-width and flat —
+   no card radius/shadow that would float above the host's own panels. Applies to any legacy fit. */
+:host([data-motu-fit="legacy"]) .gm-panel,
+:host([data-motu-fit="legacy"]) .gm-hero,
+.motu-root[data-motu-fit="legacy"] .gm-panel,
+.motu-root[data-motu-fit="legacy"] .gm-hero {
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Page hero as an individual toggle: take the host's page-heading footprint — a flat band the width
+   of the slot, a small square icon tile in the absorbed host primary, and legacy type sizes — so
+   swapping it in doesn't shift the page. Colours come from the --x-color-* contract (not hardcoded);
+   tune the band metrics to whatever host you embed in. */
+:host([data-motu-fit="legacy"]) .gm-hero,
+.motu-root[data-motu-fit="legacy"] .gm-hero {
+  min-height: 64px;
+  margin-bottom: 0;
+  padding: 12px 16px;
+  gap: 12px;
+  border-bottom: 1px solid var(--_border);
+  background: transparent;
+  /* The motu skin paints the hero white-on-gradient; a legacy FOOTPRINT drops the gradient, so the
+     text has to come back to the ambient colour or it would be white-on-white. */
+  color: var(--_text);
+}
+/* The preview badge belongs to the vibrant banner only — a host page has no room for it. */
+:host([data-motu-fit="legacy"]) .gm-hero__badge,
+.motu-root[data-motu-fit="legacy"] .gm-hero__badge {
+  display: none;
+}
+:host([data-motu-fit="legacy"]) .gm-hero__icon,
+.motu-root[data-motu-fit="legacy"] .gm-hero__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--_radius-sm);
+  background: var(--_primary);
+  color: #fff;
+  font-size: 17px;
+}
+:host([data-motu-fit="legacy"]) .gm-hero__title, .motu-root[data-motu-fit="legacy"] .gm-hero__title { font-size: 17px; font-weight: 700; color: inherit; }
+:host([data-motu-fit="legacy"]) .gm-hero__sub, .motu-root[data-motu-fit="legacy"] .gm-hero__sub { font-size: 13px; font-weight: 400; color: var(--_muted); }
+
+/* inline: the chips cluster stretches to the rail width so its chips wrap cleanly down a narrow
+   column instead of sitting as a compact horizontal row. */
+:host([data-motu-fit="legacy"][data-motu-legacy="inline"]) .gm-chips,
+.motu-root[data-motu-fit="legacy"][data-motu-legacy="inline"] .gm-chips {
+  display: flex;
+  width: 100%;
+}
+
+/* structural: search + actions render their own always-expanded rails (see their fit branches). Both
+   reuse the shared .gm-panel chrome (a host-tinted header + bordered body) so they match the host's
+   other rails. */
+.gm-searchrail { width: 100%; }
+.gm-searchrail .gm-panel__body { padding-bottom: 10px; }
+.gm-searchrail__foot {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--_border);
+}
+.gm-searchrail__foot .gm-btn { flex: 1 1 auto; text-align: center; }
+
+/* The "Client" actions rail: a short hint above a 2-col button grid (New/Paste, Import/Export). */
+.gm-actionrail { width: 100%; }
+.gm-actionrail__hint { margin: 0 0 12px; color: var(--_muted); font-size: 13px; }
+.gm-actionrail__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gm-actionrail__grid .gm-btn { width: 100%; text-align: center; }
+
+/* Filter bar: a compact trigger + popover instead of a dedicated rail. */
+.gm-filterbar { position: relative; display: inline-flex; }
+.gm-filter-trigger { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.gm-filter-trigger svg { width: 16px; height: 16px; }
+.gm-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--_accent);
+}
+.gm-popover-backdrop { position: fixed; inset: 0; z-index: 40; }
+/* The grabber handle is a mobile-sheet affordance only; the mobile media block reveals it. */
+.gm-sheet-handle { display: none; }
+.gm-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: 340px;
+  max-width: min(92vw, 380px);
+  background: var(--_surface);
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius);
+  box-shadow: var(--_shadow-hover);
+  overflow: hidden;
+}
+.gm-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--_border);
+  font-weight: 700;
+}
+.gm-popover__reset {
+  border: 0;
+  background: transparent;
+  color: var(--_accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.gm-popover__body { padding: 14px 16px; max-height: min(60vh, 440px); overflow: auto; }
+.gm-popover__foot { padding: 12px 16px; border-top: 1px solid var(--_border); display: flex; justify-content: flex-end; }
+
+/* Inline filter panel (motu ocean / native fit): the same popover markup shown expanded in place
+   instead of behind the Filters trigger — no click, no floating layer. The trigger, backdrop and the
+   Done footer are dropped; the panel becomes a static full-width card reusing the popover chrome. */
+.gm-filterbar--inline { display: block; width: 100%; }
+.gm-filterbar--inline .gm-filter-trigger,
+.gm-filterbar--inline .gm-popover-backdrop,
+.gm-filterbar--inline .gm-popover__foot { display: none; }
+.gm-filterbar--inline .gm-popover {
+  position: static;
+  width: 100%;
+  max-width: none;
+  box-shadow: var(--_shadow);
+}
+.gm-filterbar--inline .gm-popover__body { max-height: none; overflow: visible; }
+
+/* The island renders its own gm-* fields, but a host-provided schema can still bring bare controls
+   into the panel (and shadow isolation blocks the host's global form styles) — so give any control
+   inside the panel body the gm look. */
+.gm-popover__body input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='reset']),
+.gm-popover__body select,
+.gm-popover__body textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius-sm);
+  font: inherit;
+  color: var(--_text);
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.gm-popover__body input:focus,
+.gm-popover__body select:focus,
+.gm-popover__body textarea:focus {
+  outline: none;
+  border-color: var(--_accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--_accent) 22%, transparent);
+}
+
+/* Inline actions cluster (replaces the old 'Client' rail card). */
+.gm-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* The filter panel is always in the DOM (so the mobile sheet can transition). In desktop POPOVER mode
+   that means hiding it — with its full-screen backdrop — until open. Inline mode always shows it; the
+   mobile media block below turns it into a slide-up sheet that stays mounted for the animation. */
+@media (min-width: 721px) {
+  .gm-filterbar:not(.gm-filterbar--inline):not(.gm-filterbar--open) .gm-filterbar__panel { display: none; }
+}
+
+/* ================================================================================ responsive ====
+   The members region is a hero + a 3-island toolbar row + a 6-column results table — all of which
+   assume desktop width. Narrow viewports stack the toolbar, wrap the pager, tighten padding, and drop
+   the two lowest-priority table columns so the identity columns stay readable. Applies in both
+   isolation modes (the sheet is adopted in shadow, injected in light) and is inert in the gallery. */
+@media (max-width: 720px) {
+  .gm-arch { margin: 14px auto; padding: 0 12px 84px; gap: 12px; }
+  /* Toolbar stacks: search, chips and actions each take the full width instead of sharing one row. */
+  .gm-arch__toolbar { flex-direction: column; align-items: stretch; }
+  .gm-arch__toolbar > motu-island { width: 100%; }
+  /* The chips island's row flex-basis (200px) would become 200px of HEIGHT once stacked — reset it
+     (child-combinator specificity so it wins over the base .gm-arch__grow across both sheet copies). */
+  .gm-arch__toolbar > .gm-arch__grow { flex: 0 0 auto; }
+  /* Actions lift out of the toolbar into a floating chip cluster (bottom-right FABs) so they stay
+     reachable without eating a row; the island's slot collapses since its content leaves the flow. */
+  .gm-actions {
+    position: fixed;
+    right: 14px;
+    bottom: 16px;
+    z-index: 40;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+  }
+  .gm-actions .gm-btn {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 11px 16px;
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--_accent) 32%, rgba(16, 42, 67, 0.3));
+  }
+  /* Results header: count + pager wrap; the pager takes its own full-width row. */
+  .gm-toolbar { flex-wrap: wrap; }
+  .gm-pager { margin-left: 0; width: 100%; justify-content: space-between; }
+  .gm-panel__head { padding: 12px 14px; }
+  .gm-panel__body { padding: 12px; }
+  :host([data-motu-theme="motu"]) .gm-hero, .motu-root[data-motu-theme="motu"] .gm-hero { padding: 16px 18px; }
+
+  /* Filters: a floating chip (bottom-left, mirroring the action FABs) that opens a slide-up BOTTOM
+     SHEET. The desktop inline/popover branch is overridden into a fixed dialog; the island's slot
+     collapses since both the trigger and the sheet leave the flow. `--open` (from vm.open) drives it. */
+  .gm-filterbar .gm-filter-trigger {
+    display: inline-flex;
+    position: fixed;
+    left: 14px;
+    bottom: 16px;
+    z-index: 41;
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(16, 42, 67, 0.24);
+  }
+  .gm-filterbar .gm-popover-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 42, 67, 0.42);
+    z-index: 45;
+  }
+  .gm-filterbar--open .gm-popover-backdrop { display: block; }
+  .gm-filterbar .gm-popover {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 30px rgba(16, 42, 67, 0.28);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    z-index: 46;
+  }
+  .gm-filterbar--open .gm-popover { transform: translateY(0); }
+  /* Grabber handle: the drag affordance at the top of the sheet (JS handles the drag-to-dismiss). */
+  .gm-filterbar .gm-sheet-handle {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 8px auto 2px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--_muted) 45%, transparent);
+    cursor: grab;
+    touch-action: none;
+  }
+  /* The sheet body scrolls; the Done footer (hidden by the inline branch) returns as the sheet action. */
+  .gm-filterbar .gm-popover__body { flex: 1; max-height: none; overflow: auto; }
+  .gm-filterbar .gm-popover__foot { display: flex; }
+}
+
+@media (max-width: 520px) {
+  /* Drop 'Joined' + 'Chapter' so 'Plan/Email/Last name/First name' stay legible without a squeeze. */
+  .gm-table th:nth-child(5), .gm-table td:nth-child(5),
+  .gm-table th:nth-child(6), .gm-table td:nth-child(6) { display: none; }
+  .gm-table thead th, .gm-table tbody td { padding: 9px 10px; }
+}
+

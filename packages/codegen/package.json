@@ -1,0 +1,10 @@
+{
+  "name": "@motu/codegen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "motu-codegen": "src/cli.mjs" },
+  "scripts": {
+    "gen": "node src/cli.mjs"
+  }
+}

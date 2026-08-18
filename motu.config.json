@@ -1,0 +1,5 @@
+{
+  "app": "demo-app",
+  "manifest": "../ocean/web-console/target/classes/motu-manifest.json",
+  "isolation": "light"
+}

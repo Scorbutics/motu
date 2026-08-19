@@ -13,8 +13,8 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation } from '@motu/core';
-import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome } from '@motu/core';
+import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineMotuApp, type ElementSpec } from './bootstrap.js';
 import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle.js';
 import { mountFitToggle } from './fit-toggle.js';
@@ -30,6 +30,13 @@ export interface LagoonConfig {
   httpBase?: string;
   /** Skin. The lagoon previews the end design, so 'motu' unless a project says otherwise. */
   defaultTheme?: MotuTheme;
+  /**
+   * Point motu's own chrome at this application's colours, so the tooling looks like it belongs to
+   * the page it frames instead of to motu. Reference the host's tokens rather than copying values:
+   * `{ "primary": "hsl(var(--primary))", "onPrimary": "hsl(var(--primary-foreground))" }`. Omit it
+   * and motu's teal stands.
+   */
+  chrome?: MotuChromeTheme;
   /**
    * Per-archipelago presentation, keyed by id: a human label and an explicit order. Ids absent from
    * this map still appear (a new archipelago must never need a config edit to become visible) — they
@@ -130,6 +137,8 @@ export function startLagoon(opts: StartLagoonOptions): void {
   const overrides = opts.overrides ?? {};
 
   if (opts.isolation) setDefaultIsolation(opts.isolation);
+  // Before anything paints, so the chrome never flashes motu's default over the host's palette.
+  applyMotuChrome(config.chrome ?? {});
   overrides.setup?.();
 
   const mode = resolveTransportMode(typeof opts.transport === 'string' ? opts.transport : config.transport ?? '');

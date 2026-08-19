@@ -201,16 +201,20 @@ const STYLES = `
 :host { all: initial; }
 * { box-sizing: border-box; font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; }
 
-/* The lagoon palette, so the lens and the chrome agree. */
+/* The lagoon palette, so the lens and the chrome agree — including when a project points motu's
+   chrome at its own primary (applyMotuChrome). Everything BRAND is derived from --motu-primary here;
+   the group colours below (input/output/coupling) and ok/warn/broken are SEMANTIC and stay put, or a
+   yellow-branded app would end up with a yellow "ok" sitting next to an amber "warn". */
 :host {
-  --w-deep: #0b6f68;
-  --w-mid: #12988f;
-  --accent: #0f766e;
+  --_p: var(--motu-primary, #0f766e);
+  --w-deep: var(--motu-water-deep, #0b6f68);
+  --w-mid: var(--motu-water-mid, #12988f);
+  --accent: var(--_p);
   --ink: #22302c;
   --ink-soft: #5c6b63;
   --ink-faint: #9a9182;
-  --glass: linear-gradient(180deg, rgba(247, 253, 252, .96), rgba(232, 248, 246, .94));
-  --hair: rgba(11, 111, 104, .12);
+  --glass: linear-gradient(180deg, color-mix(in srgb, var(--_p) 3%, #fff), color-mix(in srgb, var(--_p) 9%, #fff));
+  --hair: color-mix(in srgb, var(--_p) 14%, transparent);
   --ok: #0f766e;
   --warn: #b45309;
   --broken: #b91c1c;
@@ -232,7 +236,7 @@ const STYLES = `
   position: absolute; top: -10px; left: 8px; pointer-events: auto; cursor: pointer;
   display: none; align-items: center; gap: 5px; height: 19px; padding: 0 9px;
   border-radius: 999px; font: 700 10px/1 var(--mono); color: #fff; white-space: nowrap;
-  background: var(--accent); box-shadow: 0 3px 10px rgba(11, 111, 104, .3);
+  background: var(--accent); box-shadow: 0 3px 10px color-mix(in srgb, var(--_p) 34%, transparent);
 }
 /* Low-noise by default: the label only appears for the island under the cursor (or the selected one). */
 .box.hover .tag, .box.sel .tag, .box.link .tag { display: inline-flex; }
@@ -272,7 +276,7 @@ const STYLES = `
   font-size: 12px; padding: 4px 8px; border-radius: 8px; transition: background 160ms, color 160ms;
 }
 .panel__head button:hover { color: var(--ink); background: rgba(15, 118, 110, .09); }
-.panel__head button.on { color: #fff; background: var(--accent); }
+.panel__head button.on { color: var(--motu-on-primary, #fff); background: var(--accent); }
 .panel__head button.rec { color: #fff; background: var(--broken); }
 .recbar {
   margin: 8px 12px 0; padding: 6px 9px; border-radius: 8px;
@@ -281,7 +285,7 @@ const STYLES = `
 /* Picker mode is a MODE, and a mode that isn't visible is a trap — say so while it is armed. */
 .pickbar {
   margin: 8px 12px 0; padding: 6px 9px; border-radius: 8px;
-  font: 600 10px/1.4 inherit; background: rgba(15, 118, 110, .12); color: #0b5b55;
+  font: 600 10px/1.4 inherit; background: color-mix(in srgb, var(--_p) 12%, transparent); color: var(--motu-primary-deep, #0b5b55);
 }
 /* Where the island list used to be: how to narrow the scope, said once. */
 .scopehint {
@@ -317,7 +321,7 @@ const STYLES = `
   transition: background 160ms, color 160ms, transform 160ms;
 }
 .row:hover { background: rgba(15, 118, 110, .07); transform: translateX(2px); }
-.row.sel { background: rgba(15, 118, 110, .11); color: #0b5b55; }
+.row.sel { background: color-mix(in srgb, var(--_p) 11%, transparent); color: var(--motu-primary-deep, #0b5b55); }
 .row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .dot.ok { background: var(--ok); box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 70%, transparent); }
 .dot.warn { background: var(--warn); }
@@ -331,7 +335,7 @@ const STYLES = `
   font-size: 9px; padding: 2px 7px; border-radius: 999px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .05em; font-family: inherit;
 }
-.badge.bound { background: rgba(15, 118, 110, .14); color: #0b5b55; }
+.badge.bound { background: color-mix(in srgb, var(--_p) 14%, transparent); color: var(--motu-primary-deep, #0b5b55); }
 .badge.bound-empty { background: rgba(180, 83, 9, .14); color: var(--warn); }
 .badge.static { background: rgba(141, 133, 120, .16); color: #6f675c; }
 .badge.default { background: rgba(185, 28, 28, .12); color: var(--broken); }

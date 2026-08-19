@@ -189,6 +189,7 @@ import { setDefaultIsolation } from '@motu/core';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, getArchipelago } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
 import { ALL_FIXTURES, ALL_ROLES } from './fixtures.js';
+import config from '../lagoon.config.json';
 {{hostImport}}{{hostGlobalCss}}
 // Injected by vite.config from the MOTU_* env (see vite.config.ts).
 declare const __MOTU_TARGET__: string; // "island:{{tagPrefix}}some-tag" | "archipelago:some-id"
@@ -211,6 +212,11 @@ bootstrapLagoon({
   fixtures: ALL_FIXTURES,
   roles: ALL_ROLES,
   resolveArchipelago: getArchipelago,
+  // motu's chrome wears this application's colours. Shared with the gallery through
+  // lagoon.config.json so the two entries cannot disagree — override it right here when you want a
+  // value the JSON should not carry, e.g. a deliberately darker shade of the brand:
+  //   chrome: { ...config.chrome, primary: 'color-mix(in srgb, hsl(var(--primary)) 70%, #000)' },
+  chrome: config.chrome,
 {{hostOption}}  target,
   fit: typeof __MOTU_FIT__ === 'string' ? __MOTU_FIT__ : '',
   forceErrorStatus:
@@ -223,8 +229,16 @@ export const LAGOON_CONFIG = `{
   "about": "The {{appPackage}} lagoon: this project's islands rendered against fixtures, with no backend, no session and no host application around them.",
   "transport": "mock",
   "defaultTheme": "motu",
-  "stations": {}
+{{lagoonChrome}}  "stations": {}
 }
+`;
+
+/** For a host with shadcn-style tokens, point motu's chrome at the app's own primary by REFERENCE —
+ *  no value copied here, so a rebrand in the app moves the tooling with it. */
+export const LAGOON_CHROME_SHADCN = `  "chrome": {
+    "primary": "hsl(var(--primary))",
+    "onPrimary": "hsl(var(--primary-foreground))"
+  },
 `;
 
 /** `src/lagoon.ts` — the escape hatch, empty by default. */

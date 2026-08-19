@@ -113,10 +113,12 @@ const CSS = `
   /* Lagoon water, deep → shallow. MOCK is calm still water; HTTP is the same lagoon lit brighter and
      running faster (live backend); LEGACY fit floods the whole bay amber. --tide-accent is the one
      colour the CHROME borrows (the sliding pill, splash droplets) so it always matches the water. */
-  --w-deep: #0b6f68;
-  --w-mid: #12988f;
-  --w-shallow: #35c2b3;
-  --tide-accent: #0f766e;
+  /* Tokens, not literals: a project can point motu's chrome at its own primary (see applyMotuChrome),
+     and the ramp shifts hue with it while keeping this shape. Unset, the tuned defaults below stand. */
+  --w-deep: var(--motu-water-deep, #0b6f68);
+  --w-mid: var(--motu-water-mid, #12988f);
+  --w-shallow: var(--motu-water-shallow, #35c2b3);
+  --tide-accent: var(--motu-primary, #0f766e);
 }
 #tide[data-transport="http"] {
   --w-deep: #076b7f;
@@ -326,7 +328,11 @@ const CSS = `
   transition: background 160ms, color 160ms, transform 160ms;
 }
 #tide .opt:hover { background: rgba(15, 118, 110, .07); color: #22302c; transform: translateX(2px); }
-#tide .opt[aria-current="true"] { background: rgba(15, 118, 110, .10); color: #0b5b55; font-weight: 700; }
+#tide .opt[aria-current="true"] {
+  background: color-mix(in srgb, var(--tide-accent, #0f766e) 10%, transparent);
+  color: var(--motu-primary-deep, #0b5b55);
+  font-weight: 700;
+}
 #tide .opt[hidden] { display: none; }
 /* A depth lamp: lit for the mounted archipelago, dark for the rest. */
 #tide .lamp {
@@ -603,7 +609,10 @@ const CSS = `
   animation: tide-row 180ms ease both;
 }
 @keyframes tide-row { from { opacity: 0; transform: translateX(-6px); } }
-#tide-palette li[aria-selected="true"] { background: #eef6f3; color: #0f766e; }
+#tide-palette li[aria-selected="true"] {
+  background: color-mix(in srgb, var(--motu-primary, #0f766e) 9%, #fff);
+  color: var(--motu-primary, #0f766e);
+}
 #tide-palette li .kind {
   font-size: 10px;
   text-transform: uppercase;
@@ -611,8 +620,8 @@ const CSS = `
   color: #a39a8a;
   margin-left: auto;
 }
-#tide-palette li mark { background: transparent; color: #0f766e; font-weight: 700; }
-#tide-palette li[aria-selected="true"] mark { color: #0b5b55; }
+#tide-palette li mark { background: transparent; color: var(--motu-primary, #0f766e); font-weight: 700; }
+#tide-palette li[aria-selected="true"] mark { color: var(--motu-primary-deep, #0b5b55); }
 #tide-palette .about {
   padding: 14px 18px;
   color: #6b7280;

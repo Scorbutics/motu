@@ -134,13 +134,49 @@ an island's siblings read and write — is the most likely place for coupling to
 
 ## The chrome palette
 
-motu's tooling has one primary colour, `MOTU_CHROME.primary` in `@motu/core`, and it **is** the
-lagoon's own water: the UI and the lagoon it frames are the same surface, so a chip in another hue
-reads as belonging to something else. The transport chip used to be indigo — a colour chosen only to
-distinguish two states, which ended up competing with the water behind it. The other tokens are
-semantic rather than decorative: `caution` marks "not the calm default" (a live backend answering with
-your real session, or an island wearing the legacy fit) and `idle` marks off. Colours that carry
-meaning inside the seam lens — external origin, broken binding — are the overlay's own and stay there.
+motu's tooling is themed by CSS tokens (`MOTU_CHROME` in `@motu/core`), and the teal default is only a
+default. Inside a lagoon it is usually the wrong colour: the page below belongs to a real application
+with its own primary, and tooling in an unrelated hue reads as something that wandered in. So a project
+points motu's chrome at its own colours in `lagoon.config.json`:
+
+```jsonc
+"chrome": {
+  "primary": "hsl(var(--primary))",              // the host's OWN token, by reference
+  "onPrimary": "hsl(var(--primary-foreground))"  // required whenever primary is light
+}
+```
+
+Referencing the host's token rather than copying a hex means a rebrand in the app moves the tooling
+with it, with nothing to keep in sync. `--host next` scaffolds exactly this, since a shadcn app already
+exposes both. `onPrimary` matters more than it looks: the chips hardcoded white text, which is
+unreadable the moment a host's primary is a bright yellow.
+
+A brand primary is often tuned for a small accent and is too loud once it covers the water and every
+chip. Three ways down, in order of preference:
+
+```jsonc
+"primary": "hsl(var(--primary-control))"                       // a darker token the app already has
+"primary": "color-mix(in srgb, hsl(var(--primary)) 70%, #000)" // derived, still follows a rebrand
+"primary": "#8a7f12"                                           // a literal, when nothing else fits
+```
+
+Both lagoon entries read the same `chrome` from `lagoon.config.json`, so the gallery and the focused
+target cannot disagree. `bootstrapLagoon` also takes `chrome` directly, for a value the JSON should not
+carry — override it inline in `lagoon.tsx`:
+
+```ts
+chrome: { ...config.chrome, primary: 'color-mix(in srgb, hsl(var(--primary)) 70%, #000)' },
+```
+
+Two things deliberately do **not** follow the brand, because they are readouts rather than decoration:
+
+- The **water** keeps its shape — calm for mock, brighter and faster for a live backend, flooded amber
+  under the legacy fit. `applyMotuChrome` re-derives the deep→shallow ramp around the host's hue and
+  leaves the state variations alone.
+- The lens's **semantic** colours: the input / output / coupling triad, and ok / warn / broken. Give a
+  yellow-branded app a yellow "ok" and it sits indistinguishably beside an amber "warn"; make INPUT
+  follow the brand and it collides with OUTPUT's amber. `caution` and `idle` are semantic for the same
+  reason.
 
 ## Layout
 

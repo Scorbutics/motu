@@ -30,6 +30,7 @@ import {
   LAGOON_FOCUS_ENTRY,
   LAGOON_GALLERY_ENTRY,
   LAGOON_CONFIG,
+  LAGOON_CHROME_SHADCN,
   LAGOON_OVERRIDES,
   LAGOON_VITE_CONFIG,
   NEXT_STUBS,
@@ -212,6 +213,9 @@ export async function initCommand(argv) {
       // The app's own global stylesheet. Without it the lagoon has no Tailwind base/utilities and no
       // theme tokens, so islands render unstyled — a preview that lies about how they look in the app.
       hostGlobalCss: hostGlobalCssImport(lagoonDir, hostRoot),
+      // A Next/shadcn app exposes --primary / --primary-foreground; borrow them so motu's chrome
+      // wears the application's colour rather than motu's own.
+      lagoonChrome: host === 'next' ? LAGOON_CHROME_SHADCN : '',
       motuAliases: motuAliases(lagoonDir, appRoot, appPackage, host),
       hostAliases: host === 'next' ? render(NEXT_VITE_ALIASES, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',
       viteCss: host === 'next' ? render(NEXT_VITE_CSS, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',

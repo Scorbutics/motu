@@ -5,7 +5,8 @@
 import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
-import type { HostBridge, MotuFit, ArchipelagoConfig, Channel } from '@motu/core';
+import { applyMotuChrome } from '@motu/core';
+import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, type ElementSpec, type LagoonTarget } from './bootstrap.js';
 
 export interface LagoonBootstrapOptions {
@@ -33,6 +34,17 @@ export interface LagoonBootstrapOptions {
   mountId?: string;
   /** When set, every contract call fails with this HTTP status — verify's error-resilience mount. */
   forceErrorStatus?: number;
+  /**
+   * Point motu's chrome at this application's colours (see `applyMotuChrome`). The focused lagoon
+   * shows little chrome of its own, but the tokens also reach anything mounted alongside it — the
+   * seam lens above all — so a project's colour should not depend on which entry you opened.
+   *
+   * Any CSS colour works, which is the point: reference the host's token to follow a rebrand
+   * (`hsl(var(--primary))`), reach for a darker one it already defines (`hsl(var(--primary-control))`),
+   * or derive one when a brand primary is too bright to sit under white chrome
+   * (`color-mix(in srgb, hsl(var(--primary)) 70%, #000)`).
+   */
+  chrome?: MotuChromeTheme;
 }
 
 /** Parse the "kind:value" target string into a LagoonTarget, resolving archipelagos via the project. */
@@ -54,6 +66,8 @@ function resolveTarget(opts: LagoonBootstrapOptions): LagoonTarget {
  * transport from the supplied fixtures, resolves the target, mounts it, and returns the element.
  */
 export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
+  // Before anything paints, so the chrome never flashes motu's default over the host's palette.
+  applyMotuChrome(opts.chrome ?? {});
   configure(
     opts.forceErrorStatus
       ? new FailingTransport(opts.forceErrorStatus)

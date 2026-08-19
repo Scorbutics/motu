@@ -111,15 +111,52 @@ export function motuToolbar(): HTMLElement {
  * the overlay's own and deliberately not here.
  */
 export const MOTU_CHROME = {
-  /** The lagoon's water. Every "on" and calm-default state. */
-  primary: '#0f766e',
-  /** The water, deeper — text on a tinted primary ground. */
-  primaryDeep: '#0b5b55',
+  /** Every "on" and calm-default state. */
+  primary: 'var(--motu-primary, #0f766e)',
+  /** The primary, deeper — text on a tinted primary ground. */
+  primaryDeep: 'var(--motu-primary-deep, #0b5b55)',
+  /** Text ON a primary ground. A bright host primary needs dark text, not white. */
+  onPrimary: 'var(--motu-on-primary, #fff)',
   /** Proceed with care: real backend, or the legacy footprint. Not an error. */
-  caution: '#b45309',
+  caution: 'var(--motu-caution, #b45309)',
   /** Off. */
-  idle: '#1e293b',
+  idle: 'var(--motu-idle, #1e293b)',
 } as const;
+
+export interface MotuChromeTheme {
+  /** Any CSS colour, including a reference to the host's own token: `hsl(var(--primary))`. */
+  primary?: string;
+  /** Text on `primary`. Supply it whenever primary is light, or the chips become unreadable. */
+  onPrimary?: string;
+  caution?: string;
+}
+
+/**
+ * Point motu's chrome at the surrounding application's colours.
+ *
+ * The teal default is motu's own, and it is right when motu frames nothing in particular. Inside a
+ * lagoon it is wrong: the page below belongs to a real application with its own primary, and tooling
+ * in an unrelated hue reads as something that wandered in. So the palette is tokens, the defaults are
+ * motu's, and a project points them at its own — `hsl(var(--primary))` picks the host's up directly,
+ * no value copied and nothing to keep in sync.
+ *
+ * The water ramp is derived rather than themed away: it is a READOUT (calm = mock, brighter/faster =
+ * live backend, amber = legacy fit), so it keeps its shape and only shifts hue with the primary. When
+ * no primary is given the tuned defaults stand untouched.
+ */
+export function applyMotuChrome(theme: MotuChromeTheme = {}): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement.style;
+  if (theme.caution) root.setProperty('--motu-caution', theme.caution);
+  if (theme.onPrimary) root.setProperty('--motu-on-primary', theme.onPrimary);
+  if (!theme.primary) return;
+  root.setProperty('--motu-primary', theme.primary);
+  root.setProperty('--motu-primary-deep', `color-mix(in srgb, ${theme.primary} 78%, #000)`);
+  // Same deep -> shallow shape as the default ramp, rebuilt around the host's hue.
+  root.setProperty('--motu-water-deep', `color-mix(in srgb, ${theme.primary} 84%, #000)`);
+  root.setProperty('--motu-water-mid', theme.primary);
+  root.setProperty('--motu-water-shallow', `color-mix(in srgb, ${theme.primary} 68%, #fff)`);
+}
 
 export const MOTU_TOOLBAR_CHIP_CSS = [
   'display:inline-flex',
@@ -129,7 +166,7 @@ export const MOTU_TOOLBAR_CHIP_CSS = [
   'border:0',
   'border-radius:9999px',
   'cursor:pointer',
-  'color:#fff',
+  'color:' + MOTU_CHROME.onPrimary,
   'font:inherit',
   'box-shadow:0 4px 14px rgba(15,23,42,.28)',
 ].join(';');

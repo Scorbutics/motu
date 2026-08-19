@@ -13,12 +13,22 @@ import { provideToArchipelago, type ArchipelagoConfig, type Channel, type HostBr
 import { ArchipelagoProvider, Island } from './react-island.js';
 import type { ElementSpec } from './bootstrap.js';
 
+/** One React root per container, so a re-mount replaces rather than stacks. */
+const roots = new Map<HTMLElement, ReturnType<typeof createRoot>>();
+
 export interface ReactLagoonOptions {
   elements: ElementSpec[];
   host?: HostBridge;
   seed?: Record<string, unknown>;
   channels?: Channel[];
   fit?: MotuFit;
+  /**
+   * 'region' renders the archipelago as one area; 'mountpoints' frames each slot separately, standing
+   * in for islands placed individually across a host page. Mirrors the custom element's `view`
+   * attribute, class names included, so recorded callsite frames (`motu archipelago record-frame`)
+   * apply to either mount path.
+   */
+  view?: 'region' | 'mountpoints';
 }
 
 declare global {
@@ -42,6 +52,29 @@ export function mountReactLagoon(
     console.warn('motu: lagoon has no mount element');
     return;
   }
+  // Switching station or view re-mounts: drop the previous root first, or React warns about two roots
+  // on one container and the old tree keeps its store subscription alive.
+  roots.get(mountEl)?.unmount();
+
+  const islands = config.islands.map((island) =>
+    opts.view === 'mountpoints' ? (
+      <section
+        key={island.slot}
+        className="motu-frame"
+        data-motu-arch={config.id}
+        data-motu-slot={island.slot}
+      >
+        <header className="motu-frame__label">
+          <span>{island.slot}</span>
+        </header>
+        <div className="motu-frame__stage">
+          <Island slot={island.slot} fit={opts.fit} />
+        </div>
+      </section>
+    ) : (
+      <Island key={island.slot} slot={island.slot} fit={opts.fit} />
+    ),
+  );
 
   const tree = (
     <ArchipelagoProvider
@@ -51,13 +84,12 @@ export function mountReactLagoon(
       seed={opts.seed}
       channels={opts.channels}
     >
-      {config.islands.map((island) => (
-        <Island key={island.slot} slot={island.slot} fit={opts.fit} />
-      ))}
+      {opts.view === 'mountpoints' ? <div className="motu-gallery">{islands}</div> : islands}
     </ArchipelagoProvider>
   );
 
   let root = createRoot(mountEl);
+  roots.set(mountEl, root);
   root.render(tree);
 
   // The harness drives both of these through <motu-archipelago> on the element path, which does not
@@ -73,6 +105,7 @@ export function mountReactLagoon(
     remount: () => {
       root.unmount();
       root = createRoot(mountEl);
+      roots.set(mountEl, root);
       root.render(tree);
     },
   };

@@ -308,6 +308,8 @@ import * as overrides from './lagoon.js';
 {{hostImport}}{{hostGlobalCss}}
 declare const __MOTU_ISOLATION__: 'shadow' | 'light';
 declare const __MOTU_TRANSPORT__: string;
+// "archipelago:<id>" when the artifact was built for one region; '' for the whole gallery.
+declare const __MOTU_TARGET__: string;
 // Present in the lagoon by default (this is the sandbox); MOTU_DEBUG=0 strips the lens entirely.
 declare const __MOTU_DEBUG__: boolean;
 
@@ -321,7 +323,11 @@ startLagoon({
   overrides,
   isolation: __MOTU_ISOLATION__,
   transport: __MOTU_TRANSPORT__,
+  target: __MOTU_TARGET__,
   debug: __MOTU_DEBUG__,
+  // Must match the host application (and the focused entry), or the lagoon shows a mount path the
+  // project does not ship.
+  mount: config.mount,
   lens: {
     mount: mountDebugOverlay,
     toggle: toggleDebugOverlay,

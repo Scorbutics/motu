@@ -36,8 +36,12 @@ function resolveTarget(argv) {
   if (archipelago) {
     if (!existsSync(paths.archipelagoFile(archipelago)))
       throw new Error(`unknown archipelago "${archipelago}" — no ${paths.rel(paths.archipelagoFile(archipelago))}`);
+    // The GALLERY entry, focused on this region — not the bare single-target one. `serve` and
+    // `publish` are for a human to look at, and the chrome (tide line, seam lens, the transport and
+    // fit chips) is most of what makes the lagoon worth looking at. The bare entry exists for
+    // `motu island verify`, which drives lagoon.html directly and wants nothing else on the page.
     return {
-      entry: 'lagoon',
+      entry: 'main',
       target: `archipelago:${archipelago}`,
       slug: `archipelago-${archipelago}`,
       title: `${names(archipelago).pascal} Lagoon`,

@@ -19,6 +19,7 @@ import { defineMotuApp, type ElementSpec } from './bootstrap.js';
 import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle.js';
 import { mountFitToggle } from './fit-toggle.js';
 import { mountTideLine, type TideLens, type TideView } from './tideline.js';
+import { mountReactLagoon } from './lagoon-react-mount.js';
 
 /** `lagoon.config.json` — everything about a project's lagoon that a declaration can carry. */
 export interface LagoonConfig {
@@ -83,8 +84,19 @@ export interface StartLagoonOptions {
   isolation?: IslandIsolation;
   /** Build-time transport default (`MOTU_TRANSPORT`), '' when unset. */
   transport?: string;
+  /**
+   * Build-time target (`MOTU_TARGET`), e.g. "archipelago:actions". `motu lagoon serve/publish
+   * --archipelago X` sets it so the artifact opens on that region instead of whatever the last
+   * visitor happened to select.
+   */
+  target?: string;
   /** False strips the lens and its buoy. */
   debug?: boolean;
+  /**
+   * How islands attach — must match the host application, and the focused lagoon. 'react' renders
+   * them in this page's own tree; 'element' uses <motu-archipelago> custom elements.
+   */
+  mount?: 'element' | 'react';
   lens?: LagoonLens;
   /** Recorded callsite frames (`motu archipelago record-frame` output), as a Vite glob result. */
   frames?: Record<string, string>;
@@ -156,15 +168,21 @@ export function startLagoon(opts: StartLagoonOptions): void {
   const host = overrides.host ?? LOGGING_HOST;
   const stations = resolveStations(opts.archipelagos, config);
 
-  defineMotuApp({
-    elements: opts.elements,
-    css: opts.css,
-    defaultTheme: config.defaultTheme ?? 'motu',
-    archipelagos: stations.map(({ id }) => ({
-      config: opts.archipelagos[id],
-      options: { host, seed: overrides.seed?.[id], channels: overrides.channels?.[id] },
-    })),
-  });
+  const react = opts.mount === 'react';
+  // The element path has to define the custom elements up front. The React path must NOT: defining
+  // them would register the islands' archipelagos a second time and hand the elements a different
+  // store than the one <ArchipelagoProvider> resolves.
+  if (!react) {
+    defineMotuApp({
+      elements: opts.elements,
+      css: opts.css,
+      defaultTheme: config.defaultTheme ?? 'motu',
+      archipelagos: stations.map(({ id }) => ({
+        config: opts.archipelagos[id],
+        options: { host, seed: overrides.seed?.[id], channels: overrides.channels?.[id] },
+      })),
+    });
+  }
 
   // Recorded callsite frames: stand-in geometry for each slot's real placement in the host. Lagoon
   // only — in the host, the real callsite supplies the container.
@@ -179,7 +197,10 @@ export function startLagoon(opts: StartLagoonOptions): void {
   if (!root) throw new Error(`lagoon: no #${opts.mountId ?? 'lagoon-root'} element to mount into`);
 
   const ids = stations.map((s) => s.id);
-  let current = localStorage.getItem(STORAGE_KEY) ?? '';
+  // A build-time target wins over the remembered selection: it is what the artifact was published
+  // FOR, and a stale localStorage entry from a different region should not override it.
+  const targeted = (opts.target ?? '').startsWith('archipelago:') ? (opts.target ?? '').slice('archipelago:'.length) : '';
+  let current = targeted || localStorage.getItem(STORAGE_KEY) || '';
   if (!ids.includes(current)) current = ids[0] ?? '';
   let view: TideView = localStorage.getItem(VIEW_KEY) === 'mountpoints' ? 'mountpoints' : 'region';
 
@@ -187,6 +208,21 @@ export function startLagoon(opts: StartLagoonOptions): void {
     if (!id) return;
     current = id;
     localStorage.setItem(STORAGE_KEY, id);
+
+    if (react) {
+      // Same path the host application and `motu island verify` use, so the surface a human judges
+      // here is the one that ships and the one that was verified.
+      mountReactLagoon(root, opts.archipelagos[id], {
+        elements: opts.elements,
+        host,
+        seed: overrides.seed?.[id],
+        channels: overrides.channels?.[id],
+        view,
+      });
+      tide.setActive(current, view);
+      return;
+    }
+
     root!.replaceChildren();
     const el = document.createElement('motu-archipelago');
     el.setAttribute('name', id);

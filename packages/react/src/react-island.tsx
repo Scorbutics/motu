@@ -142,6 +142,28 @@ export function Island({ slot, fit, props: extra, className }: IslandProps) {
   const [, bump] = useReducer((n: number) => n + 1, 0);
   useEffect(() => ctx.store.subscribe(bump), [ctx.store]);
 
+  // Output callbacks, built ONCE per island rather than per render.
+  //
+  // A fresh function identity every render is not merely wasteful: a component that lists its
+  // callback in an effect's dependencies (a normal, correct thing to do) then re-runs that effect on
+  // every render, and if the effect writes to the store the write re-renders the island and the loop
+  // never settles. The handler only ever needs the archipelago's config, the store and the host, all
+  // of which are stable for the life of the island.
+  const handlers = useMemo(() => {
+    const out: Record<string, (detail: unknown) => void> = {};
+    if (!spec || !elementSpec) return out;
+    for (const [callbackProp, eventName] of Object.entries(declaredOutputs(elementSpec))) {
+      const handler = spec.on?.[eventName];
+      out[callbackProp] = (detail: unknown) => {
+        if (!handler) return;
+        // Tag the island as the writer, so the lens attributes store writes the same way it does for
+        // an event dispatched by the custom element.
+        runWithWriteSource(slot, () => handler(detail, { store: ctx.store, host: ctx.host! }));
+      };
+    }
+    return out;
+  }, [spec, elementSpec, slot, ctx.store, ctx.host]);
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!spec || !wrapperRef.current) return;
@@ -174,15 +196,7 @@ export function Island({ slot, fit, props: extra, className }: IslandProps) {
     if (value !== undefined) resolved[prop] = value;
   }
   // 4. Output: each declared callback routes to the archipelago's handler for that event name.
-  for (const [callbackProp, eventName] of Object.entries(declaredOutputs(elementSpec))) {
-    const handler = spec.on?.[eventName];
-    resolved[callbackProp] = (detail: unknown) => {
-      if (!handler) return;
-      // Tag the island as the writer, so the lens can attribute store writes the same way it does
-      // for an event dispatched by the custom element.
-      runWithWriteSource(slot, () => handler(detail, { store: ctx.store, host: ctx.host! }));
-    };
-  }
+  Object.assign(resolved, handlers);
   if (fit) resolved.fit = fit;
   Object.assign(resolved, extra ?? {});
 

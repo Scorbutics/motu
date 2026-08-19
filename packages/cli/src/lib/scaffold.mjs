@@ -165,6 +165,25 @@ export const LAGOON_FOCUS_HTML = `<!doctype html>
 </html>
 `;
 
+/**
+ * A `process.env` for the browser, installed before any application module is evaluated.
+ *
+ * Host modules read process.env at IMPORT time — a Supabase client that throws when its keys are
+ * missing takes the whole lagoon down before anything renders, with an error ("process is not
+ * defined") that says nothing about why. Vite's `define` does not reach files served from outside the
+ * lagoon root, which is exactly where the host application's modules live, so the values are installed
+ * at runtime instead. ES modules evaluate in import order, so importing this first is enough.
+ */
+export const ENV_SHIM = `// Installs process.env before any host module reads it. MUST be imported first — see below.
+import config from '../lagoon.config.json';
+
+const g = globalThis as unknown as { process?: { env: Record<string, string> } };
+g.process = g.process ?? { env: {} };
+// Declared under "env" in lagoon.config.json. The lagoon has no backend, so these only have to EXIST;
+// never put a real secret here — a published lagoon is a static page anyone with the link can read.
+Object.assign(g.process.env, { NODE_ENV: 'development', ...(config.env ?? {}) });
+`;
+
 /** Fixture aggregation by glob, so adding an island needs no edit here (the demo app's hand-maintained
  *  fixtures.ts drifts by construction — its own header admits the manual step). */
 export const LAGOON_FIXTURES = `// Every island's lagoon fixtures, gathered by glob so adding an island is not also an edit here.
@@ -181,7 +200,7 @@ export const ALL_ROLES: string[] = [...new Set(Object.values(modules).flatMap((m
 `;
 
 /** The focused entry — this is what `motu island verify` drives via MOTU_TARGET. */
-export const LAGOON_FOCUS_ENTRY = `// Thin lagoon entry: reads the vite-injected target/fit and hands the generic lagoon harness
+export const LAGOON_FOCUS_ENTRY = `{{envShim}}// Thin lagoon entry: reads the vite-injected target/fit and hands the generic lagoon harness
 // (@motu/react -> bootstrapLagoon) the project's element registry, fixtures and archipelago resolver.
 // All harness logic is framework-side; this file only supplies app-specific inputs.
 import { bootstrapLagoon } from '@motu/react';
@@ -269,7 +288,7 @@ export {};
 `;
 
 /** The gallery shim. Deliberately tiny and stable: it is wiring Vite requires in the app, nothing more. */
-export const LAGOON_GALLERY_ENTRY = `// The lagoon gallery entry.
+export const LAGOON_GALLERY_ENTRY = `{{envShim}}// The lagoon gallery entry.
 //
 // There is no logic here on purpose. The gallery — tide line, seam lens, archipelago switching, the
 // recorded callsite frames — lives in @motu/react (\`startLagoon\`), so improvements to it arrive with
@@ -348,6 +367,17 @@ const MOTU_ROOT = process.env.MOTU_ROOT
 
 const motu = (p) => resolve(MOTU_ROOT, p);
 
+// The LAGOON's own declaration (next to this file). Distinct from motu.config.json above, which
+// describes the project's layout; this one describes the lagoon, and carries the two things the build
+// needs from it: module aliases and the browser env.
+const LAGOON = (() => {
+  try {
+    return JSON.parse(readFileSync(resolve(__dirname, 'lagoon.config.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+
 
 // One-chunk build target for \`motu lagoon publish\`: 'lagoon' (focused) | 'main' (the gallery).
 // Unset => the normal two-entry, code-split build.
@@ -365,6 +395,12 @@ export default defineConfig({
     __MOTU_FORCE_ERROR__: JSON.stringify(process.env.MOTU_FORCE_ERROR ?? ''),
     __MOTU_DEBUG__: JSON.stringify(process.env.MOTU_DEBUG !== '0'),
     __MOTU_ISOLATION__: JSON.stringify(ISOLATION),
+    // The host application's modules read process.env AT IMPORT TIME — a Supabase client that throws
+    // when its keys are missing is enough to take the whole lagoon down before anything renders, and
+    // the error ("process is not defined") says nothing about why. There is no backend here, so the
+    // values only have to exist: declare them under "env" in lagoon.config.json. Never put a real
+    // secret here — the lagoon gets published as a static page.
+    'process.env': JSON.stringify({ NODE_ENV: 'development', ...(LAGOON.env ?? {}) }),
   },
   resolve: {
     // One React, always. The lagoon has no React of its own so it resolves the host application's,
@@ -376,7 +412,18 @@ export default defineConfig({
     // matches 'pkg/styles.css' (the query is part of the id), and '@motu/runtime' happily swallows
     // '@motu/runtime/mock'. Anchored regexes make each mapping mean exactly what it says.
     alias: [
-{{motuAliases}}{{hostAliases}}    ],
+{{motuAliases}}      // Project aliases from lagoon.config.json "alias" — BEFORE the host's own '@/…' rule, because
+      // the first matching entry wins and '^@/' would otherwise rewrite the specifier to the real
+      // module before this ever sees it. This is the seam for standing a host module
+      // down inside the lagoon — a React context whose real provider talks to a backend, a service
+      // module that fetches on import — without touching the component that consumes it. Paths are
+      // relative to this file. A string find matches the specifier exactly (or as a path prefix),
+      // which is what a module alias wants.
+      ...Object.entries(LAGOON.alias ?? {}).map(([find, replacement]) => ({
+        find,
+        replacement: resolve(__dirname, replacement),
+      })),
+{{hostAliases}}    ],
   },
 {{viteCss}}  build: {
     // MOTU_SINGLEFILE=lagoon|main builds ONE entry as ONE chunk so \`motu lagoon publish\` can inline

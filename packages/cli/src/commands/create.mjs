@@ -37,7 +37,7 @@ export function ${pascal}({ title = '${pascal}' }: ${pascal}Props = {}) {
 `;
 }
 
-function elementSource(pascal, camel, tag, kebab, from) {
+function elementSource(pascal, camel, tag, kebab, from, exportName) {
   // `from` = wrapping a component the app already owns; otherwise the scaffolded ui/ component.
   const spec = from ?? `../../ui/${kebab}/${pascal}.js`;
   const header = from
@@ -56,8 +56,12 @@ function elementSource(pascal, camel, tag, kebab, from) {
   // prop declared a default. `motu island verify`'s props-match is what actually reconciles the
   // registry against the component.
   const typeImport = '';
+  // The app's export is rarely named after the island: `motu island create network-stats` should wrap
+  // `NetworkStatsBanner`, not a `NetworkStats` that does not exist. Alias it so the rest of the file
+  // (and the component-name conventions verify relies on) still reads as the island's own name.
+  const imported = exportName && exportName !== pascal ? `${exportName} as ${pascal}` : `${pascal}${typeImport}`;
   return `${header}import type { ElementSpec } from '@motu/react';
-import { ${pascal}${typeImport} } from '${spec}';
+import { ${imported} } from '${spec}';
 
 export const ${camel}Element: ElementSpec = {
   tag: '${tag}',
@@ -149,6 +153,8 @@ export async function createCommand(argv) {
   // nothing to write, only something to mount). Without it, scaffold a new component under ui/ — the
   // extraction case, where the original is not React and a component has to be authored.
   const from = typeof argv.from === 'string' ? argv.from : null;
+  // `--export` names the component INSIDE the module, when it is not the island's Pascal name.
+  const exportName = typeof argv.export === 'string' ? argv.export : null;
   const componentPath = paths.componentFile(kebab, pascal);
   const fixturesPath = paths.fixturesFile(kebab);
 
@@ -169,7 +175,7 @@ export async function createCommand(argv) {
 
   // Component in ui/ (unless wrapping one the app owns); mount point (element + index + fixtures).
   if (!from) writeFileSync(componentPath, componentSource(pascal, kebab));
-  writeFileSync(paths.elementFile(kebab), elementSource(pascal, camel, tag, kebab, from));
+  writeFileSync(paths.elementFile(kebab), elementSource(pascal, camel, tag, kebab, from, exportName));
   writeFileSync(paths.islandIndexFile(kebab), indexSource(camel));
   if (!existsSync(fixturesPath) || argv.force) {
     writeFileSync(fixturesPath, fixturesSource(kebab, readContractHint()));

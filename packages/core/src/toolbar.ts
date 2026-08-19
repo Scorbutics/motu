@@ -1,22 +1,24 @@
-// One shared floating toolbar that the dev/preview controls plug into — transport, fit, debug — so
-// they cluster in a single place instead of scattering pills around the page. Any package (or root)
-// grabs it by calling motuToolbar() and appends its own compact control; the container is created
-// once, lazily, on first use.
+// One shared toolbar that the dev/preview controls plug into — transport, fit, debug — so they
+// cluster in a single place instead of scattering pills around the page. Any package (or root) grabs
+// it by calling motuToolbar() and appends its own compact control; the container is created once,
+// lazily, on first use.
 //
-// It sits top-right on a roomy screen. On a narrow one it moves to the BOTTOM-right: the page's own
-// header/switcher owns the top of the screen and grows rightward as it wraps, so a fixed top-right
-// bar lands on top of it — covering navigation and putting both sets of controls on the same pixels.
-// The bottom-right corner is anchored to nothing. This matters because the published lagoon artifact
-// is meant to be opened on a phone, which is exactly where the collision happens.
+// By DEFAULT it floats: top-right on a roomy screen, bottom-right on a narrow one (a page header
+// owns the top and grows rightward as it wraps, so a fixed top-right bar lands on top of it). That
+// default serves roots with no chrome of their own.
+//
+// A root that HAS its own chrome surface (e.g. the lagoon's tide line) calls setMotuToolbarHost() to
+// adopt the chips into it instead. Then the toolbar stops floating entirely: no fixed positioning,
+// no corner collision to dodge, and the controls live with the rest of the root's controls. Chips
+// already mounted are moved, so the call is order-independent w.r.t. the mount* functions.
 
 const TOOLBAR_ID = 'motu-toolbar';
 const STYLE_ID = 'motu-toolbar-css';
 
 /**
- * Below this width the toolbar flips to the bottom. Chosen so the flip happens BEFORE a page header
- * can reach the toolbar, not at the moment it touches: the lagoon's switcher row ends at x≈633, and
- * the bar (~258px wide, 12px inset) has its left edge at viewport−270 — so they meet at ~903px, and
- * 900 left a 2px clip at 901px. 960 keeps ~57px of clearance there.
+ * Below this width the FLOATING toolbar flips to the bottom. Chosen so the flip happens BEFORE a page
+ * header can reach the toolbar, not at the moment it touches. Irrelevant once a host is adopted —
+ * a hosted toolbar is in normal flow and cannot collide with anything.
  *
  * This is a heuristic, not a guarantee: a host page with a WIDER header can still reach a top-right
  * bar above this width. If that happens, raise this — or give that header its own right padding.
@@ -44,6 +46,12 @@ const TOOLBAR_CSS = `
     bottom: 12px;
   }
 }
+/* Adopted by a root's own chrome: drop every trace of the floating layout and flow inside the host. */
+#${TOOLBAR_ID}[data-hosted] {
+  position: static;
+  max-width: none;
+  flex-wrap: nowrap;
+}
 `;
 
 /** Inject the toolbar stylesheet once. A stylesheet (not inline style) so it can carry a media query. */
@@ -55,7 +63,23 @@ function ensureToolbarStyle(): void {
   document.head.appendChild(style);
 }
 
-/** The shared floating controls bar (created on first call). Append compact controls to it. */
+/** Where the bar lives, once a root has claimed it. Null => float in the corner (the default). */
+let toolbarHost: HTMLElement | null = null;
+
+/**
+ * Adopt the shared toolbar into a root's own chrome instead of letting it float in a corner. Safe to
+ * call before or after the controls mount: an existing bar is moved into `host` as-is.
+ */
+export function setMotuToolbarHost(host: HTMLElement): void {
+  toolbarHost = host;
+  const bar = document.getElementById(TOOLBAR_ID);
+  if (bar) {
+    bar.dataset.hosted = '';
+    host.appendChild(bar);
+  }
+}
+
+/** The shared controls bar (created on first call). Append compact controls to it. */
 export function motuToolbar(): HTMLElement {
   ensureToolbarStyle();
   const existing = document.getElementById(TOOLBAR_ID);
@@ -63,7 +87,12 @@ export function motuToolbar(): HTMLElement {
   const bar = document.createElement('div');
   bar.id = TOOLBAR_ID;
   bar.setAttribute('role', 'toolbar');
-  document.body.appendChild(bar);
+  if (toolbarHost) {
+    bar.dataset.hosted = '';
+    toolbarHost.appendChild(bar);
+  } else {
+    document.body.appendChild(bar);
+  }
   return bar;
 }
 

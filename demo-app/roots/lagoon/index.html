@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>motu lagoon — Members (members archipelago)</title>
     <style>
+      /* The shell owns almost nothing on purpose: all lagoon chrome (archipelago + view switching,
+         the transport/fit/debug chips, the command palette, the About text that used to be a footer
+         paragraph) lives in the corner bay, mounted from src/tideline.ts. What is left here is the
+         page ground. */
       * { box-sizing: border-box; }
       body {
         margin: 0;
@@ -12,52 +16,12 @@
         color: #22302c;
         font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
       }
-      .foot { max-width: 1440px; margin: 0 auto 40px; padding: 0 20px; color: #8d8578; font-size: 12px; }
-      #lagoon-switcher {
-        max-width: 1440px;
-        margin: 22px auto 0;
-        padding: 0 20px;
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      #lagoon-switcher .label {
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #8d8578;
-        margin-right: 4px;
-      }
-      #lagoon-switcher button {
-        appearance: none;
-        border: 1px solid #ddd6ca;
-        background: #fff;
-        color: #4c5a53;
-        font: inherit;
-        font-size: 13px;
-        padding: 6px 14px;
-        border-radius: 999px;
-        cursor: pointer;
-        transition: background 0.12s, border-color 0.12s, color 0.12s;
-      }
-      #lagoon-switcher button:hover { border-color: #b9ab97; }
-      #lagoon-switcher button[aria-current="true"] {
-        background: #0f766e;
-        border-color: #0f766e;
-        color: #fff;
-      }
+      /* No clearance needed any more: the lagoon chrome is a small bay in ONE corner (see
+         src/tideline.ts), not a band across an edge, so the archipelago gets the whole page. */
     </style>
   </head>
   <body>
-    <nav id="lagoon-switcher" aria-label="Archipelago switcher"></nav>
     <div id="lagoon-root"></div>
-    <p class="foot">
-      Transport is switchable at runtime via the pill in the floating toolbar (or
-      <code>?transport=http|mock</code>). MOCK renders offline sample data with no login; HTTP hits the
-      real backend through the dev-proxy using your own session cookie. The default is set by the
-      <code>MOTU_TRANSPORT</code> env var (unset =&nbsp;mock, so agents get offline data by default).
-    </p>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

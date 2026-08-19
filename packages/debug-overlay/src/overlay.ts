@@ -28,9 +28,17 @@ import { observeCalls, startRecording, stopRecording, type CallEvent, type Recor
 export interface DebugOverlayOptions {
   /** Keyboard shortcut, matched against KeyboardEvent.code (default 'KeyG' with Cmd/Ctrl+Shift). */
   shortcutCode?: string;
+  /**
+   * Mount the built-in toggle chip into the shared toolbar (default true). Pass FALSE when the host
+   * root has chrome of its own and wants to own the trigger — the lagoon puts it on its corner bay,
+   * so that the page-wide lens is not summoned from inside a popup that then closes. Drive it with
+   * `toggleDebugOverlay()` and mirror its state with `subscribeDebugOverlay()`.
+   */
+  chip?: boolean;
 }
 
 const OPEN_KEY = 'motu:debug';
+const POS_KEY = 'motu:debug:pos';
 const CALL_BUFFER = 200;
 
 type PropState = 'bound' | 'bound-empty' | 'static' | 'default';
@@ -56,6 +64,9 @@ interface CallRecord {
 }
 
 let mounted = false;
+/** The live instance, so the host-owned trigger below can reach it. */
+let instance: Overlay | null = null;
+const openListeners = new Set<(open: boolean) => void>();
 
 /**
  * Mounts the overlay once. Idempotent, so both composition roots (bridge + lagoon) can call it behind
@@ -64,7 +75,27 @@ let mounted = false;
 export function mountDebugOverlay(opts: DebugOverlayOptions = {}): void {
   if (mounted || typeof document === 'undefined') return;
   mounted = true;
-  new Overlay(opts);
+  instance = new Overlay(opts);
+}
+
+/** Flip the lens. For a root that mounted with `chip: false` and hosts the trigger in its own chrome. */
+export function toggleDebugOverlay(): void {
+  instance?.toggle();
+}
+
+/** Whether the lens is currently showing — for a host trigger that renders its own on/off state. */
+export function isDebugOverlayOpen(): boolean {
+  return instance?.isOpen() ?? false;
+}
+
+/**
+ * Observe the lens' open state. Fires on every change (including the keyboard shortcut and the
+ * panel's own close button), so a host trigger stays in sync with whatever flipped it.
+ * Returns an unsubscribe.
+ */
+export function subscribeDebugOverlay(fn: (open: boolean) => void): () => void {
+  openListeners.add(fn);
+  return () => openListeners.delete(fn);
 }
 
 // --- Read-only computations over framework data --------------------------------------------------
@@ -152,111 +183,204 @@ function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/**
+ * The overlay wears the SAME visual language as the rest of the motu chrome (the lagoon's corner bay
+ * and control panel): frosted light glass, teal water accents, Inter for prose and labels, 14px radii,
+ * soft teal-tinted shadows. It used to be dark slate + indigo, which read as a different product
+ * bolted onto the page.
+ *
+ * The one deliberate exception is DATA: island names, store keys, payloads and call rows stay in a
+ * monospace face. They are values being inspected, and column alignment is what makes a wall of them
+ * scannable — that is a different job from the labels around them.
+ *
+ * Colour carries meaning here and must survive the restyle: ok / warn / broken / neutral keep their
+ * green-amber-red-grey semantics, re-tuned for a light ground instead of being dropped.
+ */
 const STYLES = `
 :host { all: initial; }
-* { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+* { box-sizing: border-box; font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; }
+
+/* The lagoon palette, so the lens and the chrome agree. */
+:host {
+  --w-deep: #0b6f68;
+  --w-mid: #12988f;
+  --accent: #0f766e;
+  --ink: #22302c;
+  --ink-soft: #5c6b63;
+  --ink-faint: #9a9182;
+  --glass: linear-gradient(180deg, rgba(247, 253, 252, .96), rgba(232, 248, 246, .94));
+  --hair: rgba(11, 111, 104, .12);
+  --ok: #0f766e;
+  --warn: #b45309;
+  --broken: #b91c1c;
+  --neutral: #8d8578;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
 .layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147482000; }
 .wires { position: fixed; inset: 0; pointer-events: none; overflow: visible; }
 /* No resting outline — the page stays clean. The box border (and label) appear only for the island
    under the cursor, the selected one, or the islands a hovered channel links to. */
-.box { position: absolute; border: 1.5px dashed transparent; border-radius: 4px; }
+.box { position: absolute; border: 1.5px dashed transparent; border-radius: 10px; }
 .box.broken { border-style: solid; }
 .box.hover, .box.sel, .box.link { border-color: currentColor; }
-.box.hover { background: rgba(90,103,242,.05); }
-.box.link { background: rgba(56,189,248,.08); }
-.box.sel { box-shadow: 0 0 0 2px rgba(255,255,255,.6), 0 0 0 4px currentColor; }
+.box.hover { background: rgba(15, 118, 110, .05); }
+.box.link { background: rgba(18, 152, 143, .08); }
+.box.sel { box-shadow: 0 0 0 2px rgba(255,255,255,.7), 0 0 0 4px currentColor; }
 .tag {
-  position: absolute; top: -9px; left: 6px; pointer-events: auto; cursor: pointer;
-  display: none; align-items: center; gap: 5px; height: 18px; padding: 0 7px;
-  border-radius: 9px; font: 600 10px/1 ui-monospace, monospace; color: #fff; white-space: nowrap;
-  background: #5a67f2;
+  position: absolute; top: -10px; left: 8px; pointer-events: auto; cursor: pointer;
+  display: none; align-items: center; gap: 5px; height: 19px; padding: 0 9px;
+  border-radius: 999px; font: 700 10px/1 var(--mono); color: #fff; white-space: nowrap;
+  background: var(--accent); box-shadow: 0 3px 10px rgba(11, 111, 104, .3);
 }
 /* Low-noise by default: the label only appears for the island under the cursor (or the selected one). */
 .box.hover .tag, .box.sel .tag, .box.link .tag { display: inline-flex; }
-.tag.ok { background: #16a34a; } .tag.warn { background: #d97706; }
-.tag.broken { background: #dc2626; } .tag.neutral { background: #64748b; }
+.tag.ok { background: var(--ok); } .tag.warn { background: var(--warn); }
+.tag.broken { background: var(--broken); } .tag.neutral { background: var(--neutral); }
 .tag .iso { opacity: .8; font-weight: 500; }
 
+/* The panel is the control panel's twin: same glass, same radius, same shadow. It sits opposite the
+   lagoon's bay when the host says where that is (--motu-debug-left/right), so the two never overlap. */
 .panel {
-  position: fixed; right: 12px; top: 56px; z-index: 2147483000; pointer-events: auto;
-  width: 360px; max-height: 82vh; display: flex; flex-direction: column;
-  background: #0f172a; color: #e2e8f0; border-radius: 12px; overflow: hidden;
-  box-shadow: 0 18px 48px rgba(2,6,23,.55); font-size: 12px;
+  position: fixed;
+  top: var(--motu-debug-top, 56px);
+  right: var(--motu-debug-right, 12px);
+  left: var(--motu-debug-left, auto);
+  z-index: 2147483000; pointer-events: auto;
+  width: 372px; max-width: calc(100vw - 24px); max-height: 82vh;
+  display: flex; flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  color: var(--ink);
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 14px 40px rgba(11, 111, 104, .18);
+  font-size: 12px;
 }
-.panel__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #1e293b; }
-.panel__head b { font-size: 12px; letter-spacing: .3px; }
+.panel__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px; border-bottom: 1px solid var(--hair);
+  /* The title bar is the drag handle, so it must not start a text selection instead. */
+  cursor: grab; user-select: none; -webkit-user-select: none;
+}
+.panel__head.grabbing { cursor: grabbing; }
+.panel__head b { font: 700 11px/1 inherit; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-faint); }
 .panel__head .spacer { flex: 1; }
-.panel__head button { background: transparent; border: 0; color: #94a3b8; cursor: pointer; font-size: 13px; padding: 2px 6px; border-radius: 6px; }
-.panel__head button:hover { color: #fff; background: rgba(255,255,255,.08); }
-.panel__head button.on { color: #fff; background: rgba(90,103,242,.45); }
-.panel__head button.rec { color: #fff; background: rgba(239,68,68,.6); }
-.recbar { margin: 0 10px 4px; padding: 5px 8px; border-radius: 6px; font: 500 10px/1.4 ui-monospace, monospace; background: rgba(239,68,68,.14); color: #fca5a5; }
-.fitctl { display: flex; align-items: center; gap: 6px; margin: 2px 0 6px; font: 500 10px/1 ui-monospace, monospace; }
-.fitctl__l { color: #94a3b8; text-transform: uppercase; letter-spacing: .6px; }
-.fitctl button { cursor: pointer; border: 1px solid rgba(148,163,184,.3); background: transparent; color: #94a3b8; padding: 3px 8px; border-radius: 6px; font: inherit; }
-.fitctl button:hover { color: #fff; border-color: rgba(148,163,184,.6); }
-.fitctl button.on { color: #fff; background: rgba(245,158,11,.35); border-color: transparent; }
-.panel__body { overflow-y: auto; padding: 8px 10px 12px; }
-.section { margin-top: 10px; }
-.section h4 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: #94a3b8; font-weight: 700; }
+.panel__head button {
+  background: transparent; border: 1px solid transparent; color: var(--ink-soft); cursor: pointer;
+  font-size: 12px; padding: 4px 8px; border-radius: 8px; transition: background 160ms, color 160ms;
+}
+.panel__head button:hover { color: var(--ink); background: rgba(15, 118, 110, .09); }
+.panel__head button.on { color: #fff; background: var(--accent); }
+.panel__head button.rec { color: #fff; background: var(--broken); }
+.recbar {
+  margin: 8px 12px 0; padding: 6px 9px; border-radius: 8px;
+  font: 600 10px/1.4 var(--mono); background: rgba(185, 28, 28, .10); color: var(--broken);
+}
+/* Picker mode is a MODE, and a mode that isn't visible is a trap — say so while it is armed. */
+.pickbar {
+  margin: 8px 12px 0; padding: 6px 9px; border-radius: 8px;
+  font: 600 10px/1.4 inherit; background: rgba(15, 118, 110, .12); color: #0b5b55;
+}
+/* Where the island list used to be: how to narrow the scope, said once. */
+.scopehint {
+  padding: 2px 0 6px; color: var(--ink-faint); font-size: 11px; font-style: italic;
+}
+/* The way back out of an island, now that no list holds the selection. */
+.back {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-bottom: 4px; padding: 5px 10px; border: 1px solid var(--hair); border-radius: 999px;
+  background: rgba(255,255,255,.6); color: var(--ink-soft);
+  font: 600 11px/1 inherit; cursor: pointer; transition: all 160ms;
+}
+.back:hover { color: var(--ink); border-color: rgba(11, 111, 104, .35); background: rgba(15, 118, 110, .07); }
+.fitctl { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; font: 600 10px/1 inherit; }
+.fitctl__l { color: var(--ink-faint); text-transform: uppercase; letter-spacing: .09em; }
+.fitctl button {
+  cursor: pointer; border: 1px solid var(--hair); background: rgba(255,255,255,.6);
+  color: var(--ink-soft); padding: 4px 9px; border-radius: 999px; font: inherit; transition: all 160ms;
+}
+.fitctl button:hover { color: var(--ink); border-color: rgba(11, 111, 104, .35); }
+.fitctl button.on { color: #fff; background: var(--warn); border-color: transparent; }
+.panel__body { overflow-y: auto; padding: 10px 12px 14px; }
+.panel__body::-webkit-scrollbar { width: 6px; }
+.panel__body::-webkit-scrollbar-thumb { background: rgba(15, 118, 110, .22); border-radius: 999px; }
+.section { margin-top: 12px; }
+.section h4 {
+  margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--ink-faint); font-weight: 700;
+}
 
-.row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }
-.row:hover { background: rgba(255,255,255,.05); }
-.row.sel { background: rgba(90,103,242,.22); }
-.row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.dot.ok { background: #22c55e; } .dot.warn { background: #f59e0b; }
-.dot.broken { background: #ef4444; } .dot.neutral { background: #64748b; }
-.row .name { font: 600 11px/1.3 ui-monospace, monospace; }
-.row .meta { margin-left: auto; color: #64748b; font-size: 10px; }
+.row {
+  display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 9px; cursor: pointer;
+  transition: background 160ms, color 160ms, transform 160ms;
+}
+.row:hover { background: rgba(15, 118, 110, .07); transform: translateX(2px); }
+.row.sel { background: rgba(15, 118, 110, .11); color: #0b5b55; }
+.row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dot.ok { background: var(--ok); box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 70%, transparent); }
+.dot.warn { background: var(--warn); }
+.dot.broken { background: var(--broken); } .dot.neutral { background: #cdd6d2; }
+.row .name { font: 700 11px/1.3 var(--mono); }
+.row .meta { margin-left: auto; color: var(--ink-faint); font-size: 10px; }
 
-.prop { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font: 11px/1.4 ui-monospace, monospace; }
-.prop .pn { color: #cbd5e1; min-width: 92px; }
-.prop .badge { font-size: 9px; padding: 1px 6px; border-radius: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
-.badge.bound { background: rgba(34,197,94,.2); color: #4ade80; }
-.badge.bound-empty { background: rgba(245,158,11,.2); color: #fbbf24; }
-.badge.static { background: rgba(148,163,184,.2); color: #cbd5e1; }
-.badge.default { background: rgba(239,68,68,.2); color: #f87171; }
-.prop .val { color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font: 11px/1.4 var(--mono); }
+.prop .pn { color: var(--ink-soft); min-width: 92px; }
+.prop .badge {
+  font-size: 9px; padding: 2px 7px; border-radius: 999px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; font-family: inherit;
+}
+.badge.bound { background: rgba(15, 118, 110, .14); color: #0b5b55; }
+.badge.bound-empty { background: rgba(180, 83, 9, .14); color: var(--warn); }
+.badge.static { background: rgba(141, 133, 120, .16); color: #6f675c; }
+.badge.default { background: rgba(185, 28, 28, .12); color: var(--broken); }
+.prop .val { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.detail { margin-top: 10px; }
-.detail__title { display: flex; align-items: baseline; gap: 8px; padding-bottom: 2px; font: 700 12px/1.3 ui-monospace, monospace; color: #e2e8f0; }
-.detail__slot { font-weight: 500; font-size: 10px; color: #64748b; }
-.grp { margin-top: 9px; padding: 2px 0 4px 10px; border-left: 2px solid #64748b; }
-.grp__h { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; font: 700 10px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: 1px; }
+.detail { margin-top: 12px; }
+.detail__title { display: flex; align-items: baseline; gap: 8px; padding-bottom: 2px; font: 700 12px/1.3 var(--mono); color: var(--ink); }
+.detail__slot { font-weight: 500; font-size: 10px; color: var(--ink-faint); font-family: inherit; }
+.grp { margin-top: 10px; padding: 2px 0 4px 11px; border-left: 2px solid rgba(11, 111, 104, .2); }
+.grp__h { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font: 700 10px/1 inherit; text-transform: uppercase; letter-spacing: .09em; }
 .grp__bar { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.sub { margin: 6px 0 3px; font: 700 9px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .6px; color: #64748b; }
-.lr { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font: 11px/1.3 ui-monospace, monospace; }
-.lr__k { color: #94a3b8; min-width: 74px; flex: none; }
-.lr__k.warn { color: #fbbf24; }
-.lr__k.ext { color: #c4b5fd; }
-.lr__key { color: #cbd5e1; }
-.lr__t { margin-left: auto; color: #7dd3fc; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.origin { margin-left: 6px; font: 600 9px/1 ui-monospace, monospace; padding: 1px 5px; border-radius: 5px; background: rgba(148,163,184,.16); color: #94a3b8; }
-.origin.ext { background: rgba(167,139,250,.22); color: #c4b5fd; }
-.risk { margin: 2px 0 6px; padding: 4px 8px; border-radius: 6px; font: 600 10px/1.3 ui-monospace, monospace; color: #fca5a5; background: rgba(239,68,68,.12); }
-.st.ext { background: #a78bfa; }
+.sub { margin: 7px 0 3px; font: 700 9px/1 inherit; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); }
+.lr { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font: 11px/1.3 var(--mono); }
+.lr__k { color: var(--ink-soft); min-width: 74px; flex: none; }
+.lr__k.warn { color: var(--warn); }
+.lr__k.ext { color: #7c5cbf; }
+.lr__key { color: var(--ink); }
+.lr__t { margin-left: auto; color: var(--w-mid); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.origin {
+  margin-left: 6px; font: 700 9px/1 inherit; padding: 2px 6px; border-radius: 999px;
+  background: rgba(141, 133, 120, .16); color: #6f675c;
+}
+.origin.ext { background: rgba(124, 92, 191, .16); color: #7c5cbf; }
+.risk { margin: 3px 0 6px; padding: 5px 9px; border-radius: 8px; font: 600 10px/1.35 inherit; color: var(--broken); background: rgba(185, 28, 28, .10); }
+.st.ext { background: #7c5cbf; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip { font: 500 10px/1 ui-monospace, monospace; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.06); color: #cbd5e1; }
+.chip { font: 600 10px/1 var(--mono); padding: 4px 8px; border-radius: 999px; background: rgba(11, 111, 104, .08); color: var(--ink-soft); }
 
-.call { display: flex; align-items: center; gap: 8px; padding: 4px 0; font: 11px/1.3 ui-monospace, monospace; }
-.call .st { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.st.start { background: #38bdf8; } .st.success { background: #22c55e; } .st.error { background: #ef4444; }
-.call .ep { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.call .n { margin-left: auto; color: #64748b; }
-.call .isl { color: #818cf8; }
-.empty { color: #64748b; font-style: italic; padding: 4px 0; }
+.call { display: flex; align-items: center; gap: 8px; padding: 4px 0; font: 11px/1.3 var(--mono); }
+.call .st { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.st.start { background: var(--w-mid); } .st.success { background: var(--ok); } .st.error { background: var(--broken); }
+.call .ep { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call .n { margin-left: auto; color: var(--ink-faint); }
+.call .isl { color: var(--w-deep); }
+.empty { color: var(--ink-faint); font-style: italic; padding: 5px 0; font-family: inherit; }
 
-.ch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; font: 11px/1.3 ui-monospace, monospace; }
-.st.ch-live { background: #22c55e; } .st.ch-orphan { background: #f59e0b; } .st.ch-never { background: #ef4444; }
-.ch .pay { flex-basis: 100%; color: #64748b; padding-left: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch .links { flex-basis: 100%; padding-left: 16px; color: #7dd3fc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch .links.warn { color: #fbbf24; }
-.cp { display: flex; align-items: center; gap: 8px; padding: 3px 0; font: 11px/1.3 ui-monospace, monospace; }
-.cp .k { color: #cbd5e1; } .cp .rw { color: #64748b; }
-.cp .flag { margin-left: auto; font-size: 9px; padding: 1px 6px; border-radius: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
-.flag.coupling { background: rgba(239,68,68,.2); color: #f87171; }
-.flag.demote { background: rgba(245,158,11,.2); color: #fbbf24; }
+.ch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; font: 11px/1.3 var(--mono); }
+.st.ch-live { background: var(--ok); } .st.ch-orphan { background: var(--warn); } .st.ch-never { background: var(--broken); }
+.ch .pay { flex-basis: 100%; color: var(--ink-faint); padding-left: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch .links { flex-basis: 100%; padding-left: 16px; color: var(--w-mid); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch .links.warn { color: var(--warn); }
+.cp { display: flex; align-items: center; gap: 8px; padding: 3px 0; font: 11px/1.3 var(--mono); }
+.cp .k { color: var(--ink); } .cp .rw { color: var(--ink-faint); }
+.cp .flag {
+  margin-left: auto; font: 700 9px/1 inherit; padding: 2px 7px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.flag.coupling { background: rgba(185, 28, 28, .12); color: var(--broken); }
+.flag.demote { background: rgba(180, 83, 9, .14); color: var(--warn); }
 `;
 
 // --- The overlay controller ----------------------------------------------------------------------
@@ -265,13 +389,17 @@ class Overlay {
   #root: ShadowRoot;
   #layer: HTMLElement;
   #panel: HTMLElement | null = null;
-  #chip: HTMLButtonElement;
+  /** Null when the host root owns the trigger (`chip: false`). */
+  #chip: HTMLButtonElement | null = null;
   #boxes = new Map<MountedIslandInfo, { box: HTMLElement; tag: HTMLElement }>();
   #wires: SVGSVGElement;
   #open = false;
   #selected: MountedIslandInfo | null = null;
   #hovered: MountedIslandInfo | null = null;
   #showCoupling = false;
+  /** Element-picker mode: the next click on the page selects an island instead of reaching the app. */
+  #picking = false;
+  #dragOffset: { x: number; y: number } | null = null;
   #recording = false;
   #recStatus = '';
   #calls: CallRecord[] = [];
@@ -315,39 +443,76 @@ class Overlay {
     window.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === shortcut) {
         e.preventDefault();
-        this.#toggle();
+        this.toggle();
       }
+      if (e.key === 'Escape' && this.#picking) this.#setPicking(false);
     });
+
+    // Selecting an island happens ON THE PAGE, where the island is — not from a list of names in the
+    // panel. Two ways in, both capture-phase so the app never sees the click:
+    //   * the picker (a mode, like a browser inspector's element picker), and
+    //   * Alt-click, always live while the lens is open, for anyone who knows it.
+    // Everything else passes straight through: the lens stays a read-only observer of a usable page.
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!this.#open) return;
+        if (!this.#picking && !e.altKey) return;
+        const info = this.#islandAt(e.clientX, e.clientY);
+        if (!info && !this.#picking) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.#swallowNextClick();
+        if (this.#picking) this.#setPicking(false);
+        this.#select(info);
+      },
+      true,
+    );
     // Hit-test the real page (the overlay layer is pointer-events:none, so elementFromPoint returns the
     // page element under the cursor) to reveal only the hovered island's label — no always-on badges.
     window.addEventListener('pointermove', (e) => {
       if (this.#open) this.#hovered = this.#islandAt(e.clientX, e.clientY);
     });
 
-    // The overlay's toggle lives in the shared top-right toolbar (alongside the transport/fit chips).
-    this.#chip = document.createElement('button');
-    this.#chip.type = 'button';
-    this.#chip.title = 'motu debug — seam lens (Cmd/Ctrl+Shift+G)';
-    const chipDot = document.createElement('span');
-    chipDot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:#fff;opacity:.85';
-    const chipLabel = document.createElement('span');
-    chipLabel.textContent = 'debug';
-    this.#chip.append(chipDot, chipLabel);
-    this.#chip.addEventListener('click', () => this.#toggle());
-    motuToolbar().appendChild(this.#chip);
+    // Unless the host root owns the trigger, the overlay's toggle lives in the shared toolbar
+    // (alongside the transport/fit chips).
+    if (opts.chip !== false) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.title = 'motu debug — seam lens (Cmd/Ctrl+Shift+G)';
+      const chipDot = document.createElement('span');
+      chipDot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:#fff;opacity:.85';
+      const chipLabel = document.createElement('span');
+      chipLabel.textContent = 'debug';
+      chip.append(chipDot, chipLabel);
+      chip.addEventListener('click', () => this.toggle());
+      motuToolbar().appendChild(chip);
+      this.#chip = chip;
+    }
+
+    // A window pinned to a corner will eventually be in the way of the thing it is describing, so it
+    // is draggable — and a dragged window must survive the viewport shrinking under it. Bound once
+    // per overlay, not per panel: the panel is destroyed and rebuilt on every open.
+    window.addEventListener('resize', () => this.#clampPosition());
 
     this.#open = readOpen();
     this.#sync();
   }
 
-  #renderChip() {
-    this.#chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (this.#open ? '#5a67f2' : '#1e293b');
+  isOpen(): boolean {
+    return this.#open;
   }
 
-  #toggle() {
+  #renderChip() {
+    if (!this.#chip) return;
+    this.#chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (this.#open ? '#0f766e' : '#1e293b');
+  }
+
+  toggle() {
     this.#open = !this.#open;
     writeOpen(this.#open);
     this.#sync();
+    for (const fn of openListeners) fn(this.#open);
   }
 
   #sync() {
@@ -359,6 +524,7 @@ class Overlay {
       this.#renderPanel();
       this.#loop();
     } else {
+      if (this.#picking) this.#setPicking(false);
       this.#clearBoxes();
       this.#wires.replaceChildren();
       this.#hovered = null;
@@ -475,10 +641,10 @@ class Overlay {
         const anchors = [...islands].map((i) => islandAnchor(i.el)).filter((a): a is Point => !!a);
         if (anchors.length < 2) continue;
         const hub = { x: avg(anchors.map((a) => a.x)), y: avg(anchors.map((a) => a.y)) };
-        const color = islands.size >= 3 ? '#f87171' : '#fbbf24';
+        const color = islands.size >= 3 ? '#b91c1c' : '#b45309';
         for (const a of anchors) this.#wires.append(wire(hub.x, hub.y, a.x, a.y, color));
         const ring = svgDot(hub.x, hub.y, color, 5);
-        ring.setAttribute('stroke', '#0f172a');
+        ring.setAttribute('stroke', '#fffefb');
         ring.setAttribute('stroke-width', '2');
         this.#wires.append(ring);
         this.#wires.append(svgLabel(hub.x, hub.y - 9, key, color));
@@ -562,6 +728,24 @@ class Overlay {
     this.#renderPanel();
   }
 
+  /** A prevented pointerdown still lets the click through in some browsers; eat exactly one. */
+  #swallowNextClick() {
+    const eat = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('click', eat, { capture: true, once: true });
+    // If no click follows (drag, cancel), don't leave the trap armed for a later, legitimate click.
+    window.setTimeout(() => window.removeEventListener('click', eat, true), 400);
+  }
+
+  #setPicking(on: boolean) {
+    this.#picking = on;
+    // The page's own cursor says what mode you are in; the overlay layer can't (it is inert).
+    document.body.style.cursor = on ? 'crosshair' : '';
+    this.#renderPanel();
+  }
+
   // --- Call log --------------------------------------------------------------------------------
 
   #onCall(e: CallEvent) {
@@ -595,6 +779,87 @@ class Overlay {
     this.#panel = h('div', { class: 'panel' });
     this.#root.append(this.#panel);
     this.#renderPanel();
+    this.#restorePosition();
+  }
+
+  /** Move the panel to (x, y), clamped so it can never be dragged off where it can't be grabbed back. */
+  #placePanel(x: number, y: number) {
+    const panel = this.#panel;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const maxX = Math.max(0, window.innerWidth - r.width);
+    const maxY = Math.max(0, window.innerHeight - r.height);
+    const left = Math.min(Math.max(x, 0), maxX);
+    const top = Math.min(Math.max(y, 0), maxY);
+    // Inline left/top win over the corner-aware CSS defaults; right must be released or it fights.
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    panel.style.right = 'auto';
+    try {
+      localStorage.setItem(POS_KEY, JSON.stringify({ x: left, y: top }));
+    } catch {
+      /* storage disabled — the position just won't persist */
+    }
+  }
+
+  #clampPosition() {
+    const panel = this.#panel;
+    if (!panel || panel.style.left === '') return;
+    this.#placePanel(parseFloat(panel.style.left), parseFloat(panel.style.top));
+  }
+
+  /** Reopen where it was last left. Absent (or unparseable) => the corner-aware CSS default stands. */
+  #restorePosition() {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(POS_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    try {
+      const { x, y } = JSON.parse(raw) as { x: number; y: number };
+      if (Number.isFinite(x) && Number.isFinite(y)) this.#placePanel(x, y);
+    } catch {
+      /* ignore a corrupt value and keep the default placement */
+    }
+  }
+
+  /** Drag by the header, the way a window is dragged by its title bar. */
+  #makeDraggable(handle: HTMLElement) {
+    handle.addEventListener('pointerdown', (e) => {
+      // Buttons in the header are controls, not a grab area.
+      if ((e.target as HTMLElement).closest('button')) return;
+      const panel = this.#panel;
+      if (!panel) return;
+      const r = panel.getBoundingClientRect();
+      this.#dragOffset = { x: e.clientX - r.left, y: e.clientY - r.top };
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('grabbing');
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!this.#dragOffset) return;
+      this.#placePanel(e.clientX - this.#dragOffset.x, e.clientY - this.#dragOffset.y);
+    });
+    const end = () => {
+      this.#dragOffset = null;
+      handle.classList.remove('grabbing');
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    // Double-click the title bar to send it back to its default corner.
+    handle.addEventListener('dblclick', (e) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      this.#panel?.style.removeProperty('left');
+      this.#panel?.style.removeProperty('top');
+      this.#panel?.style.removeProperty('right');
+      try {
+        localStorage.removeItem(POS_KEY);
+      } catch {
+        /* ignore */
+      }
+    });
   }
 
   // Human fixture capture. Toggles the runtime recorder (read-only — it only observes call()); on
@@ -668,10 +933,18 @@ class Overlay {
       this.#showCoupling = !this.#showCoupling;
       this.#renderPanel();
     });
+    const pickBtn = h('button', { title: 'Pick an island on the page (Esc to cancel \u00b7 or Alt-click any island)' }, '\u2316');
+    if (this.#picking) pickBtn.classList.add('on');
+    pickBtn.addEventListener('click', () => this.#setPicking(!this.#picking));
     const closeBtn = h('button', { title: 'Close (Cmd/Ctrl+Shift+G)' }, '\u2715');
-    closeBtn.addEventListener('click', () => this.#toggle());
-    head.append(recBtn, couplingBtn, closeBtn);
+    closeBtn.addEventListener('click', () => this.toggle());
+    head.append(pickBtn, recBtn, couplingBtn, closeBtn);
     this.#panel.append(head);
+    this.#makeDraggable(head);
+
+    if (this.#picking) {
+      this.#panel.append(h('div', { class: 'pickbar' }, '\u2316 click an island on the page \u2014 Esc to cancel'));
+    }
 
     // Recording status (human fixture capture): read-only — it only observes the call() seam.
     if (this.#recording || this.#recStatus) {
@@ -682,41 +955,27 @@ class Overlay {
     }
 
     const body = h('div', { class: 'panel__body' });
-    body.append(this.#islandList());
     if (this.#selected) {
-      // Island scope: its own input / output / coupling.
+      // Island scope: its own input / output / coupling. The way back is here, not in a list.
+      const back = h('button', { class: 'back', title: 'Back to the whole region' }, '\u25c2 All islands');
+      back.addEventListener('click', () => this.#select(null));
+      body.append(back);
       body.append(this.#detail(this.#selected));
     } else {
       // Archipelago scope: the same three axes for the whole region — input (host channels), output
-      // (contract calls), coupling (shared store keys). Select an island to narrow to it.
+      // (contract calls), coupling (shared store keys). Pick an island on the page to narrow to it.
+      body.append(
+        h(
+          'div',
+          { class: 'scopehint' },
+          `${getMountedIslands().length} island(s) on screen \u00b7 click \u2316 above, or Alt-click one, to inspect it`,
+        ),
+      );
       body.append(this.#archInput());
       body.append(this.#archOutput());
       body.append(this.#archCoupling());
     }
     this.#panel.append(body);
-  }
-
-  #islandList(): HTMLElement {
-    const sec = h('div', { class: 'section' });
-    const islands = getMountedIslands();
-    const scope = this.#selected ? this.#selected.element : 'all islands';
-    sec.append(h('h4', {}, `Islands (${islands.length}) \u00b7 ${scope}`));
-    if (!islands.length) {
-      sec.append(h('div', { class: 'empty' }, 'No islands mounted.'));
-      return sec;
-    }
-    for (const info of islands) {
-      const def = getIslandDefinition(info.element);
-      const v = verdictOf(computeProps(info, def));
-      const row = h('div', { class: `row${this.#selected === info ? ' sel' : ''}` });
-      row.append(h('span', { class: `dot ${v}` }));
-      row.append(h('span', { class: 'name' }, info.element));
-      row.append(h('span', { class: 'meta' }, `${info.slot} \u00b7 ${isolationOf(info.el)}`));
-      // Clicking the selected island again clears the selection, back to the archipelago view.
-      row.addEventListener('click', () => this.#select(this.#selected === info ? null : info));
-      sec.append(row);
-    }
-    return sec;
   }
 
   // Per-island fit override: preview a MIXED soft-migration state (one island legacy, another native)
@@ -774,7 +1033,7 @@ class Overlay {
 
     // INPUT — declared props (bound / default + live value), their ORIGIN (does the value cross the
     // motu boundary from the ocean, or come from a sibling island?), and the channels feeding them.
-    const input = this.#group('input', '#38bdf8');
+    const input = this.#group('input', '#12988f');
     const risk = this.#externalRisk(info);
     if (risk) input.append(h('div', { class: 'risk' }, `\u26a0 ${risk} \u2014 verify embedded`));
     if (!rows.length) input.append(h('div', { class: 'empty' }, 'No declared props.'));
@@ -805,7 +1064,7 @@ class Overlay {
 
     // OUTPUT — events it emits, store keys it has written (observed), host intents it pushed OUT to
     // the ocean, and contract calls it made to the backend (both cross the motu boundary).
-    const output = this.#group('output', '#f59e0b');
+    const output = this.#group('output', '#b45309');
     const emits = Object.keys(info.spec.on ?? {});
     if (emits.length) {
       output.append(this.#subLabel('emits events'));
@@ -833,7 +1092,7 @@ class Overlay {
 
     // COUPLING — sibling islands sharing a store key: depends-on (their writes feed my reads), feeds
     // (my writes feed their reads), and co-reads (a shared input source), all store-mediated.
-    const coupling = this.#group('coupling', '#f87171');
+    const coupling = this.#group('coupling', '#b91c1c');
     const up = this.#upstream(info);
     const down = this.#downstream(info);
     const co = this.#coReaders(info);
@@ -978,7 +1237,7 @@ class Overlay {
   // Archipelago INPUT: the host channels feeding the shared store (host -> store -> islands). Shows
   // fired / never-fired (the silent-event bug), last payload + age, and which islands read each.
   #archInput(): HTMLElement {
-    const g = this.#group('input', '#38bdf8');
+    const g = this.#group('input', '#12988f');
     const active = this.#activeStores();
     const channels = getChannels().filter((c) => active.has(c.store));
     const dead = channels.filter((c) => c.fireCount === 0).length;
@@ -1034,7 +1293,7 @@ class Overlay {
   // Archipelago COUPLING: per shared store key, how many islands read/write it, flagging demotion
   // candidates (single reader) and accreting coupling (touched by many).
   #archCoupling(): HTMLElement {
-    const g = this.#group('coupling', '#f87171');
+    const g = this.#group('coupling', '#b91c1c');
     g.append(this.#subLabel('shared store keys \u00b7 Nr / Mw'));
     const groups = new Map<Store, MountedIslandInfo[]>();
     for (const info of getMountedIslands()) {
@@ -1080,7 +1339,7 @@ class Overlay {
   // Archipelago OUTPUT: host intents pushed OUT to the ocean, and every contract call the region made
   // to the backend (with duplicate detection — the same endpoint+args fetched twice).
   #archOutput(): HTMLElement {
-    const g = this.#group('output', '#f59e0b');
+    const g = this.#group('output', '#b45309');
     // Scope to the region on screen: intents from its mounted islands, calls attributed to its tags.
     const slots = new Set(getMountedIslands().map((i) => i.slot));
     const tags = this.#activeIslandTags();
@@ -1122,7 +1381,8 @@ class Overlay {
 }
 
 function boxColor(v: Verdict): string {
-  return v === 'ok' ? '#22c55e' : v === 'warn' ? '#f59e0b' : v === 'broken' ? '#ef4444' : '#64748b';
+  // Same four meanings, re-tuned for a light ground: ok reads as lagoon teal rather than a neon green.
+  return v === 'ok' ? '#0f766e' : v === 'warn' ? '#b45309' : v === 'broken' ? '#b91c1c' : '#8d8578';
 }
 
 interface Point {
@@ -1170,7 +1430,7 @@ function svgLabel(x: number, y: number, text: string, color: string): SVGTextEle
   t.setAttribute('font-size', '10');
   t.setAttribute('font-weight', '700');
   t.setAttribute('fill', color);
-  t.setAttribute('stroke', '#0f172a');
+  t.setAttribute('stroke', '#fffefb');
   t.setAttribute('stroke-width', '3');
   t.setAttribute('paint-order', 'stroke');
   t.textContent = text;

@@ -20,9 +20,8 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { resolve, sep } from 'node:path';
-import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
+import { REPO_ROOT, APP_ROOT, paths, names, color, VITE_BIN } from '../lib/util.mjs';
 
-const VITE_BIN = resolve(REPO_ROOT, 'node_modules/vite/bin/vite.js');
 
 /**
  * Resolve the CLI's target flags into what the lagoon build needs.

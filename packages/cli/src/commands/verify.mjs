@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
-import { paths, names, color } from '../lib/util.mjs';
+import { paths, names, color, HOST, LEGACY_FIT } from '../lib/util.mjs';
 import { runLagoon, runArchipelagoLagoon, differentiateLagoon } from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -237,10 +237,14 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     .trim()
     .replace(/['"]/g, '');
   const options = row.getProperty('options')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+  // Fitting an island to a legacy skin is only meaningful when the host HAS one. On a React host
+  // (next/none) the island mounts directly, so requiring the strategy would be dead ceremony.
   if (options?.getProperty('legacy')) {
     report.ok('legacy-strategy', 'declares a required legacy-fit strategy');
-  } else {
+  } else if (LEGACY_FIT) {
     report.error('legacy-strategy', 'element row is missing the required `legacy` strategy');
+  } else {
+    report.ok('legacy-strategy', `no legacy fit required (host: ${HOST})`);
   }
 
   // props/events reconciliation: the registry (element.ts) and the component are the two sources of
@@ -505,6 +509,23 @@ function reportDifferentiation(report, r) {
   }
 }
 
+/**
+ * Condense a lagoon boot failure into one actionable line.
+ *
+ * startLagoon attaches vite's own stdout/stderr to the error, but taking only the first line threw it
+ * away — so every misconfiguration surfaced as "vite did not open port N in time", which says nothing
+ * about the cause. Keep the headline, then append the first line of vite output that actually names
+ * the problem.
+ */
+function lagoonFailure(err) {
+  const full = String(err?.message || err);
+  const headline = full.split('\n')[0];
+  const detail = full
+    .split('\n')
+    .find((l) => /^(Error|\s*failed to|.*ERR_[A-Z_]+|.*Cannot find)/.test(l) && !l.includes('did not open port'));
+  return detail ? `${headline} — ${detail.trim()}` : headline;
+}
+
 /** Real-browser lagoon mount via Playwright/Chromium for one fit (the default). */
 async function runtimeCheckBrowser(report, tag, fit, port) {
   try {
@@ -514,7 +535,7 @@ async function runtimeCheckBrowser(report, tag, fit, port) {
     else report.warn('lagoon-render', `mounts but renders nothing from default props (fit=${fit}) — confirm this island's empty state is intentional (e.g. a pure projection)`);
     reportRuntimeDiagnostics(report, r, `fit=${fit}`);
   } catch (err) {
-    const msg = String(err?.message || err).split('\n')[0];
+    const msg = lagoonFailure(err);
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
       report.error('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli), or use --fast for the happy-dom mount`);
     } else {
@@ -536,7 +557,7 @@ async function runtimeErrorCheck(report, tag, port) {
       report.error('error-resilient', `unhandled backend error — the island must catch its own calls: ${r.diagnostics[0]}`);
     }
   } catch (err) {
-    const msg = String(err?.message || err).split('\n')[0];
+    const msg = lagoonFailure(err);
     // A missing browser is already reported by the normal lagoon check; don't double-report.
     if (!/Executable doesn't exist|playwright install/i.test(msg)) {
       report.error('error-resilient', `error mount failed: ${msg}`);
@@ -546,7 +567,13 @@ async function runtimeErrorCheck(report, tag, port) {
 
 // Known adapter packages -> their verify contribution's export specifier. Discovery is by the adapter
 // the island actually imports (read from element.ts), resolved via the package's `./verify` export.
-const ADAPTER_VERIFY = { '@motu/adapter-angularjs': '@motu/adapter-angularjs/verify' };
+const ADAPTER_VERIFY = {
+  '@motu/adapter-angularjs': '@motu/adapter-angularjs/verify',
+  '@motu/adapter-next': '@motu/adapter-next/verify',
+};
+
+// Fallback discovery for hosts whose islands don't import an adapter at the mount point.
+const HOST_ADAPTER_VERIFY = { next: '@motu/adapter-next/verify' };
 
 /** Extract the structured `contract.coupling` from an island's element.ts (AST, not regex). */
 function extractCoupling(elementPath) {
@@ -581,17 +608,24 @@ function extractCoupling(elementPath) {
  * element.ts) and hand its verify contribution the STRUCTURED coupling we extract by AST — the CLI owns
  * the parsing (it has ts-morph), the adapter owns the semantics.
  */
-async function adapterChecks(report, kebab) {
+async function adapterChecks(report, kebab, componentPath) {
   const elementPath = paths.elementFile(kebab);
   if (!existsSync(elementPath)) return;
   const text = readFileSync(elementPath, 'utf8');
+  // Discovery is by the adapter the island IMPORTS — right for AngularJS, where the mount point is
+  // adapter-specific. A React host's mount point imports no adapter (the adapter lives at the
+  // composition root), so fall back to the configured host: the coupling is a property of where the
+  // island is going, not of what element.ts happens to import.
   const pkgs = [...text.matchAll(/from\s+['"](@motu\/adapter-[\w-]+)['"]/g)].map((m) => m[1]);
-  const specifier = pkgs.map((p) => ADAPTER_VERIFY[p]).find(Boolean);
-  if (!specifier) return; // island uses no adapter that ships a verify contribution
+  const specifier = pkgs.map((p) => ADAPTER_VERIFY[p]).find(Boolean) ?? HOST_ADAPTER_VERIFY[HOST];
+  if (!specifier) return; // no adapter ships a verify contribution for this island/host
   const coupling = extractCoupling(elementPath);
+  // Hand over the component source too: some host boundaries (Next's server/client split) live in the
+  // component, not in the mount point. The CLI reads; the adapter judges.
+  const source = componentPath && existsSync(componentPath) ? readFileSync(componentPath, 'utf8') : undefined;
   try {
     const mod = await import(specifier);
-    for (const f of mod.checkCoupling({ coupling })) report[f.level](f.check, f.msg);
+    for (const f of mod.checkCoupling({ coupling, source, elementSource: text })) report[f.level](f.check, f.msg);
   } catch (err) {
     report.warn('adapter-verify', `could not run ${specifier}: ${String(err?.message || err)}`);
   }
@@ -628,7 +662,7 @@ export async function verifyCommand(argv) {
   }
 
   // Adapter-owned checks (e.g. the AngularJS host-scope contract) fold in regardless of island kind.
-  await adapterChecks(report, kebab);
+  await adapterChecks(report, kebab, isReactIsland ? componentPath : null);
 
   // CSS lint of the island's OWN stylesheet if it owns one (opt-in; the shared sheet is linted at
   // region scope by `motu archipelago verify`).
@@ -639,7 +673,9 @@ export async function verifyCommand(argv) {
     // Randomize the base port so parallel/back-to-back verifies don't collide on a strict port.
     let port = 5300 + Math.floor(Math.random() * 400);
     const fixturesPath = existsSync(paths.fixturesFile(kebab)) ? paths.fixturesFile(kebab) : '';
-    for (const fit of ['native', 'legacy']) {
+    // 'legacy' fit re-mounts the island under the host's legacy skin. Skip it where there is no
+    // legacy skin — it would verify the same thing twice and double the wall clock.
+    for (const fit of LEGACY_FIT ? ['native', 'legacy'] : ['native']) {
       if (argv.fast) {
         runtimeCheckFast(report, resolvedTag, fixturesPath, fit);
       } else {

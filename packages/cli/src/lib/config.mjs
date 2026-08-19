@@ -25,7 +25,18 @@ const DEFAULTS = {
   manifest: 'target/motu-manifest.json',
   tagPrefix: 'x-',
   isolation: 'shadow',
+  // The stack the islands are embedded INTO. It selects the adapter, and decides whether the
+  // "legacy fit" gate applies: fitting an island to a legacy skin is only meaningful when there IS
+  // a legacy skin. 'angularjs' = the reference ocean; 'next'/'none' = a modern React host, where an
+  // island is mounted directly and there is nothing to fit to.
+  host: 'angularjs',
+  // Root of the HOST application (relative to the project root) — where a 'next' lagoon resolves the
+  // host's own path aliases, Tailwind config and component library from. Defaults to the app root.
+  hostRoot: '.',
 };
+
+/** Hosts that have a legacy skin an island must be proven to survive. */
+const LEGACY_FIT_HOSTS = new Set(['angularjs']);
 
 function findConfig(startDir) {
   let dir = startDir;
@@ -70,6 +81,10 @@ export function loadMotuConfig() {
     appPackage: cfg.appPackage ?? basename(appRoot),
     tagPrefix: cfg.tagPrefix,
     isolation: cfg.isolation === 'light' ? 'light' : 'shadow',
+    host: cfg.host ?? 'angularjs',
+    /** Whether `legacy` fit is a required strategy + a verified runtime mount for this host. */
+    legacyFit: cfg.legacyFit ?? LEGACY_FIT_HOSTS.has(cfg.host ?? 'angularjs'),
+    hostRoot: resolve(root, cfg.hostRoot ?? cfg.app ?? '.'),
     islandsDir: inApp(cfg.islands),
     uiDir: inApp(cfg.ui),
     archipelagosDir: inApp(cfg.archipelagos),

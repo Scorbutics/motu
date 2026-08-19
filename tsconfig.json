@@ -1,12 +1,29 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/runtime" },
-    { "path": "./demo-app/contract" },
-    { "path": "./packages/core" },
-    { "path": "./packages/adapters/angularjs" },
-    { "path": "./packages/react" },
-    { "path": "./packages/debug-overlay" },
-    { "path": "./demo-app" }
+    {
+      "path": "./packages/runtime"
+    },
+    {
+      "path": "./demo-app/contract"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/adapters/angularjs"
+    },
+    {
+      "path": "./packages/adapters/next"
+    },
+    {
+      "path": "./packages/react"
+    },
+    {
+      "path": "./packages/debug-overlay"
+    },
+    {
+      "path": "./demo-app"
+    }
   ]
 }

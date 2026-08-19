@@ -1,0 +1,111 @@
+// Adapter-owned verify layer for Next.js islands. Core `motu island verify` runs the framework-neutral
+// static/config/runtime checks; it cannot judge the one coupling unique to this host — the RSC
+// boundary.
+//
+// Why this is the Next analogue of the AngularJS adapter's host-scope check: both police the ONE way an
+// island can silently bind itself to its host. On AngularJS that is reaching up the scope chain. On
+// Next it is reaching across the server/client split. An island that imports `next/headers`, or awaits
+// a server action, or omits 'use client', is a component only Next can render — and the lagoon is a
+// plain Vite SPA with no Next runtime at all. It would pass every static check and then fail to mount,
+// or worse, mount only in the host and never in the loop. The loop is the product; this keeps islands
+// inside it.
+//
+// Operates on the source text + the structured coupling the CLI extracts from element.ts via AST (no
+// ts-morph dependency here — the CLI owns parsing, the adapter owns semantics). Discovery is by package
+// export (`@motu/adapter-next/verify`), resolved from the adapter the island actually imports.
+
+/** Modules that only exist on the server. Importing one makes the component unmountable in the lagoon. */
+const SERVER_ONLY = [
+  'server-only',
+  'next/headers',
+  'next/server',
+  'next/cache',
+  'next/og',
+];
+
+/** Next modules an island may use — the lagoon stubs exactly these (see the scaffolded next-stubs). */
+const STUBBED = ['next/link', 'next/image', 'next/navigation'];
+
+/**
+ * @param {{ source?: string, coupling?: { serverActions?: boolean } }} input
+ *   source   — the ui component's source text (the CLI reads the file; the adapter judges it)
+ *   coupling — structured `contract.coupling` from element.ts
+ * @returns {{ level: 'error'|'warn'|'ok', check: string, msg: string }[]}
+ */
+export function checkCoupling({ source, coupling } = {}) {
+  const findings = [];
+  if (typeof source !== 'string') return findings;
+
+  // Strip comments so a rule is not tripped by prose ABOUT the rule (this file would fail itself).
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  const imports = [...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+
+  // 1. Server-only imports — the island could never mount in the lagoon.
+  const serverImports = imports.filter((s) => SERVER_ONLY.some((m) => s === m || s.startsWith(m + '/')));
+  if (serverImports.length) {
+    for (const s of serverImports) {
+      findings.push({
+        level: 'error',
+        check: 'rsc-boundary',
+        msg: `imports server-only '${s}' — an island must mount in the lagoon, which has no Next runtime`,
+      });
+    }
+  } else {
+    findings.push({ level: 'ok', check: 'rsc-boundary', msg: 'no server-only imports' });
+  }
+
+  // 2. 'use client'. An island always REACHES the browser — it mounts inside a custom element, which
+  //    only ever runs client-side — so the directive is not what makes it work today. It is what keeps
+  //    it working on the way out: motu's exit path is dropping the wrapper and importing the ui
+  //    component directly, and at that moment a hook-using component with no directive breaks the
+  //    first server page that renders it. So: an error once the component actually uses hooks (the
+  //    break is real and mechanical), a warning otherwise (a pure projection is safe either way).
+  const hasUseClient = /^\s*['"]use client['"]/.test(code);
+  const usesHooks = /\buse(State|Effect|Reducer|Ref|Callback|Memo|Context|LayoutEffect|Transition|Optimistic)\s*\(/.test(code);
+  if (hasUseClient) {
+    findings.push({ level: 'ok', check: 'use-client', msg: "declares 'use client'" });
+  } else if (usesHooks) {
+    findings.push({
+      level: 'error',
+      check: 'use-client',
+      msg: "uses hooks without 'use client' — mounts fine as an island, but breaks the moment the component is imported directly (the exit path)",
+    });
+  } else {
+    findings.push({
+      level: 'warn',
+      check: 'use-client',
+      msg: "no 'use client' — safe while it stays a pure projection; add it before the component grows state",
+    });
+  }
+
+  // 3. Server actions. A 'use server' function is an RPC the lagoon cannot serve; server I/O belongs
+  //    on the contract seam, which MockTransport can stand in for.
+  if (/['"]use server['"]/.test(code)) {
+    findings.push({
+      level: 'error',
+      check: 'rsc-boundary',
+      msg: "contains a 'use server' action — server I/O goes through the contract seam, not an RPC the lagoon cannot replay",
+    });
+  } else if (coupling?.serverActions) {
+    findings.push({
+      level: 'warn',
+      check: 'rsc-boundary',
+      msg: 'declares serverActions coupling — the lagoon cannot replay these; prefer the contract seam',
+    });
+  }
+
+  // 4. Stubbed Next modules are allowed but reported, so the coupling stays visible: what the lagoon
+  //    renders for them is inert, and an island leaning on their real behaviour will pass here and
+  //    still be wrong in the host.
+  const stubbed = imports.filter((s) => STUBBED.includes(s));
+  if (stubbed.length) {
+    findings.push({
+      level: 'warn',
+      check: 'next-stubs',
+      msg: `uses ${stubbed.join(', ')} — inert in the lagoon (navigation is a host intent, not an island concern)`,
+    });
+  }
+
+  return findings;
+}

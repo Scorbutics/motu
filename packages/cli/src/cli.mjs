@@ -38,7 +38,7 @@ function parse(args) {
 const USAGE = `${color.bold('motu')} — island / archipelago CLI
 
 ${color.bold('Usage:')}
-  motu init [dir]                                   scaffold motu.config.json + empty roots/registries
+  motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
   motu island verify <name>                         run the island rules + lagoon mount (the loop)
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago

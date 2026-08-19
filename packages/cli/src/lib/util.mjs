@@ -1,6 +1,7 @@
 // Shared helpers: project layout + island name derivation. The layout (WHERE each piece lands) is
 // declared in motu.config.json and resolved by loadMotuConfig(); the CLI holds no hardcoded app
 // paths. WHAT lives inside each root stays motu's convention (islands/<kebab>/…, ui/<kebab>/…).
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
 import { loadMotuConfig } from './config.mjs';
@@ -14,6 +15,10 @@ export const REPO_ROOT = cfg.root;
 export const APP_ROOT = cfg.appRoot;
 /** The npm package name whose barrel exports ELEMENT_REGISTRY (for the runtime harness). */
 export const APP_PACKAGE = cfg.appPackage;
+/** The stack the islands embed into ('angularjs' | 'next' | 'none') — selects host-specific gates. */
+export const HOST = cfg.host;
+/** Whether the `legacy` fit gate applies (only hosts that actually have a legacy skin). */
+export const LEGACY_FIT = cfg.legacyFit;
 
 const ISLANDS_DIR = cfg.islandsDir;
 const ARCHIPELAGOS_DIR = cfg.archipelagosDir;
@@ -47,6 +52,28 @@ export const paths = {
   /** Project-relative display path for messages — derived from config, never hardcoded. */
   rel: (abs) => relative(cfg.root, abs) || '.',
 };
+
+/**
+ * Locate the vite binary that serves/builds the lagoon.
+ *
+ * A single `REPO_ROOT/node_modules/vite` join only works when the project root is also the install
+ * root. It is not, in the case motu has to support: a motu project living in a SUBFOLDER of an
+ * existing app, where node_modules sits at the app root above it (or is hoisted further up still).
+ * Walk up from the lagoon itself — the app that actually needs vite — then fall back to the motu
+ * checkout's own install, so a project with no vite of its own can still close the loop.
+ */
+function findVite() {
+  const candidates = [];
+  for (let dir = cfg.lagoonDir; ; dir = dirname(dir)) {
+    candidates.push(resolve(dir, 'node_modules/vite/bin/vite.js'));
+    if (dirname(dir) === dir) break;
+  }
+  candidates.push(resolve(here, '../../node_modules/vite/bin/vite.js'));
+  return candidates.find((p) => existsSync(p)) ?? candidates[0];
+}
+
+/** The vite binary the lagoon is served/built with (see findVite). */
+export const VITE_BIN = findVite();
 
 /** Accepts kebab-case, PascalCase or camelCase and returns the canonical names used throughout. */
 export function names(input) {

@@ -6,10 +6,34 @@ import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { resolve } from 'node:path';
-import { REPO_ROOT, paths, color } from './lib/util.mjs';
+import { existsSync } from 'node:fs';
+import { REPO_ROOT, paths, color, VITE_BIN } from './lib/util.mjs';
 
-const VITE_BIN = resolve(REPO_ROOT, 'node_modules/vite/bin/vite.js');
 const LAGOON_DIR = paths.lagoonDir;
+
+
+/**
+ * The lagoon is the loop: without it `verify` has static checks and nothing else. Both of its
+ * preconditions used to fail as a bare spawn ENOENT (an unhandled 'error' event that killed the
+ * process with a stack trace), which reads as a motu bug rather than a missing composition root.
+ * Diagnose them up front instead.
+ */
+function assertLagoonBootable() {
+  if (!existsSync(LAGOON_DIR)) {
+    throw new Error(
+      `no lagoon root at ${paths.rel(LAGOON_DIR)} — the lagoon is where verify mounts the island, so ` +
+        `there is nothing to verify against. Run \`motu init --host <angularjs|next|none>\` to scaffold ` +
+        `one, or point "lagoon" in motu.config.json at an existing composition root.`,
+    );
+  }
+  if (!existsSync(VITE_BIN)) {
+    throw new Error(
+      `vite not found — the lagoon is a Vite app. Searched node_modules from ${paths.rel(LAGOON_DIR)} ` +
+        `up to the filesystem root, and the motu checkout. Install dependencies in the project ` +
+        `(${paths.rel(REPO_ROOT)}) first.`,
+    );
+  }
+}
 
 function waitForPort(port, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
@@ -32,6 +56,7 @@ function waitForPort(port, timeoutMs = 30000) {
 
 /** Start the lagoon Vite dev server focused on one target ("island:x-…" | "archipelago:id"). */
 async function startLagoon({ target, fit = 'native', port, forceError, transport }) {
+  assertLagoonBootable();
   // Spawn vite DIRECTLY (not via `pnpm exec`) in its own process group: a pnpm wrapper would spawn
   // vite as a grandchild that gets orphaned on kill and keeps holding the strict port, so a later run
   // would connect to the stale server. `detached: true` lets us SIGKILL the whole group in stop().

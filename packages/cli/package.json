@@ -10,7 +10,8 @@
     "@motu/core": "workspace:*",
     "@motu/adapter-angularjs": "workspace:*",
     "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*"
+    "@motu/runtime": "workspace:*",
+    "@motu/adapter-next": "workspace:*"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.11.2",

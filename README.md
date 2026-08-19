@@ -147,6 +147,7 @@ packages/                 # the framework (published @motu/* packages)
   react/         defineReactElement + registerElements + defineMotuApp + defineLagoon.
   adapters/
     angularjs/   AngularJS adapter (defineAngularElement, channels, host bridge) + verify contribution.
+    next/        Next.js adapter (nextHostBridge, <Archipelago>) + RSC-boundary verify contribution.
   codegen/       manifest.json -> TypeScript contract CLI.
   cli/           `motu` CLI: island create / verify (the loop) / integrate, archipelago create/verify,
                  fixtures record, codegen.
@@ -181,6 +182,7 @@ without a human eyeballing the host. It scaffolds the island artifacts, edits th
 config via AST, and — the point of it — **verifies** that a component is actually a valid island.
 
 ```
+pnpm motu init [dir] --host next|angularjs|none       # scaffold config + registries + a working lagoon
 pnpm motu island create <name>                        # component + registry row + fixtures stub
 pnpm motu island verify <name>                        # the loop: rules + lagoon mount (PASS/FAIL + exit code)
 pnpm motu island integrate <name> --archipelago <id>  # AST membership + layout marker
@@ -261,6 +263,140 @@ lifts an existing *ocean* component into an island; `island-create`
 builds a brand-new island (archipelago-first → lagoon → verify → integrate → ocean tests → human gate).
 Both orchestrate the CLI verbs, keeping legacy-stack knowledge in the skill so the CLI stays
 stack-agnostic.
+
+## Adopting motu in an existing project
+
+motu does not need to own the repo. `motu init` scaffolds into a **subfolder** of an app you already
+have, and nothing outside that folder changes until you choose to mount an archipelago.
+
+```bash
+cd ~/dev/my-app
+motu init motu --host next --hostRoot .. --appPackage my-islands
+cd motu/roots/lagoon && npm install     # the lagoon's own build deps (vite + plugin-react)
+```
+
+That produces a project where the loop already closes:
+
+```
+my-app/
+  motu/
+    motu.config.json          layout + host declaration (the only file the CLI reads)
+    src/islands/              mount points  (element.ts, fixtures.mock.ts)
+    src/ui/                   the components — the part that survives to the mainland
+    src/archipelagos/         region compositions + the shared Store
+    src/shared/styles.css     the island stylesheet
+    roots/lagoon/             where `motu island verify` mounts things
+  app/  components/  lib/     ...your application, untouched
+```
+
+`--host` picks the stack the islands embed **into**, which is what decides the gates and the wiring:
+
+| `--host` | legacy fit | adapter | lagoon speaks |
+| --- | --- | --- | --- |
+| `angularjs` | required (`native` + `legacy` mounts) | `@motu/adapter-angularjs` | AngularJS host scope, `$http` channels |
+| `next` | off | `@motu/adapter-next` | the host's `@/…` alias, its Tailwind, inert `next/*` stubs |
+| `none` | off | — | plain React, nothing host-specific |
+
+Fitting an island to a legacy skin is only meaningful when the host has one, so `next`/`none` skip
+the `legacy` strategy gate and the second runtime mount. `--host next` also defaults isolation to
+`light`: shadow DOM would cut islands off from the host's own stylesheet, Tailwind included.
+
+### No install of the framework itself
+
+`@motu/*` are unpublished workspace packages whose entry point is raw TypeScript, so an existing app
+cannot simply depend on them. The lagoon is a Vite app and transpiles TS anyway, so `motu init`
+points it straight at the checkout's sources instead:
+
+```jsonc
+// motu.config.json
+"motuRoot": "../../motu"   // the one machine-specific path; override per-machine with MOTU_ROOT
+```
+
+The generated `vite.config.ts` turns that into `resolve.alias` entries. Consequences worth knowing:
+
+- The lagoon installs **no React**. It resolves the host application's copy and pins it with
+  `resolve.dedupe`, because two Reacts break hooks the moment an island renders a component from the
+  host's own library.
+- Aliases are anchored regexes, not the object form: Vite's alias matcher is exact-or-prefix-with-a-
+  slash, which never matches `pkg/styles.css?inline` and lets `@motu/runtime` swallow
+  `@motu/runtime/mock`.
+- Only the lagoon's own build tools need installing (`vite`, `@vitejs/plugin-react`, plus
+  `tailwindcss`/`autoprefixer` for a Next host).
+
+### Migrating a component
+
+Start with a leaf — no I/O, no router, no host reach — so the first island exercises the wiring and
+nothing else.
+
+```bash
+motu archipelago create directory
+motu island create phone-display
+# port the component into src/ui/phone-display/PhoneDisplay.tsx
+motu island integrate phone-display --archipelago directory
+motu island verify phone-display
+```
+
+A ported component keeps importing the host's own modules (`@/lib/phone-format`) rather than copying
+logic — the lagoon resolves that alias exactly as Next does, so the island and the original cannot
+disagree. Give every prop a default: "renders from default props alone" is what makes the lagoon a
+test rather than a demo.
+
+### Mounting islands in a Next app
+
+There is no `bridge.js` and no injected markers — a Next host is already React, so a page renders the
+archipelago directly:
+
+```tsx
+'use client';
+import { Archipelago, nextHostBridge } from '@motu/adapter-next';
+import { ELEMENT_REGISTRY, getArchipelago } from 'my-islands';
+import css from 'my-islands/styles.css?inline';
+
+export function Directory() {
+  const router = useRouter();
+  const host = useMemo(() => nextHostBridge(router), [router]);
+  return (
+    <Archipelago config={getArchipelago('directory')!} elements={ELEMENT_REGISTRY} css={css} host={host} />
+  );
+}
+```
+
+The custom elements stay, even though React could render the components directly, because they carry
+what motu is for: one declared `Store` per region, declarative `bind` from store key to island prop,
+the host-intent seam, and the debug overlay's view of all three. Dropping to bare imports drops the
+discipline with them.
+
+For the Next app to import from the motu subfolder, add a path alias in `tsconfig.json`
+(`"my-islands": ["./motu/src/index.ts"]`) and list it in `transpilePackages` in `next.config.mjs`.
+
+### What `@motu/adapter-next` is (and is not)
+
+Deliberately small — the AngularJS adapter is large because AngularJS is a *foreign* framework
+needing channels and a custom-element definer to cross into. A Next host is already React, so the
+adapter is only:
+
+- **`nextHostBridge(router)`** — turns an island's `navigate` intent into `router.push()`. Islands
+  are forbidden from touching `history`/`location` (that rule is what lets the same component mount
+  in a lagoon with no router at all), so something has to do this at the composition root.
+- **`Archipelago`** — the React component above.
+- **`@motu/adapter-next/verify`** — the RSC boundary, which is Next's analogue of AngularJS's
+  host-scope coupling. Both police the one way an island can silently bind to its host. It errors on
+  server-only imports (`next/headers`, `server-only`, …) and `'use server'` actions, which would make
+  a component the lagoon can never mount; errors on hooks without `'use client'` (fine as an island,
+  broken the moment the component is imported directly — which is motu's exit path); and warns on
+  `next/link`/`next/image`/`next/navigation`, which the lagoon stubs as inert.
+
+There is no `defineNextElement` and no bridge root, by design.
+
+### Known limits
+
+- **The contract seam has no Next equivalent yet.** `motu-apt` → `@motu/contract` is Jakarta-specific.
+  On a Supabase/Next app there is nothing generating a typed contract, so `contract-only-io` has
+  little to check — and `@supabase/supabase-js` is not in its blocked-client list, so an island doing
+  direct Supabase I/O will pass a rule that exists to prevent exactly that. Treat the seam as
+  convention here until this is closed.
+- The lagoon cannot reproduce host CSS collisions or auth expiry; an integration test alongside it
+  is still necessary.
 
 ## Install (one command)
 

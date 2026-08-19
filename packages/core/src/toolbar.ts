@@ -97,6 +97,30 @@ export function motuToolbar(): HTMLElement {
 }
 
 /** Base styling shared by the toolbar's compact chip controls (rounded pill, dark). */
+/**
+ * motu's chrome palette — one place, so the tooling cannot drift into a second brand colour.
+ *
+ * The primary IS the lagoon's own water (see the tide line): motu's UI and the lagoon it frames are
+ * the same surface, and a chip in a different hue reads as belonging to something else. The transport
+ * chip used to be indigo for exactly that reason — a colour picked to distinguish two states, which
+ * ended up competing with the water behind it.
+ *
+ * The other two are semantic, not decorative. `caution` is the "you are not in the calm default" state
+ * — a live backend answering with your real session, or an island wearing the legacy fit. `idle` is an
+ * inert chip. Colours that carry MEANING inside the seam lens (external origin, broken binding) are
+ * the overlay's own and deliberately not here.
+ */
+export const MOTU_CHROME = {
+  /** The lagoon's water. Every "on" and calm-default state. */
+  primary: '#0f766e',
+  /** The water, deeper — text on a tinted primary ground. */
+  primaryDeep: '#0b5b55',
+  /** Proceed with care: real backend, or the legacy footprint. Not an error. */
+  caution: '#b45309',
+  /** Off. */
+  idle: '#1e293b',
+} as const;
+
 export const MOTU_TOOLBAR_CHIP_CSS = [
   'display:inline-flex',
   'align-items:center',

@@ -29,11 +29,14 @@ import {
   LAGOON_FIXTURES,
   LAGOON_FOCUS_ENTRY,
   LAGOON_GALLERY_ENTRY,
+  LAGOON_CONFIG,
+  LAGOON_OVERRIDES,
   LAGOON_VITE_CONFIG,
   NEXT_STUBS,
   NEXT_VITE_IMPORTS,
   NEXT_VITE_ALIASES,
   NEXT_VITE_CSS,
+  NEXT_TAILWIND_CONFIG,
 } from '../lib/scaffold.mjs';
 
 /** This motu checkout (packages/cli/src/commands -> up 4). */
@@ -88,6 +91,18 @@ function motuAliases(lagoonDir, appRoot, appPackage, host) {
     `      { find: ${exact(appPackage)}, replacement: resolve(__dirname, '${relPosix(lagoonDir, resolve(appRoot, 'src/index.ts'))}') },`,
   );
   return lines.join('\n') + '\n';
+}
+
+/** Where a Next/React app conventionally keeps the global stylesheet Tailwind is pulled in through. */
+const HOST_GLOBAL_CSS = ['app/globals.css', 'src/app/globals.css', 'styles/globals.css', 'src/styles/globals.css'];
+
+/** `import '<host globals.css>';` for the lagoon entries, or '' when the host has no such file. */
+function hostGlobalCssImport(lagoonDir, hostRoot) {
+  for (const rel of HOST_GLOBAL_CSS) {
+    const abs = resolve(hostRoot, rel);
+    if (existsSync(abs)) return `import '${relPosix(resolve(lagoonDir, 'src'), abs)}';\n`;
+  }
+  return '';
 }
 
 const HOSTS = new Set(['angularjs', 'next', 'none']);
@@ -194,6 +209,9 @@ export async function initCommand(argv) {
       // Tailwind/autoprefixer are the host's toolchain, but the lagoon runs its own postcss pass.
       lagoonExtraDevDeps: host === 'next' ? ',\n    "autoprefixer": "^10.4.20",\n    "tailwindcss": "^3.4.0"' : '',
       viteHostImports: host === 'next' ? NEXT_VITE_IMPORTS : '',
+      // The app's own global stylesheet. Without it the lagoon has no Tailwind base/utilities and no
+      // theme tokens, so islands render unstyled — a preview that lies about how they look in the app.
+      hostGlobalCss: hostGlobalCssImport(lagoonDir, hostRoot),
       motuAliases: motuAliases(lagoonDir, appRoot, appPackage, host),
       hostAliases: host === 'next' ? render(NEXT_VITE_ALIASES, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',
       viteCss: host === 'next' ? render(NEXT_VITE_CSS, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',
@@ -211,7 +229,13 @@ export async function initCommand(argv) {
     writeNew(resolve(lagoonDir, 'src/fixtures.ts'), render(LAGOON_FIXTURES, vars), created, skipped);
     writeNew(resolve(lagoonDir, 'src/lagoon.tsx'), render(LAGOON_FOCUS_ENTRY, vars), created, skipped);
     writeNew(resolve(lagoonDir, 'src/main.tsx'), render(LAGOON_GALLERY_ENTRY, vars), created, skipped);
-    if (host === 'next') writeNew(resolve(lagoonDir, 'src/next-stubs.tsx'), NEXT_STUBS, created, skipped);
+    // Declared, not coded: what the lagoon IS lives here; what it DOES lives in @motu/react.
+    writeNew(resolve(lagoonDir, 'lagoon.config.json'), render(LAGOON_CONFIG, vars), created, skipped);
+    writeNew(resolve(lagoonDir, 'src/lagoon.ts'), LAGOON_OVERRIDES, created, skipped);
+    if (host === 'next') {
+      writeNew(resolve(lagoonDir, 'src/next-stubs.tsx'), NEXT_STUBS, created, skipped);
+      writeNew(resolve(lagoonDir, 'tailwind.config.ts'), render(NEXT_TAILWIND_CONFIG, vars), created, skipped);
+    }
   }
 
   if (argv.json) {

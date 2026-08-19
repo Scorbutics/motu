@@ -16,6 +16,7 @@ import {
   stopSeedRecording,
   motuToolbar,
   MOTU_TOOLBAR_CHIP_CSS,
+  MOTU_CHROME,
   type MountedIslandInfo,
   type IslandDefinition,
   type ChannelInfo,
@@ -505,7 +506,7 @@ class Overlay {
 
   #renderChip() {
     if (!this.#chip) return;
-    this.#chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (this.#open ? '#0f766e' : '#1e293b');
+    this.#chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (this.#open ? MOTU_CHROME.primary : MOTU_CHROME.idle);
   }
 
   toggle() {

@@ -7,6 +7,13 @@ export { resolveFitMode, mountFitToggle } from './fit-toggle.js';
 export { mountTideLine } from './tideline.js';
 export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCorner, TideLens } from './tideline.js';
 export { bootstrapLagoon } from './lagoon-bootstrap.js';
+export { startLagoon } from './lagoon-gallery.js';
+export type {
+  LagoonConfig,
+  LagoonOverrides,
+  LagoonLens,
+  StartLagoonOptions,
+} from './lagoon-gallery.js';
 export type { LagoonBootstrapOptions } from './lagoon-bootstrap.js';
 export type {
   ElementSpec,

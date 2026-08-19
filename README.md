@@ -132,6 +132,16 @@ cannot reproduce legacy stylesheet collisions, AngularJS digest timing, or sessi
 small integration suite alongside the lagoon remains necessary. The archipelago — the shared store
 an island's siblings read and write — is the most likely place for coupling to accrete back in.
 
+## The chrome palette
+
+motu's tooling has one primary colour, `MOTU_CHROME.primary` in `@motu/core`, and it **is** the
+lagoon's own water: the UI and the lagoon it frames are the same surface, so a chip in another hue
+reads as belonging to something else. The transport chip used to be indigo — a colour chosen only to
+distinguish two states, which ended up competing with the water behind it. The other tokens are
+semantic rather than decorative: `caution` marks "not the calm default" (a live backend answering with
+your real session, or an island wearing the legacy fit) and `idle` marks off. Colours that carry
+meaning inside the seam lens — external origin, broken binding — are the overlay's own and stay there.
+
 ## Layout
 
 ```
@@ -256,6 +266,21 @@ the page survives with no `/assets/` and no backend behind it. For a phone that 
 command prints an ssh one-liner (`ssh -R 80:localhost:8817 nokey@localhost.run`) — it deliberately does
 not run it for you: that URL is public while it lives.
 
+**Tailscale.** If you already run tailscale, prefer it: the tunnel is a property of the PORT, not of a
+project, so whichever lagoon is serving on 8817 is what the tunnel exposes. Point it at a different
+project by running `motu lagoon serve` from that project — no tunnel reconfiguration:
+
+```bash
+tailscale serve --bg 8817     # tailnet-only: just your devices. The private default.
+tailscale funnel --bg 8817    # PUBLIC on the internet — anyone with the URL, no login.
+tailscale serve status        # what is currently exposed, and whether Funnel is on
+```
+
+Prefer `serve` over `funnel` unless you actually need to show someone outside your tailnet: the lagoon
+carries your fixtures, and Funnel puts them on the open internet for as long as the server runs. (With
+`tailscaled --tun=userspace-networking`, pass `--socket=/run/user/$UID/tailscaled.sock` if the CLI
+cannot find the daemon.)
+
 The judgement half comes in two skills: `island-extract`
 ([`.github/agents/island-extract.agent.md`](.github/agents/island-extract.agent.md), `/island-extract`)
 lifts an existing *ocean* component into an island; `island-create`
@@ -294,7 +319,7 @@ my-app/
 | `--host` | legacy fit | adapter | lagoon speaks |
 | --- | --- | --- | --- |
 | `angularjs` | required (`native` + `legacy` mounts) | `@motu/adapter-angularjs` | AngularJS host scope, `$http` channels |
-| `next` | off | `@motu/adapter-next` | the host's `@/…` alias, its Tailwind, inert `next/*` stubs |
+| `next` | off | `@motu/adapter-next` | the host's `@/…` alias, its Tailwind + global stylesheet, inert `next/*` stubs |
 | `none` | off | — | plain React, nothing host-specific |
 
 Fitting an island to a legacy skin is only meaningful when the host has one, so `next`/`none` skip
@@ -322,6 +347,50 @@ The generated `vite.config.ts` turns that into `resolve.alias` entries. Conseque
   `@motu/runtime/mock`.
 - Only the lagoon's own build tools need installing (`vite`, `@vitejs/plugin-react`, plus
   `tailwindcss`/`autoprefixer` for a Next host).
+
+The gallery — the **tide line** (archipelago switcher, Region/Mountpoints view, the adopted transport
+and fit chips, a Cmd/Ctrl+K palette), the **seam lens** moored to the buoy in its bay, and the injection
+of recorded callsite frames — is framework behaviour and lives in `@motu/react` (`startLagoon`). It is
+not scaffolded, so improvements to it arrive with a `git pull` rather than by regenerating a file. Both
+surfaces stay submerged until you reach for them, so the archipelago owns the first screenful. The
+focused `lagoon.html` entry deliberately has none of it: that is what `verify` drives, and chrome there
+would be noise.
+
+A project therefore **declares** its lagoon rather than coding it:
+
+```jsonc
+// roots/lagoon/lagoon.config.json
+{
+  "about": "…shown by the palette",
+  "transport": "mock",          // build-time default; MOTU_TRANSPORT and the chip override it
+  "httpBase": "/api/motu",      // only if this project has a dispatcher to talk to
+  "defaultTheme": "motu",
+  "stations": { "directory": { "label": "Directory", "order": 1 } },
+  "exclude": []
+}
+```
+
+An archipelago missing from `stations` still appears — configuring one is for renaming and ordering,
+never for visibility, so a newly created archipelago can never be invisible because someone forgot a
+config edit.
+
+What a declaration cannot hold — functions and objects — goes in `roots/lagoon/src/lagoon.ts`, which
+is empty by default: `host` (the outward seam; the default logs intents, which is how you SEE that an
+island emitted a navigation instead of performing one), `channels` and `seed` per archipelago id,
+`setup` (run before anything mounts), and `transportFor` when `httpBase` cannot say enough.
+
+`src/main.tsx` remains, but only as glue Vite requires in the app: the build-time defines,
+`import.meta.glob`, the project's own registry, and the debug overlay — which `@motu/react` must not
+depend on, so the app hands it in.
+
+A Next lagoon also inherits the app's **styling**, which is what makes it worth looking at: the entries
+import the host's `globals.css`, and the scaffolded `roots/lagoon/tailwind.config.ts` extends the app's
+Tailwind config with its `content` globs re-anchored on the host root. That re-anchoring is the part
+that is easy to get wrong and fails silently — Tailwind resolves `content` against the CWD, which here
+is the lagoon, so the app's own `./components/**` globs would match nothing, no utilities would be
+emitted, and every island would render unstyled while still passing `verify`. The config is extended
+through Tailwind's own loader rather than imported into `vite.config.ts`, because an app config that
+`require()`s a CJS plugin (`tailwindcss-animate`) cannot survive Vite's ESM config bundling.
 
 ### Migrating a component
 

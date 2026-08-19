@@ -4,7 +4,7 @@ export { observeStoreWrites } from './store.js';
 export type { StoreWrite } from './store.js';
 export { startSeedRecording, stopSeedRecording } from './store.js';
 export type { RecordedSeed } from './store.js';
-export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS } from './toolbar.js';
+export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME } from './toolbar.js';
 export { defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents } from './archipelago.js';
 export type {
   HostBridge,

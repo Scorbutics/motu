@@ -189,7 +189,7 @@ import { setDefaultIsolation } from '@motu/core';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, getArchipelago } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
 import { ALL_FIXTURES, ALL_ROLES } from './fixtures.js';
-{{hostImport}}
+{{hostImport}}{{hostGlobalCss}}
 // Injected by vite.config from the MOTU_* env (see vite.config.ts).
 declare const __MOTU_TARGET__: string; // "island:{{tagPrefix}}some-tag" | "archipelago:some-id"
 declare const __MOTU_FIT__: string; //    "native" | "legacy"
@@ -218,66 +218,85 @@ bootstrapLagoon({
 });
 `;
 
-/** The gallery entry — every archipelago with a switcher. The human-facing half of the lagoon. */
-export const LAGOON_GALLERY_ENTRY = `// The lagoon gallery: every archipelago in the project, with a switcher. This is the design/play
-// surface; the single-target lagoon.tsx next to it is what \`motu island verify\` drives.
-import { configure } from '@motu/runtime';
-import { MockTransport } from '@motu/runtime/mock';
-import { setDefaultIsolation } from '@motu/core';
-import { defineLagoon, resolveTransportMode, mountTransportToggle } from '@motu/react';
-import { ELEMENT_REGISTRY, ARCHIPELAGOS, getArchipelago } from '{{appPackage}}';
+/** `lagoon.config.json` — the project's lagoon, declared. Behaviour lives in @motu/react. */
+export const LAGOON_CONFIG = `{
+  "about": "The {{appPackage}} lagoon: this project's islands rendered against fixtures, with no backend, no session and no host application around them.",
+  "transport": "mock",
+  "defaultTheme": "motu",
+  "stations": {}
+}
+`;
+
+/** `src/lagoon.ts` — the escape hatch, empty by default. */
+export const LAGOON_OVERRIDES = `// Lagoon overrides: what a JSON declaration cannot hold.
+//
+// Everything the lagoon DOES lives in @motu/react (\`startLagoon\`), and everything it can be TOLD is in
+// ../lagoon.config.json. This file is for the rest — functions and objects — and staying empty is the
+// normal case. Each export below is optional; delete what you do not use.
+import type { LagoonOverrides } from '@motu/react';
+
+// A host bridge for outward intents. The default logs them, which is usually what you want here:
+// seeing "[host] navigate /x" in the console is the proof that an island emitted an intent instead of
+// navigating by itself.
+// export const host: LagoonOverrides['host'] = { navigate: (p) => {}, action: (n, d) => {} };
+
+// Inbound channels per archipelago id — host signals mirrored into the store.
+// export const channels: LagoonOverrides['channels'] = { someArchipelago: [] };
+
+// Initial store contents per archipelago id, so bound islands render meaningfully on first paint.
+// export const seed: LagoonOverrides['seed'] = { someArchipelago: { criteria: {} } };
+
+// Runs before anything mounts — e.g. standing up a fake host for a foreign-framework island.
+// export const setup: LagoonOverrides['setup'] = () => {};
+
+export {};
+`;
+
+/** The gallery shim. Deliberately tiny and stable: it is wiring Vite requires in the app, nothing more. */
+export const LAGOON_GALLERY_ENTRY = `// The lagoon gallery entry.
+//
+// There is no logic here on purpose. The gallery — tide line, seam lens, archipelago switching, the
+// recorded callsite frames — lives in @motu/react (\`startLagoon\`), so improvements to it arrive with
+// the framework instead of needing this file regenerated. Declare the lagoon in ../lagoon.config.json;
+// override behaviour in ./lagoon.ts.
+//
+// What stays here is only what Vite requires in the app: the build-time defines, \`import.meta.glob\`,
+// the project's own registry, and the debug overlay — which @motu/react must not depend on, so the app
+// hands it in.
+import { startLagoon } from '@motu/react';
+import { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from '@motu/debug-overlay';
+import { ELEMENT_REGISTRY, ARCHIPELAGOS } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
 import { ALL_FIXTURES, ALL_ROLES } from './fixtures.js';
-{{hostImport}}
+import config from '../lagoon.config.json';
+import * as overrides from './lagoon.js';
+{{hostImport}}{{hostGlobalCss}}
 declare const __MOTU_ISOLATION__: 'shadow' | 'light';
 declare const __MOTU_TRANSPORT__: string;
+// Present in the lagoon by default (this is the sandbox); MOTU_DEBUG=0 strips the lens entirely.
+declare const __MOTU_DEBUG__: boolean;
 
-setDefaultIsolation(__MOTU_ISOLATION__);
-
-// Mock by default: the lagoon must work with no backend, no session and no login, or it is not a
-// place an agent can close a loop in.
-configure(new MockTransport(ALL_FIXTURES, ALL_ROLES));
-
-const root = document.getElementById('lagoon-root')!;
-const ids = Object.keys(ARCHIPELAGOS);
-
-function show(id: string) {
-  host.innerHTML = '';
-  const config = getArchipelago(id);
-  if (!config) return;
-  host.appendChild(
-    defineLagoon({ kind: 'archipelago', config }, { elements: ELEMENT_REGISTRY, css{{hostOptionInline}} }),
-  );
-  for (const b of bar.querySelectorAll('button')) {
-    b.setAttribute('aria-current', String(b.dataset.id === id));
-  }
-}
-
-const bar = document.createElement('nav');
-bar.style.cssText = 'display:flex;gap:8px;padding:12px 20px;flex-wrap:wrap;align-items:center';
-const host = document.createElement('div');
-host.style.cssText = 'max-width:1440px;margin:0 auto;padding:0 20px';
-
-if (ids.length === 0) {
-  host.innerHTML =
-    '<p style="color:#6b7280;padding:40px 0">No archipelagos yet — run <code>motu archipelago create &lt;id&gt;</code>, ' +
-    'then <code>motu island create &lt;name&gt;</code>.</p>';
-} else {
-  for (const id of ids) {
-    const b = document.createElement('button');
-    b.textContent = id;
-    b.dataset.id = id;
-    b.style.cssText = 'padding:6px 12px;border:1px solid #d3cede;border-radius:6px;background:#fff;cursor:pointer';
-    b.onclick = () => show(id);
-    bar.appendChild(b);
-  }
-}
-
-root.append(bar, host);
-if (ids.length) show(ids[0]);
-
-// The transport pill (mock <-> http) — only meaningful once the project has a real backend seam.
-mountTransportToggle(resolveTransportMode(__MOTU_TRANSPORT__));
+startLagoon({
+  elements: ELEMENT_REGISTRY,
+  archipelagos: ARCHIPELAGOS,
+  fixtures: ALL_FIXTURES,
+  roles: ALL_ROLES,
+  css,
+  config,
+  overrides,
+  isolation: __MOTU_ISOLATION__,
+  transport: __MOTU_TRANSPORT__,
+  debug: __MOTU_DEBUG__,
+  lens: {
+    mount: mountDebugOverlay,
+    toggle: toggleDebugOverlay,
+    isOpen: isDebugOverlayOpen,
+    subscribe: subscribeDebugOverlay,
+  },
+  // Recorded callsite frames (\`motu archipelago record-frame\`). The glob has to be written here:
+  // Vite resolves it statically, at this file's location.
+  frames: import.meta.glob('./frames/*.css', { query: '?inline', import: 'default', eager: true }),
+});
 `;
 
 // ---------------------------------------------------------------------------------------------
@@ -312,6 +331,7 @@ const MOTU_ROOT = process.env.MOTU_ROOT
   : resolve(dirname(CONFIG_PATH), CONFIG.motuRoot ?? '.');
 
 const motu = (p) => resolve(MOTU_ROOT, p);
+
 
 // One-chunk build target for \`motu lagoon publish\`: 'lagoon' (focused) | 'main' (the gallery).
 // Unset => the normal two-entry, code-split build.
@@ -355,6 +375,33 @@ export default defineConfig({
   },
   server: { port: 5173, strictPort: false },
 });
+`;
+
+/** The lagoon's Tailwind config: the host's, re-anchored so it works from a different directory. */
+export const NEXT_TAILWIND_CONFIG = `// The lagoon's Tailwind setup — the HOST's config, with one thing changed.
+//
+// Tailwind resolves \`content\` globs against the current working directory, and here that is the lagoon
+// rather than the app. The host's own './components/**' globs would therefore match nothing, Tailwind
+// would emit no utilities at all, and every island would render unstyled — a preview that quietly lies
+// about how the component looks in the app. Re-anchoring the globs on the host root fixes that, and the
+// island sources are added so a class used ONLY inside an island still gets generated.
+//
+// Everything else (theme, plugins, dark mode, breakpoints) is inherited, so the lagoon and the app
+// cannot drift apart on design tokens.
+import { resolve } from 'node:path';
+import hostConfig from '{{hostRootFromLagoon}}/tailwind.config';
+
+const HOST_ROOT = resolve(__dirname, '{{hostRootFromLagoon}}');
+
+const hostContent = Array.isArray(hostConfig.content) ? hostConfig.content : (hostConfig.content?.files ?? []);
+
+export default {
+  ...hostConfig,
+  content: [
+    ...hostContent.map((glob) => (typeof glob === 'string' ? resolve(HOST_ROOT, glob) : glob)),
+    resolve(__dirname, '../../src/**/*.{ts,tsx}'),
+  ],
+};
 `;
 
 // --- host: next -------------------------------------------------------------------------------
@@ -415,12 +462,12 @@ export const NEXT_VITE_ALIASES = `      // The lagoon mounts components written 
 
 /** Tailwind is the HOST's, not motu's: point postcss at the host config so an island's utility
  *  classes render in the lagoon exactly as they do in the app. */
-export const NEXT_VITE_CSS = `  css: {
+export const NEXT_VITE_CSS = `  // Tailwind is the HOST's. It is loaded through the lagoon's own tailwind.config.ts (which extends the
+  // app's) rather than imported here, because Tailwind's loader handles a config that \`require()\`s CJS
+  // plugins and vite's ESM config bundling does not.
+  css: {
     postcss: {
-      plugins: [
-        tailwindcss({ config: resolve(__dirname, '{{hostRootFromLagoon}}/tailwind.config.ts') }),
-        autoprefixer(),
-      ],
+      plugins: [tailwindcss({ config: resolve(__dirname, 'tailwind.config.ts') }), autoprefixer()],
     },
   },
 `;

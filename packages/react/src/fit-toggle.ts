@@ -4,7 +4,7 @@
 // the "turn the whole archipelago" control; a per-island override lives in the debug overlay. Renders
 // as a compact chip in the shared floating toolbar.
 
-import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS } from '@motu/core';
+import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME } from '@motu/core';
 import type { MotuFit } from '@motu/core';
 
 const FIT_KEY = 'motu:fit';
@@ -72,7 +72,7 @@ export function mountFitToggle(initial: MotuFit = resolveFitMode()): void {
 
   const render = () => {
     const legacy = fit === 'legacy';
-    chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (legacy ? '#92400e' : '#334155');
+    chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (legacy ? MOTU_CHROME.caution : MOTU_CHROME.idle);
     label.textContent = legacy ? 'LEGACY fit' : 'NATIVE fit';
     chip.title = legacy
       ? 'fit: LEGACY (soft-migration view) — click for NATIVE (end design)'

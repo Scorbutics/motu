@@ -3,7 +3,7 @@
 // compact chip in the shared floating toolbar so a human can flip modes in the browser without
 // editing code. It has NO knowledge of any particular backend/app — the root wires the transports.
 
-import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS } from '@motu/core';
+import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME } from '@motu/core';
 
 export type TransportMode = 'mock' | 'http';
 
@@ -51,7 +51,9 @@ export function mountTransportToggle(mode: TransportMode): void {
   const chip = document.createElement('button');
   chip.type = 'button';
   chip.title = `transport: ${isHttp ? 'HTTP (live · your cookie)' : 'MOCK (offline data)'} — click to switch to ${other.toUpperCase()}`;
-  chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (isHttp ? '#0f766e' : '#4338ca');
+  // MOCK is the lagoon's calm default, so it wears the water. HTTP means real backend + real
+  // session, which is the state worth noticing — caution, not a second brand colour.
+  chip.style.cssText = MOTU_TOOLBAR_CHIP_CSS + ';background:' + (isHttp ? MOTU_CHROME.caution : MOTU_CHROME.primary);
 
   const dot = document.createElement('span');
   dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:#fff;opacity:.85';

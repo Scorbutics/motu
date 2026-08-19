@@ -236,7 +236,7 @@ setDefaultIsolation(__MOTU_ISOLATION__);
 
 // Mock by default: the lagoon must work with no backend, no session and no login, or it is not a
 // place an agent can close a loop in.
-configure({ transport: new MockTransport({ fixtures: ALL_FIXTURES, roles: ALL_ROLES }) });
+configure(new MockTransport(ALL_FIXTURES, ALL_ROLES));
 
 const root = document.getElementById('lagoon-root')!;
 const ids = Object.keys(ARCHIPELAGOS);

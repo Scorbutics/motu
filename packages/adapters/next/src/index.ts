@@ -3,9 +3,16 @@
 // Deliberately small. The AngularJS adapter is large because AngularJS is a foreign framework: it needs
 // channels to mirror $http/$scope into the store, and a custom-element definer to cross the boundary.
 // A Next host is already React, so neither applies — an island mounts directly. What remains is the
-// part that is genuinely host-specific: turning outward intents into App Router navigation, and (in
-// ./verify, loaded by `motu island verify`) policing the RSC boundary an island must stay inside.
+// part that is genuinely host-specific: turning outward intents into App Router navigation, declaring
+// the browser-callable surface, and (in ./verify, loaded by `motu island verify`) policing the RSC
+// boundary an island must stay inside.
+//
+// The server dispatcher lives behind ./server so a client bundle can never pull it in by accident.
 export { nextHostBridge, collectingHostBridge } from './host-bridge.js';
 export type { NextRouterLike, NextHostBridgeOptions } from './host-bridge.js';
 export { Archipelago } from './archipelago.js';
 export type { ArchipelagoProps } from './archipelago.js';
+export { defineServices } from './services.js';
+export type { MotuServiceMap, MotuMethod } from './services.js';
+export { createContract } from './contract.js';
+export type { Contract } from './contract.js';

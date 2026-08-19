@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
-import { paths, names, color, HOST, LEGACY_FIT } from '../lib/util.mjs';
+import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath } from '../lib/util.mjs';
 import { runLagoon, runArchipelagoLagoon, differentiateLagoon } from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -274,6 +274,14 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
       }
     }
     if (report.findings.length === before) report.ok('props-match', 'registry props/events match the component');
+  } else {
+    // Drift detection reads the `${Pascal}Props` interface. A component that types its props inline
+    // (common in an app's own components, which never expected to be reconciled against a registry)
+    // gives nothing to compare — say so, rather than silently dropping the check and looking green.
+    report.warn(
+      'props-match',
+      `no \`${pascal}Props\` interface on the component — registry/component drift can't be checked (declare one to enable it)`,
+    );
   }
 
   // Membership: scan every archipelago file for this tag.
@@ -638,7 +646,9 @@ export async function verifyCommand(argv) {
     process.exit(2);
   }
   const { pascal, kebab, tag } = names(name);
-  const componentPath = paths.componentFile(kebab, pascal);
+  // Follow element.ts to the component it mounts: on a React host the island wraps a component the
+  // app already owns, which does not live under ui/.
+  const componentPath = islandComponentPath(kebab, pascal);
   const uiDir = paths.uiDir(kebab);
   const isReactIsland = existsSync(componentPath);
   // An AngularJS island has no React `.tsx` — its component is a `*.ng.ts` spec (in ui/<kebab>/).

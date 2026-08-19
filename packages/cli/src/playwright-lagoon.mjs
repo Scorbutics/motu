@@ -146,6 +146,59 @@ async function setupPageDiagnostics(page, diagnostics) {
 }
 
 /**
+ * Neutralise auto-generated element ids before two renders are compared.
+ *
+ * React's `useId` hands out ids from a per-root counter, so a second mount legitimately produces
+ * `radix-_r_1_` where the first had `radix-_r_0_`. Any component library built on it (Radix, and so
+ * every shadcn UI) therefore differs between mounts for a reason that says nothing about the island.
+ * Comparing raw HTML made that look like leaked module state, and — in the other direction — could
+ * make two identical scenarios look meaningfully different and pass the data-flow check for free.
+ * Both comparisons are about CONTENT, so strip the counter from both.
+ */
+function normalizeRender(html) {
+  return String(html)
+    .replace(/_r_[0-9a-z]+_/gi, '_r_#_') // React 19
+    .replace(/:r[0-9a-z]+:/gi, ':r#:') //   React 18
+    .replace(/\u00abr[0-9a-z]+\u00bb/gi, 'r#'); // React 18, SSR-safe form
+
+}
+
+/**
+ * Wait for the island's rendered output to SETTLE, and return it.
+ *
+ * "Non-empty" is not the same as "finished". An island that loads through the contract paints an empty
+ * shell first and fills in a tick later, so a snapshot taken at first paint is a race: the re-mount
+ * check compares an empty first mount against a warm, already-filled second one and reports phantom
+ * instability, and the data-flow check compares two shells and calls them identical. Since almost every
+ * island that talks to a backend behaves this way, settling has to be the default, not an opt-in.
+ *
+ * Settled = non-empty and unchanged across consecutive samples. Returns '' if it never rendered.
+ */
+async function waitForStableRender(page, tag, { timeoutMs = 15000, quietSamples = 3, intervalMs = 120 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  let stable = 0;
+  while (Date.now() < deadline) {
+    let html = '';
+    try {
+      html = await page.evaluate((t) => window.__motuRendered(window.__motuFindIsland(t)), tag);
+    } catch {
+      // Execution context destroyed by Vite's dep re-optimization reload — re-poll on the new one.
+      last = null;
+      stable = 0;
+    }
+    if (html && html === last) {
+      if (++stable >= quietSamples) return html;
+    } else {
+      stable = 0;
+      last = html || null;
+    }
+    await sleep(intervalMs);
+  }
+  return last ?? '';
+}
+
+/**
  * Mount one island in the real-browser lagoon and report whether it rendered. Optionally screenshots.
  * Returns { ok, mounted, shadowLength, diagnostics, remountIdentical }.
  *   diagnostics       — console.error lines + uncaught errors + unhandled rejections (empty = clean).
@@ -179,6 +232,11 @@ export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPa
         // Execution context destroyed by an HMR/full reload — wait and retry on the fresh context.
       }
       await sleep(200);
+    }
+    // Let an async-loading island finish before anything is measured from it.
+    if (result.mounted) {
+      const settled = await waitForStableRender(page, tag);
+      result.shadowLength = settled.length;
     }
 
     if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
@@ -217,14 +275,8 @@ async function remountAndCompare(page, tag) {
     }, tag);
     if (before == null) return null;
 
-    let after = '';
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      after = await page.evaluate((t) => window.__motuRendered(window.__motuFindIsland(t)), tag).catch(() => '');
-      if (after && after.length > 0) break;
-      await sleep(150);
-    }
-    return after === before;
+    const after = await waitForStableRender(page, tag, { timeoutMs: 8000 });
+    return normalizeRender(after) === normalizeRender(before);
   } catch {
     return null;
   }
@@ -334,12 +386,10 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
           for (const [k, v] of Object.entries(seed || {})) arch.provide(k, v);
         }
       }, scenario.seed ?? {});
-      // Let the store write, bound props flow, the contract re-fetch and React re-render settle.
-      await sleep(500);
-      const html = await page
-        .evaluate((t) => window.__motuRendered(window.__motuFindIsland(t)), tag)
-        .catch(() => '');
-      outputs.push(html);
+      // Let the store write and bound props flow, then wait for the render to settle rather than
+      // guessing at a fixed delay — a contract re-fetch can easily outlast one.
+      await sleep(150);
+      outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
     }
 
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);

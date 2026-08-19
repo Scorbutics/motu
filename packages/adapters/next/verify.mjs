@@ -39,7 +39,11 @@ export function checkCoupling({ source, coupling } = {}) {
   // Strip comments so a rule is not tripped by prose ABOUT the rule (this file would fail itself).
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-  const imports = [...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  // Type-only imports are erased at build, so they cannot drag server code into a client bundle —
+  // and importing the SERVER'S service-map type is exactly how a typed contract is declared. Judging
+  // them as runtime imports would make the correct pattern unusable.
+  const runtimeCode = code.replace(/^\s*import\s+type\s[\s\S]*?from\s*['"][^'"]+['"];?/gm, '');
+  const imports = [...runtimeCode.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
 
   // 1. Server-only imports — the island could never mount in the lagoon.
   const serverImports = imports.filter((s) => SERVER_ONLY.some((m) => s === m || s.startsWith(m + '/')));

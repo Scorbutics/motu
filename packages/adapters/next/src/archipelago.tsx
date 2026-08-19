@@ -12,7 +12,8 @@
 // `@motu/adapter-next/verify` checks an island stays inside.
 import { useEffect, useRef, useState } from 'react';
 import { defineMotuApp, type ElementSpec, type MotuArchipelago } from '@motu/react';
-import type { ArchipelagoConfig, Channel, HostBridge, MotuTheme } from '@motu/core';
+import { setDefaultIsolation } from '@motu/core';
+import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motu/core';
 
 export interface ArchipelagoProps {
   /** The archipelago being mounted (from the project's archipelagos registry). */
@@ -29,6 +30,14 @@ export interface ArchipelagoProps {
   channels?: Channel[];
   /** Default skin. A Next host has no legacy skin to match, so 'motu'. */
   defaultTheme?: MotuTheme;
+  /**
+   * Region encapsulation. Defaults to 'light' — the opposite of the framework default, and on purpose.
+   * A shadow root is right for an ocean whose stylesheet would otherwise bleed into the islands. Here
+   * the app's stylesheet is the POINT: islands are the app's own components, styled by the app's own
+   * Tailwind, and a shadow root blocks exactly that, rendering them unstyled inside their own page.
+   * Pass 'shadow' deliberately if an island needs sealing off.
+   */
+  isolation?: IslandIsolation;
   className?: string;
 }
 
@@ -40,6 +49,9 @@ const defined = new Set<string>();
 function define(props: ArchipelagoProps) {
   if (defined.has(props.config.id)) return;
   defined.add(props.config.id);
+  // Must be set before the elements are defined: <motu-archipelago> reads the default when it
+  // connects, and a region that has already attached a shadow root cannot give it back.
+  setDefaultIsolation(props.isolation ?? 'light');
   const archipelagos: MotuArchipelago[] = [
     { config: props.config, options: { host: props.host, seed: props.seed, channels: props.channels } },
   ];

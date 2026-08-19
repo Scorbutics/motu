@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
-import { paths, names, color, FMT } from '../lib/util.mjs';
+import { paths, names, color, FMT, resolveModuleSpecifier } from '../lib/util.mjs';
 
 function componentSource(pascal, kebab) {
   return `export interface ${pascal}Props {
@@ -37,16 +37,34 @@ export function ${pascal}({ title = '${pascal}' }: ${pascal}Props = {}) {
 `;
 }
 
-function elementSource(pascal, camel, tag, kebab) {
-  return `import type { ElementSpec } from '@motu/react';
-import { ${pascal}, type ${pascal}Props } from '../../ui/${kebab}/${pascal}.js';
+function elementSource(pascal, camel, tag, kebab, from) {
+  // `from` = wrapping a component the app already owns; otherwise the scaffolded ui/ component.
+  const spec = from ?? `../../ui/${kebab}/${pascal}.js`;
+  const header = from
+    ? `// Mount point for ${pascal}: it wraps the application's OWN component rather than a copy, so the
+// island cannot drift from what the app already ships. The component stays where it is and keeps
+// being used directly elsewhere; this file only declares how it is mounted as an island.
+`
+    : '';
+  const input = from
+    ? `// TODO(motu:contract): list the props the island is fed, with defaults so it renders from
+    //   defaults alone in the lagoon — e.g. [{ name: 'phone', default: '+33600000000' }]
+    contract: { input: [] },`
+    : `contract: { input: ['title'] },`;
+  // No `as (keyof Props)[]` cast: `input` is already typed PropEntry<P>[], which accepts BOTH a bare
+  // name and the `{ name, default }` form — the cast only fitted the former, so it broke the moment a
+  // prop declared a default. `motu island verify`'s props-match is what actually reconciles the
+  // registry against the component.
+  const typeImport = '';
+  return `${header}import type { ElementSpec } from '@motu/react';
+import { ${pascal}${typeImport} } from '${spec}';
 
 export const ${camel}Element: ElementSpec = {
   tag: '${tag}',
   component: ${pascal},
   options: {
     // The island contract in one place — input (props), output (events), coupling (host reach).
-    contract: { input: ['title'] as (keyof ${pascal}Props & string)[] },
+    ${input}
     legacy: 'fill',
   },
 };
@@ -127,20 +145,31 @@ export async function createCommand(argv) {
     process.exit(2);
   }
   const { pascal, camel, kebab, tag } = names(name);
+  // `--from <specifier>` wraps a component the application already owns (the React-host case: there is
+  // nothing to write, only something to mount). Without it, scaffold a new component under ui/ — the
+  // extraction case, where the original is not React and a component has to be authored.
+  const from = typeof argv.from === 'string' ? argv.from : null;
   const componentPath = paths.componentFile(kebab, pascal);
   const fixturesPath = paths.fixturesFile(kebab);
 
-  if (existsSync(componentPath) && !argv.force) {
+  if (!from && existsSync(componentPath) && !argv.force) {
     console.error(color.red(`✗ ${componentPath} already exists (use --force to overwrite)`));
     process.exit(1);
   }
+  if (from && !resolveModuleSpecifier(from, paths.islandDir(kebab))) {
+    console.error(
+      color.red(`✗ --from '${from}' does not resolve to a file from ${paths.rel(paths.islandDir(kebab))}`) +
+        color.dim('\n  Use the specifier the app itself uses (e.g. an alias like @/components/foo), or a relative path.'),
+    );
+    process.exit(1);
+  }
 
-  mkdirSync(dirname(componentPath), { recursive: true }); // ui/<kebab>/
+  if (!from) mkdirSync(dirname(componentPath), { recursive: true }); // ui/<kebab>/
   mkdirSync(paths.islandDir(kebab), { recursive: true }); // islands/<kebab>/
 
-  // Component in ui/; the mount point (element + index + fixtures) in islands/.
-  writeFileSync(componentPath, componentSource(pascal, kebab));
-  writeFileSync(paths.elementFile(kebab), elementSource(pascal, camel, tag, kebab));
+  // Component in ui/ (unless wrapping one the app owns); mount point (element + index + fixtures).
+  if (!from) writeFileSync(componentPath, componentSource(pascal, kebab));
+  writeFileSync(paths.elementFile(kebab), elementSource(pascal, camel, tag, kebab, from));
   writeFileSync(paths.islandIndexFile(kebab), indexSource(camel));
   if (!existsSync(fixturesPath) || argv.force) {
     writeFileSync(fixturesPath, fixturesSource(kebab, readContractHint()));
@@ -159,7 +188,8 @@ export async function createCommand(argv) {
 
   const rel = paths.rel(paths.islandDir(kebab));
   console.log(color.green(`✓ created island ${color.bold(kebab)}  (component ${pascal}, tag ${tag})`));
-  console.log('  ' + color.dim(`${paths.rel(paths.componentFile(kebab, pascal))}   (component)`));
+  if (from) console.log('  ' + color.dim(`wraps ${from}   (the app's own component — not copied)`));
+  else console.log('  ' + color.dim(`${paths.rel(paths.componentFile(kebab, pascal))}   (component)`));
   console.log('  ' + color.dim(`${rel}/element.ts   (registry row)`));
   console.log('  ' + color.dim(`${rel}/fixtures.mock.ts`));
   console.log('  ' + color.dim(`${rel}/index.ts   (exports)`));

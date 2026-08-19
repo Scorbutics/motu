@@ -22,3 +22,4 @@ motu-runtime/src/main/resources/dev/motu/assets/bridge.js
 .DS_Store
 *.swp
 .motu/
+.playwright-mcp/

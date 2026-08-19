@@ -104,9 +104,31 @@ export interface DefineLagoonOptions {
   channels?: Channel[];
 }
 
-/** Bind each seeded store key to a same-named island prop (`{ criteria: 'criteria', … }`). */
-function seedBind(seed: Record<string, unknown> | undefined): Record<string, string> {
-  return Object.fromEntries(Object.keys(seed ?? {}).map((k) => [k, k]));
+/** The prop names an island declares as input, from either the grouped `contract.input` or `props`. */
+function declaredInputs(elements: ElementSpec[], tag: string): string[] {
+  const spec = elements.find((e) => e.tag === tag) as ReactElementSpec | undefined;
+  const options = spec?.options as
+    | { contract?: { input?: unknown[] }; props?: unknown[] }
+    | undefined;
+  const entries = options?.contract?.input ?? options?.props ?? [];
+  return entries
+    .map((p) => (typeof p === 'string' ? p : (p as { name?: string })?.name))
+    .filter((n): n is string => typeof n === 'string' && n.length > 0);
+}
+
+/**
+ * Store-key -> prop binds for a lone island in the lagoon.
+ *
+ * Seeded keys alone are not enough. The lagoon entry of a scaffolded project passes no seed at all —
+ * it cannot know which island the build is focused on — so deriving binds only from the seed left a
+ * single-island target with NO binds, and `provide()` had nothing to drive. verify's data-flow check
+ * then reported "inputs don't reach the output" for every async island, which was true of the harness
+ * rather than of the island. Bind every DECLARED input as well: the element spec already states what
+ * the island accepts, so the store can drive any of it. Binds for props the island lacks are inert.
+ */
+function islandBind(elements: ElementSpec[], tag: string, seed: Record<string, unknown> | undefined): Record<string, string> {
+  const names = new Set<string>([...Object.keys(seed ?? {}), ...declaredInputs(elements, tag)]);
+  return Object.fromEntries([...names].map((k) => [k, k]));
 }
 
 /**
@@ -121,12 +143,12 @@ export function defineLagoon(target: LagoonTarget, opts: DefineLagoonOptions): H
       ? target.config
       : {
           id: 'lagoon',
-          // Bind every seeded store key to a same-named prop so seeding the store actually DRIVES a
-          // single island (otherwise a lone island can't be exercised by input — its props stay
-          // default). This is what lets verify's differentiation check feed distinct seeds and observe
-          // distinct output. Extra binds for props the island lacks are harmless.
+          // Bind the island's declared inputs (and any seeded key) to same-named store keys, so
+          // writing the store actually DRIVES the island — otherwise a lone island can't be exercised
+          // by input and its props stay at their defaults. This is what lets verify's differentiation
+          // check feed distinct values and observe distinct output.
           islands: [
-            { slot: 'lagoon', element: target.tag, bind: seedBind(opts.seed) },
+            { slot: 'lagoon', element: target.tag, bind: islandBind(opts.elements, target.tag, opts.seed) },
           ],
           layout: `<motu-island slot="lagoon"${target.fit ? ` fit="${target.fit}"` : ''}></motu-island>`,
         };

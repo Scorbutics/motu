@@ -325,21 +325,76 @@ The generated `vite.config.ts` turns that into `resolve.alias` entries. Conseque
 
 ### Migrating a component
 
-Start with a leaf — no I/O, no router, no host reach — so the first island exercises the wiring and
-nothing else.
+On a React host an island is a **mount point over a component the app already owns** — not a copy of
+it. The `ui/<kebab>/` layer exists for the foreign ocean case, where the original is not React and a
+component has to be written; duplicating an existing React component there would fork it and let the
+two drift, which is the opposite of what migrating incrementally means.
 
 ```bash
 motu archipelago create directory
-motu island create phone-display
-# port the component into src/ui/phone-display/PhoneDisplay.tsx
+motu island create phone-display --from '@/components/phone-display'
 motu island integrate phone-display --archipelago directory
 motu island verify phone-display
 ```
 
-A ported component keeps importing the host's own modules (`@/lib/phone-format`) rather than copying
-logic — the lagoon resolves that alias exactly as Next does, so the island and the original cannot
-disagree. Give every prop a default: "renders from default props alone" is what makes the lagoon a
-test rather than a demo.
+`--from` takes the specifier **the app itself uses** — host tsconfig aliases included — and writes
+only the mount point. The component stays where it is and every existing call site keeps working;
+`motu island verify` follows `element.ts` to wherever it lives.
+
+Requiring props is fine. The app's component was never written to render from nothing, so declare the
+default on the island instead — the wrapper fills declared defaults at mount, leaving the component
+exactly as the app wrote it:
+
+```ts
+contract: { input: [{ name: 'phone', default: '+33617866318' }] },
+```
+
+Start with a leaf — no I/O, no router, no host reach — so the first island exercises the wiring and
+nothing else. Drift detection (`props-match`) needs a `<Pascal>Props` interface to compare against;
+an app component that types its props inline gets a warning saying the check is off, rather than a
+silent pass.
+
+### Server data: the contract seam
+
+Islands must not call a repository or a database client directly. All I/O goes through the generated
+`contract`, because that single indirection is what lets the lagoon put `MockTransport` in its place
+and replay fixtures offline. `motu island verify` enforces it.
+
+On the Jakarta side the callable surface is discovered by an annotation processor and turned into a
+generated contract. TypeScript needs neither: the surface is an object literal, and its *type* is the
+contract. A signature change fails `tsc` at the island's call site immediately — there is no
+generator to re-run and no window where the two disagree.
+
+```ts
+// motu/src/services/index.ts — the ONLY functions an island can reach. Deny-by-default is
+// structural: nothing else in lib/ is exposed, and no convention can widen it accidentally.
+export const services = defineServices({
+  directory: { getSectors: fetchDirectorySectors, getTags: fetchDirectoryTags },
+})
+export type AppServices = typeof services
+
+// motu/src/contract.ts — the island side. The type import is erased at build.
+export const contract = createContract<AppServices>()
+```
+
+Then pick a transport at the composition root — the one decision islands never see:
+
+| Transport | For |
+| --- | --- |
+| `DirectTransport(services)` | The app reads from the browser (Supabase + row-level security). The call goes straight to the app's own function; there is no network hop and no second client. |
+| `HttpTransport('/api/motu')` + `createMotuRoute` | The work genuinely must run on the server (a service-role key, a secret). Mount the handler at `app/api/motu/[...call]/route.ts`. |
+| `MockTransport(fixtures)` | The lagoon. Same components, no backend, no session. |
+
+**motu does not reimplement authorization.** The registry's entries are the app's own functions, and
+whatever they already use — a session-bound client, row-level security, an existing `@Roles`
+interceptor — decides what the caller may see. motu adds no credential and can widen nothing. The
+`authorize` hook on `createMotuRoute` is a coarse early exit, not the security boundary.
+
+`DirectTransport` deserves its own note: HttpTransport exists because the Jakarta ocean keeps data
+access on the server. That is not universal. What motu actually needs is not a network boundary but a
+single seam every island call passes through, so the lagoon can stand in for it. Forcing an
+RLS-based app through an HTTP tier it does not otherwise have would add a hop and a second place for
+authorization to drift.
 
 ### Mounting islands in a Next app
 
@@ -348,16 +403,17 @@ archipelago directly:
 
 ```tsx
 'use client';
+import { configure, DirectTransport } from '@motu/runtime';
 import { Archipelago, nextHostBridge } from '@motu/adapter-next';
 import { ELEMENT_REGISTRY, getArchipelago } from 'my-islands';
-import css from 'my-islands/styles.css?inline';
+import { services } from '@/motu/src/services';
+
+configure(new DirectTransport(services));
 
 export function Directory() {
   const router = useRouter();
   const host = useMemo(() => nextHostBridge(router), [router]);
-  return (
-    <Archipelago config={getArchipelago('directory')!} elements={ELEMENT_REGISTRY} css={css} host={host} />
-  );
+  return <Archipelago config={getArchipelago('directory')!} elements={ELEMENT_REGISTRY} host={host} />;
 }
 ```
 
@@ -366,8 +422,31 @@ what motu is for: one declared `Store` per region, declarative `bind` from store
 the host-intent seam, and the debug overlay's view of all three. Dropping to bare imports drops the
 discipline with them.
 
-For the Next app to import from the motu subfolder, add a path alias in `tsconfig.json`
-(`"my-islands": ["./motu/src/index.ts"]`) and list it in `transpilePackages` in `next.config.mjs`.
+An archipelago needs a **layout** or it renders nothing — the single-island lagoon target synthesises
+one, so `island verify` passes green while the real page stays empty:
+
+```ts
+layout: `<motu-island slot="phone-display"></motu-island>`,
+```
+
+`<Archipelago>` defaults to `isolation="light"`, the opposite of the framework default and on purpose.
+A shadow root is right for an ocean whose stylesheet would bleed into the islands; here the app's
+stylesheet is the point, and a shadow root leaves the app's own components unstyled inside their own
+page.
+
+**Bundler wiring.** The app resolves `@motu/*` by path, the same way the lagoon does — mirror the
+aliases in `next.config.mjs` and in `tsconfig.json` `paths`, or the build type-checks against
+something it is not bundling. Three things are needed beyond the aliases:
+
+- `experimental.externalDir: true` — the checkout is outside the project root and Next declines to
+  compile anything out there without it.
+- `resolve.extensionAlias { '.js': ['.ts', '.tsx', '.js'] }` — motu's sources import each other with
+  `.js` specifiers (the NodeNext idiom). Vite maps those back to source on its own; webpack does not.
+- Exact-match alias keys (`'@motu/runtime$'`), or `@motu/runtime` swallows `@motu/runtime/mock`.
+
+**Turbopack does not work yet** — use `next dev --webpack` / `next build --webpack`. Turbopack resolves
+an absolute `resolveAlias` value as project-relative, and has no `extensionAlias` equivalent for the
+`.js` specifiers. Both are fixable, neither is fixed.
 
 ### What `@motu/adapter-next` is (and is not)
 
@@ -379,6 +458,7 @@ adapter is only:
   are forbidden from touching `history`/`location` (that rule is what lets the same component mount
   in a lagoon with no router at all), so something has to do this at the composition root.
 - **`Archipelago`** — the React component above.
+- **`defineServices` / `createContract` / `createMotuRoute`** — the contract seam (see *Server data*).
 - **`@motu/adapter-next/verify`** — the RSC boundary, which is Next's analogue of AngularJS's
   host-scope coupling. Both police the one way an island can silently bind to its host. It errors on
   server-only imports (`next/headers`, `server-only`, …) and `'use server'` actions, which would make
@@ -390,11 +470,12 @@ There is no `defineNextElement` and no bridge root, by design.
 
 ### Known limits
 
-- **The contract seam has no Next equivalent yet.** `motu-apt` → `@motu/contract` is Jakarta-specific.
-  On a Supabase/Next app there is nothing generating a typed contract, so `contract-only-io` has
-  little to check — and `@supabase/supabase-js` is not in its blocked-client list, so an island doing
-  direct Supabase I/O will pass a rule that exists to prevent exactly that. Treat the seam as
-  convention here until this is closed.
+- **`contract-only-io` still can't see a direct Supabase import.** The seam exists now
+  (`defineServices` + `createContract`), but the static rule's blocked-client list is
+  `axios/ky/superagent/node-fetch/got` — `@supabase/supabase-js` is not on it, so an island that
+  imports the client directly passes a rule meant to prevent exactly that. The list should be
+  configurable per project.
+- **Turbopack** — see above; the Next host builds with `--webpack` only.
 - The lagoon cannot reproduce host CSS collisions or auth expiry; an integration test alongside it
   is still necessary.
 

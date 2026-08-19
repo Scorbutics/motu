@@ -1,7 +1,7 @@
 // Shared helpers: project layout + island name derivation. The layout (WHERE each piece lands) is
 // declared in motu.config.json and resolved by loadMotuConfig(); the CLI holds no hardcoded app
 // paths. WHAT lives inside each root stays motu's convention (islands/<kebab>/…, ui/<kebab>/…).
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
 import { loadMotuConfig } from './config.mjs';
@@ -52,6 +52,124 @@ export const paths = {
   /** Project-relative display path for messages — derived from config, never hardcoded. */
   rel: (abs) => relative(cfg.root, abs) || '.',
 };
+
+/**
+ * Strip comments and trailing commas from JSONC (tsconfig/jsconfig), string-aware.
+ *
+ * Regex stripping is wrong here in a way that looks fine until it silently destroys the file: a
+ * tsconfig's `paths` is full of `"@/*": ["./*"]`, and the `/*` inside those string literals opens a
+ * block comment that the regex then closes at the next comment terminator far below, deleting
+ * everything between. So scan characters, and only treat comment openers outside strings as comments.
+ */
+function stripJsonc(text) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === '\\') {
+        out += text[++i] ?? '';
+      } else if (c === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+    } else if (c === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      out += '\n';
+    } else if (c === '/' && text[i + 1] === '*') {
+      i += 2;
+      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++;
+      i++;
+    } else {
+      out += c;
+    }
+  }
+  // Trailing commas are legal in JSONC, not in JSON.
+  return out.replace(/,(\s*[}\]])/g, '$1');
+}
+
+/**
+ * Path aliases declared by the HOST application's tsconfig (e.g. Next's `@/*` -> `./*`).
+ *
+ * An island that wraps a component the app already owns imports it the way the app does. Resolving
+ * that import means speaking the host's alias language, so read it from the host's own tsconfig
+ * rather than assuming a convention.
+ */
+function hostTsconfigAliases() {
+  const out = [];
+  for (const name of ['tsconfig.json', 'jsconfig.json']) {
+    const file = resolve(cfg.hostRoot, name);
+    if (!existsSync(file)) continue;
+    try {
+      const json = JSON.parse(stripJsonc(readFileSync(file, 'utf8')));
+      const paths = json?.compilerOptions?.paths ?? {};
+      const base = resolve(cfg.hostRoot, json?.compilerOptions?.baseUrl ?? '.');
+      for (const [pattern, targets] of Object.entries(paths)) {
+        if (!Array.isArray(targets) || !targets.length) continue;
+        out.push({ prefix: pattern.replace(/\*$/, ''), target: resolve(base, targets[0].replace(/\*$/, '')) });
+      }
+    } catch {
+      /* unreadable host tsconfig — aliases just stay unresolved */
+    }
+    break;
+  }
+  return out;
+}
+
+const HOST_ALIASES = hostTsconfigAliases();
+
+const TS_EXTENSIONS = ['', '.tsx', '.ts', '/index.tsx', '/index.ts'];
+
+/** Resolve a module specifier found in an island's element.ts to a file on disk (null if it can't). */
+export function resolveModuleSpecifier(spec, fromDir) {
+  let base = null;
+  if (spec.startsWith('.')) base = resolve(fromDir, spec);
+  else {
+    const alias = HOST_ALIASES.find((a) => a.prefix && spec.startsWith(a.prefix));
+    if (alias) base = resolve(alias.target, spec.slice(alias.prefix.length));
+  }
+  if (!base) return null;
+  // TS source is imported with a '.js' specifier under NodeNext; try the source extensions too.
+  const candidates = base.endsWith('.js') ? [base.slice(0, -3), base] : [base];
+  for (const c of candidates) {
+    for (const ext of TS_EXTENSIONS) {
+      const p = c + ext;
+      if (existsSync(p) && !p.endsWith('/')) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * Where an island's component actually lives.
+ *
+ * The reference layout puts it at ui/<kebab>/<Pascal>.tsx, because extracting from an AngularJS ocean
+ * means WRITING a React component that did not exist. A React host is the other case entirely: the
+ * component already exists and the island is only a mount point over it, so copying it into ui/ would
+ * fork the app's own component and let the two drift. So: follow element.ts's import of the component
+ * it mounts, and fall back to the ui/ convention when there is nothing to follow.
+ */
+export function islandComponentPath(kebab, pascal) {
+  const elementPath = resolve(ISLANDS_DIR, kebab, 'element.ts');
+  if (existsSync(elementPath)) {
+    const text = readFileSync(elementPath, 'utf8');
+    const componentName = text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1];
+    if (componentName) {
+      for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+        const named = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/).pop().trim());
+        if (!named.includes(componentName)) continue;
+        const resolved = resolveModuleSpecifier(m[2], resolve(ISLANDS_DIR, kebab));
+        if (resolved) return resolved;
+      }
+    }
+  }
+  return resolve(UI_DIR, kebab, `${pascal}.tsx`);
+}
 
 /**
  * Locate the vite binary that serves/builds the lagoon.

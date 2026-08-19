@@ -9,7 +9,7 @@
 // the extract skill's job, not the CLI's.
 import { existsSync } from 'node:fs';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
-import { paths, names, color, FMT } from '../lib/util.mjs';
+import { paths, names, color, FMT, islandComponentPath } from '../lib/util.mjs';
 
 /** Find the archipelago object literal (`{ id: '<id>', islands: [...] }`) for the given id. */
 function findArchipelago(sf, archId) {
@@ -32,8 +32,10 @@ export async function integrateCommand(argv) {
   const { pascal, kebab, tag } = names(name);
   const slot = argv.slot || kebab;
 
-  if (!existsSync(paths.componentFile(kebab, pascal))) {
-    console.error(color.red(`✗ no island component at ${paths.rel(paths.componentFile(kebab, pascal))} — run \`motu island create ${kebab}\` first`));
+  // Follow element.ts to the component the island mounts — it only lives under ui/ when motu wrote
+  // it; an island wrapping the app's own component points outside the project.
+  if (!existsSync(islandComponentPath(kebab, pascal))) {
+    console.error(color.red(`✗ no island component at ${paths.rel(islandComponentPath(kebab, pascal))} — run \`motu island create ${kebab}\` first`));
     process.exit(1);
   }
 

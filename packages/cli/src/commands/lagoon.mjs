@@ -15,12 +15,12 @@
 // it. That is the check nothing else performs: `dev:lagoon` serves the source through vite with the
 // dev proxy, so it never proves the inlining worked, the mock transport renders with no backend, or
 // the page survives with no /assets/ behind it. Serving the artifact does.
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
-import { resolve } from 'node:path';
-import { REPO_ROOT, paths, names, color } from '../lib/util.mjs';
+import { resolve, sep } from 'node:path';
+import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
 
 const VITE_BIN = resolve(REPO_ROOT, 'node_modules/vite/bin/vite.js');
 
@@ -182,6 +182,51 @@ ${page}</body>
 `;
 }
 
+/**
+ * A rebuild is only useful if the phone in your hand notices it, so `--watch` also injects a tiny
+ * live-reload client that listens on an SSE endpoint this same server owns.
+ *
+ * Injected ONLY in watch mode, never by `publish`: a published artifact is served under a strict CSP
+ * with nothing behind it, so a page that dials home would be both broken and a lie about what the
+ * artifact is. This is the one place the served page deliberately differs from the published one.
+ */
+function injectReloadClient(page) {
+  return `${page}
+<script>
+(function () {
+  // Reconnects on its own: the server restarts (or the phone sleeps) far more often than you reload.
+  function listen() {
+    var es = new EventSource('/__motu_reload');
+    es.onmessage = function (e) { if (e.data === 'reload') location.reload(); };
+    es.onerror = function () { es.close(); setTimeout(listen, 1500); };
+  }
+  listen();
+})();
+</script>`;
+}
+
+/**
+ * Where a rebuild can come from. The lagoon entry, the app's own sources, and — in this monorepo,
+ * where @motu/* resolve to workspace source rather than to a published tarball — the framework
+ * packages, so editing the lagoon chrome in packages/react rebuilds too.
+ *
+ * Nested roots are dropped (the lagoon lives inside the app root), because a recursive watch on both
+ * would deliver every event twice.
+ */
+function watchRoots() {
+  const candidates = [APP_ROOT, paths.lagoonDir, resolve(REPO_ROOT, 'packages')].filter((p) => existsSync(p));
+  return candidates.filter((p) => !candidates.some((other) => other !== p && p.startsWith(other + sep)));
+}
+
+/** Source files worth a rebuild. Everything else — build output above all — must not feed the loop. */
+function isSourceChange(file) {
+  if (!file) return false;
+  const path = file.split(sep).join('/');
+  // dist/ is the vite build's OWN output: reacting to it would make every build trigger the next one.
+  if (/(^|\/)(node_modules|dist|\.motu|\.git)(\/|$)/.test(path)) return false;
+  return /\.(ts|tsx|js|jsx|css|html|json)$/.test(path);
+}
+
 /** First real LAN IPv4 — docker/virtual bridges are skipped, they are never the phone's route here. */
 function lanAddress() {
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
@@ -211,6 +256,12 @@ export function lagoonServeCommand(argv) {
   const lan = argv.host === true || argv.host === '0.0.0.0';
   const bind = lan ? '0.0.0.0' : '127.0.0.1';
 
+  const watching = argv.watch === true;
+  if (watching && argv.build === false) {
+    console.error(color.red('✗ --watch and --no-build contradict each other — --no-build never rebuilds'));
+    process.exit(1);
+  }
+
   let page;
   if (argv.build === false) {
     const file = publishFile(slug);
@@ -229,10 +280,28 @@ export function lagoonServeCommand(argv) {
     }
   }
 
+  // The served bytes are a VARIABLE, not a constant: --watch swaps them in place, so the funnel or
+  // LAN URL in front of this server never has to be re-pointed to see new work.
+  let body = Buffer.from(wrapForBrowser(watching ? injectReloadClient(page) : page), 'utf8');
+  /** Open live-reload streams, one per viewer (a laptop and a phone on the same URL is the point). */
+  const viewers = new Set();
+
   // One artifact, no asset requests to route: every path serves the page, so deep links work too.
-  const body = Buffer.from(wrapForBrowser(page), 'utf8');
   const server = createServer((req, res) => {
     if (req.url === '/favicon.ico') return void res.writeHead(204).end(); // keeps the console clean
+    if (watching && req.url === '/__motu_reload') {
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+        // The funnel sits in front of this; without it the stream is buffered and nothing arrives.
+        'x-accel-buffering': 'no',
+      });
+      res.write('retry: 1500\n\n');
+      viewers.add(res);
+      req.on('close', () => viewers.delete(res));
+      return;
+    }
     res.writeHead(200, {
       'content-type': 'text/html; charset=utf-8',
       'content-length': body.length,
@@ -266,8 +335,66 @@ export function lagoonServeCommand(argv) {
     console.log(color.dim('  Ctrl-C to stop.'));
   });
 
+  if (watching) startWatching();
+
+  /**
+   * Rebuild on source change, debounced, and never concurrently: a vite build takes seconds, and a
+   * burst of saves (or one editor writing several files) must collapse into one build. A build that
+   * fails keeps the LAST GOOD bytes on the wire — a broken page is worse than a slightly stale one,
+   * especially on the phone you are holding, where there is no console to explain it.
+   */
+  function startWatching() {
+    const roots = watchRoots();
+    let timer = null;
+    let building = false;
+    let queued = false;
+
+    const rebuild = () => {
+      if (building) {
+        queued = true;
+        return;
+      }
+      building = true;
+      const started = Date.now();
+      try {
+        const fresh = inlineToArtifact(buildSingleFile({ entry, target, fit }), title);
+        body = Buffer.from(wrapForBrowser(injectReloadClient(fresh)), 'utf8');
+        const secs = ((Date.now() - started) / 1000).toFixed(1);
+        console.log(
+          `${color.green('✓')} rebuilt in ${secs}s — ${(body.length / 1024).toFixed(0)} kB` +
+            (viewers.size ? color.dim(` · reloading ${viewers.size} viewer(s)`) : ''),
+        );
+        for (const res of viewers) res.write('data: reload\n\n');
+      } catch (err) {
+        console.error(color.red(`✗ rebuild failed — still serving the last good page`));
+        console.error(color.dim(`  ${err.message.split('\n')[0]}`));
+      } finally {
+        building = false;
+        if (queued) {
+          queued = false;
+          rebuild();
+        }
+      }
+    };
+
+    for (const root of roots) {
+      try {
+        fsWatch(root, { recursive: true }, (_event, file) => {
+          if (!isSourceChange(file)) return;
+          clearTimeout(timer);
+          timer = setTimeout(rebuild, 250);
+        });
+      } catch (err) {
+        console.error(color.red(`✗ cannot watch ${paths.rel(root)} — ${err.message}`));
+      }
+    }
+    console.log(color.dim(`  watching ${roots.map((r) => paths.rel(r)).join(', ')} — saves rebuild and reload viewers`));
+    console.log('');
+  }
+
   process.on('SIGINT', () => {
     console.log('');
+    for (const res of viewers) res.end();
     server.close(() => process.exit(0));
   });
   return 0;

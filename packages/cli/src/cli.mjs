@@ -48,6 +48,7 @@ ${color.bold('Usage:')}
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
+  motu lagoon serve --watch --host                  ...and keep it current: rebuild on save, reload viewers
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
   motu skills list                                  list the skills this motu checkout ships
@@ -62,6 +63,7 @@ ${color.bold('lagoon serve flags:')}
   --port <n>      port to listen on (default 8817)
   --host          also serve on your LAN, to open it on a phone on the same wifi
   --no-build      serve the last published artifact instead of rebuilding
+  --watch         rebuild on every source change and live-reload open viewers (phones included)
   ${color.dim('takes the same target/--fit flags as publish. Ctrl-C to stop.')}
 
 ${color.bold('lagoon publish flags:')}

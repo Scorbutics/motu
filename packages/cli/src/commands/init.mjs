@@ -216,6 +216,9 @@ export async function initCommand(argv) {
       // A Next/shadcn app exposes --primary / --primary-foreground; borrow them so motu's chrome
       // wears the application's colour rather than motu's own.
       lagoonChrome: host === 'next' ? LAGOON_CHROME_SHADCN : '',
+      // A React host renders islands in its own tree; the lagoon must do the same or it verifies a
+      // mount path the project never ships. An ocean keeps the custom elements.
+      lagoonMount: host === 'angularjs' ? '' : '  "mount": "react",\n',
       motuAliases: motuAliases(lagoonDir, appRoot, appPackage, host),
       hostAliases: host === 'next' ? render(NEXT_VITE_ALIASES, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',
       viteCss: host === 'next' ? render(NEXT_VITE_CSS, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',

@@ -217,6 +217,8 @@ bootstrapLagoon({
   // value the JSON should not carry, e.g. a deliberately darker shade of the brand:
   //   chrome: { ...config.chrome, primary: 'color-mix(in srgb, hsl(var(--primary)) 70%, #000)' },
   chrome: config.chrome,
+  // Must match how the host application mounts islands, or this verifies a path you do not ship.
+  mount: config.mount,
 {{hostOption}}  target,
   fit: typeof __MOTU_FIT__ === 'string' ? __MOTU_FIT__ : '',
   forceErrorStatus:
@@ -229,7 +231,7 @@ export const LAGOON_CONFIG = `{
   "about": "The {{appPackage}} lagoon: this project's islands rendered against fixtures, with no backend, no session and no host application around them.",
   "transport": "mock",
   "defaultTheme": "motu",
-{{lagoonChrome}}  "stations": {}
+{{lagoonMount}}{{lagoonChrome}}  "stations": {}
 }
 `;
 

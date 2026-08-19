@@ -1,17 +1,24 @@
 'use client';
 // Mounting an archipelago inside a Next page.
 //
-// There is no bridge.js here and no injected markers: a Next host is already React, so a page renders
-// <Archipelago /> directly. What the custom elements still buy us — and the reason this is not just an
-// import of the ui components — is the archipelago itself: one declared Store, declarative `bind` from
-// store key to island prop, the host-intent seam, and the debug overlay's view of all three. That is
-// the discipline motu is for; dropping to bare imports would drop it.
+// There is no bridge script here and no injected markers: a Next host is already React, so islands
+// render in the page's own tree, in place. What the archipelago still buys — and the reason this is
+// not just an import of the ui components — is the discipline: one declared Store per region,
+// declarative `bind` from store key to island prop, the host-intent seam, and the seam lens's view of
+// all three.
 //
-// Everything here is client-side by construction. The islands mount into the DOM and hold state, so
-// the page (or layout) that renders this must be a client component — which is exactly the boundary
-// `@motu/adapter-next/verify` checks an island stays inside.
-import { useEffect, useRef, useState } from 'react';
-import { defineMotuApp, type ElementSpec, type MotuArchipelago } from '@motu/react';
+// `mount` picks HOW islands attach:
+//
+//   'react'   (default) each island renders inside this page's React tree. Context, error boundaries
+//             and Suspense from the page reach it, and there is one React root for the whole page.
+//   'element' each island mounts as a <motu-island> custom element with its own React root. For the
+//             case a React host does not actually own the DOM the island lands in — markup rendered
+//             by a CMS, a slot filled imperatively — where there is no tree to join.
+//
+// Isolation is a different axis and is unaffected by this: it decides whether the host's stylesheet
+// reaches the island, not which tree the island renders in.
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArchipelagoProvider, Island, defineMotuApp, type ElementSpec, type MotuArchipelago } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motu/core';
 
@@ -20,7 +27,7 @@ export interface ArchipelagoProps {
   config: ArchipelagoConfig;
   /** The project's element registry — the same one the lagoon uses. */
   elements: ElementSpec[];
-  /** Compiled island stylesheet text (the project's shared sheet). */
+  /** Compiled island stylesheet text (the project's shared sheet). Only used by `mount="element"`. */
   css?: string;
   /** Outward seam: navigate/action intents. Build one with `nextHostBridge(useRouter())`. */
   host?: HostBridge;
@@ -35,10 +42,18 @@ export interface ArchipelagoProps {
    * A shadow root is right for an ocean whose stylesheet would otherwise bleed into the islands. Here
    * the app's stylesheet is the POINT: islands are the app's own components, styled by the app's own
    * Tailwind, and a shadow root blocks exactly that, rendering them unstyled inside their own page.
-   * Pass 'shadow' deliberately if an island needs sealing off.
+   * Only meaningful for `mount="element"`.
    */
   isolation?: IslandIsolation;
+  /** How islands attach. See the note at the top of this file. */
+  mount?: 'react' | 'element';
   className?: string;
+  /**
+   * Place islands yourself with `<Island slot="…">`, anywhere in the page's own markup. Without
+   * children every declared slot renders in config order, which is the sensible default for a region
+   * that owns its whole area.
+   */
+  children?: ReactNode;
 }
 
 // defineMotuApp registers custom elements, which is global and one-shot per tag: calling it twice for
@@ -46,7 +61,7 @@ export interface ArchipelagoProps {
 // remounts across navigations, so guard by archipelago id.
 const defined = new Set<string>();
 
-function define(props: ArchipelagoProps) {
+function defineElements(props: ArchipelagoProps) {
   if (defined.has(props.config.id)) return;
   defined.add(props.config.id);
   // Must be set before the elements are defined: <motu-archipelago> reads the default when it
@@ -68,26 +83,56 @@ function define(props: ArchipelagoProps) {
  *
  * ```tsx
  * 'use client';
- * import { Archipelago, nextHostBridge } from '@motu/adapter-next';
- * import { ELEMENT_REGISTRY, getArchipelago } from '@/motu/src';
- *
- * export function Directory() {
+ * export function Actions() {
  *   const router = useRouter();
  *   const host = useMemo(() => nextHostBridge(router), [router]);
- *   return <Archipelago config={getArchipelago('directory')!} elements={ELEMENT_REGISTRY} host={host} />;
+ *   return (
+ *     <Archipelago config={getArchipelago('actions')!} elements={ELEMENT_REGISTRY} host={host}>
+ *       <div className="grid gap-6 lg:grid-cols-2">
+ *         <Island slot="network-stats" />
+ *         <Island slot="revenue-thanks" />
+ *       </div>
+ *     </Archipelago>
+ *   );
  * }
  * ```
  */
 export function Archipelago(props: ArchipelagoProps) {
+  if (props.mount === 'element') return <ElementArchipelago {...props} />;
+
+  // Without children, every declared slot renders in config order — the sensible default for a region
+  // that owns its whole area. The annotation keeps the union from widening across the React 18/19
+  // type boundary this package can be compiled over.
+  const placed: ReactNode = props.children ?? (
+    <>
+      {props.config.islands.map((i) => (
+        <Island key={i.slot} slot={i.slot} />
+      ))}
+    </>
+  );
+
+  return (
+    <ArchipelagoProvider
+      config={props.config}
+      elements={props.elements}
+      host={props.host}
+      seed={props.seed}
+      channels={props.channels}
+    >
+      {placed}
+    </ArchipelagoProvider>
+  );
+}
+
+/** The custom-element path: one React root per island, for a host that does not own this DOM. */
+function ElementArchipelago(props: ArchipelagoProps) {
   const ref = useRef<HTMLDivElement>(null);
   // Custom elements only exist in the browser; defining during render would run on the server too.
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    define(props);
+    defineElements(props);
     setReady(true);
-    // The registration is global and one-shot; re-running it on prop changes would be a no-op at best
-    // and a double-define at worst. Store/host updates flow through the archipelago, not through here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.config.id]);
 

@@ -137,6 +137,20 @@ function islandBind(elements: ElementSpec[], tag: string, seed: Record<string, u
  * the same mount path (<motu-archipelago> → <motu-island>) is exercised as in production. Returns the
  * <motu-archipelago> element; append it to the DOM to render.
  */
+/**
+ * The archipelago a lagoon target represents. Extracted so the element path and the React path build
+ * the SAME config — an island target must not mean two different things depending on how it mounts.
+ */
+export function lagoonArchipelagoConfig(target: LagoonTarget, opts: Pick<DefineLagoonOptions, 'elements' | 'seed'>): ArchipelagoConfig {
+  return target.kind === 'archipelago'
+    ? target.config
+    : {
+        id: 'lagoon',
+        islands: [{ slot: 'lagoon', element: target.tag, bind: islandBind(opts.elements, target.tag, opts.seed) }],
+        layout: `<motu-island slot="lagoon"${target.fit ? ` fit="${target.fit}"` : ''}></motu-island>`,
+      };
+}
+
 export function defineLagoon(target: LagoonTarget, opts: DefineLagoonOptions): HTMLElement {
   const config: ArchipelagoConfig =
     target.kind === 'archipelago'

@@ -1,12 +1,12 @@
 export { Store } from './store.js';
 export type { StoreListener } from './store.js';
-export { observeStoreWrites } from './store.js';
+export { observeStoreWrites, runWithWriteSource } from './store.js';
 export type { StoreWrite } from './store.js';
 export { startSeedRecording, stopSeedRecording } from './store.js';
 export type { RecordedSeed } from './store.js';
 export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, applyMotuChrome } from './toolbar.js';
 export type { MotuChromeTheme } from './toolbar.js';
-export { defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents } from './archipelago.js';
+export { defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago } from './archipelago.js';
 export type {
   HostBridge,
   IslandContext,

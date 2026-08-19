@@ -522,10 +522,25 @@ export function Directory() {
 }
 ```
 
-The custom elements stay, even though React could render the components directly, because they carry
-what motu is for: one declared `Store` per region, declarative `bind` from store key to island prop,
-the host-intent seam, and the debug overlay's view of all three. Dropping to bare imports drops the
-discipline with them.
+Islands render **in the page's own React tree**. What the archipelago carries is unchanged — one
+declared `Store` per region, declarative `bind` from store key to island prop, the host-intent seam,
+and the seam lens's view of all three — but there is no custom element and no second React root.
+
+That is a different axis from `isolation`, and deliberately so. Isolation decides whether the host's
+CSS reaches an island; `mount` decides which tree it renders in:
+
+| `mount` | |
+| --- | --- |
+| `"react"` (default) | Islands render in the host's tree. Context, error boundaries and Suspense from the page reach them; one root for the page; server rendering stays possible. |
+| `"element"` | `<motu-island>` custom elements, one React root each. For a React host that does **not** own the DOM an island lands in — markup rendered by a CMS, a slot filled imperatively — where there is no tree to join. |
+
+A root per island is right for an ocean, which has no React tree at all. Carried into a React host it
+costs more than the roots: each root is its own **context** boundary, so a component calling
+`useClock()` throws inside an island while working two lines above it on the same page.
+
+**The lagoon must use the same `mount` as the host** (`"mount": "react"` in `lagoon.config.json`,
+scaffolded for `--host next`), or `motu island verify` green-lights a mount path the project never
+ships — and context, error boundaries and prop timing all differ between the two.
 
 An archipelago needs a **layout** or it renders nothing — the single-island lagoon target synthesises
 one, so `island verify` passes green while the real page stays empty:

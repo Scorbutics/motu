@@ -7,7 +7,8 @@ import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
 import { applyMotuChrome } from '@motu/core';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
-import { defineLagoon, type ElementSpec, type LagoonTarget } from './bootstrap.js';
+import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap.js';
+import { mountReactLagoon } from './lagoon-react-mount.js';
 
 export interface LagoonBootstrapOptions {
   /** The project's element registry (same one the real composition roots use). */
@@ -45,6 +46,14 @@ export interface LagoonBootstrapOptions {
    * (`color-mix(in srgb, hsl(var(--primary)) 70%, #000)`).
    */
   chrome?: MotuChromeTheme;
+  /**
+   * How islands attach — and it must match what the host application does, or the lagoon verifies a
+   * mount path the project does not ship.
+   *
+   *   'element' (default) <motu-island> custom elements, one React root each. The ocean case.
+   *   'react'   islands render in the lagoon's own React tree, exactly as they do in a React host.
+   */
+  mount?: 'element' | 'react';
 }
 
 /** Parse the "kind:value" target string into a LagoonTarget, resolving archipelagos via the project. */
@@ -79,7 +88,22 @@ export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
     action: (name, detail) => console.log('[lagoon] action', name, detail),
   };
 
-  const el = defineLagoon(resolveTarget(opts), {
+  const target = resolveTarget(opts);
+  const mountEl = document.getElementById(opts.mountId ?? 'lagoon');
+
+  if (opts.mount === 'react') {
+    const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: opts.seed });
+    mountReactLagoon(mountEl, config, {
+      elements: opts.elements,
+      host,
+      seed: opts.seed ?? { criteria: {} },
+      channels: opts.channels,
+      fit: target.kind === 'island' ? target.fit : undefined,
+    });
+    return mountEl ?? document.body;
+  }
+
+  const el = defineLagoon(target, {
     elements: opts.elements,
     css: opts.css,
     defaultTheme: 'motu',

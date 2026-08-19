@@ -125,6 +125,9 @@ async function setupPageDiagnostics(page, diagnostics) {
           }
         }
       }
+      // React mount path: the island renders in the host's own tree, so there is no <x-tag> element.
+      // Its wrapper carries the tag instead (display:contents, so it is the same box as the content).
+      if (!el) el = document.querySelector('[data-motu-island="' + t + '"]');
       return el;
     };
     // Rendered output = the island's own shadow (standalone) or its light DOM (nested in an archipelago).
@@ -267,6 +270,13 @@ async function remountAndCompare(page, tag) {
       const el = window.__motuFindIsland(t);
       if (!el) return null;
       const html = window.__motuRendered(el);
+      // React mount path: swapping the DOM node only detaches React's tree — the "fresh" node would
+      // stay empty and every island would look unstable. Tear the tree down and rebuild it instead,
+      // which is the same question asked of the same code: does anything survive that should not.
+      if (window.__motuLagoon && typeof window.__motuLagoon.remount === 'function') {
+        window.__motuLagoon.remount();
+        return html;
+      }
       const parent = el.parentNode;
       const clone = el.cloneNode(false); // attributes only — a genuinely fresh element, no shadow
       parent.removeChild(el); // disconnectedCallback -> __motuDispose
@@ -305,19 +315,31 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
     while (Date.now() < deadline) {
       try {
         result = await page.evaluate(() => {
-          const arch = document.querySelector('motu-archipelago');
-          if (!arch) return { region: false, islands: [] };
-          const root = arch.shadowRoot || arch;
           const rendered = (el) => (el ? (el.shadowRoot ? el.shadowRoot.innerHTML : el.innerHTML) : '');
-          const islands = [...root.querySelectorAll('motu-island')].map((marker) => {
-            const child = [...marker.children].find((c) => c.tagName.includes('-'));
-            return {
-              slot: marker.getAttribute('slot'),
-              tag: child ? child.tagName.toLowerCase() : null,
-              len: rendered(child || marker).length,
-            };
-          });
-          return { region: true, islands };
+          const arch = document.querySelector('motu-archipelago');
+          if (arch) {
+            const root = arch.shadowRoot || arch;
+            const islands = [...root.querySelectorAll('motu-island')].map((marker) => {
+              const child = [...marker.children].find((c) => c.tagName.includes('-'));
+              return {
+                slot: marker.getAttribute('slot'),
+                tag: child ? child.tagName.toLowerCase() : null,
+                len: rendered(child || marker).length,
+              };
+            });
+            return { region: true, islands };
+          }
+          // React mount path: no region element and no markers — islands render in the host's own
+          // tree, each behind a wrapper carrying its slot and tag.
+          if (window.__motuLagoon) {
+            const islands = [...document.querySelectorAll('[data-motu-island]')].map((el) => ({
+              slot: el.getAttribute('data-motu-slot'),
+              tag: el.getAttribute('data-motu-island'),
+              len: rendered(el).length,
+            }));
+            return { region: true, islands };
+          }
+          return { region: false, islands: [] };
         });
         // Ready once the region is up and every declared slot has mounted its island element.
         if (result.region && result.islands.length > 0 && result.islands.every((i) => i.tag)) break;
@@ -382,9 +404,15 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     for (const scenario of scenarios) {
       await page.evaluate((seed) => {
         const arch = document.querySelector('motu-archipelago');
-        if (arch && typeof arch.provide === 'function') {
-          for (const [k, v] of Object.entries(seed || {})) arch.provide(k, v);
-        }
+        // Either mount path exposes the same `provide` seam: the element on the custom-element path,
+        // window.__motuLagoon on the React one.
+        const provide =
+          arch && typeof arch.provide === 'function'
+            ? (k, v) => arch.provide(k, v)
+            : window.__motuLagoon
+              ? (k, v) => window.__motuLagoon.provide(k, v)
+              : null;
+        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
       }, scenario.seed ?? {});
       // Let the store write and bound props flow, then wait for the render to settle rather than
       // guessing at a fixed delay — a contract re-fetch can easily outlast one.

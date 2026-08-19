@@ -113,6 +113,43 @@ export interface MountedIslandInfo {
 const mounted = new Set<MountedIslandInfo>();
 const mountListeners = new Set<() => void>();
 
+/**
+ * Feed a value into an archipelago's store from OUTSIDE it — the `provide` seam, without an element.
+ *
+ * <motu-archipelago>.provide() is the same thing with a DOM handle in front of it, which is what an
+ * ocean needs. A React host has no such element (islands render in its own tree), so the seam has to
+ * be reachable by archipelago id too, or the host-feeds-the-region direction would exist on one mount
+ * path and not the other.
+ */
+export function provideToArchipelago(id: string, key: string, value: unknown): void {
+  const store = stores.get(id);
+  if (!store) {
+    console.warn(`motu: no archipelago "${id}" to provide("${key}")`);
+    return;
+  }
+  // Tag as a host-origin (external) write so the overlay classifies this key as coming from outside.
+  if (DEBUG) runWithWriteSource('host', () => store.set(key, value));
+  else store.set(key, value);
+}
+
+/**
+ * Register an island mounted by something other than the custom element — the React host path, where
+ * an island renders inside the page's own tree and no <motu-island> is created.
+ *
+ * The seam lens reads this registry, so without it a React-mounted island is invisible to the very
+ * tool that exists to show what is and is not connected. Returns the disposer to call on unmount.
+ * Debug-only, like the registry itself: in production this is a no-op and costs nothing.
+ */
+export function registerMountedIsland(info: MountedIslandInfo): () => void {
+  if (!DEBUG) return () => {};
+  mounted.add(info);
+  notifyMounts();
+  return () => {
+    mounted.delete(info);
+    notifyMounts();
+  };
+}
+
 /** Every currently-mounted island (debug only; empty in production). */
 export function getMountedIslands(): MountedIslandInfo[] {
   return [...mounted];

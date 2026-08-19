@@ -12,6 +12,9 @@ export { nextHostBridge, collectingHostBridge } from './host-bridge.js';
 export type { NextRouterLike, NextHostBridgeOptions } from './host-bridge.js';
 export { Archipelago } from './archipelago.js';
 export type { ArchipelagoProps } from './archipelago.js';
+// Re-exported so a page places islands without also importing @motu/react directly.
+export { Island, useMotuStore } from '@motu/react';
+export type { IslandProps } from '@motu/react';
 export { defineServices } from './services.js';
 export type { MotuServiceMap, MotuMethod } from './services.js';
 export { createContract } from './contract.js';

@@ -2,6 +2,7 @@
 // MOTU_TARGET=island:<tag>) and drives it with Playwright/Chromium, so verification exercises real
 // layout, CSS and paint — not just an in-process DOM. Exposes runLagoon() for `motu island verify`;
 // also runnable directly for a screenshot: `node --import tsx playwright-lagoon.mjs <tag> <fit> [screenshotPath]`.
+import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -52,8 +53,124 @@ function waitForPort(port, timeoutMs = 30000) {
   });
 }
 
+// One server, one browser, for the whole run.
+//
+// Every runtime check used to boot its own Vite and its own Chromium: four per island, sixty for a
+// project the size of peps, each paying a cold dep-optimize before it could answer a question that
+// takes 200ms. The target is now read from the URL as well as the env, so the SAME server can serve
+// every island and every region — a check navigates instead of booting. What still forces a separate
+// server is what is baked at build time (fit, isolation, forced error, transport), so the pool is
+// keyed by exactly those.
+const servers = new Map();
+let sharedBrowser = null;
+let poolClosing = false;
+let exitHooked = false;
+
+/**
+ * Kill the pool on the way out.
+ *
+ * Commands end with `process.exit`, so a `finally` in the caller is not enough — and a leaked vite
+ * holds its port, which the next run then connects to and measures a stale build with.
+ */
+function hookExit() {
+  if (exitHooked) return;
+  exitHooked = true;
+  const kill = () => {
+    for (const entry of servers.values()) stopLagoonProcess(entry.child);
+    servers.clear();
+  };
+  process.on('exit', kill);
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => {
+      kill();
+      process.exit(130);
+    });
+  }
+}
+
+/** Everything the pool holds, released at the end of a command (see `closeLagoonPool`). */
+export async function closeLagoonPool() {
+  poolClosing = true;
+  for (const page of pages.values()) await page.close().catch(() => {});
+  pages.clear();
+  for (const entry of servers.values()) stopLagoonProcess(entry.child);
+  servers.clear();
+  if (sharedBrowser) {
+    await sharedBrowser.close().catch(() => {});
+    sharedBrowser = null;
+  }
+  poolClosing = false;
+}
+
+/** The one Chromium every check drives. */
+async function getBrowser() {
+  const { chromium } = await import('playwright');
+  if (!sharedBrowser || !sharedBrowser.isConnected()) sharedBrowser = await chromium.launch();
+  return sharedBrowser;
+}
+
+// ONE PAGE, RE-AIMED.
+//
+// The lagoon is a single page holding the whole registry, every fixture and a mock transport. Loading
+// it again to look at the next island rebuilt all of that to ask a question that takes milliseconds —
+// which is what made the runtime lane feel like an integration suite. The page is opened once per run
+// and each check asks it to show something else: a different island, a whole region, the same island
+// with a failing backend. Feeding data and firing declared outputs then happen in the page that is
+// already standing, which is the thing a browser-per-spec suite cannot do.
+const pages = new Map();
+/** Diagnostics of the CHECK currently running — console/pageerror listeners are per page, not per check. */
+let diagnosticSink = [];
+
+/** The page for a build posture, opened on first use. */
+async function lagoonPage(server, target) {
+  const existing = pages.get(server.key);
+  if (existing && !existing.isClosed()) {
+    // Re-aim it. `false` means this build has no harness (an older lagoon entry) — fall back to a load.
+    const aimed = await existing
+      .evaluate(
+        ([t, fit, forceError]) => !!window.__motuLagoonHarness?.mount(t, { fit, forceError }),
+        [target, server.fit ?? '', server.forceError ?? 0],
+      )
+      .catch(() => false);
+    if (aimed) return existing;
+    await existing.goto(lagoonUrl(server, target), { waitUntil: 'load' });
+    return existing;
+  }
+  const browser = await getBrowser();
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await setupPageDiagnostics(page, null);
+  await page.goto(lagoonUrl(server, target), { waitUntil: 'load' });
+  pages.set(server.key, page);
+  return page;
+}
+
+/**
+ * Run one check against the shared page: re-aim it, collect this check's diagnostics, restore the
+ * viewport it was handed.
+ */
+async function onLagoonPage({ target, fit, forceError, transport, port, viewport, diagnostics }, fn) {
+  const server = await startLagoon({ target, fit, forceError, transport, port });
+  const page = await lagoonPage(server, target);
+  const previousSink = diagnosticSink;
+  diagnosticSink = diagnostics ?? [];
+  try {
+    if (viewport) await page.setViewportSize(viewport);
+    return await fn(page, server);
+  } finally {
+    diagnosticSink = previousSink;
+  }
+}
+
+/** `/lagoon.html` for a target, on a pooled server. */
+function lagoonUrl(server, target) {
+  const q = new URLSearchParams({ target: target ?? '' });
+  if (server.fit) q.set('fit', server.fit);
+  if (server.forceError) q.set('forceError', String(server.forceError));
+  return `http://localhost:${server.port}/lagoon.html?${q}`;
+}
+
 /** Start the lagoon Vite dev server focused on one target ("island:x-…" | "archipelago:id"). */
-async function startLagoon({ target, fit = 'native', port, forceError, transport }) {
+async function startLagoonProcess({ target, fit = 'native', port, forceError, transport }) {
   assertLagoonBootable();
   // Spawn vite DIRECTLY (not via `pnpm exec`) in its own process group: a pnpm wrapper would spawn
   // vite as a grandchild that gets orphaned on kill and keeps holding the strict port, so a later run
@@ -88,8 +205,33 @@ async function startLagoon({ target, fit = 'native', port, forceError, transport
   return child;
 }
 
+/**
+ * Take (or start) a pooled server for this build posture. The `target` is passed for the first boot's
+ * env — later callers pass theirs in the URL.
+ */
+async function startLagoon(opts) {
+  // Only what is BAKED at build time can force another server. Target, fit and the forced error all
+  // travel in the URL, so what is left is the transport choice, which vite compiles in.
+  const key = String(opts.transport ?? '');
+  const existing = servers.get(key);
+  if (existing) return { ...existing, target: opts.target, fit: opts.fit, forceError: opts.forceError };
+  hookExit();
+  const port = opts.port ?? 5200 + Math.floor(Math.random() * 700);
+  const child = await startLagoonProcess({ ...opts, port });
+  const entry = { key, child, port };
+  servers.set(key, entry);
+  return { ...entry, target: opts.target, fit: opts.fit, forceError: opts.forceError };
+}
+
+/** A pooled server is not stopped by its caller — the pool outlives the check (see closeLagoonPool). */
+function stopLagoon(server) {
+  if (poolClosing || !server) return;
+  if (servers.has(server.key)) return;
+  stopLagoonProcess(server.child ?? server);
+}
+
 /** Kill the vite process group started by startLagoon. */
-function stopLagoon(child) {
+function stopLagoonProcess(child) {
   if (!child || child.killed) return;
   try {
     process.kill(-child.pid, 'SIGKILL'); // negative pid → the whole detached group
@@ -112,6 +254,9 @@ const NOISE = /\[vite\]|Download the React DevTools|favicon|net::ERR|Failed to l
  * reachable from document.querySelector); (2) console.error / uncaught / unhandled-rejection collection.
  */
 async function setupPageDiagnostics(page, diagnostics) {
+  // `null` means "the shared sink" — the page outlives any one check, so its listeners write into
+  // whichever check is running (see onLagoonPage).
+  const sink = diagnostics ?? { push: (line) => diagnosticSink.push(line) };
   await page.addInitScript(() => {
     window.__motuFindIsland = (t) => {
       let el = document.querySelector(t);
@@ -139,11 +284,11 @@ async function setupPageDiagnostics(page, diagnostics) {
     });
   });
   page.on('console', (msg) => {
-    if (msg.type() === 'error' && !NOISE.test(msg.text())) diagnostics.push(`console.error: ${msg.text()}`);
+    if (msg.type() === 'error' && !NOISE.test(msg.text())) sink.push(`console.error: ${msg.text()}`);
   });
   page.on('pageerror', (err) => {
     const m = String(err?.message || err);
-    if (!NOISE.test(m)) diagnostics.push(`pageerror: ${m}`);
+    if (!NOISE.test(m)) sink.push(`pageerror: ${m}`);
   });
 }
 
@@ -208,14 +353,8 @@ async function waitForStableRender(page, tag, { timeoutMs = 15000, quietSamples 
  */
 export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPath, checkRemount = true, forceError }) {
   const { chromium } = await import('playwright');
-  const server = await startLagoon({ target: `island:${tag}`, fit, port, forceError });
-  let browser;
   const diagnostics = [];
-  try {
-    browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 900, height: 720 } });
-    await setupPageDiagnostics(page, diagnostics);
-    await page.goto(`http://localhost:${port}/lagoon.html`, { waitUntil: 'load' });
+  return onLagoonPage({ target: `island:${tag}`, fit, port, forceError, viewport: { width: 900, height: 720 }, diagnostics }, async (page, server) => {
 
     // Poll the DOM until the island upgrades and paints. This is a retry loop rather than a single
     // waitForFunction because Vite's first-run dep re-optimization can trigger a full page reload that
@@ -254,12 +393,7 @@ export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPa
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
 
     return { ok: result.mounted && result.shadowLength > 0, ...result, diagnostics, remountIdentical };
-  } finally {
-    if (browser) await browser.close();
-    stopLagoon(server);
-    // Give the OS a beat to release the strict port before the next fit runs.
-    await sleep(200);
-  }
+  });
 }
 
 /** Snapshot the island's rendered output, swap in a fresh clone (fires disconnect+reconnect), diff. */
@@ -292,6 +426,346 @@ async function remountAndCompare(page, tag) {
 }
 
 /**
+ * Run a region's declared FLOWS: seed, fire a declared output, check what the region holds.
+ *
+ * The executable form of a coupling. `wiring-live` proves a declared write reaches its key; this
+ * proves the region ends up in the state the flow says it should — which is the difference between
+ * "the wire is connected" and "answering a card raises the banner's number".
+ *
+ * Returns [{ scenario, step, ok, mismatches: [{ key, expected, actual }] }].
+ */
+export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
+  const { chromium } = await import('playwright');
+  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 } }, async (page, server) => {
+    await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
+    await sleep(400);
+
+    const out = [];
+    for (const scenario of scenarios) {
+      // A fresh mount per scenario. One flow CAN leave the region unrenderable — seed an index past the
+      // end of a list and the component that reads it throws, React tears the tree down, and every
+      // later flow reports "no island mounted under that slot", which is true and completely
+      // misleading. Isolation keeps each verdict about its own flow.
+      await page.evaluate(() => window.__motuLagoon?.remount?.());
+      await sleep(250);
+      for (const [index, step] of (scenario.steps ?? []).entries()) {
+        const result = await page.evaluate(
+          async ({ seed, step: st }) => {
+            const lagoon = window.__motuLagoon;
+            if (!lagoon || typeof lagoon.emit !== 'function') return { error: 'no emit seam on this mount path' };
+            for (const [k, v] of Object.entries(seed ?? {})) lagoon.provide(k, v);
+            await new Promise((r) => setTimeout(r, 120));
+            // Setup done. From here, a host write is a RESPONSE to what the island did.
+            window.__motuSuspects?.reset?.();
+            if (!lagoon.emit(st.emit.slot, st.emit.event, st.emit.detail)) {
+              return { error: `no island mounted under slot "${st.emit.slot}"` };
+            }
+            await new Promise((r) => setTimeout(r, 120));
+            const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+            const mismatches = Object.entries(st.expect ?? {})
+              .map(([key, expected]) => ({ key, expected, actual: lagoon.read(key) }))
+              .filter((m) => !same(m.expected, m.actual));
+            // Did the region survive its own flow? A step that leaves nothing on screen has broken
+            // something, even when every key it asserted holds the right value.
+            const alive = document.querySelectorAll('[data-motu-slot]').length > 0;
+            return { mismatches, alive };
+          },
+          { seed: scenario.seed ?? {}, step },
+        );
+        out.push({
+          scenario: scenario.name ?? 'flow',
+          step: index + 1,
+          ok: !result.error && result.mismatches.length === 0 && result.alive !== false,
+          error: result.error ?? (result.alive === false ? 'the region rendered nothing after this step' : null),
+          mismatches: result.mismatches ?? [],
+        });
+      }
+    }
+    // One beat before reading: a host effect answering an island lands a tick later, and the last
+    // step's assertion returns before it does.
+    await sleep(300);
+    // The smell, read after the flows have run: an island emitted, and the HOST answered by writing a
+    // key some island reads. Declared ownership cannot see this — the declaration is consistent, it is
+    // just not honest — so it is reported as a suspicion, never as a violation.
+    const suspects = await page.evaluate(() => window.__motuSuspects?.list?.() ?? []).catch(() => []);
+    return { flows: out, suspects };
+  });
+}
+
+/**
+ * Probe every wire a region DECLARES: fire each `writes` event and see whether its key moved.
+ *
+ * This is the contract test the archipelago can write for itself. Nothing is hand-scripted and nothing
+ * touches the DOM — the harness can only emit what an island declares as an output, so the probe list
+ * IS the declaration. What it catches is the failure types cannot: a wire that resolves, compiles and
+ * never carries anything ("declared but never fired"), which is what a broken change looks like from
+ * the outside.
+ *
+ * Returns [{ slot, event, key, moved }].
+ */
+export async function probeWiring({ id, port = 5199, islands = [] }) {
+  const { chromium } = await import('playwright');
+  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 } }, async (page, server) => {
+    await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
+    await sleep(400);
+
+    const results = [];
+    for (const island of islands) {
+      for (const [event, target] of Object.entries(island.writes ?? {})) {
+        const keys = typeof target === 'string' ? [target] : Object.values(target);
+        const fields = typeof target === 'string' ? null : Object.entries(target);
+        const probe = await page.evaluate(
+          ({ slot, event: ev, keys: ks, fields: fs }) => {
+            const lagoon = window.__motuLagoon;
+            if (!lagoon || typeof lagoon.emit !== 'function' || typeof lagoon.read !== 'function') {
+              return { kind: 'no-seam' };
+            }
+            // A sentinel that keeps the SHAPE of what is there. The first version wrote a string over
+            // the week's mission array, the island that renders it threw on `.filter`, React unmounted
+            // the tree, and every island probed after that looked unmounted — the probe destroying the
+            // page it was measuring. Different value, same type: enough to see the store move, safe
+            // enough to leave the region standing.
+            const nudge = (v) => {
+              if (typeof v === 'number') return v + 1;
+              if (typeof v === 'boolean') return !v;
+              if (typeof v === 'string') return `${v}\u00b7probe`;
+              if (Array.isArray(v)) return v.length ? v.slice(0, v.length - 1) : ['motu-probe'];
+              if (v && typeof v === 'object') return { ...v };
+              return 'motu-probe';
+            };
+            const read = () => ks.map((k) => lagoon.read(k));
+            const before = read();
+            const detail = fs
+              ? Object.fromEntries(fs.map(([field, key]) => [field, nudge(lagoon.read(key))]))
+              : nudge(lagoon.read(ks[0]));
+            if (!lagoon.emit(slot, ev, detail)) return { kind: 'not-mounted' };
+            const after = read();
+            const rows = ks.map((k, i) => ({ key: k, moved: before[i] !== after[i] }));
+            // Put the region back the way it was, so a later probe measures the page and not the wake
+            // of this one.
+            ks.forEach((k, i) => lagoon.provide(k, before[i]));
+            return { kind: 'measured', rows };
+          },
+          { slot: island.slot, event, keys, fields },
+        );
+        if (probe.kind === 'measured') {
+          for (const row of probe.rows) results.push({ slot: island.slot, event, ...row });
+        } else {
+          results.push({ slot: island.slot, event, key: keys.join(', '), moved: null, reason: probe.kind });
+        }
+      }
+    }
+    return results;
+  });
+}
+
+/**
+ * Run axe against one island, in the lagoon, per scenario.
+ *
+ * Cheap because the browser is already open, and it catches the class of mistake that types cannot see
+ * at all: a clickable div, a control with no accessible name, text that fails contrast. Scoped to the
+ * island's own subtree — the lagoon's chrome is motu's, and an island should not fail for it.
+ */
+export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
+  const { chromium } = await import('playwright');
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const axeSource = readFileSync(require.resolve('axe-core'), 'utf8');
+  return onLagoonPage({ target: `island:${tag}`, port, viewport: { width: 1280, height: 900 } }, async (page, server) => {
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      const ready = await page
+        .evaluate((t) => {
+          const el = window.__motuFindIsland(t);
+          return !!el && (el.innerHTML || '').trim().length > 0;
+        }, tag)
+        .catch(() => false);
+      if (ready) break;
+      await sleep(250);
+    }
+    await page.addScriptTag({ content: axeSource });
+
+    const findings = [];
+    const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
+    for (const scenario of list) {
+      await page.evaluate((seed) => {
+        const arch = document.querySelector('motu-archipelago');
+        const provide =
+          arch && typeof arch.provide === 'function'
+            ? (k, v) => arch.provide(k, v)
+            : window.__motuLagoon
+              ? (k, v) => window.__motuLagoon.provide(k, v)
+              : null;
+        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
+      }, scenario.seed ?? {});
+      await sleep(250);
+      const violations = await page.evaluate(async (t) => {
+        const el = window.__motuFindIsland(t);
+        if (!el) return [];
+        // A `display: contents` wrapper is not a valid axe context; its painted content is.
+        const target = el.getBoundingClientRect().height ? el : el.firstElementChild;
+        if (!target) return [];
+        const res = await window.axe.run(target, { resultTypes: ['violations'] });
+        return res.violations.map((v) => ({
+          id: v.id,
+          impact: v.impact,
+          help: v.help,
+          nodes: v.nodes.length,
+          // The first offender, so a finding says WHERE — a count alone sends you hunting.
+          where: v.nodes[0]?.target?.join(' ') ?? '',
+          html: (v.nodes[0]?.html ?? '').slice(0, 120),
+        }));
+      }, tag);
+      for (const v of violations) findings.push({ scenario: scenario.name ?? 'default', ...v });
+    }
+    return findings;
+  });
+}
+
+/**
+ * Capture one island's rendered pixels, per scenario × viewport, in one browser.
+ *
+ * Same seams as everything else here: scenarios come from the island's declared evidence and are
+ * driven through `provide()`, viewports from `lagoon.config.json`. Nothing accepts a selector or a
+ * script — a capture can only put the island in a state the island itself declares, which is what
+ * keeps this a harness rather than a second, untyped test suite.
+ *
+ * Returns [{ scenario, viewport, width, png }].
+ */
+export async function captureLagoon({ tag, port = 5199, scenarios = [], viewports = [] }) {
+  const { chromium } = await import('playwright');
+  return onLagoonPage({ target: `island:${tag}`, port, viewport: { width: viewports[0]?.width ?? 1280, height: 900 } }, async (page, server) => {
+
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      const ready = await page
+        .evaluate((t) => {
+          const el = window.__motuFindIsland(t);
+          return !!el && (el.innerHTML || '').trim().length > 0;
+        }, tag)
+        .catch(() => false);
+      if (ready) break;
+      await sleep(250);
+    }
+
+    // Motion makes a baseline flap. Freeze it rather than sampling and hoping.
+    await page.addStyleTag({
+      content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}',
+    });
+
+    const shots = [];
+    const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
+    for (const scenario of list) {
+      await page.evaluate((seed) => {
+        const arch = document.querySelector('motu-archipelago');
+        const provide =
+          arch && typeof arch.provide === 'function'
+            ? (k, v) => arch.provide(k, v)
+            : window.__motuLagoon
+              ? (k, v) => window.__motuLagoon.provide(k, v)
+              : null;
+        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
+      }, scenario.seed ?? {});
+      for (const vp of viewports) {
+        await page.setViewportSize({ width: vp.width, height: 900 });
+        await sleep(250);
+        const handle = await page.evaluateHandle((t) => window.__motuFindIsland(t), tag);
+        const el = handle.asElement();
+        // A `display: contents` wrapper cannot be screenshotted; its first painted child can.
+        const target = (await el?.evaluateHandle((n) => (n.getBoundingClientRect().height ? n : n.firstElementChild)))?.asElement();
+        const png = target
+          ? await target.screenshot({ animations: 'disabled' }).catch(() => null)
+          : await page.screenshot({ animations: 'disabled' });
+        if (png) shots.push({ scenario: scenario.name ?? 'default', viewport: vp.name, width: vp.width, png });
+      }
+    }
+    return shots;
+  });
+}
+
+/**
+ * Render one island at each declared viewport and report what does not fit.
+ *
+ * The check nobody was running: motu knew `native | legacy` (footprint and skin) and nothing about
+ * WIDTH, so "does this work on a phone" was a human dragging a window. One mount, resized — a browser
+ * per width would triple the wall clock for the same answer.
+ *
+ * Horizontal overflow of the DOCUMENT is the signal, not of the island: a card that scrolls its own
+ * table on purpose is fine; a page the member has to pan sideways is the bug this catches.
+ */
+export async function responsiveLagoon({ tag, port = 5199, viewports = [], scenarios = [] }) {
+  return onLagoonPage(
+    { target: `island:${tag}`, port, viewport: { width: viewports[0]?.width ?? 1280, height: 900 } },
+    async (page) => {
+    // Poll for a PAINTED island, not just a mounted one: Vite's first-run dep re-optimization reloads
+    // the page, and an island that fetches its own data paints a frame later.
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      const ready = await page
+        .evaluate((t) => {
+          const el = window.__motuFindIsland(t);
+          return !!el && (el.innerHTML || '').trim().length > 0;
+        }, tag)
+        .catch(() => false);
+      if (ready) break;
+      await sleep(250);
+    }
+    await sleep(250);
+
+    const results = [];
+    // Per SCENARIO, not just the default state: an island whose empty state is legitimately blank (a
+    // notice with nothing to say) would otherwise be measured empty at every width and reported as
+    // rendering nothing — a false alarm that teaches people to ignore the check.
+    const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
+    for (const scenario of list) {
+    await page.evaluate((seed) => {
+      const arch = document.querySelector('motu-archipelago');
+      const provide =
+        arch && typeof arch.provide === 'function'
+          ? (k, v) => arch.provide(k, v)
+          : window.__motuLagoon
+            ? (k, v) => window.__motuLagoon.provide(k, v)
+            : null;
+      if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
+    }, scenario.seed ?? {});
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: 900 });
+      // Two beats: one for the resize to land, one for anything that re-measures on it.
+      await sleep(200);
+      const measured = await page.evaluate((t) => {
+        // A React-mounted island's wrapper is `display: contents` — no box of its own — so measuring it
+        // directly reports every island as blank. Fall back to what it rendered, the same way the seam
+        // lens does for its outlines.
+        const boxOf = (el) => {
+          if (!el) return null;
+          const own = el.getBoundingClientRect();
+          if (own.width || own.height) return own;
+          let l = Infinity, t2 = Infinity, r = -Infinity, b = -Infinity;
+          for (const child of el.children) {
+            const c = boxOf(child);
+            if (!c || (!c.width && !c.height)) continue;
+            l = Math.min(l, c.left); t2 = Math.min(t2, c.top);
+            r = Math.max(r, c.right); b = Math.max(b, c.bottom);
+          }
+          return l === Infinity ? null : { left: l, top: t2, right: r, bottom: b, width: r - l, height: b - t2 };
+        };
+        const doc = document.documentElement;
+        const rect = boxOf(window.__motuFindIsland(t));
+        return {
+          overflow: doc.scrollWidth - doc.clientWidth,
+          rendered: !!rect && rect.width > 0 && rect.height > 0,
+          height: rect ? Math.round(rect.height) : 0,
+        };
+      }, tag);
+      results.push({ ...vp, scenario: scenario.name ?? 'default', ...measured });
+    }
+    }
+    return results;
+    },
+  );
+}
+
+/**
  * Boot a whole archipelago in the real-browser lagoon and report every island slot it mounted. Returns
  * { ok, region, islands: [{ slot, tag, len }], diagnostics }. `ok` is true when the region rendered and
  * every declared slot MOUNTED its island element. Emptiness of content is NOT a failure — an island may
@@ -300,14 +774,8 @@ async function remountAndCompare(page, tag) {
  */
 export async function runArchipelagoLagoon({ id, port = 5199 }) {
   const { chromium } = await import('playwright');
-  const server = await startLagoon({ target: `archipelago:${id}`, port });
-  let browser;
   const diagnostics = [];
-  try {
-    browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
-    await setupPageDiagnostics(page, diagnostics);
-    await page.goto(`http://localhost:${port}/lagoon.html`, { waitUntil: 'load' });
+  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1200, height: 900 }, diagnostics }, async (page, server) => {
 
     let result = { region: false, islands: [] };
     const deadline = Date.now() + 15000;
@@ -353,11 +821,7 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
 
     const ok = result.region && result.islands.length > 0 && result.islands.every((i) => i.tag);
     return { ok, ...result, diagnostics };
-  } finally {
-    if (browser) await browser.close();
-    stopLagoon(server);
-    await sleep(200);
-  }
+  });
 }
 
 /**
@@ -369,14 +833,8 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
  */
 export async function differentiateLagoon({ tag, fit = 'native', port = 5199, scenarios = [] }) {
   const { chromium } = await import('playwright');
-  const server = await startLagoon({ target: `island:${tag}`, fit, port });
-  let browser;
   const diagnostics = [];
-  try {
-    browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 900, height: 720 } });
-    await setupPageDiagnostics(page, diagnostics);
-    await page.goto(`http://localhost:${port}/lagoon.html`, { waitUntil: 'load' });
+  return onLagoonPage({ target: `island:${tag}`, fit, port, viewport: { width: 900, height: 720 }, diagnostics }, async (page, server) => {
 
     // Wait for the island to upgrade and paint.
     let mounted = false;
@@ -424,11 +882,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
 
     const differentiates = outputs.every((o) => o.trim().length > 0) && new Set(outputs).size > 1;
     return { differentiates, scenarioCount: scenarios.length, mounted: true, diagnostics };
-  } finally {
-    if (browser) await browser.close();
-    stopLagoon(server);
-    await sleep(200);
-  }
+  });
 }
 
 /**
@@ -440,13 +894,8 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
  */
 export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios = [], transport }) {
   const { chromium } = await import('playwright');
-  const server = await startLagoon({ target: `island:${tag}`, fit, port, transport });
-  let browser;
   const diagnostics = [];
-  try {
-    browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 900, height: 720 } });
-    await setupPageDiagnostics(page, diagnostics);
+  return onLagoonPage({ target: `island:${tag}`, fit, port, transport, viewport: { width: 900, height: 720 }, diagnostics }, async (page, server) => {
     // Turn on recording the instant the runtime module exposes the hook — before the island's mount
     // self-fetch — so the default (first scenario) request is captured too. Also start the seed
     // recorder (@motu/core) to capture host-fed store writes (channels + provide()).
@@ -459,7 +908,6 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
         }
       }, 0);
     });
-    await page.goto(`http://localhost:${port}/lagoon.html`, { waitUntil: 'load' });
 
     // Wait for the island to upgrade and paint (its mount fetch fires here).
     let mounted = false;
@@ -513,11 +961,7 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
 
     return { calls, seedWrites, mounted, diagnostics };
-  } finally {
-    if (browser) await browser.close();
-    stopLagoon(server);
-    await sleep(200);
-  }
+  });
 }
 
 /**

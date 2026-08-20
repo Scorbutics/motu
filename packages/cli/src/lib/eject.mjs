@@ -20,6 +20,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
+import { readGeneratedContracts } from './contracts.mjs';
 
 /**
  * Read every archipelago's wiring from its config file: slot -> { element, writes }.
@@ -85,8 +86,11 @@ function readIslands(text) {
 }
 
 /** tag -> { callbackProp: eventName }, from each island file's declared contract output. */
-export function readOutputs(islandFiles) {
-  const out = {};
+export function readOutputs(islandFiles, islandsDir) {
+  // The generated contracts first: with the short island form (`island('x-tag', Component)`) they are
+  // the only place the event names exist. An island file that still declares its own contract wins for
+  // its own tag — nothing has to be migrated for eject to keep working.
+  const out = { ...Object.fromEntries(Object.entries(readGeneratedContracts(islandsDir ?? '')).map(([tag, c]) => [tag, c.output])) };
   for (const file of islandFiles) {
     const text = blankComments(readFileSync(file, 'utf8'));
     const tag = text.match(/\btag:\s*'([^']+)'/)?.[1];

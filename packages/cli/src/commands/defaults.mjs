@@ -16,8 +16,9 @@
 // who can make it — not to guess and quietly edit an app component.
 import { existsSync, readFileSync } from 'node:fs';
 import { Project, SyntaxKind } from 'ts-morph';
-import { paths, color, names } from '../lib/util.mjs';
+import { paths, color, names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
 import { listIslands, syncRegistry } from '../lib/islands.mjs';
+import { syncContracts } from '../lib/contracts.mjs';
 
 /** Values that are neutral for their type: an empty state, not a piece of data. */
 function classifyLiteral(node) {
@@ -137,4 +138,7 @@ export function islandDefaultsCommand(argv) {
 export function islandSyncCommand() {
   const { path, count } = syncRegistry(paths.islandsDir);
   console.log(`${paths.rel(path)} — ${count} island(s)`);
+  // The contracts are the same kind of file: derived from what is on disk, never edited by hand.
+  const contracts = syncContracts(paths.islandsDir, { islandComponentPath, islandComponentExport, names });
+  console.log(`${paths.rel(contracts.path)} — ${contracts.count} contract(s)${contracts.changed ? '' : ' (unchanged)'}`);
 }

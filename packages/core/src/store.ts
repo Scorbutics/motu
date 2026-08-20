@@ -16,6 +16,55 @@ export type StoreListener = () => void;
 const producerOfKey = new WeakMap<Store, Map<string, string>>();
 const ownershipWarned = new Set<string>();
 
+// --- Dev-only laundering smell (docs/plan-key-ownership.md, verify check 4) ----------------------
+// Ownership makes bypass impossible; it cannot make a declaration HONEST. A key declared host-fed but
+// really derived from what an island did still passes every check — the page computes it, provides it,
+// and the region looks fed from outside. What gives it away is TIMING: the host writing a bound key
+// moments after an island emitted. Undecidable statically, cheap to notice at runtime.
+
+const readerOfKey = new WeakMap<Store, Map<string, string[]>>();
+let lastOutput: { slot: string; event: string; at: number } | null = null;
+let forceSettled = false;
+const suspects: LaunderingSuspect[] = [];
+
+/** A host write to a bound key, close enough behind an island's output to be its consequence. */
+export interface LaunderingSuspect {
+  key: string;
+  readers: string[];
+  after: { slot: string; event: string };
+  gapMs: number;
+}
+
+/** Called by the mount paths when an island's declared output fires. */
+export function noteIslandOutput(slot: string, event: string): void {
+  if (DEBUG) lastOutput = { slot, event, at: Date.now() };
+}
+
+/** Suspects seen so far (debug only; empty in production). */
+export function launderingSuspects(): LaunderingSuspect[] {
+  return [...suspects];
+}
+
+/**
+ * Forget what has been seen.
+ *
+ * The harness seeds a region before it drives it, and seeding is a host write moments before an island
+ * emits — indistinguishable from the smell unless the window is narrowed deliberately. The caller
+ * resets after setup, so what is collected is the response to the act, not the preparation for it.
+ */
+export function resetLaunderingSuspects(): void {
+  suspects.length = 0;
+  lastOutput = null;
+  // An explicit reset IS the statement that setup is over — the harness calls it after seeding a
+  // scenario, which can happen well inside the store's own settling window.
+  forceSettled = true;
+}
+
+/** Called by `defineArchipelago` with `key -> reading slots`, so a host write can be judged. */
+export function declareReaders(store: Store, readers: Map<string, string[]>): void {
+  if (DEBUG) readerOfKey.set(store, readers);
+}
+
 /** Called by `defineArchipelago` with `key -> producing slot` for this region. */
 export function declareProducers(store: Store, producers: Map<string, string>): void {
   if (DEBUG) producerOfKey.set(store, producers);
@@ -97,6 +146,9 @@ export function recordSeedWrite(key: string, value: unknown, source: 'host' | 'c
 }
 
 export class Store {
+  /** When this store came into existence — mount-time writes are setup, not consequence. */
+  readonly createdAt = Date.now();
+
   private data: Record<string, unknown>;
   private listeners = new Set<StoreListener>();
   /**
@@ -140,6 +192,8 @@ export class Store {
     // was never written returns here and the key is NEVER CREATED, so `has()` stays false and the
     // precedence rule above silently reads the wrong side.
     if (this.has(key) && Object.is(this.data[key], value)) return;
+    // Before the assignment: the smell below distinguishes establishing a key from overwriting one.
+    const wasSet = Object.prototype.hasOwnProperty.call(this.data, key);
     this.data[key] = value;
     this.snapshotCache = null;
     this.revision++;
@@ -159,6 +213,23 @@ export class Store {
               `${writeSource ? `"${writeSource}"` : 'unattributed host code'}. Route it through that ` +
               `island's output, or change who the archipelago declares as its producer.`,
           );
+        }
+      }
+      // Laundering: the HOST writing a key an island reads, right after an island emitted. Recorded,
+      // never fatal — it is a suspicion about provenance, and provenance is not decidable here.
+      const readers = readerOfKey.get(this)?.get(key);
+      const external = writeSource === null || writeSource === 'host';
+      // Only an OVERWRITE can be laundering. The first value a key ever gets is the host establishing
+      // the region — it happens during mount, moments after some island's first emit, and reading that
+      // as "the page answered the island" was the smell's loudest false positive.
+      // …and not while the region is still being established. A host frame that seeds a key and then
+      // feeds it again from a mount effect is setting the region up, not answering an island — and at
+      // mount SOME island has always just emitted, so every such key looked laundered.
+      const settled = forceSettled || Date.now() - this.createdAt > 2000;
+      if (readers?.length && external && wasSet && settled && lastOutput) {
+        const gapMs = Date.now() - lastOutput.at;
+        if (gapMs <= 1500 && !suspects.some((s2) => s2.key === key && s2.after.slot === lastOutput!.slot)) {
+          suspects.push({ key, readers, after: { slot: lastOutput.slot, event: lastOutput.event }, gapMs });
         }
       }
       const w: StoreWrite = { store: this, key, source: writeSource, at: Date.now() };
@@ -197,4 +268,9 @@ if (DEBUG && typeof globalThis !== 'undefined') {
     start: startSeedRecording,
     stop: stopSeedRecording,
   };
+  // The laundering smell, readable by the verify harness after it has driven a region's flows.
+  (globalThis as unknown as { __motuSuspects?: unknown }).__motuSuspects = Object.assign(launderingSuspects, {
+    list: launderingSuspects,
+    reset: resetLaunderingSuspects,
+  });
 }

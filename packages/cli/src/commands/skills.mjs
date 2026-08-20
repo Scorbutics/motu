@@ -14,7 +14,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, relative, resolve } from 'node:path';
-import { color } from '../lib/util.mjs';
+import { color, HOST_ROOT } from '../lib/util.mjs';
+import { applyHostRules } from '../lib/host-rules.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** The motu checkout that owns this CLI (packages/cli/src/commands → repo root). */
@@ -111,7 +112,15 @@ export async function skillsInstallCommand(argv) {
   for (const p of out.same) console.log('  ' + color.dim('= ' + p));
   for (const p of out.skipped) console.log('  ' + color.red('! ') + p + color.dim(' (differs — use --force to overwrite)'));
   console.log('');
+  // The skills are the judgement half; the rules are the standing instructions that go with them, so
+  // installing one installs the other. `motu init` does the same for a fresh project.
+  // The rules belong to the HOST application — that is where the coding agent's instruction file
+  // lives. Writing them beside the motu project (which is often a subfolder) created a second
+  // CLAUDE.md nothing reads.
+  const rules = applyHostRules(HOST_ROOT);
+
   console.log(color.green(`✓ ${skills.length} skill(s): ${skills.map((s) => s.name).join(', ')}`));
+  for (const p of rules) console.log('  ' + color.dim(p) + color.dim(' (motu rules block)'));
   if (out.skipped.length) {
     console.log(color.yellow(`  ${out.skipped.length} file(s) left untouched — rerun with --force to overwrite`));
     process.exit(1);

@@ -1,0 +1,110 @@
+// `motu check` — one gate, one verdict: is the project's motu wiring still sound?
+//
+// Deliberately scoped to what MOTU owns. It does not run the host's typecheck or linter: those are the
+// host's tools, configured by the host, and a framework that shells out to them has taken an opinion
+// about a build it knows nothing about (the reference ocean is not even a node app). The host composes:
+//
+//   <host build> && motu check
+//
+// The one apparent exception is removal-check, which does run the host's typecheck — but that IS its
+// subject: "the app still compiles without motu" cannot be answered any other way.
+//
+// Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
+// (a browser per island), which belongs in CI or before a release, not in a tight loop.
+import { existsSync, readdirSync } from 'node:fs';
+import { color, paths } from '../lib/util.mjs';
+import { listIslands } from '../lib/islands.mjs';
+import { runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
+import { runRemovalCheck } from './removal-check.mjs';
+import { contractsDrift } from '../lib/contracts.mjs';
+import { names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
+
+/** Is `contracts.generated.ts` what the components say it should be? */
+function islands0Drift() {
+  const util = { names, islandComponentPath, islandComponentExport };
+  const d = contractsDrift(paths.islandsDir, util);
+  if (d.missing) return { stale: true, reason: 'contracts.generated.ts is missing' };
+  if (d.drifted) return { stale: true, reason: 'a component changed since the contracts were generated' };
+  return { stale: false, reason: null };
+}
+
+export async function checkCommand(argv) {
+  // `--runtime` opts IN, the same way it does for a single `verify` — the sub-checks read the flag
+  // directly, so this only has to pass it through.
+  const runtime = argv.runtime === true;
+  const sub = { ...argv, runtime, fast: argv.fast };
+
+  // The generated half, first and cheaply: every island's contract is READ from its component, so the
+  // only way it can be wrong is by being stale. One comparison answers that for the whole project.
+  const drift = islands0Drift();
+  const islands = listIslands(paths.islandsDir);
+  const islandResults = [];
+  for (const island of islands) islandResults.push(await runIslandVerify(sub, island.kebab));
+
+  const regionIds = existsSync(paths.archipelagosDir)
+    ? readdirSync(paths.archipelagosDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && existsSync(paths.archipelagoFile(e.name)))
+        .map((e) => e.name)
+    : [];
+  const regionResults = [];
+  for (const id of regionIds) regionResults.push(await runArchipelagoVerify(sub, id));
+
+  // Last, and only when the rest holds up: it rewrites the host on disk (and restores it), so running
+  // it after a failure that is already fatal buys nothing and costs a typecheck of the whole app.
+  const structureOk =
+    !drift.stale &&
+    islandResults.every((r) => r.errors.length === 0) &&
+    regionResults.every((r) => r.errors.length === 0);
+  const removal = structureOk ? await runRemovalCheck(argv, { quiet: true }) : null;
+
+  const pass = structureOk && (removal?.pass ?? false);
+
+  if (argv.json) {
+    console.log(
+      JSON.stringify(
+        {
+          pass,
+          runtime,
+          contracts: drift,
+          islands: islandResults.map(summaryOf),
+          archipelagos: regionResults.map(summaryOf),
+          removal: removal ?? { skipped: 'structure checks failed first' },
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(pass ? 0 : 1);
+  }
+
+  console.log(color.bold('\nmotu check — contracts\n'));
+  console.log(
+    drift.stale
+      ? `  ${color.red('✗')} ${color.dim('generated'.padEnd(20))} ${color.red(drift.reason)} — run \`motu island sync\``
+      : `  ${color.green('✓')} ${color.dim('generated'.padEnd(20))}${color.dim('every island contract matches its component')}`,
+  );
+
+  printSweep('motu check — islands', islandResults);
+  printSweep('motu check — regions', regionResults);
+  console.log(color.bold('\nmotu check — removal\n'));
+  if (!removal) {
+    console.log(`  ${color.dim('–')} ${color.dim('skipped'.padEnd(20))} ${color.dim('structure checks failed first')}`);
+  } else if (removal.pass) {
+    const ejected = removal.ejected.reduce((n, e) => n + e.notes.length, 0);
+    console.log(
+      `  ${color.green('✓')} ${color.dim('removable'.padEnd(20))}` +
+        color.dim(`${removal.deleted.length} deleted, ${removal.stripped.length} unwrapped, ${ejected} ejected`),
+    );
+  } else {
+    console.log(`  ${color.red('✗')} ${color.dim('load-bearing'.padEnd(20))} ${color.red('the host does not compile without motu')}`);
+    for (const line of removal.errors.slice(0, 5)) console.log(`      ${color.dim(line)}`);
+  }
+
+  console.log('');
+  console.log(
+    pass
+      ? color.green(color.bold('PASS')) + color.dim(`  ${islandResults.length} island(s), ${regionResults.length} region(s), removable`)
+      : color.red(color.bold('FAIL')) + color.dim('  see above'),
+  );
+  process.exit(pass ? 0 : 1);
+}

@@ -11,6 +11,8 @@ const cfg = loadMotuConfig();
 
 /** The motu project root (the directory that owns motu.config.json). */
 export const REPO_ROOT = cfg.root;
+/** The HOST application's root — where its instruction files and tsconfig live. */
+export const HOST_ROOT = cfg.hostRoot;
 /** The frontend app root (root/<app>) — everything below is motu-conventional. */
 export const APP_ROOT = cfg.appRoot;
 /** The npm package name whose barrel exports ELEMENT_REGISTRY (for the runtime harness). */
@@ -33,6 +35,8 @@ export const paths = {
   archipelagosDir: ARCHIPELAGOS_DIR,
   archipelagosRegistry: resolve(ARCHIPELAGOS_DIR, 'registry.ts'),
   archipelagoFile: (id) => resolve(ARCHIPELAGOS_DIR, id, `${id}.archipelago.ts`),
+  /** A region's declared flows — beside its config, never inside it (evidence stays out of the bundle). */
+  archipelagoEvidence: (id) => resolve(ARCHIPELAGOS_DIR, id, `${id}.evidence.ts`),
   barrel: cfg.barrel,
   contract: resolve(cfg.contractSrcDir, 'index.ts'),
   contractSrcDir: cfg.contractSrcDir,
@@ -173,6 +177,15 @@ export function resolveModuleSpecifier(spec, fromDir) {
  * fork the app's own component and let the two drift. So: follow element.ts's import of the component
  * it mounts, and fall back to the ui/ convention when there is nothing to follow.
  */
+/** The identifier an island file mounts, in either declaration form. */
+export function islandComponentIdentifier(text) {
+  return (
+    text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1] ??
+    text.match(/\bisland\(\s*'[^']+'\s*,\s*([A-Za-z_$][\w$]*)/)?.[1] ??
+    null
+  );
+}
+
 export function islandComponentPath(kebab, pascal) {
   // Whichever layout the island uses. A relative import in the declaration resolves against the
   // FILE's own directory — the islands dir for a flat `<kebab>.island.ts`, the island's folder for
@@ -180,7 +193,9 @@ export function islandComponentPath(kebab, pascal) {
   const elementPath = paths.elementFile(kebab);
   if (existsSync(elementPath)) {
     const text = readFileSync(elementPath, 'utf8');
-    const componentName = text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1];
+    // Either declaration form: the explicit `component:` property, or `island('x-tag', Component)`
+    // — the short form, where everything derivable comes from the generated contracts file.
+    const componentName = islandComponentIdentifier(text);
     if (componentName) {
       for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
         const named = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/).pop().trim());
@@ -191,6 +206,35 @@ export function islandComponentPath(kebab, pascal) {
     }
   }
   return resolve(UI_DIR, kebab, `${pascal}.tsx`);
+}
+
+/**
+ * The viewports a project checks its UI at, from `lagoon.config.json`.
+ *
+ * Motu had no notion of one: `fit` is footprint and skin, never width, so "does this work on a phone"
+ * was left to whoever remembered to drag a browser window. Declared once, they drive the lagoon's own
+ * width switcher and the responsive check — the same list, so what you look at is what CI measures.
+ */
+export function lagoonViewports() {
+  const file = resolve(cfg.lagoonDir, 'lagoon.config.json');
+  const declared = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')).viewports ?? null) : null;
+  const map = declared ?? { mobile: 390, desktop: 1280 };
+  return Object.entries(map).map(([name, width]) => ({ name, width: Number(width) }));
+}
+
+/**
+ * How hard the accessibility check bites, from `lagoon.config.json`.
+ *
+ * Warnings by default, deliberately. A check that turns an existing codebase red on the day it ships
+ * gets switched off, not acted on — and the first run here found violations owned by a UI library, not
+ * by the app. Same adoption shape as key ownership: report, let a project get clean, then promote.
+ *
+ *   "a11y": { "fail": "critical" | "serious" | "never", "ignore": ["aria-allowed-attr"] }
+ */
+export function lagoonA11y() {
+  const file = resolve(cfg.lagoonDir, 'lagoon.config.json');
+  const declared = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')).a11y ?? {}) : {};
+  return { fail: declared.fail ?? 'never', ignore: new Set(declared.ignore ?? []) };
 }
 
 /**
@@ -205,7 +249,7 @@ export function islandComponentExport(kebab, fallback) {
   const elementPath = paths.elementFile(kebab);
   if (!existsSync(elementPath)) return fallback;
   const text = readFileSync(elementPath, 'utf8');
-  const local = text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1];
+  const local = islandComponentIdentifier(text);
   if (!local) return fallback;
   for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"][^'"]+['"]/g)) {
     for (const entry of m[1].split(',')) {

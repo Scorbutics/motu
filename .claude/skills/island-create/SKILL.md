@@ -62,8 +62,15 @@ MOTU_NO_SSL=1 pnpm dev:lagoon           # visual iteration (standalone app + swi
 
 ### 3 — Verify in the lagoon; raise integration concerns
 ```bash
-pnpm motu island verify <name>          # static + config + REAL-browser lagoon (native & legacy) + data-flow
+pnpm motu island verify <name>          # STATIC: drift between the island, its component and the region
+pnpm motu island verify <name> --runtime  # the browser lane — mount, data-flow, viewports, axe
 ```
+The default is static and takes about a second: it answers "has this drifted from what it declares?",
+which is the question nearly every edit raises. `--runtime` drives a real browser once per scenario ×
+viewport — that is SECONDS PER ISLAND, so it is a punctual gate (before you hand the island over, in
+CI, nightly), never something to run on each save. Iterate visually in the lagoon instead; that is what
+the lagoon is for. `--verbose` names each runtime step and what it cost.
+
 Fix every `✗` until **PASS**. Then, BEFORE integrating, explicitly write down the integration risks the
 lagoon CANNOT cover — this is the honest boundary:
 - inputs still on defaults / channels that never fired (the overlay's ⚠ line; `bound-empty` props),

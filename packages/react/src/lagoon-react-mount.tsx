@@ -10,7 +10,17 @@
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { provideToArchipelago, type ArchipelagoConfig, type Channel, type HostBridge, type MotuFit } from '@motu/core';
+import {
+  applyOutput,
+  getArchipelagoStore,
+  getMountedIslands,
+  provideToArchipelago,
+  runWithWriteSource,
+  type ArchipelagoConfig,
+  type Channel,
+  type HostBridge,
+  type MotuFit,
+} from '@motu/core';
 import { ArchipelagoProvider, Island } from './react-island.js';
 import { renderArchipelagoLayout } from './archipelago-layout.js';
 import type { ElementSpec } from './bootstrap.js';
@@ -46,6 +56,10 @@ declare global {
     __motuLagoon?: {
       provide: (key: string, value: unknown) => void;
       remount: () => void;
+      /** Fire one of an island's DECLARED outputs, as if the component had. */
+      emit: (slot: string, event: string, detail: unknown) => boolean;
+      /** Read a region key, for a check that needs to know whether it moved. */
+      read: (key: string) => unknown;
       archipelago: string;
     };
   }
@@ -120,6 +134,24 @@ export function mountReactLagoon(
   window.__motuLagoon = {
     archipelago: config.id,
     provide: (key, value) => provideToArchipelago(config.id, key, value),
+    //  - emit: fire an island's declared output without touching its DOM.
+    //
+    //    This is the only interaction primitive the harness gets, and deliberately so: it can drive
+    //    what an island DECLARES, never a selector or a synthetic click. That keeps a check derivable
+    //    from the archipelago (every `writes` entry can be probed) instead of hand-scripted — which is
+    //    the line between a harness and a second, untyped test suite.
+    read: (key) => getArchipelagoStore(config.id)?.get(key),
+    emit: (slot, event, detail) => {
+      const spec = config.islands.find((i) => i.slot === slot);
+      const store = getArchipelagoStore(config.id);
+      // MOUNTED, not merely declared: a `writes` entry for a slot this region never renders is a
+      // declaration pointing at nothing, and firing it anyway would report that wire as healthy.
+      const mounted = getMountedIslands().some((i) => i.slot === slot && i.store === store);
+      if (!spec || !store || !mounted) return false;
+      const host = opts.host ?? { navigate: () => {}, action: () => {} };
+      runWithWriteSource(slot, () => applyOutput(spec, event, detail, { store, host }));
+      return true;
+    },
     remount: () => {
       root.unmount();
       root = createRoot(mountEl);

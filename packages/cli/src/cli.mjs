@@ -8,6 +8,8 @@
 // Kept dependency-light and plain-ESM (like @motu/codegen) so it runs with a bare `node`.
 import { createCommand } from './commands/create.mjs';
 import { verifyCommand, archipelagoVerifyCommand } from './commands/verify.mjs';
+import { checkCommand } from './commands/check.mjs';
+import { snapshotCommand } from './commands/snapshot.mjs';
 import { integrateCommand } from './commands/integrate.mjs';
 import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
@@ -44,7 +46,9 @@ const USAGE = `${color.bold('motu')} — island / archipelago CLI
 ${color.bold('Usage:')}
   motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
-  motu island verify <name|--all>                   run the island rules + lagoon mount (the loop)
+  motu check                                        every island + every region + removal, one verdict
+  motu island verify <name|--all>                   the island rules (static; --runtime adds the browser)
+  motu island snapshot <name|--all> [--update]      visual baselines, per scenario × viewport
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
   motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
@@ -63,11 +67,24 @@ ${color.bold('Usage:')}
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
   motu skills list                                  list the skills this motu checkout ships
 
+${color.bold('snapshot flags:')}
+  --update        record the baselines instead of checking them (a deliberate, separate act)
+  --all           every island
+  --json          machine-readable report
+  ${color.dim('baselines live in <islands>/<kebab>.snapshots/, one per scenario × viewport; commit them.')}
+
+${color.bold('check flags:')}
+  --runtime       also drive the lagoon in a browser (mount, data-flow, viewports, axe, live wiring)
+  --verbose       name each runtime step as it runs, with what it cost
+  --json          machine-readable verdict: islands, regions, removal
+  ${color.dim('motu check runs MOTU\'s gates only. Your typecheck/linter are yours: `<host build> && motu check`.')}
+
 ${color.bold('verify flags:')}
   --all           every island / every region, one after another; one line each, findings where there are any
-                  ${color.dim('with the runtime checks that is a lagoon per island — pair it with --no-runtime for a fast sweep')}
+  --runtime       add the lagoon checks: mount, data-flow, viewports, axe, live wiring
+                  ${color.dim('opt-in: it drives a real browser per scenario × viewport. Static verify answers drift, which is the common question.')}
+  --verbose       name each runtime step as it runs, with what it cost
   --fast          use the in-process happy-dom lagoon mount instead of the real browser (Playwright)
-  --no-runtime    skip the lagoon mount entirely (static + config checks only)
   --standalone    the island is intentionally not in an archipelago (no membership warning)
   --json          machine-readable report
 
@@ -115,6 +132,7 @@ async function main() {
   if (group === 'island') {
     if (sub === 'create') return createCommand(argv);
     if (sub === 'verify') return verifyCommand(argv);
+    if (sub === 'snapshot') return snapshotCommand(argv);
     if (sub === 'defaults') return islandDefaultsCommand(argv);
     if (sub === 'sync') return islandSyncCommand(argv);
     if (sub === 'integrate') return integrateCommand(argv);
@@ -158,7 +176,10 @@ async function main() {
     process.exit(2);
   }
 
-  if (group === 'removal-check') return removalCheckCommand(argv);
+  // Single-word verbs: their flags land in `sub`, since `argv` is parsed from what follows it.
+  if (group === 'removal-check') return removalCheckCommand(parse([sub, ...rest].filter(Boolean)));
+
+  if (group === 'check') return checkCommand(parse([sub, ...rest].filter(Boolean)));
 
   if (group === 'contract') {
     if (sub === 'check') return contractCheckCommand(argv);

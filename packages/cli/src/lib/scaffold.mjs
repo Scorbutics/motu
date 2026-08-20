@@ -223,9 +223,14 @@ declare const __MOTU_ISOLATION__: 'shadow' | 'light';
 // Set BEFORE bootstrapLagoon so single-target verify exercises the project's real isolation posture.
 setDefaultIsolation(__MOTU_ISOLATION__);
 
-// verify always passes an explicit MOTU_TARGET. Opening lagoon.html by hand does not, so fall back
-// to the project's first archipelago rather than to a name the framework guessed.
+// The target can come from the URL (\`?target=island:x-thing\`), from the build (\`MOTU_TARGET\`), or
+// from nowhere at all. The URL wins because it is what lets ONE dev server answer for every island:
+// the checks navigate instead of booting a server each. Opening lagoon.html by hand passes neither,
+// so fall back to the project's first archipelago rather than to a name the framework guessed.
+const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+const targetFromUrl = params.get('target');
 const target =
+  targetFromUrl ||
   (typeof __MOTU_TARGET__ === 'string' && __MOTU_TARGET__) ||
   (Object.keys(ARCHIPELAGOS)[0] ? 'archipelago:' + Object.keys(ARCHIPELAGOS)[0] : '');
 
@@ -247,9 +252,13 @@ bootstrapLagoon({
   // Must match how the host application mounts islands, or this verifies a path you do not ship.
   mount: config.mount,
 {{hostOption}}  target,
-  fit: typeof __MOTU_FIT__ === 'string' ? __MOTU_FIT__ : '',
-  forceErrorStatus:
-    typeof __MOTU_FORCE_ERROR__ === 'string' && __MOTU_FORCE_ERROR__ ? Number(__MOTU_FORCE_ERROR__) : undefined,
+  fit: params.get('fit') || (typeof __MOTU_FIT__ === 'string' ? __MOTU_FIT__ : ''),
+  // Also from the URL, and for the same reason as the target: the error-resilience check wants ONE
+  // island mounted against a failing transport, not a second dev server that differs by an env var.
+  forceErrorStatus: (() => {
+    const forced = params.get('forceError') || (typeof __MOTU_FORCE_ERROR__ === 'string' ? __MOTU_FORCE_ERROR__ : '');
+    return forced ? Number(forced) : undefined;
+  })(),
 });
 `;
 

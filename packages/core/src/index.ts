@@ -1,12 +1,13 @@
 export { Store } from './store.js';
 export type { StoreListener } from './store.js';
-export { observeStoreWrites, runWithWriteSource, producerOf } from './store.js';
+export { observeStoreWrites, runWithWriteSource, producerOf, launderingSuspects, resetLaunderingSuspects } from './store.js';
+export type { LaunderingSuspect } from './store.js';
 export type { StoreWrite } from './store.js';
 export { startSeedRecording, stopSeedRecording } from './store.js';
 export type { RecordedSeed } from './store.js';
 export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, applyMotuChrome } from './toolbar.js';
 export type { MotuChromeTheme } from './toolbar.js';
-export { archipelago, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
+export { archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
 export type {
   HostBridge,
   IslandContext,
@@ -16,6 +17,8 @@ export type {
   ProducedKeys,
   BoundKeys,
   ProvidedKeys,
+  HostFedKeys,
+  BindDeclaration,
   UnownedKeys,
   DisputedKeys,
   RegionOwnershipOk,

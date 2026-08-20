@@ -276,7 +276,8 @@ pnpm motu init [dir] --host next|angularjs|none       # scaffold config + regist
 pnpm motu island create <name>                        # one island file (+ component if motu owns it)
 pnpm motu island sync                                 # regenerate the registry from the files on disk
 pnpm motu island defaults [name]                      # classify declared defaults: component, or evidence?
-pnpm motu island verify <name>                        # the loop: rules + lagoon mount (PASS/FAIL + exit code)
+pnpm motu island verify <name>                        # the loop: drift rules, static (PASS/FAIL + exit code)
+pnpm motu island verify <name> --runtime              # the browser lane — punctual: a gate, CI, nightly
 pnpm motu island integrate <name> --archipelago <id>  # AST membership + layout marker
 pnpm motu archipelago create <id>                     # scaffold + register a new archipelago
 pnpm motu archipelago verify <id>                     # config + shared-CSS lint + whole-region lagoon mount
@@ -288,7 +289,13 @@ pnpm motu codegen [manifest] [outDir]                 # regenerate @motu/contrac
 ```
 
 `motu island verify` turns the prose in *The rules that make islands verifiable* into a machine-checked
-gate. It runs static, config and runtime layers:
+gate. It has three layers — **static** and **config** run by default, **runtime** only with `--runtime`:
+
+The split is about cost, and about what each layer answers. Static and config answer *has this drifted
+from what it declares?* — a question about source, answered in about a second, which is why it is the
+dev loop. Runtime answers *does it still behave?* by driving a real browser once per scenario ×
+viewport: seconds per island, minutes across a project. Run it as a gate before handing work over, in
+CI, or nightly — not on every save. `--verbose` names each runtime step with what it cost.
 
 - **static** (AST over the ui component): no bare `fetch`/`XMLHttpRequest`, no `history`/`location`, no
   `document` reach-out, server I/O only via `@motu/contract`, no reach into `islands/`/`archipelagos/`
@@ -324,8 +331,9 @@ work in both shadow and light isolation (a bare `:host` is inert in light DOM); 
 `--x-*`/`--_*` tokens rather than raw literals (a warning).
 
 Both verbs exit non-zero on any error and take `--json` for a machine-readable report — so an agent loops on
-them directly. `--fast` swaps the real-browser mount for a quicker (weaker) in-process `happy-dom` check;
-`--no-runtime` skips the lagoon. Iterate visually with `MOTU_NO_SSL=1 pnpm dev:lagoon`. The real-browser
+them directly. `--fast` swaps the real-browser mount for a quicker (weaker) in-process `happy-dom` check.
+The runtime lane shares ONE dev server and ONE browser across every island and region it checks (the
+target travels in the URL), so a sweep pays for the lagoon once rather than once per check. Iterate visually with `MOTU_NO_SSL=1 pnpm dev:lagoon`. The real-browser
 check needs Chromium once: `cd packages/cli && npx playwright install chromium`.
 
 `motu fixtures record <island> [--transport http|mock]` captures a session's contract responses AND

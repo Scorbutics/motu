@@ -14,8 +14,19 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
 import { listIslands } from '../lib/islands.mjs';
-import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
-import { runLagoon, runArchipelagoLagoon, differentiateLagoon } from '../playwright-lagoon.mjs';
+import { readRegions } from '../lib/eject.mjs';
+import { stubParity } from '../lib/stubs.mjs';
+import { islandContract, contractsDrift } from '../lib/contracts.mjs';
+import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
+import {
+  runLagoon,
+  runArchipelagoLagoon,
+  differentiateLagoon,
+  responsiveLagoon,
+  axeLagoon,
+  probeWiring,
+  runRegionFlows,
+} from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
 // The CLI package root — used as cwd for the harness so `--import tsx` and the @motu/* workspace
@@ -23,6 +34,36 @@ const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-har
 const CLI_PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const DOC_QUERIES = new Set(['querySelector', 'querySelectorAll', 'getElementById', 'getElementsByClassName']);
+
+/**
+ * Say what is happening while it happens.
+ *
+ * The runtime checks drive a real browser, and a run that prints nothing until the end is
+ * indistinguishable from a run that has hung — which is exactly how it read at fifteen islands. With
+ * `--verbose` each step names itself as it starts and reports what it cost, so a slow check is
+ * identifiable rather than merely suspected.
+ */
+let progressLabel = '';
+let verbose = false;
+export function setProgressScope(label) {
+  progressLabel = label;
+}
+
+/** Turned on once per command (`--verbose`), rather than threaded through every check's arguments. */
+export function setVerbose(on) {
+  verbose = !!on;
+}
+
+export async function step(name, run) {
+  if (!verbose) return run();
+  const at = Date.now();
+  process.stderr.write(color.dim(`  · ${progressLabel ? `${progressLabel} ` : ''}${name}…`));
+  try {
+    return await run();
+  } finally {
+    process.stderr.write(color.dim(` ${((Date.now() - at) / 1000).toFixed(1)}s\n`));
+  }
+}
 
 function makeReport() {
   const findings = [];
@@ -242,7 +283,11 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
   }
   if (!sawSiblingIsland) report.ok('no-island-import', 'mount point imports no sibling island');
 
-  // The exported ElementSpec object literal for this island.
+  // What the island file declares, in EITHER form: the long `islandElement({ tag, component, options })`
+  // literal, or the short `island('x-tag', Component)` call whose derivable half lives in the generated
+  // contracts file. The short form is the point of that generation — a mount point that says only what
+  // someone decided — so the checks below read both rather than insisting on the shape.
+  const elementText = readFileSync(elementPath, 'utf8');
   let row;
   for (const obj of sf.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
     if (obj.getProperty('tag') && obj.getProperty('component')) {
@@ -250,13 +295,16 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
       break;
     }
   }
-  if (!row) {
-    report.error('registered', `${pascal} has no ElementSpec in ${paths.rel(elementPath)}`);
+  const shortForm = !row && /\bisland\(\s*'[^']+'/.test(elementText);
+  if (!row && !shortForm) {
+    report.error('registered', `${pascal} has no island declaration in ${paths.rel(elementPath)}`);
     return null;
   }
   // The identifier must resolve to something imported here; its NAME is the app's business (an island
   // wraps the app's own component), so a difference from the island's kebab is not a finding.
-  const comp = row.getProperty('component')?.getText().replace(/^component:\s*/, '').trim();
+  const comp = row
+    ? row.getProperty('component')?.getText().replace(/^component:\s*/, '').trim()
+    : islandComponentIdentifier(elementText);
   if (comp && !sf.getImportDeclarations().some((i) => i.getNamedImports().some((n) => (n.getAliasNode() ?? n.getNameNode()).getText() === comp))) {
     report.warn('registered', `element.ts mounts '${comp}', which is not imported in this file`);
   }
@@ -271,12 +319,19 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
   }
 
   const tag = row
-    .getProperty('tag')
-    ?.getText()
-    .replace(/^tag:\s*/, '')
-    .trim()
-    .replace(/['"]/g, '');
-  const options = row.getProperty('options')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+    ? row
+        .getProperty('tag')
+        ?.getText()
+        .replace(/^tag:\s*/, '')
+        .trim()
+        .replace(/['"]/g, '')
+    : elementText.match(/\bisland\(\s*'([^']+)'/)?.[1];
+  const options = row?.getProperty('options')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+  // In the short form the boundary is generated, so it is read from the generated file rather than
+  // from this one — the same data the checks below expect, just not hand-written.
+  const generated = shortForm
+    ? islandContract({ kebab, element: elementPath }, { islandComponentPath, islandComponentExport, names })
+    : null;
   // Fitting an island to a legacy skin is only meaningful when the host HAS one. On a React host
   // (next/none) the island mounts directly, so requiring the strategy would be dead ceremony.
   // POSTURE FIRST. Testing for the field first (as this did) makes the skip branch unreachable for any
@@ -305,8 +360,8 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
   // either the grouped `contract: { input, output }` or the flat `props`/`events` form.
   if (componentProps?.propNames) {
     const compNames = componentProps.propNames;
-    const registeredProps = objectArrayStrings(optionProp(options, 'props', 'input'));
-    const eventKeys = objectKeys(optionProp(options, 'events', 'output'));
+    const registeredProps = generated ? generated.input : objectArrayStrings(optionProp(options, 'props', 'input'));
+    const eventKeys = generated ? Object.keys(generated.output) : objectKeys(optionProp(options, 'events', 'output'));
     const before = report.findings.length;
 
     for (const rp of registeredProps) {
@@ -355,10 +410,23 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
       /* no lagoon config, or none declared */
     }
     if (aliases.length && existsSync(componentPath)) {
-      const src = readFileSync(componentPath, 'utf8');
+      // Over RUNTIME imports only. A `import type { Mission } from '@/lib/services/missions'` erases —
+      // the island never calls that module, and asking it to declare the shape it borrows as a host
+      // capability is how a true list turns into a list nobody trusts.
+      const src = readFileSync(componentPath, 'utf8')
+        .split('\n')
+        .filter((l) => !/^\s*import\s+type\b/.test(l))
+        .join('\n');
       const used = aliases.filter((a) => new RegExp(`from\\s*['"]${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`).test(src)).sort();
-      const declared = (readFileSync(elementPath, 'utf8').match(/ambient:\s*\[([^\]]*)\]/)?.[1] ?? '')
-        .split(',').map((x) => x.trim().replace(/['"]/g, '')).filter(Boolean).sort();
+      // Either place the boundary can live: written in the island file, or generated from the
+      // component into the contracts file. Reading only the island file reported every short-form
+      // island as declaring nothing.
+      const declaredText = readFileSync(elementPath, 'utf8').match(/ambient:\s*\[([^\]]*)\]/)?.[1];
+      const declared = (
+        declaredText !== undefined
+          ? declaredText.split(',').map((x) => x.trim().replace(/['"]/g, '')).filter(Boolean)
+          : islandContract({ kebab, element: elementPath }, { islandComponentPath, islandComponentExport, names }).ambient
+      ).slice().sort();
       const missing = used.filter((u) => !declared.includes(u));
       const stale = declared.filter((d) => !used.includes(d));
       if (missing.length) {
@@ -531,6 +599,34 @@ function blocksAfter(code, label, open) {
   }
 }
 
+/**
+ * Store keys read by the islands in an archipelago file, in either `bind` form.
+ *
+ * The opener has to be the character that IMMEDIATELY follows `bind:` — searching for the next `[`
+ * from there would happily jump over a `{...}` bind and land in some unrelated array later in the
+ * file, reporting keys nobody binds.
+ */
+function boundKeysIn(code) {
+  const out = [];
+  const re = /\bbind:\s*([[{])/g;
+  for (const m of code.matchAll(re)) {
+    const block = blockAfter(code, 'bind:', m[1], m.index);
+    if (!block) continue;
+    // In the array form a bare entry IS the key and a `{ prop: 'key' }` entry names one; taking every
+    // quoted string would count the prop name as a key, so the renames are read off the value side and
+    // the bare entries off what is left.
+    const keys =
+      m[1] === '['
+        ? [
+            ...[...block.body.matchAll(/(?<![\w'"])'([^']+)'(?!\s*:)/g)].map((x) => x[1]),
+            ...[...block.body.matchAll(/:\s*'([^']+)'/g)].map((x) => x[1]),
+          ]
+        : [...block.body.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((x) => x[1]);
+    out.push(...keys);
+  }
+  return out;
+}
+
 /** Store keys in a `bind` / `writes` block: every quoted string that sits on the VALUE side. */
 function keysIn(blocks) {
   return blocks.flatMap((b) => [...b.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
@@ -634,7 +730,7 @@ async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast
   }
 
   try {
-    const r = await differentiateLagoon({ tag, port, scenarios });
+    const r = await step('data-flow', () => differentiateLagoon({ tag, port, scenarios }));
     reportDifferentiation(report, r);
   } catch (err) {
     const msg = String(err?.message || err).split('\n')[0];
@@ -676,7 +772,7 @@ function lagoonFailure(err) {
 /** Real-browser lagoon mount via Playwright/Chromium for one fit (the default). */
 async function runtimeCheckBrowser(report, tag, fit, port) {
   try {
-    const r = await runLagoon({ tag, fit, port });
+    const r = await step('mount', () => runLagoon({ tag, fit, port }));
     if (r.ok) report.ok('lagoon-render', `renders in the real-browser lagoon (fit=${fit})`);
     else if (!r.mounted) report.error('lagoon-render', `island tag <${tag}> did not upgrade (fit=${fit})`);
     else report.warn('lagoon-render', `mounts but renders nothing from default props (fit=${fit}) — confirm this island's empty state is intentional (e.g. a pure projection)`);
@@ -695,7 +791,7 @@ async function runtimeCheckBrowser(report, tag, fit, port) {
  *  leaks no unhandled rejection / console error (i.e. it catches its own fetch failures). */
 async function runtimeErrorCheck(report, tag, port) {
   try {
-    const r = await runLagoon({ tag, fit: 'native', port, forceError: 500, checkRemount: false });
+    const r = await step('error-resilience', () => runLagoon({ tag, fit: 'native', port, forceError: 500, checkRemount: false }));
     if (!r.mounted) {
       report.warn('error-resilient', 'island did not mount under forced backend errors');
     } else if (r.diagnostics.length === 0) {
@@ -809,8 +905,10 @@ export async function verifyCommand(argv) {
 }
 
 /** One island's checks, as data — printing and exiting belong to the caller (see `--all`). */
-async function runIslandVerify(argv, name) {
+export async function runIslandVerify(argv, name) {
+  setVerbose(argv?.verbose);
   const { pascal, kebab, tag } = names(name);
+  setProgressScope(kebab);
   // Follow element.ts to the component it mounts: on a React host the island wraps a component the
   // app already owns, which does not live under ui/.
   const componentPath = islandComponentPath(kebab, pascal);
@@ -846,7 +944,13 @@ async function runIslandVerify(argv, name) {
   const ownCss = islandOwnCss(kebab);
   if (ownCss) cssChecks(report, readFileSync(ownCss, 'utf8'), paths.rel(ownCss));
 
-  if (argv.runtime !== false) {
+  // OPT-IN, not default. `verify` answers "has this island drifted from what it declares?", and that
+  // question is static: props against the component, contract against the generated one, imports,
+  // registration. Everything below drives a real browser once per scenario × viewport, which is a
+  // different question ("does it still behave?") and a different cost — a few seconds per island, so a
+  // migrated project pays minutes for a check most edits do not need. It belongs in `--runtime`
+  // (and in `motu check --runtime`), where someone asked for it.
+  if (argv.runtime === true) {
     // Randomize the base port so parallel/back-to-back verifies don't collide on a strict port.
     let port = 5300 + Math.floor(Math.random() * 400);
     const fixturesPath = existsSync(paths.fixturesFile(kebab)) ? paths.fixturesFile(kebab) : '';
@@ -863,6 +967,10 @@ async function runIslandVerify(argv, name) {
     if (!argv.fast) await runtimeErrorCheck(report, resolvedTag, port++);
     // Data-flow differentiation (opt-in via declared `scenarios`).
     await runtimeDifferentiationCheck(report, resolvedTag, fixturesPath, port++, Boolean(argv.fast));
+    // Every declared viewport — the phone included, which nothing checked before.
+    if (!argv.fast) await responsiveCheck(report, resolvedTag, kebab, port++);
+    // Accessibility, in the browser that is already open.
+    if (!argv.fast) await a11yCheck(report, resolvedTag, kebab, port++);
   }
 
   return {
@@ -875,7 +983,7 @@ async function runIslandVerify(argv, name) {
 }
 
 /** `--json` shape for one member of a sweep. */
-function summaryOf(r) {
+export function summaryOf(r) {
   return { name: r.kebab, tag: r.tag, pass: r.errors.length === 0, findings: r.report.findings };
 }
 
@@ -885,7 +993,7 @@ function summaryOf(r) {
  * A full report per island is unreadable at fourteen of them, and what a sweep answers is "is anything
  * wrong, and where" — so a clean island costs one line.
  */
-function printSweep(title, results) {
+export function printSweep(title, results) {
   console.log(color.bold(`\n${title}\n`));
   for (const r of results) {
     const mark = r.errors.length ? color.red('✗') : r.warns.length ? color.yellow('!') : color.green('✓');
@@ -906,6 +1014,190 @@ function printSweep(title, results) {
     ? color.red(color.bold('FAIL')) + `  ${failed}/${results.length} with errors`
     : color.green(color.bold('PASS')) + `  ${results.length}/${results.length} clean`;
   console.log(head + color.dim(` · ${warned} warning(s) total`));
+}
+
+/**
+ * axe, per declared scenario, scoped to the island's own subtree.
+ *
+ * Serious violations fail; the rest are reported. The line is `impact`: 'critical' and 'serious' are
+ * axe's own words for "a person cannot use this", which is not a matter of taste.
+ */
+async function a11yCheck(report, tag, kebab, port) {
+  let findings;
+  try {
+    findings = await step('a11y', async () => axeLagoon({ tag, port, scenarios: await islandScenarios(kebab) }));
+  } catch (err) {
+    report.warn('a11y', `could not run axe: ${err.message}`);
+    return;
+  }
+  const policy = lagoonA11y();
+  const kept = findings.filter((f) => !policy.ignore.has(f.id));
+  if (!kept.length) {
+    report.ok('a11y', `no axe violations in any declared scenario${policy.ignore.size ? ` (${policy.ignore.size} rule(s) ignored by config)` : ''}`);
+    return;
+  }
+  // 'never' (the default) reports everything and fails on nothing; 'serious' and 'critical' promote at
+  // that severity and above.
+  const rank = { minor: 0, moderate: 1, serious: 2, critical: 3 };
+  const bar = policy.fail === 'never' ? Infinity : rank[policy.fail] ?? Infinity;
+  const say = (f) => `${f.impact}: ${f.help} — ${f.where || '?'} (${f.nodes} node(s), scenario "${f.scenario}")`;
+  for (const f of kept) {
+    if ((rank[f.impact] ?? 0) >= bar) report.error('a11y', say(f));
+    else report.warn('a11y', say(f));
+  }
+}
+
+/** An island's declared scenarios, loaded from its evidence file (node strips the types). */
+async function islandScenarios(kebab) {
+  const file = paths.fixturesFile(kebab);
+  if (!existsSync(file)) return [];
+  try {
+    const mod = await import(`file://${file}?t=${Date.now()}`);
+    return Array.isArray(mod.scenarios) ? mod.scenarios : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Renders at every declared width, and fits.
+ *
+ * An error, not a warning: a page the member has to scroll sideways is broken, and the project rule
+ * ("always implement mobile AND desktop") had no enforcement at all until this.
+ */
+async function responsiveCheck(report, tag, kebab, port) {
+  const viewports = lagoonViewports();
+  if (!viewports.length) return;
+  let measured;
+  try {
+    measured = await step('responsive', async () =>
+      responsiveLagoon({ tag, port, viewports, scenarios: await islandScenarios(kebab) }));
+  } catch (err) {
+    report.warn('responsive', `could not measure viewports: ${err.message}`);
+    return;
+  }
+  const overflowing = measured.filter((m) => m.overflow > 1);
+  // Overflow is an error — a page the member has to pan sideways is broken. Rendering nothing is a
+  // WARNING: an island's empty state can legitimately be empty, and only the author knows which.
+  if (overflowing.length) {
+    report.error(
+      'responsive',
+      `overflows horizontally at ${overflowing
+        .map((m) => `${m.name} (${m.width}px, +${m.overflow}px${m.scenario === 'default' ? '' : `, "${m.scenario}"`})`)
+        .join(', ')}`,
+    );
+  }
+  if (measured.every((m) => !m.rendered)) {
+    report.warn('responsive', 'renders nothing at any declared viewport, in any scenario — is there evidence that shows it?');
+  }
+  if (!overflowing.length && measured.some((m) => m.rendered)) {
+    const widths = [...new Set(measured.map((m) => `${m.name} ${m.width}px`))].join(', ');
+    const states = new Set(measured.map((m) => m.scenario)).size;
+    report.ok('responsive', `fits every declared viewport (${widths}) in ${states} scenario(s)`);
+  }
+}
+
+/**
+ * The region's declared flows end where they say they do.
+ *
+ * Optional: a region with no `<id>.evidence.ts` is reported as having none, rather than passing
+ * quietly — a check that says nothing is indistinguishable from one that did not run.
+ */
+async function regionFlowCheck(report, id, port) {
+  const file = paths.archipelagoEvidence(id);
+  if (!existsSync(file)) {
+    report.warn('region-flow', 'no declared flows — add `<id>.evidence.ts` with the couplings this region promises');
+    return;
+  }
+  let scenarios = [];
+  try {
+    const mod = await import(`file://${file}?t=${Date.now()}`);
+    scenarios = Array.isArray(mod.scenarios) ? mod.scenarios : [];
+  } catch (err) {
+    report.warn('region-flow', `could not read declared flows: ${err.message}`);
+    return;
+  }
+  const steps = scenarios.reduce((n, s) => n + (s.steps?.length ?? 0), 0);
+  if (!steps) {
+    report.warn('region-flow', 'evidence declares no steps — a flow is a seed, an emit and an expectation');
+    return;
+  }
+  let results;
+  let suspects = [];
+  try {
+    const run = await runRegionFlows({ id, port, scenarios });
+    results = run.flows;
+    suspects = run.suspects ?? [];
+  } catch (err) {
+    report.warn('region-flow', `could not run declared flows: ${err.message}`);
+    return;
+  }
+  for (const s of suspects) {
+    report.warn(
+      'laundering',
+      `the host wrote "${s.key}" (read by ${s.readers.join(', ')}) ${s.gapMs}ms after ${s.after.slot} emitted ` +
+        `"${s.after.event}" — if that value is derived from what ${s.after.slot} did, declare it as an output ` +
+        `instead of feeding it from the page`,
+    );
+  }
+  for (const r of results.filter((x) => !x.ok)) {
+    const detail = r.error
+      ? r.error
+      : r.mismatches.map((m) => `${m.key}: expected ${JSON.stringify(m.expected)}, got ${JSON.stringify(m.actual)}`).join('; ');
+    report.error('region-flow', `"${r.scenario}" step ${r.step}: ${detail}`);
+  }
+  const passed = results.filter((r) => r.ok).length;
+  if (passed === results.length) report.ok('region-flow', `${passed} declared flow step(s) end as declared`);
+}
+
+/**
+ * Every declared wire carries something.
+ *
+ * The runtime half of the ownership work: `RegionWiringOk` proves an event NAME resolves to an island
+ * that declares it, and that is all a type can do. Whether firing it actually moves the key it claims
+ * to write is a question only a run answers — and a wire that resolves, compiles and moves nothing is
+ * exactly what a broken change looks like from outside.
+ */
+async function wiringProbe(report, id, port) {
+  const islands = declaredWrites(id);
+  if (!islands.length) return;
+  let results;
+  try {
+    results = await step('wiring-live', () => probeWiring({ id, port, islands }));
+  } catch (err) {
+    report.warn('wiring-live', `could not probe declared writes: ${err.message}`);
+    return;
+  }
+  const noSeam = results.filter((r) => r.reason === 'no-seam');
+  const unmounted = results.filter((r) => r.reason === 'not-mounted');
+  const dead = results.filter((r) => r.moved === false);
+  const live = results.filter((r) => r.moved === true);
+
+  if (noSeam.length) {
+    report.skip('wiring-live', 'this mount path has no emit seam — probing declared writes needs the React lagoon');
+    return;
+  }
+  for (const r of unmounted) {
+    report.error('wiring-live', `${r.slot} declares it writes "${r.key}", but this region mounts no island under that slot`);
+  }
+  for (const r of dead) {
+    report.error('wiring-live', `${r.slot} declares it writes "${r.key}" on "${r.event}", but firing it changed nothing`);
+  }
+  if (live.length && !dead.length && !unmounted.length) {
+    // Deliberately precise about what this proves: the region APPLIES each declared write. Whether the
+    // component ever emits it is a different question, and one only a declared interaction can ask
+    // (nothing here touches the DOM, on purpose).
+    report.ok('wiring-live', `${live.length} declared write(s) reach their key: ${live.map((r) => `${r.slot} → ${r.key}`).join(', ')}`);
+  }
+}
+
+/** `writes` per island, read from the config's text — the same reader eject uses. */
+function declaredWrites(id) {
+  const file = paths.archipelagoFile(id);
+  if (!existsSync(file)) return [];
+  return readRegions(paths.archipelagosDir)
+    .find((r) => r.id === id)
+    ?.islands.filter((i) => Object.keys(i.writes ?? {}).length) ?? [];
 }
 
 /** Pretty-print a report's findings + the PASS/FAIL summary line (shared by island + archipelago verify). */
@@ -935,7 +1227,8 @@ function registeredTags() {
   for (const entry of listIslands(paths.islandsDir)) {
     const el = entry.element;
     if (!existsSync(el)) continue;
-    const m = readFileSync(el, 'utf8').match(/tag:\s*['"]([^'"]+)['"]/);
+    const text = readFileSync(el, 'utf8');
+    const m = text.match(/tag:\s*['"]([^'"]+)['"]/) ?? text.match(/\bisland\(\s*'([^']+)'/);
     if (m) tags.add(m[1]);
   }
   return tags;
@@ -1002,11 +1295,15 @@ function archipelagoConfigChecks(report, id) {
     //   bind:     { prop: key} who reads
     // A `store.set` left inside an `on` handler still writes, but opaquely — it is counted as written
     // and reported, because nothing can draw it or generate wiring from it.
-    const provided = new Set(quotedIn(blockAfter(code, 'provides:', '[')));
+    const declaredProvided = new Set(quotedIn(blockAfter(code, 'provides:', '[')));
     const declaredWritten = new Set(keysIn(blocksAfter(code, 'writes:', '{')));
     const opaqueWritten = new Set([...code.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
     const written = new Set([...declaredWritten, ...opaqueWritten]);
-    const read = new Set(keysIn(blocksAfter(code, 'bind:', '{')));
+    // Both forms of `bind`: the rename map, and the short array where prop and key are the same word.
+    const read = new Set(boundKeysIn(code));
+    // Host-fed is DERIVED — bound here, written by no island — with the explicit list still honoured
+    // for a key nothing binds.
+    const provided = new Set([...declaredProvided, ...[...read].filter((k) => !written.has(k))]);
     const shared = [...written].filter((k) => read.has(k));
 
     const orphanKeys = [...written].filter((k) => !read.has(k));
@@ -1026,9 +1323,24 @@ function archipelagoConfigChecks(report, id) {
       report.ok('coupling', 'no shared state between islands — a page whose islands are independent');
     }
 
+    // --- composition: a slot filled by another island must be one this region declares -------------
+    {
+      const declaredSlots = new Set([...code.matchAll(/\bslot:\s*'([^']+)'/g)].map((m) => m[1]));
+      const filled = blocksAfter(code, 'slots:', '{').flatMap((b) => [...b.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]));
+      const missing = [...new Set(filled)].filter((slot) => !declaredSlots.has(slot));
+      if (missing.length) {
+        report.error(
+          'composition',
+          `island slot(s) filled with an island this region does not declare: ${missing.join(', ')}`,
+        );
+      } else if (filled.length) {
+        report.ok('composition', `${filled.length} island(s) nested inside another by declaration`);
+      }
+    }
+
     // --- ownership: every key an island READS should have exactly one declared owner --------------
     const unowned = [...read].filter((k) => !provided.has(k) && !written.has(k));
-    const disputed = [...declaredWritten].filter((k) => provided.has(k));
+    const disputed = [...declaredWritten].filter((k) => declaredProvided.has(k));
     const owned = [...read].filter((k) => provided.has(k) || written.has(k));
 
     if (disputed.length) {
@@ -1067,6 +1379,27 @@ function archipelagoConfigChecks(report, id) {
           `instead. A handler can do anything, so it cannot be drawn before it fires, and it cannot be ` +
           `materialised when motu is ejected; \`on\` is for effects that are NOT store writes`,
       );
+    }
+  }
+
+  // --- the lagoon's stand-ins still stand in ----------------------------------------------------
+  {
+    const results = stubParity();
+    const broken = results.filter((r) => r.missing.length || r.unresolved);
+    for (const r of broken) {
+      if (r.unresolved) {
+        report.error('host-stubs', `${r.specifier}: ${r.unresolved}`);
+      } else {
+        report.error(
+          'host-stubs',
+          `${r.specifier}: islands import ${r.missing.map((m) => `\`${m}\``).join(', ')}, which the stub does not export — ` +
+            `the lagoon is standing in for a module it no longer mirrors`,
+        );
+      }
+    }
+    if (results.length && !broken.length) {
+      const covered = results.reduce((n, r) => n + r.needed.length, 0);
+      report.ok('host-stubs', `${results.length} stub(s) cover the ${covered} export(s) the islands reach for`);
     }
   }
 
@@ -1141,7 +1474,9 @@ export async function archipelagoVerifyCommand(argv) {
 }
 
 /** One region's checks, as data — see `runIslandVerify`. */
-async function runArchipelagoVerify(argv, id) {
+export async function runArchipelagoVerify(argv, id) {
+  setVerbose(argv?.verbose);
+  setProgressScope(id);
   const report = makeReport();
   const hasLayout = archipelagoConfigChecks(report, id);
 
@@ -1150,13 +1485,16 @@ async function runArchipelagoVerify(argv, id) {
     cssChecks(report, readFileSync(paths.sharedStyles, 'utf8'), paths.rel(paths.sharedStyles));
   }
 
-  if (argv.runtime !== false) {
+  // Same line as the islands: static by default, browser on request (see runIslandVerify).
+  if (argv.runtime === true) {
+    if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
+    if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400));
     if (!hasLayout) {
       report.warn('lagoon-render', 'no layout — islands are placed individually across the host, not as a region; region render skipped');
     } else {
       const port = 5300 + Math.floor(Math.random() * 400);
       try {
-        const r = await runArchipelagoLagoon({ id, port });
+        const r = await step('region-mount', () => runArchipelagoLagoon({ id, port }));
         if (r.region) {
           const unmounted = r.islands.filter((i) => !i.tag);
           if (r.islands.length === 0) {

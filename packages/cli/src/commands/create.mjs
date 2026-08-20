@@ -15,6 +15,7 @@ import { dirname, resolve } from 'node:path';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
 import { paths, names, color, FMT, resolveModuleSpecifier, LEGACY_FIT } from '../lib/util.mjs';
 import { syncRegistry } from '../lib/islands.mjs';
+import { readComponentContract } from '../lib/component-props.mjs';
 
 function componentSource(pascal, kebab) {
   return `export interface ${pascal}Props {
@@ -42,7 +43,7 @@ export function ${pascal}({ title = '${pascal}' }: ${pascal}Props = {}) {
 `;
 }
 
-function elementSource(pascal, camel, tag, kebab, from, exportName) {
+function elementSource(pascal, camel, tag, kebab, from, exportName, contract) {
   // Only where the host HAS a legacy skin. Under a modern host it is not optional but absent —
   // declaring it would be a field nothing reads (see `motu island verify`'s legacy-strategy rule).
   const legacy = LEGACY_FIT ? "\n    legacy: 'fill'," : '';
@@ -55,33 +56,49 @@ function elementSource(pascal, camel, tag, kebab, from, exportName) {
 // being used directly elsewhere; this file only declares how it is mounted as an island.
 `
     : '';
-  const input = from
-    ? `// TODO(motu:contract): list the props this island is fed — e.g. ['phone', 'isLoading'].
-    //   DEFAULTS BELONG IN THE COMPONENT, not here: an island must render from its defaults alone,
-    //   and a default that cannot be honest in production is not a default, it is missing evidence
-    //   (put it in \`${kebab}.evidence.ts\` as a scenario seed instead).
-    contract: { input: [] },`
-    : `contract: { input: ['title'] },`;
-  // No `as (keyof Props)[]` cast: `input` is already typed PropEntry<P>[], which accepts BOTH a bare
-  // name and the `{ name, default }` form — the cast only fitted the former, so it broke the moment a
-  // prop declared a default. `motu island verify`'s props-match is what actually reconciles the
-  // registry against the component.
-  const typeImport = '';
-  // The app's export is rarely named after the island: `motu island create network-stats` should wrap
-  // `NetworkStatsBanner`, not a `NetworkStats` that does not exist. Alias it so the rest of the file
-  // (and the component-name conventions verify relies on) still reads as the island's own name.
-  const imported = exportName && exportName !== pascal ? `${exportName} as ${pascal}` : `${pascal}${typeImport}`;
-  return `${header}import type { ElementSpec } from '@motu/react';
+
+  // READ from the component when there is one to read. Every line below is a fact already in its
+  // source — transcribing it by hand is how an island's contract drifts from the component on its
+  // first day. What is left for a human is the part that is a decision: the event NAMES (renamed here
+  // to the region's vocabulary if it has a better word) and, in the archipelago, what they bind to.
+  const lines = [];
+  if (contract?.ambient?.length) {
+    lines.push('      // AMBIENT — host capabilities this island reaches for without being handed them.');
+    lines.push('      ambient: [');
+    for (const a of contract.ambient) lines.push(`        '${a}',`);
+    lines.push('      ],');
+  }
+  if (contract?.input?.length) {
+    lines.push('      input: [');
+    for (const i of contract.input) lines.push(`        '${i}',`);
+    lines.push('      ],');
+  } else if (from) {
+    lines.push("      // TODO(motu:contract): this component's props could not be read — list them here.");
+    lines.push('      input: [],');
+  } else {
+    lines.push("      input: ['title'],");
+  }
+  if (contract?.output?.length) {
+    lines.push('      // Event names are the REGION\'s vocabulary — rename them if it has a better word.');
+    lines.push('      output: {');
+    for (const o of contract.output) lines.push(`        ${o.prop}: '${o.event}',`);
+    lines.push('      },');
+  }
+
+  const imported = exportName && exportName !== pascal ? `${exportName} as ${pascal}` : pascal;
+  return `${header}import { islandElement } from '@motu/react';
 import { ${imported} } from '${spec}';
 
-export const element: ElementSpec = {
+export const element = islandElement({
   tag: '${tag}',
   component: ${pascal},
   options: {
     // The island's boundary in one place — input (props), output (events), ambient (host reach).
-    ${input}${legacy}
+    contract: {
+${lines.join('\n')}
+    },${legacy}
   },
-};
+});
 `;
 }
 
@@ -186,12 +203,23 @@ export async function createCommand(argv) {
   // Component in ui/ (unless wrapping one the app owns), then the island itself — one file.
   if (!from) writeFileSync(componentPath, componentSource(pascal, kebab));
   const islandFile = resolve(paths.islandsDir, `${kebab}.island.ts`);
-  writeFileSync(islandFile, elementSource(pascal, camel, tag, kebab, from, exportName));
+  // The component's own source answers most of the contract; read it rather than asking for it again.
+  const contract = from ? readComponentContract(resolveModuleSpecifier(from, paths.islandDir(kebab)), exportName ?? pascal) : null;
+  writeFileSync(islandFile, elementSource(pascal, camel, tag, kebab, from, exportName, contract));
 
   // The registry is GENERATED from what is on disk, not edited: adding an island is a file operation,
   // and reconciling is what keeps a deleted or renamed one from lingering in it.
   syncRegistry(paths.islandsDir);
   console.log(color.green(`✓ created island ${color.bold(kebab)}  (component ${pascal}, tag ${tag})`));
+  if (contract) {
+    console.log(
+      '  ' +
+        color.dim(
+          `read from the component: ${contract.input.length} input(s), ${contract.output.length} output(s)` +
+            `${contract.ambient.length ? `, ${contract.ambient.length} ambient` : ''}`,
+        ),
+    );
+  }
   if (from) console.log('  ' + color.dim(`wraps ${from}   (the app's own component — not copied)`));
   else console.log('  ' + color.dim(`${paths.rel(paths.componentFile(kebab, pascal))}   (component)`));
   console.log('  ' + color.dim(`${paths.rel(islandFile)}   (the island)`));

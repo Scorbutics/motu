@@ -5,6 +5,7 @@
 
 import {
   getMountedIslands,
+  launderingSuspects,
   subscribeMounts,
   getIslandDefinition,
   getChannels,
@@ -23,6 +24,8 @@ import {
   type HostIntent,
   type RecordedSeed,
   type Store,
+  bindEntries,
+  writtenKeys,
 } from '@motu/core';
 import { observeCalls, startRecording, stopRecording, type CallEvent, type RecordedCall } from '@motu/runtime';
 
@@ -106,12 +109,12 @@ export function subscribeDebugOverlay(fn: (open: boolean) => void): () => void {
 /** The store keys an island reads. `bind` values are optional in the type (see IslandSpec), so a
  *  declaration that leaves one out must not become an `undefined` key in the graph. */
 function bindKeys(info: MountedIslandInfo): string[] {
-  return Object.values(info.spec.bind ?? {}).filter((k): k is string => typeof k === 'string');
+  return bindEntries(info.spec).map(([, key]) => key);
 }
 
 function computeProps(info: MountedIslandInfo, def: IslandDefinition | undefined): PropRow[] {
   if (!def) return [];
-  const bind = info.spec.bind ?? {};
+  const bind = Object.fromEntries(bindEntries(info.spec));
   const staticProps = info.spec.props ?? {};
   return def.props.map((name): PropRow => {
     const storeKey = bind[name];
@@ -258,13 +261,30 @@ const STYLES = `
 
 /* The panel is the control panel's twin: same glass, same radius, same shadow. It sits opposite the
    lagoon's bay when the host says where that is (--motu-debug-left/right), so the two never overlap. */
+/* One row per region key. Fixed columns, every cell on ONE line: the sheet is meant to be SCANNED —
+   a wrapping cell turns twenty-four keys into a page nobody reads to the end. */
+.sheet {
+  display: grid;
+  grid-template-columns: 104px 60px 1.1fr 1fr 72px 12px;
+  gap: 6px; align-items: baseline; padding: 2px 0; font-size: 10.5px; line-height: 1.5;
+}
+.sheet > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet .k { font-weight: 600; }
+.sheet .own { font-size: 9.5px; padding: 0 4px; border-radius: 4px; text-align: center; }
+.sheet .own.island { background: rgba(15, 118, 110, 0.14); color: #0f766e; }
+.sheet .own.host { background: rgba(100, 116, 139, 0.14); color: #475569; }
+.sheet .val { color: #0f172a; }
+.sheet .rd { color: #64748b; }
+.sheet .moved { color: #0f766e; text-align: right; }
+.sheet .still { color: #cbd5e1; text-align: right; }
+.sheet .flag { font-size: 9px; }
 .panel {
   position: fixed;
   top: var(--motu-debug-top, 56px);
   right: var(--motu-debug-right, 12px);
   left: var(--motu-debug-left, auto);
   z-index: 2147483000; pointer-events: auto;
-  width: 372px; max-width: calc(100vw - 24px); max-height: 82vh;
+  width: 460px; max-width: calc(100vw - 24px); max-height: 82vh;
   display: flex; flex-direction: column;
   background: var(--glass);
   backdrop-filter: blur(14px) saturate(1.35);
@@ -433,6 +453,8 @@ class Overlay {
   #calls: CallRecord[] = [];
   #intents: HostIntent[] = [];
   #writes = new Map<Store, Map<string, Set<string>>>();
+  // Per key: how many times it changed, when, and who did it last — the live half of the region sheet.
+  #moves = new Map<Store, Map<string, { n: number; at: number; by: string }>>();
   #rafPending = false;
   #panelDirty = false;
 
@@ -466,6 +488,10 @@ class Overlay {
       let writers = byKey.get(w.key);
       if (!writers) byKey.set(w.key, (writers = new Set()));
       if (w.source) writers.add(w.source);
+      let moves = this.#moves.get(w.store);
+      if (!moves) this.#moves.set(w.store, (moves = new Map()));
+      const prev = moves.get(w.key);
+      moves.set(w.key, { n: (prev?.n ?? 0) + 1, at: w.at ?? Date.now(), by: w.source ?? 'host' });
       if (this.#open) this.#panelDirty = true;
     });
     window.addEventListener('keydown', (e) => {
@@ -1039,6 +1065,7 @@ class Overlay {
           `${getMountedIslands().length} island(s) on screen \u00b7 click \u2316 above, or Alt-click one, to inspect it`,
         ),
       );
+      body.append(this.#regionSheet());
       body.append(this.#archInput());
       body.append(this.#archOutput());
       body.append(this.#archCoupling());
@@ -1419,7 +1446,84 @@ class Overlay {
         any = true;
       }
     }
+    // Provenance the declarations cannot prove: the host wrote a key an island reads, moments after
+    // another island emitted. Reported here because it is a suspicion, not a violation.
+    for (const s of launderingSuspects()) {
+      const row = h('div', { class: 'cp' });
+      row.append(h('span', { class: 'k' }, s.key));
+      row.append(h('span', { class: 'who' }, h('b', {}, 'host'), document.createTextNode(` → ${s.readers.join(',')}`)));
+      row.append(h('span', { class: 'flag demote' }, `after ${s.after.slot}`));
+      g.append(row);
+      any = true;
+    }
     if (!any) g.append(h('div', { class: 'empty' }, 'No shared store keys.'));
+    return g;
+  }
+
+  /**
+   * THE REGION, IN ONE TABLE — one row per key: who owns it, who reads it, what it holds, whether it
+   * has moved.
+   *
+   * Everything else in this panel answers a question about one island. This answers the question a
+   * reviewer would otherwise open two files to answer — the archipelago (who declared what) and the
+   * page (what actually feeds it) — and it answers it from the RUNNING region, so a declaration that
+   * is merely plausible reads differently from one that is true. A key nothing has written since the
+   * seed says so; a key an island declares and never moves says so; a key the host answered right
+   * after an island emitted is flagged where it happened.
+   */
+  #regionSheet(): HTMLElement {
+    const g = this.#group('region', '#0f766e');
+    const islands = getMountedIslands();
+    if (!islands.length) {
+      g.append(h('div', { class: 'empty' }, 'No region mounted.'));
+      return g;
+    }
+    const store = islands[0].store;
+    const here = islands.filter((i) => i.store === store);
+
+    // DECLARED: who writes each key, who reads it. Both come from the archipelago's own entries, so
+    // this table is the declaration — not an approximation of it.
+    const owner = new Map<string, string>();
+    const readers = new Map<string, string[]>();
+    for (const info of here) {
+      for (const key of writtenKeys(info.spec)) owner.set(key, info.slot);
+      for (const key of bindKeys(info)) readers.set(key, [...(readers.get(key) ?? []), info.slot]);
+    }
+    const moves = this.#moves.get(store) ?? new Map();
+    const suspects = new Map(launderingSuspects().map((s) => [s.key, s]));
+    const keys = [...new Set([...readers.keys(), ...owner.keys()])].sort();
+    if (!keys.length) {
+      g.append(h('div', { class: 'empty' }, 'No declared region state.'));
+      return g;
+    }
+    const owned = keys.filter((k) => owner.has(k)).length;
+    g.append(this.#subLabel(`${keys.length} key(s) \u00b7 ${owned} island-owned, ${keys.length - owned} host-fed`));
+
+    for (const key of keys) {
+      const row = h('div', { class: 'sheet' });
+      row.append(h('span', { class: 'k' }, key));
+      const from = owner.get(key);
+      row.append(h('span', { class: from ? 'own island' : 'own host' }, from ?? 'host'));
+      const rd = readers.get(key) ?? [];
+      // Value and readers share a cell: what it holds, then who is looking at it. Both truncate, and
+      // the full text is on the row's title — the scan is the point, the detail is one hover away.
+      row.append(h('span', { class: 'rd' }, rd.length ? rd.join(', ') : '\u2205 nobody'));
+      row.append(h('span', { class: 'val' }, preview(store.get(key))));
+      const m = moves.get(key);
+      row.append(
+        h('span', { class: m ? 'moved' : 'still' }, m ? `${m.by} \u00b7 ${m.n}\u00d7 \u00b7 ${ago(m.at)}` : 'seed'),
+      );
+      row.title = `${key} \u2014 ${from ? `written by ${from}` : 'fed by the host'}; read by ${rd.join(', ') || 'nobody'}\n${preview(store.get(key))}`;
+      if (suspects.has(key)) {
+        row.append(h('span', { class: 'flag demote', title: `laundering? the host wrote this ${suspects.get(key)!.gapMs}ms after ${suspects.get(key)!.after.slot} emitted "${suspects.get(key)!.after.event}"` }, '\u26a0'));
+      } else if (from && !m) {
+        // A declared producer that has never produced: the wire compiles, and nothing has come down it.
+        row.append(h('span', { class: 'flag demote', title: `${from} declares this write; nothing has fired it yet` }, '\u25cb'));
+      } else {
+        row.append(h('span', {}, ''));
+      }
+      g.append(row);
+    }
     return g;
   }
 

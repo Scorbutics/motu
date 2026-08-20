@@ -103,7 +103,11 @@ function motuOnlySet(project, hostRoot, motuDir) {
   return { set, isMotuSpec, resolveSpec };
 }
 
-export function removalCheckCommand(argv) {
+/**
+ * The check as data, for `motu check` to aggregate. `quiet` suppresses the report; the surgery, the
+ * typecheck and the ALWAYS-restore are identical either way.
+ */
+export function runRemovalCheck(argv, { quiet = false } = {}) {
   const cfg = loadMotuConfig();
   const hostRoot = cfg.hostRoot;
   const backupDir = resolve(cfg.cacheDir, 'removal-check');
@@ -126,7 +130,7 @@ export function removalCheckCommand(argv) {
 
   // The wiring the archipelagos hold, read from their configs and the islands' declared outputs.
   const regions = readRegions(paths.archipelagosDir);
-  const outputs = readOutputs(listIslands(paths.islandsDir).map((i) => i.element));
+  const outputs = readOutputs(listIslands(paths.islandsDir).map((i) => i.element), paths.islandsDir);
 
   const deleted = [];
   const stripped = [];
@@ -168,8 +172,8 @@ export function removalCheckCommand(argv) {
   }
 
   if (!touched.length) {
-    console.log(color.green('✓ removal-check') + color.dim('  no motu references in the host application'));
-    process.exit(0);
+    if (!quiet) console.log(color.green('✓ removal-check') + color.dim('  no motu references in the host application'));
+    return { pass: true, deleted: [], stripped: [], ejected: [], errors: [] };
   }
 
   // --- apply, typecheck, ALWAYS restore -----------------------------------------------------------
@@ -199,14 +203,16 @@ export function removalCheckCommand(argv) {
     }
   }
 
-  console.log(color.bold('\nmotu removal-check — is motu removable from the host application?\n'));
-  for (const p of deleted) console.log(`  ${color.dim('delete ')} ${relative(hostRoot, p)} ${color.dim('(100% motu)')}`);
-  for (const p of stripped) console.log(`  ${color.dim('unwrap ')} ${relative(hostRoot, p)}`);
-  for (const [p, notes] of ejected) {
-    console.log(`  ${color.dim('eject  ')} ${relative(hostRoot, p)}`);
-    for (const n of notes) console.log(`           ${color.dim(n)}`);
+  if (!quiet) {
+    console.log(color.bold('\nmotu removal-check — is motu removable from the host application?\n'));
+    for (const p of deleted) console.log(`  ${color.dim('delete ')} ${relative(hostRoot, p)} ${color.dim('(100% motu)')}`);
+    for (const p of stripped) console.log(`  ${color.dim('unwrap ')} ${relative(hostRoot, p)}`);
+    for (const [p, notes] of ejected) {
+      console.log(`  ${color.dim('eject  ')} ${relative(hostRoot, p)}`);
+      for (const n of notes) console.log(`           ${color.dim(n)}`);
+    }
+    console.log('');
   }
-  console.log('');
 
   const out = ((result?.stdout ?? '') + (result?.stderr ?? '')).trim();
 
@@ -218,16 +224,31 @@ export function removalCheckCommand(argv) {
   const generated = lines.filter((l) => /^\.?next[\/\\]|^\.next[\/\\]/.test(l.trim()));
   const real = lines.filter((l) => l.trim() && !generated.includes(l));
 
-  if (result?.status === 0 || real.length === 0) {
+  const summary = {
+    pass: result?.status === 0 || real.length === 0,
+    deleted: deleted.map((p) => relative(hostRoot, p)),
+    stripped: stripped.map((p) => relative(hostRoot, p)),
+    ejected: ejected.map(([p, notes]) => ({ file: relative(hostRoot, p), notes })),
+    errors: real.slice(0, 15),
+  };
+  if (quiet) return summary;
+
+  if (summary.pass) {
     console.log(color.green(color.bold('PASS')) + color.dim('  the host typechecks with motu removed'));
     if (generated.length) {
       console.log(color.dim(`  (${generated.length} stale generated route-type error(s) ignored — build artifacts of the deleted route)`));
     }
-    process.exit(0);
+    return summary;
   }
   console.log(color.red(color.bold('FAIL')) + '  the host does NOT compile without motu:');
   console.log(real.slice(0, 15).join('\n'));
   console.log(color.dim('\n  motu is load-bearing in the app. Either the file is 100% motu (deletable whole),'));
   console.log(color.dim('  or the wrapper must leave valid JSX behind when removed (C2).'));
-  process.exit(1);
+  return summary;
+}
+
+/** `motu removal-check` — the report, and the exit code CI reads. */
+export async function removalCheckCommand(argv) {
+  const summary = await runRemovalCheck(argv);
+  process.exit(summary.pass ? 0 : 1);
 }

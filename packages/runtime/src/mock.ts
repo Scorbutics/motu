@@ -43,6 +43,30 @@ export interface Scenario {
   seed?: Record<string, unknown>;
 }
 
+/**
+ * A region's declared FLOW: a state, an act, and what the region should hold afterwards.
+ *
+ * Scenarios describe a state; this describes what happens next. `emit` fires an island's DECLARED
+ * output — the same seam the wiring probe uses — so a flow can only ever do what the archipelago says
+ * that island can do. No selectors, no synthetic clicks: the moment a harness accepts arbitrary DOM
+ * scripting it is a second, untyped test suite, and it stops being derivable from the declarations.
+ *
+ * Lives beside the archipelago (`<id>.evidence.ts`), because the mapping it asserts is the region's.
+ */
+export interface RegionScenario {
+  name?: string;
+  /** Region keys to establish before the flow runs. */
+  seed?: Record<string, unknown>;
+  steps?: RegionStep[];
+}
+
+export interface RegionStep {
+  /** The island output to fire, in the region's own vocabulary. */
+  emit: { slot: string; event: string; detail?: unknown };
+  /** Region keys and the values they must hold afterwards. Compared structurally. */
+  expect: Record<string, unknown>;
+}
+
 /** Structural arg matching: `undefined` pattern slot = wildcard; plain objects match as a subset. */
 function matchValue(pattern: unknown, actual: unknown): boolean {
   if (pattern === undefined) return true;

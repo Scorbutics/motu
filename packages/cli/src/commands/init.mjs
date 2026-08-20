@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { color } from '../lib/util.mjs';
+import { applyHostRules } from '../lib/host-rules.mjs';
 import {
   render,
   ISLANDS_REGISTRY,
@@ -264,9 +265,14 @@ export async function initCommand(argv) {
     return;
   }
 
+  // The rules the HOST's agent has to follow — shipped with motu so they cannot drift from what the
+  // CLI enforces, written into the instruction files the repo already keeps.
+  const rules = applyHostRules(hostRoot);
+
   console.log(color.green(`✓ initialized motu project in ${basename(root)}/`) + color.dim(`  (host: ${host})`));
   for (const p of created) console.log('  ' + color.dim(relPosix(root, p).replace(/^\.\//, '')));
   for (const p of skipped) console.log('  ' + color.dim(relPosix(root, p).replace(/^\.\//, '')) + color.yellow(' (kept)'));
+  for (const p of rules) console.log('  ' + color.dim(p) + color.dim(' (motu rules block)'));
   console.log('');
   if (!LEGACY_FIT_HOSTS.has(host)) {
     console.log(color.dim('  legacy fit is off for this host — islands mount directly, there is no legacy skin to fit.'));

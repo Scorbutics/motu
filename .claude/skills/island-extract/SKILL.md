@@ -98,13 +98,19 @@ error handling, and the debounce/sequence pattern.
 ## Step 6 — Close the loop in the lagoon
 
 ```bash
-pnpm motu island verify <name>          # static + config + REAL-browser lagoon mount (native & legacy fit)
+pnpm motu island verify <name>            # STATIC — the dev loop: about a second, run it as often as you like
+pnpm motu island verify <name> --runtime  # the browser lane — run it before you integrate, not on every save
 ```
 
-The runtime layer boots the focused lagoon and mounts the island in **Playwright/Chromium**, so real
-layout/CSS/paint are checked — not just an in-process DOM. One-time setup for the browser:
-`cd packages/cli && npx playwright install chromium`. Use `--fast` for a quicker in-process happy-dom
-mount when iterating, but let the real-browser check be the gate before you integrate.
+Static verify is the drift check: the island against its component, its contract and its region. That
+is the loop you close on while you work.
+
+`--runtime` boots the focused lagoon and mounts the island in **Playwright/Chromium**, so real
+layout/CSS/paint are checked — not just an in-process DOM. It costs seconds per island (a browser pass
+per scenario × viewport), which is why it is opt-in: use it as a gate before integrating, in CI, or
+nightly across the project — running it on every edit is how a harness becomes something people skip.
+One-time setup for the browser: `cd packages/cli && npx playwright install chromium`. `--fast` gives a
+quicker in-process happy-dom mount, and `--verbose` names each step with what it cost.
 
 Fix every `✗` and re-run until it prints **PASS**. For visual iteration, run the lagoon and open it:
 

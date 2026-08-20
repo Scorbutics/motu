@@ -22,7 +22,7 @@ export interface DefineOptions<P> {
    */
   contract?: {
     /** INPUT — props fed from the store/host (data in). */
-    input?: PropEntry<P>[];
+    input?: readonly PropEntry<P>[];
     /**
      * OUTPUT — callback prop -> CustomEvent name (data out), e.g. `{ onReset: 'reset' }`.
      *
@@ -30,7 +30,7 @@ export interface DefineOptions<P> {
      * nothing, silently, for as long as nobody notices. That was a runtime discovery ("declared but
      * never fired"); here it is a build error.
      */
-    output?: Partial<Record<keyof P & string, string>>;
+    output?: Readonly<Partial<Record<keyof P & string, string>>>;
     /** COUPLING — dependencies beyond the store (usually absent for a React island). */
     coupling?: IslandCoupling;
     /**
@@ -42,14 +42,14 @@ export interface DefineOptions<P> {
      * `alias` table, where standing a module down looks like build configuration rather than a
      * dependency. Verify derives the true list from that table and reconciles it with this one.
      */
-    ambient?: string[];
+    ambient?: readonly string[];
   };
   /**
    * Props set imperatively from JS (structured data goes here, never attributes). Either a bare name
    * or a `{ name, default?, required? }` spec so the wrapper fills defaults / flags a missing required
    * prop at mount. `name` is constrained to the component's props. Superseded by `contract.input`.
    */
-  props?: PropEntry<P>[];
+  props?: readonly PropEntry<P>[];
   /** Attribute names + coercion type (attributes are always strings in the DOM). */
   attributes?: Partial<Record<keyof P & string, AttrType>>;
   /** Stylesheet text adopted into the shadow root (e.g. compiled theme), shared per tag. */

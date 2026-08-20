@@ -5,7 +5,7 @@
 import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
-import { applyMotuChrome } from '@motu/core';
+import { applyMotuChrome, bindEntries } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap.js';
@@ -90,6 +90,28 @@ function resolveTarget(opts: LagoonBootstrapOptions): LagoonTarget {
 }
 
 /**
+ * Install `window.__motuLagoonHarness` — re-render this page against another target.
+ *
+ * Separate from `window.__motuLagoon` (which the CURRENT mount installs, and replaces every time it
+ * mounts): this one has to survive the mounts it triggers.
+ */
+function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
+  const w = window as unknown as { __motuLagoonHarness?: unknown };
+  w.__motuLagoonHarness = {
+    mount(target: string, options?: { fit?: string; forceError?: number }) {
+      // The transport is part of what is being asked for: 'the same island, but the backend fails'.
+      configure(
+        options?.forceError
+          ? new FailingTransport(options.forceError)
+          : new MockTransport(opts.fixtures ?? [], opts.roles ?? []),
+      );
+      render({ ...opts, target, fit: options?.fit ?? opts.fit, host });
+      return true;
+    },
+  };
+}
+
+/**
  * Boot the lagoon focused on ONE target in isolation, backed by MockTransport. Configures the mock
  * transport from the supplied fixtures, resolves the target, mounts it, and returns the element.
  */
@@ -129,7 +151,7 @@ function translateRegionSeed(
   const island = opts.archipelagos?.[regionId]?.islands?.find((i) => i.element === target.tag);
   if (!island?.bind) return seed;
   const out: Record<string, unknown> = { ...seed };
-  for (const [prop, key] of Object.entries(island.bind)) {
+  for (const [prop, key] of bindEntries(island)) {
     if (key in seed) out[prop] = seed[key];
   }
   return out;
@@ -149,6 +171,22 @@ export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
     action: (name, detail) => console.log('[lagoon] action', name, detail),
   };
 
+  // RE-AIM THE SAME PAGE.
+  //
+  // Everything a check needs is already loaded here: the whole registry, every fixture, the mock
+  // transport. Reloading the page for the next island (or the next fit, or a forced 500) rebuilt all
+  // of that to look at a different corner of it — seconds of boot per question, and the questions are
+  // milliseconds. This lets the harness say "now show me x-week-nav, with a failing backend", and the
+  // page re-renders in place. It is the same seam the lagoon's own switcher uses; the checks are just
+  // another visitor.
+  installHarness(opts, host);
+
+  return render({ ...opts, host });
+}
+
+/** Render one target into the lagoon's mount element. Called on boot and by the harness. */
+function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElement {
+  const host = opts.host;
   const target = resolveTarget(opts);
   const mountEl = document.getElementById(opts.mountId ?? 'lagoon');
 

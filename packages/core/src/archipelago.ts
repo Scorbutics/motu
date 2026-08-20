@@ -2,7 +2,7 @@
 // Store, and a HostBridge for outward intents (navigation/actions). The page only drops thin
 // <motu-island slot="…"> markers; all composition lives here, shipped in the composition root.
 
-import { Store, declareProducers } from './store.js';
+import { Store, declareProducers, declareReaders, noteIslandOutput } from './store.js';
 import { installChannels, type Channel } from './channel.js';
 import { runWithWriteSource, currentWriteSource } from './store.js';
 
@@ -45,6 +45,20 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
   /** Static properties set once on mount. */
   props?: Record<string, unknown>;
   /**
+   * Props this island fills with ANOTHER island: prop name -> slot.
+   *
+   * Nesting was expressible in the page (`<Island slot="week-nav"><WeekNavigator ambassador={<Island
+   * slot="ambassador-inline"/>} /></Island>`) and nowhere else, so the lagoon rendered the outer island
+   * with holes and the region's own composition lived only in host JSX. Two islands are two islands
+   * whether or not one sits inside the other's DOM — a navigator that owns which week is on screen is
+   * not "environment" because it happens to contain a progress strip.
+   *
+   * Declared here for the same reason `bind` is: it is a fact about how THIS region composes, and the
+   * same island may be nested in one region and standalone in another. The host's own JSX still wins
+   * where it passes the prop itself — page seeds, region fills the rest.
+   */
+  slots?: Record<string, string>;
+  /**
    * Reactively bind an element property to a store key (elementProp -> storeKey).
    *
    * The store key is `keyof TRegion`, so a region that declares its shape gets the binding checked by
@@ -56,7 +70,7 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    * `satisfies` (which `ProducedKeys` needs — see below), because an array literal of differently
    * shaped island entries infers each absent key as `?: undefined`. Readers skip falsy keys.
    */
-  bind?: Record<string, (keyof TRegion & string) | undefined>;
+  bind?: BindDeclaration<TRegion>;
   /**
    * Handle a CustomEvent the island emits; typically writes the store or fires a host intent.
    *
@@ -98,6 +112,36 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
  * requires the parameter, because there the page owns the state and motu must reference it rather
  * than restate it.
  */
+/**
+ * What an island reads: a list of region keys, and a map only where the names differ.
+ *
+ *   bind: ['profilsWaiting', 'isCurrentWeek', { stats: 'networkStats' }]
+ *
+ * A RENAME is a decision — the component's word for the value is not the region's, and someone chose
+ * that. Everything else was transcription: `{ compactMode: 'compactMode', weekLoading: 'weekLoading' }`
+ * said the same word twice per key, and a page's worth of that buries the two or three lines a
+ * reviewer actually needs to look at. The plain record stays legal (nothing has to be rewritten).
+ */
+export type BindDeclaration<TRegion> =
+  | readonly ((keyof TRegion & string) | Record<string, (keyof TRegion & string) | undefined>)[]
+  | Record<string, (keyof TRegion & string) | undefined>;
+
+/** A `bind` declaration in its long form: [prop, key] pairs, whichever form was written. */
+export function bindEntries(spec: { bind?: BindDeclaration<never> | undefined }): [string, string][] {
+  const bind = spec.bind;
+  if (!bind) return [];
+  const pairs = (record: Record<string, string | undefined>): [string, string][] =>
+    Object.entries(record).filter((e): e is [string, string] => typeof e[1] === 'string');
+  if (Array.isArray(bind)) {
+    return bind.flatMap((entry) =>
+      typeof entry === 'string'
+        ? ([[entry, entry]] as [string, string][])
+        : pairs(entry as Record<string, string | undefined>),
+    );
+  }
+  return pairs(bind as Record<string, string | undefined>);
+}
+
 export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag extends string = string> {
   id: string;
   islands: readonly IslandSpec<TRegion, TTag>[];
@@ -105,10 +149,11 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * Store keys fed from OUTSIDE the region — the host's own, written through `provideToArchipelago`
    * or a channel.
    *
-   * The counterpart of `IslandSpec.produces`: between them, every key an island binds has exactly one
-   * declared owner. Claiming a key here changes no behaviour; it makes host feeding visible (a bare
-   * `store.set` carries no source at all) and it is the one-word declaration a legacy region uses to
-   * adopt ownership key by key (D3, D8).
+   * DERIVED, and only declarable for the case derivation cannot see: a key the host feeds that no
+   * island binds. Host-fed is what is LEFT after ownership — every bound key an island does not write
+   * is fed from outside, by definition, so listing them restated a subtraction the compiler can do
+   * (`HostFedKeys`). The list also had to be maintained: sixteen entries in peps' actions region, each
+   * of them a place to typo a key that `keyof TRegion` would have caught anyway.
    */
   provides?: readonly (keyof TRegion & string)[];
   /**
@@ -136,13 +181,27 @@ type KeysIn<V> = V extends string ? V : V extends Record<string, infer K> ? (K e
 
 /** Every store key an island reads, as a union. Entries without `bind` contribute nothing. */
 export type BoundKeys<A> = A extends { islands: readonly (infer I)[] } ? BindsOf<I> : never;
-type BindsOf<I> = I extends { bind: infer B } ? B[keyof B] & string : never;
+type BindsOf<I> = I extends { bind: infer B }
+  ? B extends readonly (infer E)[]
+    ? E extends string
+      ? E
+      : E[keyof E] & string
+    : B[keyof B] & string
+  : never;
 
-/** Every key the region declares as host-fed. */
+/** Every key the region declares as host-fed, in the rare case it says so explicitly. */
 export type ProvidedKeys<A> = A extends { provides: readonly (infer K)[] } ? (K extends string ? K : never) : never;
 
-/** Bound, but claimed by nobody: neither `provides` nor any island's `writes`. */
-export type UnownedKeys<A> = Exclude<BoundKeys<A>, ProvidedKeys<A> | ProducedKeys<A>>;
+/**
+ * Host-fed keys, DERIVED: bound by an island, written by none.
+ *
+ * This is the whole of `provides`, computed. It is also why nothing can be "unowned" any more: a key
+ * either has an island that writes it, or the host feeds it, and there is no third case.
+ */
+export type HostFedKeys<A> = Exclude<BoundKeys<A>, ProducedKeys<A>>;
+
+/** Bound, but claimed by nobody. Empty by construction now that host-feeding is the default. */
+export type UnownedKeys<A> = Exclude<BoundKeys<A>, ProvidedKeys<A> | ProducedKeys<A> | HostFedKeys<A>>;
 
 /** Claimed twice — the host says it feeds it, an island says it writes it. */
 export type DisputedKeys<A> = ProvidedKeys<A> & ProducedKeys<A>;
@@ -482,6 +541,7 @@ export function outputEvents(spec: IslandSpec): string[] {
  * the same however it was mounted.
  */
 export function applyOutput(spec: IslandSpec, eventName: string, detail: unknown, ctx: IslandContext): void {
+  noteIslandOutput(spec.slot, eventName);
   const target = spec.writes?.[eventName];
   if (typeof target === 'string') {
     ctx.store.set(target, detail);
@@ -490,6 +550,20 @@ export function applyOutput(spec: IslandSpec, eventName: string, detail: unknown
     for (const [field, key] of Object.entries(target)) ctx.store.set(key, fields[field]);
   }
   spec.on?.[eventName]?.(detail, ctx);
+}
+
+/**
+ * The keys this region is fed from outside, at runtime: bound by an island, written by none — plus
+ * anything the config still names explicitly. The value-level twin of `HostFedKeys`.
+ */
+export function hostFedKeys(config: AnyArchipelagoConfig): Set<string> {
+  const produced = new Set<string>();
+  for (const island of config.islands) for (const key of writtenKeys(island)) produced.add(key);
+  const out = new Set<string>((config.provides ?? []) as readonly string[]);
+  for (const island of config.islands) {
+    for (const [, key] of bindEntries(island)) if (!produced.has(key)) out.add(key);
+  }
+  return out;
 }
 
 /**
@@ -505,6 +579,15 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
     for (const key of writtenKeys(island)) producers.set(key, island.slot);
   }
   declareProducers(store, producers);
+  // Who READS each key, so a host write to one can be recognised as feeding an island (see the
+  // laundering smell in store.ts).
+  const readers = new Map<string, string[]>();
+  for (const island of config.islands) {
+    for (const [, key] of bindEntries(island)) {
+      readers.set(key, [...(readers.get(key) ?? []), island.slot]);
+    }
+  }
+  declareReaders(store, readers);
   const host = DEBUG ? instrumentHost(opts.host ?? warnHost) : opts.host ?? warnHost;
   for (const island of config.islands) {
     slots.set(island.slot, { spec: island, store, host });
@@ -543,9 +626,9 @@ export function mountIsland(slot: string, hostEl: HTMLElement): HTMLElement | nu
 
   let unsub: (() => void) | undefined;
   if (spec.bind) {
+    const pairs = bindEntries(spec);
     const apply = () => {
-      for (const [prop, key] of Object.entries(spec.bind!)) {
-        if (!key) continue;
+      for (const [prop, key] of pairs) {
         el[prop] = store.get(key);
       }
     };

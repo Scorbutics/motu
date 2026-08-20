@@ -47,6 +47,8 @@ import {
   type IslandElementOptions,
   type MotuFit,
   type Store,
+  bindEntries,
+  hostFedKeys,
 } from '@motu/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap.js';
 
@@ -293,13 +295,15 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   // anything re-rendered. While the page keeps passing a value, the page owns it (the store is a
   // read-mirror); a key becomes store-owned only when the page stops passing it.
   const provided = useMemo(
-    () => new Set((ctx.config as { provides?: string[] }).provides ?? []),
+    // DERIVED: every key an island binds that no island writes is fed by the host. The explicit
+    // `provides` list is still honoured for a key nothing binds.
+    () => hostFedKeys(ctx.config as AnyArchipelagoConfig),
     [ctx.config],
   );
   const publishedRef = useRef<Record<string, unknown>>({});
   useEffect(() => {
     if (!hosted || !spec?.bind) return;
-    for (const [prop, key] of Object.entries(spec.bind)) {
+    for (const [prop, key] of bindEntries(spec)) {
       if (!key || !(prop in hostedProps)) continue;
       // OWNED KEYS ARE NOT THE PAGE'S TO PUBLISH (docs/plan-key-ownership.md, D5).
       //
@@ -359,7 +363,7 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   //    is bound and HAS BEEN SET, otherwise the page's own prop stands. `has()` rather than a value
   //    test, so a sibling that deliberately sets a key to `undefined` is honoured instead of silently
   //    falling back to the page.
-  for (const [prop, key] of Object.entries(spec.bind ?? {})) {
+  for (const [prop, key] of bindEntries(spec)) {
     if (!key) continue;
     if (hosted) {
       if (ctx.store.has(key)) resolved[prop] = ctx.store.get(key);
@@ -368,6 +372,14 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
       if (value !== undefined) resolved[prop] = value;
     }
   }
+  // 3b. Child islands: props this island's entry says are filled by another island. Only when the
+  //     host did not pass them itself — the page composing its own JSX stays authoritative, exactly as
+  //     it is for values (see the precedence note above).
+  for (const [prop, childSlot] of Object.entries(spec.slots ?? {})) {
+    if (hosted && prop in hostedProps) continue;
+    resolved[prop] = createElement(Island, { slot: childSlot, key: childSlot });
+  }
+
   // 4. Output: each declared callback routes to the archipelago's handler for that event name.
   //    Hosted path: the page's own handler still fires. motu OBSERVES the output; it does not take it
   //    over, or deleting the wrapper would silently drop wiring the page already had.

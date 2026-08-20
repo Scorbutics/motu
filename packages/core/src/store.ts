@@ -90,12 +90,28 @@ export class Store {
     return this.data[key] as T | undefined;
   }
 
+  /**
+   * Has this key been written at all?
+   *
+   * The precedence rule for a host that feeds its own islands (a React page passing props) is "the
+   * store wins when the key is bound AND HAS BEEN SET" — so *never set* and *set to `undefined`* have
+   * to be distinguishable, which `get()` alone cannot do. One rule, owned here, rather than each
+   * binding inventing its own.
+   */
+  has(key: string): boolean {
+    return Object.prototype.hasOwnProperty.call(this.data, key);
+  }
+
   set(key: string, value: unknown): void {
     // A write that changes nothing notifies nobody. Beyond the wasted renders, an unconditional
     // notify turns any write-during-render into a feedback loop: island renders -> writes the same
     // value -> every bound island re-renders -> writes again. Cheap guard, and it only catches the
     // no-op case — a new object identity with the same contents still notifies, as it must.
-    if (Object.is(this.data[key], value)) return;
+    //
+    // The presence test is load-bearing, not defensive: without it, `set(k, undefined)` on a key that
+    // was never written returns here and the key is NEVER CREATED, so `has()` stays false and the
+    // precedence rule above silently reads the wrong side.
+    if (this.has(key) && Object.is(this.data[key], value)) return;
     this.data[key] = value;
     if (DEBUG) {
       const w: StoreWrite = { store: this, key, source: writeSource, at: Date.now() };

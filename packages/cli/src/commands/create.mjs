@@ -1,15 +1,20 @@
-// `motu island create <name>` — scaffolds a motu island as a mount point plus its ui component:
-//   ui/<kebab>/<Pascal>.tsx   — the plain, mode-agnostic component (the reusable "mainland")
-//   islands/<kebab>/element.ts        — the element-registry row (tag -> ui component + legacy fit)
-//   islands/<kebab>/fixtures.mock.ts  — the lagoon fixtures stub
-//   islands/<kebab>/index.ts          — the mount point's public surface (its element)
-// and adds one import + one row to the islands registry (via ts-morph AST). The
-// component lives OUTSIDE islands/ so mount points can never import each other. TODO(motu:*) markers
-// are left for the extraction skill.
+// `motu island create <name>` — scaffolds an island as ONE file, plus its ui component if motu owns it:
+//   ui/<kebab>/<Pascal>.tsx   — the plain, mode-agnostic component (only when not wrapping the app's)
+//   islands/<kebab>.island.ts — the island: tag, component, and its declared boundary
+// then regenerates the registry from what is on disk.
+//
+// It does NOT scaffold an evidence file. A `fixtures.mock.ts` full of `TODO(motu:fixtures)` is worse
+// than no file: it looks like coverage, invites a hand-written response shape, and rots — six of them
+// sat empty in the reference adopter for months. Evidence appears when `motu fixtures record` produces
+// it, or when you write a scenario because you need one.
+//
+// The component lives OUTSIDE islands/ so mount points can never import each other. TODO(motu:*)
+// markers are left for the extraction skill.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
-import { paths, names, color, FMT, resolveModuleSpecifier } from '../lib/util.mjs';
+import { paths, names, color, FMT, resolveModuleSpecifier, LEGACY_FIT } from '../lib/util.mjs';
+import { syncRegistry } from '../lib/islands.mjs';
 
 function componentSource(pascal, kebab) {
   return `export interface ${pascal}Props {
@@ -38,8 +43,12 @@ export function ${pascal}({ title = '${pascal}' }: ${pascal}Props = {}) {
 }
 
 function elementSource(pascal, camel, tag, kebab, from, exportName) {
+  // Only where the host HAS a legacy skin. Under a modern host it is not optional but absent —
+  // declaring it would be a field nothing reads (see `motu island verify`'s legacy-strategy rule).
+  const legacy = LEGACY_FIT ? "\n    legacy: 'fill'," : '';
   // `from` = wrapping a component the app already owns; otherwise the scaffolded ui/ component.
-  const spec = from ?? `../../ui/${kebab}/${pascal}.js`;
+  // One directory shallower than the old folder layout: the island file sits IN islands/.
+  const spec = from ?? `../ui/${kebab}/${pascal}.js`;
   const header = from
     ? `// Mount point for ${pascal}: it wraps the application's OWN component rather than a copy, so the
 // island cannot drift from what the app already ships. The component stays where it is and keeps
@@ -47,8 +56,10 @@ function elementSource(pascal, camel, tag, kebab, from, exportName) {
 `
     : '';
   const input = from
-    ? `// TODO(motu:contract): list the props the island is fed, with defaults so it renders from
-    //   defaults alone in the lagoon — e.g. [{ name: 'phone', default: '+33600000000' }]
+    ? `// TODO(motu:contract): list the props this island is fed — e.g. ['phone', 'isLoading'].
+    //   DEFAULTS BELONG IN THE COMPONENT, not here: an island must render from its defaults alone,
+    //   and a default that cannot be honest in production is not a default, it is missing evidence
+    //   (put it in \`${kebab}.evidence.ts\` as a scenario seed instead).
     contract: { input: [] },`
     : `contract: { input: ['title'] },`;
   // No `as (keyof Props)[]` cast: `input` is already typed PropEntry<P>[], which accepts BOTH a bare
@@ -63,13 +74,12 @@ function elementSource(pascal, camel, tag, kebab, from, exportName) {
   return `${header}import type { ElementSpec } from '@motu/react';
 import { ${imported} } from '${spec}';
 
-export const ${camel}Element: ElementSpec = {
+export const element: ElementSpec = {
   tag: '${tag}',
   component: ${pascal},
   options: {
-    // The island contract in one place — input (props), output (events), coupling (host reach).
-    ${input}
-    legacy: 'fill',
+    // The island's boundary in one place — input (props), output (events), ambient (host reach).
+    ${input}${legacy}
   },
 };
 `;
@@ -171,35 +181,26 @@ export async function createCommand(argv) {
   }
 
   if (!from) mkdirSync(dirname(componentPath), { recursive: true }); // ui/<kebab>/
-  mkdirSync(paths.islandDir(kebab), { recursive: true }); // islands/<kebab>/
+  mkdirSync(paths.islandsDir, { recursive: true });
 
-  // Component in ui/ (unless wrapping one the app owns); mount point (element + index + fixtures).
+  // Component in ui/ (unless wrapping one the app owns), then the island itself — one file.
   if (!from) writeFileSync(componentPath, componentSource(pascal, kebab));
-  writeFileSync(paths.elementFile(kebab), elementSource(pascal, camel, tag, kebab, from, exportName));
-  writeFileSync(paths.islandIndexFile(kebab), indexSource(camel));
-  if (!existsSync(fixturesPath) || argv.force) {
-    writeFileSync(fixturesPath, fixturesSource(kebab, readContractHint()));
-  }
+  const islandFile = resolve(paths.islandsDir, `${kebab}.island.ts`);
+  writeFileSync(islandFile, elementSource(pascal, camel, tag, kebab, from, exportName));
 
-  // Registry edit (AST).
-  const project = new Project({
-    manipulationSettings: { quoteKind: QuoteKind.Single, useTrailingCommas: true },
-    skipAddingFilesFromTsConfig: true,
-    skipFileDependencyResolution: true,
-    compilerOptions: { allowJs: true },
-  });
-  const registrySf = addRegistryEntry(project, camel, kebab);
-  registrySf.formatText(FMT);
-  await registrySf.save();
-
-  const rel = paths.rel(paths.islandDir(kebab));
+  // The registry is GENERATED from what is on disk, not edited: adding an island is a file operation,
+  // and reconciling is what keeps a deleted or renamed one from lingering in it.
+  syncRegistry(paths.islandsDir);
   console.log(color.green(`✓ created island ${color.bold(kebab)}  (component ${pascal}, tag ${tag})`));
   if (from) console.log('  ' + color.dim(`wraps ${from}   (the app's own component — not copied)`));
   else console.log('  ' + color.dim(`${paths.rel(paths.componentFile(kebab, pascal))}   (component)`));
-  console.log('  ' + color.dim(`${rel}/element.ts   (registry row)`));
-  console.log('  ' + color.dim(`${rel}/fixtures.mock.ts`));
-  console.log('  ' + color.dim(`${rel}/index.ts   (exports)`));
-  console.log('  ' + color.dim(`${paths.rel(paths.islandsRegistry)}   (ELEMENT_REGISTRY entry)`));
+  console.log('  ' + color.dim(`${paths.rel(islandFile)}   (the island)`));
+  console.log('  ' + color.dim(`${paths.rel(paths.islandsRegistry)}   (regenerated)`));
   console.log('');
   console.log('Next: fill the TODO(motu:*) markers, then ' + color.bold(`motu island verify ${kebab}`));
+  console.log(
+    color.dim('  Evidence (fixtures/scenarios) goes in ') +
+      color.dim(color.bold(`${kebab}.evidence.ts`)) +
+      color.dim(' — write one when you need it, or record it with `motu fixtures record`.'),
+  );
 }

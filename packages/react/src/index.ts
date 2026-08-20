@@ -1,3 +1,4 @@
+export { renderArchipelagoLayout } from './archipelago-layout.js';
 export { defineReactElement } from './defineReactElement.js';
 export type { DefineOptions } from './defineReactElement.js';
 export { registerElements, defineMotuApp, defineLagoon } from './bootstrap.js';

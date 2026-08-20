@@ -6,6 +6,7 @@ import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
 import { applyMotuChrome } from '@motu/core';
+import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap.js';
 import { mountReactLagoon } from './lagoon-react-mount.js';
@@ -27,10 +28,28 @@ export interface LagoonBootstrapOptions {
   fit?: string;
   /** Outward channel; a console-logging no-op by default. */
   host?: HostBridge;
-  /** Initial store contents so bound islands render meaningfully. */
+  /** Initial store contents so bound islands render meaningfully. Overrides `overrides.seed`. */
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store (same as the real composition roots). */
   channels?: Channel[];
+  /**
+   * The project's lagoon overrides — the same `lagoon.ts` the GALLERY entry uses, keyed by archipelago
+   * id.
+   *
+   * Without this the focused lagoon ran with no region seed at all, while the gallery ran with one:
+   * the two entries showed different things from the same sources, and the focused entry is the one
+   * `motu island verify` / `motu archipelago verify` drive. So every runtime check was asserting
+   * against defaults, never against the state the region is actually fed — a weaker claim than
+   * "renders in the lagoon" sounds like. The region is resolved from the target, including for an
+   * island target (the region that declares it).
+   */
+  overrides?: {
+    seed?: Record<string, Record<string, unknown>>;
+    channels?: Record<string, Channel[]>;
+    layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
+  };
+  /** Every archipelago, so an `island:` target can find the region that declares it. */
+  archipelagos?: Record<string, { islands: { element: string; bind?: Record<string, string> }[] }>;
   /** Element id to append the archipelago into (default 'lagoon'). */
   mountId?: string;
   /** When set, every contract call fails with this HTTP status — verify's error-resilience mount. */
@@ -74,6 +93,48 @@ function resolveTarget(opts: LagoonBootstrapOptions): LagoonTarget {
  * Boot the lagoon focused on ONE target in isolation, backed by MockTransport. Configures the mock
  * transport from the supplied fixtures, resolves the target, mounts it, and returns the element.
  */
+/**
+ * The archipelago id whose seed applies to this target.
+ *
+ * An `archipelago:` target names it. An `island:` target does not — the island's seed lives on the
+ * region that declares it, so find the region holding that tag. An island in no region (or in two)
+ * gets nothing rather than a guess.
+ */
+function regionIdFor(target: LagoonTarget, opts: LagoonBootstrapOptions): string | undefined {
+  if (target.kind === 'archipelago') return target.config.id;
+  const owners = Object.entries(opts.archipelagos ?? {}).filter(([, cfg]) =>
+    cfg.islands?.some((i) => i.element === target.tag),
+  );
+  return owners.length === 1 ? owners[0][0] : undefined;
+}
+
+/**
+ * Translate a REGION seed into the namespace a single-island target uses.
+ *
+ * A lone island is mounted through a synthesised config whose binds are SAME-NAMED (prop `missions` ->
+ * key `missions`), which is what lets an island with no region be driven at all, and what the
+ * `scenarios` in every evidence file are written against. The region's own binds are not same-named —
+ * `missions` comes from `receivedMissions` — so handing the region seed over untranslated puts keys in
+ * the store that nothing reads, and the island renders its empty state while the region view shows
+ * data. Translate through the region's bind instead of changing the synthesised binds, so existing
+ * scenarios keep working.
+ */
+function translateRegionSeed(
+  seed: Record<string, unknown> | undefined,
+  target: LagoonTarget,
+  regionId: string | undefined,
+  opts: LagoonBootstrapOptions,
+): Record<string, unknown> | undefined {
+  if (!seed || target.kind !== 'island' || !regionId) return seed;
+  const island = opts.archipelagos?.[regionId]?.islands?.find((i) => i.element === target.tag);
+  if (!island?.bind) return seed;
+  const out: Record<string, unknown> = { ...seed };
+  for (const [prop, key] of Object.entries(island.bind)) {
+    if (key in seed) out[prop] = seed[key];
+  }
+  return out;
+}
+
 export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(opts.chrome ?? {});
@@ -91,13 +152,27 @@ export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
   const target = resolveTarget(opts);
   const mountEl = document.getElementById(opts.mountId ?? 'lagoon');
 
+  // An explicit `seed` still wins; otherwise take the region's own, so the focused entry and the
+  // gallery are fed from one source.
+  const regionId = regionIdFor(target, opts);
+  const seed = translateRegionSeed(
+    opts.seed ?? (regionId ? opts.overrides?.seed?.[regionId] : undefined),
+    target,
+    regionId,
+    opts,
+  );
+  const channels = opts.channels ?? (regionId ? opts.overrides?.channels?.[regionId] : undefined);
+
   if (opts.mount === 'react') {
-    const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: opts.seed });
+    const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed });
     mountReactLagoon(mountEl, config, {
       elements: opts.elements,
       host,
-      seed: opts.seed ?? { criteria: {} },
-      channels: opts.channels,
+      seed: seed ?? { criteria: {} },
+      channels,
+      // Only for a whole-region target: a single-island target is mounted through a synthesised
+      // one-slot config, and the app's layout would place slots that mount does not have.
+      layout: target.kind === 'archipelago' && regionId ? opts.overrides?.layout?.[regionId] : undefined,
       fit: target.kind === 'island' ? target.fit : undefined,
     });
     return mountEl ?? document.body;
@@ -108,8 +183,8 @@ export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
     css: opts.css,
     defaultTheme: 'motu',
     host,
-    seed: opts.seed ?? { criteria: {} },
-    channels: opts.channels,
+    seed: seed ?? { criteria: {} },
+    channels,
   });
 
   document.getElementById(opts.mountId ?? 'lagoon')?.appendChild(el);

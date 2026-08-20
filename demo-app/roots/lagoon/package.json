@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "motu lagoon dev",
     "focus": "vite --open /lagoon.html",
     "build": "vite build"
   },

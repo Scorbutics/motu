@@ -14,6 +14,7 @@
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { setDefaultIsolation, applyMotuChrome } from '@motu/core';
+import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineMotuApp, type ElementSpec } from './bootstrap.js';
 import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle.js';
@@ -56,6 +57,22 @@ export interface LagoonOverrides {
   channels?: Record<string, Channel[]>;
   /** Initial store contents per archipelago id, so bound islands render meaningfully. */
   seed?: Record<string, Record<string, unknown>>;
+  /**
+   * The region's ARRANGEMENT, per archipelago id — rendered by calling the APPLICATION's own layout
+   * component with islands in its slots.
+   *
+   * The alternative is an archipelago-level `layout` template, which is a second copy of an
+   * arrangement the host page already expresses — the same restate-instead-of-reference mistake the
+   * region contract type exists to prevent, and it drifts the same way. A React host has a real
+   * component for this; point at it:
+   *
+   *   layout: { actions: (island) => <ActionsLayout notice={island('activity-notice')} … /> }
+   *
+   * `island(slot)` renders the island registered for that slot. A slot the layout does not place
+   * simply does not appear — which is how the lagoon shows a region whose page also holds non-island
+   * content. Absent => the archipelago's `layout` template, then declared order.
+   */
+  layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
   /** Run before anything mounts — e.g. standing up a fake host for a foreign-framework island. */
   setup?: () => void;
   /**
@@ -217,6 +234,7 @@ export function startLagoon(opts: StartLagoonOptions): void {
         host,
         seed: overrides.seed?.[id],
         channels: overrides.channels?.[id],
+        layout: overrides.layout?.[id],
         view,
       });
       tide.setActive(current, view);

@@ -13,6 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
+import { listIslands } from '../lib/islands.mjs';
 import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath } from '../lib/util.mjs';
 import { runLagoon, runArchipelagoLagoon, differentiateLagoon } from '../playwright-lagoon.mjs';
 
@@ -30,6 +31,14 @@ function makeReport() {
     error: (check, msg, line) => findings.push({ level: 'error', check, msg, line }),
     warn: (check, msg, line) => findings.push({ level: 'warn', check, msg, line }),
     ok: (check, msg) => findings.push({ level: 'ok', check, msg }),
+    /**
+     * A rule that does not apply to this project's posture.
+     *
+     * Deliberately NOT `ok`: a rule silently reported as passing is indistinguishable from a rule that
+     * ran, so the two host modes could drift apart with every report still green. `skip` always states
+     * the reason.
+     */
+    skip: (check, msg) => findings.push({ level: 'skip', check, msg }),
   };
 }
 
@@ -179,7 +188,7 @@ function staticChecks(report, componentPath, pascal) {
 }
 
 /** Registry + archipelago membership checks. Returns the tag if registered. */
-function configChecks(report, kebab, pascal, expectedTag, standalone, componentProps) {
+function configChecks(report, kebab, pascal, expectedTag, standalone, componentProps, componentPath) {
   const elementPath = paths.elementFile(kebab);
   if (!existsSync(elementPath)) {
     report.error('registered', `no element.ts at ${paths.rel(elementPath)}`);
@@ -196,10 +205,18 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
   // coordinate only at runtime through the store. Its own component lives in ui/ (`../../ui/…`, which
   // is two levels up), so a single `../<other>/…` is a sibling-island reference.
   let sawSiblingIsland = false;
+  // Resolve against the actual island list rather than a path SHAPE. The folder layout made
+  // "sibling island" and "../<something>/" the same thing; the flat layout does not — there,
+  // `../ui/...` is the ui directory one level up, which is exactly what a mount point is supposed to
+  // import. Matching on shape flagged it as a sibling island.
+  const otherIslands = new Set(listIslands(paths.islandsDir).map((i) => i.kebab).filter((k) => k !== kebab));
   for (const imp of sf.getImportDeclarations()) {
-    const m = imp.getModuleSpecifierValue().match(/^\.\.\/([^./][^/]*)\//);
-    if (m) {
-      report.error('no-island-import', `element.ts imports sibling island '${m[1]}' — mount points never import each other`, imp.getStartLineNumber());
+    const spec = imp.getModuleSpecifierValue();
+    const sibling =
+      spec.match(/^\.\.\/([^./][^/]*)\//)?.[1] ?? // folder layout: ../<kebab>/element.js
+      spec.match(/^\.\/([^./]+)\.island(?:\.js)?$/)?.[1]; // flat layout: ./<kebab>.island.js
+    if (sibling && otherIslands.has(sibling)) {
+      report.error('no-island-import', `imports sibling island '${sibling}' — mount points never import each other`, imp.getStartLineNumber());
       sawSiblingIsland = true;
     }
   }
@@ -214,7 +231,7 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     }
   }
   if (!row) {
-    report.error('registered', `${pascal} has no ElementSpec in element.ts`);
+    report.error('registered', `${pascal} has no ElementSpec in ${paths.rel(elementPath)}`);
     return null;
   }
   const comp = row.getProperty('component')?.getText().replace(/^component:\s*/, '').trim();
@@ -224,7 +241,8 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
 
   // Confirm it's wired into the assembled ELEMENT_REGISTRY.
   const registryText = existsSync(paths.islandsRegistry) ? readFileSync(paths.islandsRegistry, 'utf8') : '';
-  if (registryText.includes(`./${kebab}/element.js`)) {
+  // Either layout's specifier: flat `./<kebab>.island.js` or the original `./<kebab>/element.js`.
+  if (registryText.includes(`./${kebab}.island.js`) || registryText.includes(`./${kebab}/element.js`)) {
     report.ok('registered', 'registered in ELEMENT_REGISTRY');
   } else {
     report.error('registered', `not wired into ${paths.rel(paths.islandsRegistry)}`);
@@ -239,12 +257,23 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
   const options = row.getProperty('options')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
   // Fitting an island to a legacy skin is only meaningful when the host HAS one. On a React host
   // (next/none) the island mounts directly, so requiring the strategy would be dead ceremony.
-  if (options?.getProperty('legacy')) {
+  // POSTURE FIRST. Testing for the field first (as this did) makes the skip branch unreachable for any
+  // project that declares it — which is every project, because the type used to require it. peps' eight
+  // islands each reported "declares a required legacy-fit strategy" under `host: next`, asserting a
+  // requirement that does not exist there.
+  if (!LEGACY_FIT) {
+    if (options?.getProperty('legacy')) {
+      report.warn(
+        'legacy-strategy',
+        `declares \`legacy\` but host is '${HOST}', which has no legacy skin to fit — remove it (nothing reads it)`,
+      );
+    } else {
+      report.skip('legacy-strategy', `no legacy fit on host '${HOST}' — nothing to fit to`);
+    }
+  } else if (options?.getProperty('legacy')) {
     report.ok('legacy-strategy', 'declares a required legacy-fit strategy');
-  } else if (LEGACY_FIT) {
-    report.error('legacy-strategy', 'element row is missing the required `legacy` strategy');
   } else {
-    report.ok('legacy-strategy', `no legacy fit required (host: ${HOST})`);
+    report.error('legacy-strategy', 'element row is missing the required `legacy` strategy');
   }
 
   // props/events reconciliation: the registry (element.ts) and the component are the two sources of
@@ -284,13 +313,57 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     );
   }
 
+  // --- ambient: the third leg of the boundary ---------------------------------------------------
+  //
+  // Input and output are declared. AMBIENT — the host capabilities a component reaches for without
+  // being handed them: a React context, a session hook, a feature gate, a service module it imports
+  // directly — was not, and it is the coupling most likely to make an island unmountable somewhere
+  // else. It hid in the lagoon's `alias` table, where standing a module down looked like build
+  // configuration rather than a declared dependency.
+  //
+  // It is DERIVED, not asked for twice: the lagoon's alias keys are exactly the modules this project
+  // has had to stand down, so an island importing one of them requires it. Declaring `ambient` makes
+  // that visible in the island, in the seam lens and in the contract snapshot.
+  {
+    const lagoonCfg = resolve(paths.lagoonDir, 'lagoon.config.json');
+    let aliases = [];
+    try {
+      aliases = Object.keys(JSON.parse(readFileSync(lagoonCfg, 'utf8')).alias ?? {});
+    } catch {
+      /* no lagoon config, or none declared */
+    }
+    if (aliases.length && existsSync(componentPath)) {
+      const src = readFileSync(componentPath, 'utf8');
+      const used = aliases.filter((a) => new RegExp(`from\\s*['"]${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`).test(src)).sort();
+      const declared = (readFileSync(elementPath, 'utf8').match(/ambient:\s*\[([^\]]*)\]/)?.[1] ?? '')
+        .split(',').map((x) => x.trim().replace(/['"]/g, '')).filter(Boolean).sort();
+      const missing = used.filter((u) => !declared.includes(u));
+      const stale = declared.filter((d) => !used.includes(d));
+      if (missing.length) {
+        report.warn('ambient', `reaches host capability not declared: ${missing.join(', ')} — add it to \`contract.ambient\``);
+      }
+      if (stale.length) {
+        report.warn('ambient', `declares ambient it does not use: ${stale.join(', ')}`);
+      }
+      if (!missing.length && !stale.length) {
+        report.ok('ambient', used.length ? `declares its host capabilities: ${used.join(', ')}` : 'reaches no host capability');
+      }
+    }
+  }
+
   // Membership: scan every archipelago file for this tag.
+  //
+  // An archipelago is shared state, so most islands are NOT in one — an island that couples with
+  // nothing is standalone, and that is a normal, permanent state rather than unfinished work. It is
+  // declared on the island (`standalone: true`) rather than passed to verify, because it is a property
+  // of the island, not of how you happened to invoke the check.
+  const declaredStandalone = /\bstandalone:\s*true\b/.test(readFileSync(elementPath, 'utf8'));
   if (tag && archipelagoFilesInclude(`element: '${tag}'`)) {
     report.ok('archipelago', 'member of an archipelago');
-  } else if (standalone) {
-    report.ok('archipelago', 'standalone island (membership skipped)');
+  } else if (standalone || declaredStandalone) {
+    report.ok('archipelago', 'standalone island — couples with nothing');
   } else {
-    report.warn('archipelago', `not a member of any archipelago yet — run \`motu island integrate\` (or pass --standalone)`);
+    report.warn('archipelago', `not in an archipelago — declare \`standalone: true\` if it shares state with no other island`);
   }
   return tag ?? expectedTag;
 }
@@ -666,7 +739,7 @@ export async function verifyCommand(argv) {
   let resolvedTag = tag;
   if (isReactIsland) {
     componentProps = staticChecks(report, componentPath, pascal);
-    resolvedTag = configChecks(report, kebab, pascal, tag, argv.standalone, componentProps) ?? tag;
+    resolvedTag = configChecks(report, kebab, pascal, tag, argv.standalone, componentProps, componentPath) ?? tag;
   } else {
     report.ok('adapter-island', `AngularJS island (no React component) — running config-lite + adapter + runtime checks`);
   }
@@ -714,7 +787,14 @@ export async function verifyCommand(argv) {
 function printReport(report, title, errors, warns) {
   console.log(color.bold(`\n${title}\n`));
   for (const f of report.findings) {
-    const mark = f.level === 'error' ? color.red('✗') : f.level === 'warn' ? color.yellow('!') : color.green('✓');
+    const mark =
+      f.level === 'error'
+        ? color.red('✗')
+        : f.level === 'warn'
+          ? color.yellow('!')
+          : f.level === 'skip'
+            ? color.dim('–')
+            : color.green('✓');
     const at = f.line ? color.dim(`  (line ${f.line})`) : '';
     console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${at}`);
   }
@@ -727,9 +807,8 @@ function printReport(report, title, errors, warns) {
 function registeredTags() {
   const tags = new Set();
   if (!existsSync(paths.islandsDir)) return tags;
-  for (const entry of readdirSync(paths.islandsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const el = paths.elementFile(entry.name);
+  for (const entry of listIslands(paths.islandsDir)) {
+    const el = entry.element;
     if (!existsSync(el)) continue;
     const m = readFileSync(el, 'utf8').match(/tag:\s*['"]([^'"]+)['"]/);
     if (m) tags.add(m[1]);
@@ -745,6 +824,72 @@ function archipelagoConfigChecks(report, id) {
     return;
   }
   const text = readFileSync(archPath, 'utf8');
+
+  // The region's declared shape (D8). Under a host that owns its own page state, the page and the
+  // archipelago otherwise name the same values twice with nothing linking them — peps' page called it
+  // `loadingReceived` while the store key was `receivedLoading`. Requiring the parameter makes the
+  // app's own type the single vocabulary, and a rename becomes a compile error.
+  //
+  // Skipped on an ocean: there is no app-side type to extract there — region state lives in `$scope`
+  // and motu declares it, so there is no second declaration and nothing to drift against.
+  if (LEGACY_FIT) {
+    report.skip('region-type', `region state is motu's on host '${HOST}' — no app-side type to reference`);
+  } else {
+    const param = text.match(/ArchipelagoConfig<\s*([A-Za-z_$][\w$]*)\s*>/);
+    if (param) {
+      report.ok('region-type', `bind keys are checked against \`${param[1]}\``);
+    } else {
+      report.error(
+        'region-type',
+        'ArchipelagoConfig has no region type — declare `ArchipelagoConfig<TRegion>` with a type ' +
+          'EXTRACTED FROM THE APP (no motu import, erases at runtime) so bind keys cannot drift from it',
+      );
+    }
+  }
+
+  // --- coupling: which members actually share state? -------------------------------------------
+  //
+  // An archipelago is a declared grouping of islands scattered across ONE PAGE. Most members couple
+  // with nothing — they are fed by props or read the backend themselves — and that is normal, not a
+  // smell: a page is a mix. So there is no rule here that a grouping must be coupled.
+  //
+  // What IS reported: a key written inside and read by no member. That means the coupling escapes the
+  // archipelago, and it is the check that found the real bug — `newReceivedCount` was written here and
+  // read by a button on the same page that had been left out because the boundary followed a DOM
+  // subtree rather than the page.
+  //
+  // A warning, not an error: under Model B the host page is a legitimate reader, so a key crossing to
+  // it is a design choice the rule names rather than forbids.
+  {
+    // Over CODE, not comments. `motu archipelago create` scaffolds its wiring examples as comments
+    // (`// bind: { someProp: 'someStoreKey' }`), so analysing the raw text reports a scaffolded TODO
+    // as real shared state — a green light for coupling that does not exist. Blank comments out,
+    // keeping newlines so any line number stays true.
+    const code = text
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+    const written = new Set([...code.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
+    const bindBlocks = [...code.matchAll(/bind:\s*\{([^}]*)\}/g)].map((m) => m[1]).join(',');
+    const read = new Set([...bindBlocks.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
+    const shared = [...written].filter((k) => read.has(k));
+
+    const orphanKeys = [...written].filter((k) => !read.has(k));
+    if (orphanKeys.length) {
+      report.warn(
+        'coupling',
+        `key(s) written but read by no island here: ${orphanKeys.join(', ')} — the coupling ESCAPES this ` +
+          `archipelago. Either its reader is an island on this page that is not a member yet, or it is ` +
+          `cross-page, which the lagoon does not verify (D11) and the store does not survive`,
+      );
+    }
+    if (shared.length) {
+      report.ok('coupling', `shared state: ${shared.join(', ')}`);
+    } else {
+      // Always say something. A check that reports nothing is indistinguishable from one that did not
+      // run — and "these islands are independent" is a real, useful answer, not an absence.
+      report.ok('coupling', 'no shared state between islands — a page whose islands are independent');
+    }
+  }
 
   const registryText = existsSync(paths.archipelagosRegistry) ? readFileSync(paths.archipelagosRegistry, 'utf8') : '';
   if (registryText.includes(`./${id}/${id}.archipelago.js`)) {
@@ -765,8 +910,23 @@ function archipelagoConfigChecks(report, id) {
     report.error('islands-registered', `unknown island tag(s): ${unknown.join(', ')} — not in ELEMENT_REGISTRY`);
   }
 
-  // A layout-less archipelago places its islands individually across the host (no region to render).
-  return /\blayout\s*:/.test(text);
+  // Does this region have an arrangement to render?
+  //
+  // Two places it can live, and checking only the first is what made removing a duplicated template
+  // silently disable the whole-region render — the check that catches slot/config drift:
+  //   1. a `layout:` template in the archipelago config (the ocean's answer), or
+  //   2. the region named in the lagoon overrides' `layout` map, i.e. the APPLICATION's own layout
+  //      component, which is the right answer under a React host and the one that cannot drift.
+  // Genuinely layout-less still means "islands placed individually across the host", and still skips.
+  if (/\blayout\s*:/.test(text)) return true;
+  for (const f of ['src/lagoon.tsx', 'src/lagoon.ts']) {
+    const overrides = resolve(paths.lagoonDir, f);
+    if (!existsSync(overrides)) continue;
+    const src = readFileSync(overrides, 'utf8');
+    const map = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\n\};/);
+    if (map && new RegExp(`(^|[\\s{,])['"\`]?${id}['"\`]?\\s*:`, 'm').test(map[1])) return true;
+  }
+  return false;
 }
 
 export async function archipelagoVerifyCommand(argv) {

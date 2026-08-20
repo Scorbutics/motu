@@ -40,6 +40,8 @@ export interface DebugOverlayOptions {
 
 const OPEN_KEY = 'motu:debug';
 const POS_KEY = 'motu:debug:pos';
+const MIN_KEY = 'motu:debug:min';
+const COUPLING_KEY = 'motu:debug:coupling';
 const CALL_BUFFER = 200;
 
 type PropState = 'bound' | 'bound-empty' | 'static' | 'default';
@@ -268,6 +270,9 @@ const STYLES = `
   /* The title bar is the drag handle, so it must not start a text selection instead. */
   cursor: grab; user-select: none; -webkit-user-select: none;
 }
+/* Collapsed: the title bar alone, shrunk to its controls — the graph stays on the page behind it. */
+.panel--min { width: auto; }
+.panel--min .panel__head { border-bottom: none; }
 .panel__head.grabbing { cursor: grabbing; }
 .panel__head b { font: 700 11px/1 inherit; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-faint); }
 .panel__head .spacer { flex: 1; }
@@ -380,6 +385,8 @@ const STYLES = `
 .ch .links.warn { color: var(--warn); }
 .cp { display: flex; align-items: center; gap: 8px; padding: 3px 0; font: 11px/1.3 var(--mono); }
 .cp .k { color: var(--ink); } .cp .rw { color: var(--ink-faint); }
+.cp .who { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp .who b { color: var(--ink); font-weight: 600; }
 .cp .flag {
   margin-left: auto; font: 700 9px/1 inherit; padding: 2px 7px; border-radius: 999px;
   text-transform: uppercase; letter-spacing: .05em;
@@ -401,7 +408,13 @@ class Overlay {
   #open = false;
   #selected: MountedIslandInfo | null = null;
   #hovered: MountedIslandInfo | null = null;
-  #showCoupling = false;
+  #showCoupling = readFlag(COUPLING_KEY);
+  /**
+   * Collapsed to its title bar. The panel is the heavy part (three sections, a live call log); the
+   * page-wide lenses on the header — the coupling graph, the picker, the recorder — are not. Minimize
+   * keeps those running with the outlines and wires, so the graph survives losing the reading pane.
+   */
+  #minimized = readFlag(MIN_KEY);
   /** Element-picker mode: the next click on the page selects an island instead of reaching the app. */
   #picking = false;
   #dragOffset: { x: number; y: number } | null = null;
@@ -597,8 +610,8 @@ class Overlay {
   #positionBoxes() {
     const coupled = this.#showCoupling ? this.#coupledIslands() : null;
     for (const [info, { box, tag }] of this.#boxes) {
-      const rect = info.el.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) {
+      const rect = islandRect(info.el);
+      if (!rect) {
         box.style.display = 'none';
         continue;
       }
@@ -867,6 +880,14 @@ class Overlay {
     });
   }
 
+  #setMinimized(on: boolean) {
+    this.#minimized = on;
+    writeFlag(MIN_KEY, on);
+    this.#renderPanel();
+    // Collapsing changes the panel's height, so a bottom-anchored position can end up off-screen.
+    this.#clampPosition();
+  }
+
   // Human fixture capture. Toggles the runtime recorder (read-only — it only observes call()); on
   // stop, serializes the captured calls into the SAME request-keyed fixtures text the CLI produces and
   // both downloads it and copies it to the clipboard (the browser can't write into the workspace).
@@ -924,7 +945,7 @@ class Overlay {
   #renderPanel() {
     if (!this.#panel) return;
     this.#panel.textContent = '';
-    this.#panel.className = 'panel';
+    this.#panel.className = this.#minimized ? 'panel panel--min' : 'panel';
 
     const head = h('div', { class: 'panel__head' });
     head.append(h('b', {}, 'motu debug'));
@@ -936,16 +957,26 @@ class Overlay {
     if (this.#showCoupling) couplingBtn.classList.add('on');
     couplingBtn.addEventListener('click', () => {
       this.#showCoupling = !this.#showCoupling;
+      writeFlag(COUPLING_KEY, this.#showCoupling);
       this.#renderPanel();
     });
     const pickBtn = h('button', { title: 'Pick an island on the page (Esc to cancel \u00b7 or Alt-click any island)' }, '\u2316');
     if (this.#picking) pickBtn.classList.add('on');
     pickBtn.addEventListener('click', () => this.#setPicking(!this.#picking));
+    const minBtn = h(
+      'button',
+      { title: this.#minimized ? 'Expand the panel' : 'Minimize to the title bar (lenses keep running)' },
+      this.#minimized ? '\u25a1' : '\u2013',
+    );
+    minBtn.addEventListener('click', () => this.#setMinimized(!this.#minimized));
     const closeBtn = h('button', { title: 'Close (Cmd/Ctrl+Shift+G)' }, '\u2715');
     closeBtn.addEventListener('click', () => this.toggle());
-    head.append(pickBtn, recBtn, couplingBtn, closeBtn);
+    head.append(pickBtn, recBtn, couplingBtn, minBtn, closeBtn);
     this.#panel.append(head);
     this.#makeDraggable(head);
+
+    // Minimized: the header IS the panel. Everything below it is the reading pane the user collapsed.
+    if (this.#minimized) return;
 
     if (this.#picking) {
       this.#panel.append(h('div', { class: 'pickbar' }, '\u2316 click an island on the page \u2014 Esc to cancel'));
@@ -1295,8 +1326,13 @@ class Overlay {
     return keys;
   }
 
-  // Archipelago COUPLING: per shared store key, how many islands read/write it, flagging demotion
-  // candidates (single reader) and accreting coupling (touched by many).
+  // Archipelago COUPLING: per shared store key, WHO reads and writes it, flagging demotion candidates
+  // (only one island involved) and accreting coupling (touched by many).
+  //
+  // Naming the islands is the whole point of this view: "1r/1w" is the same string whether one island
+  // reads a key nobody else touches or one island writes what ANOTHER one reads — and the second is the
+  // only genuine coupling an archipelago has. The counts alone also made that second case read as a
+  // demotion candidate, i.e. the view flagged the one real coupling on the page as removable.
   #archCoupling(): HTMLElement {
     const g = this.#group('coupling', '#b91c1c');
     g.append(this.#subLabel('shared store keys \u00b7 Nr / Mw'));
@@ -1325,12 +1361,26 @@ class Overlay {
       for (const key of [...keys].sort()) {
         const rd = readers.get(key) ?? new Set<string>();
         const wr = writers.get(key) ?? new Set<string>();
-        const touchers = new Set<string>([...rd, ...wr]);
-        const demotion = rd.size === 1 && wr.size <= 1;
+        // Host- and channel-origin writes are the OCEAN feeding the region, not an island: they say
+        // the key is externally fed, never that two islands are entangled.
+        const islandWriters = [...wr].filter((w) => w !== 'host' && w !== 'channel');
+        const external = wr.size > islandWriters.length;
+        const touchers = new Set<string>([...rd, ...islandWriters]);
+        // An externally-fed key is not a demotion candidate: `bind` IS how the ocean reaches one
+        // island, and there is nothing to demote it to. What stays worth flagging is a key that one
+        // island reads and NOTHING has been seen to feed.
+        const demotion = touchers.size <= 1 && !external;
         const coupling = touchers.size >= 3;
         const row = h('div', { class: 'cp' });
         row.append(h('span', { class: 'k' }, key));
         row.append(h('span', { class: 'rw' }, `${rd.size}r/${wr.size}w`));
+        const from = external ? ['host'] : islandWriters;
+        const who = h('span', { class: 'who' });
+        if (from.length) {
+          who.append(h('b', {}, from.join(',')), document.createTextNode(' \u2192 '));
+        }
+        who.append(document.createTextNode(rd.size ? [...rd].join(',') : '\u2205'));
+        row.append(who);
         if (coupling) row.append(h('span', { class: 'flag coupling' }, 'coupled'));
         else if (demotion) row.append(h('span', { class: 'flag demote' }, 'demote?'));
         g.append(row);
@@ -1397,11 +1447,37 @@ interface Point {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/**
+ * The island's box on screen.
+ *
+ * A React-mounted island's wrapper is `display: contents` — deliberately, so placing an island changes
+ * nothing about the page's layout — which means it has NO box: `getBoundingClientRect()` is 0x0. Every
+ * geometry the lens draws was reading that rect, so under `mount: 'react'` the outlines hid themselves
+ * and the coupling graph found no anchors and drew nothing at all. The island IS on screen; only its
+ * wrapper is boxless, so fall back to the union of what it rendered.
+ */
+function islandRect(el: HTMLElement): DOMRect | null {
+  const own = el.getBoundingClientRect();
+  if (own.width !== 0 || own.height !== 0) return own;
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const child of el.children) {
+    // A contents-only child (an island wrapping another wrapper) has no box either — recurse.
+    const r = child instanceof HTMLElement ? islandRect(child) : child.getBoundingClientRect();
+    if (!r || (r.width === 0 && r.height === 0)) continue;
+    left = Math.min(left, r.left);
+    top = Math.min(top, r.top);
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom);
+  }
+  if (left === Infinity) return null;
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
 // Where a wire meets an island: horizontal centre, near the top (capped) so tall islands (a results
 // list) don't drag the anchor far down the page.
 function islandAnchor(el: HTMLElement): Point | null {
-  const r = el.getBoundingClientRect();
-  if (r.width === 0 && r.height === 0) return null;
+  const r = islandRect(el);
+  if (!r) return null;
   return { x: r.left + r.width / 2, y: r.top + Math.min(r.height / 2, 28) };
 }
 
@@ -1462,17 +1538,25 @@ function ago(ts: number): string {
 }
 
 function readOpen(): boolean {
+  return readFlag(OPEN_KEY);
+}
+
+function readFlag(key: string): boolean {
   try {
-    return localStorage.getItem(OPEN_KEY) === 'on';
+    return localStorage.getItem(key) === 'on';
   } catch {
     return false;
   }
 }
 
-function writeOpen(on: boolean): void {
+function writeFlag(key: string, on: boolean): void {
   try {
-    localStorage.setItem(OPEN_KEY, on ? 'on' : 'off');
+    localStorage.setItem(key, on ? 'on' : 'off');
   } catch {
-    // Storage may be unavailable; the overlay still works for the session.
+    // Storage may be unavailable; the flag just won't outlive the session.
   }
+}
+
+function writeOpen(on: boolean): void {
+  writeFlag(OPEN_KEY, on);
 }

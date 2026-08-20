@@ -12,6 +12,7 @@ export type {
   IslandContext,
   IslandSpec,
   ArchipelagoConfig,
+  AnyArchipelagoConfig,
   ArchipelagoOptions,
   MountedIslandInfo,
   HostIntent,
@@ -26,7 +27,7 @@ export { getChannels, subscribeChannels } from './channel.js';
 export type { Channel, ChannelContext, ChannelInfo } from './channel.js';
 export type { MotuTheme, MotuFit, LegacyStrategy } from './theme.js';
 export { defineIsland } from './island.js';
-export { getIslandDefinition, getIslandDefinitions } from './island.js';
+export { getIslandDefinition, getIslandDefinitions, registerIslandDefinition } from './island.js';
 export { setDefaultIsolation, getDefaultIsolation } from './island.js';
 export type {
   AttrType,

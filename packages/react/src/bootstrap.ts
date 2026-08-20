@@ -17,6 +17,14 @@ import { defineReactElement, type DefineOptions } from './defineReactElement.js'
 
 /** A React-backed registry row: a tag bound to a React component + its options. */
 export interface ReactElementSpec<P extends object = any> {
+  /**
+   * This island shares state with no other island, permanently.
+   *
+   * An archipelago is shared state; most islands are in none. Declaring it here rather than passing a
+   * flag to verify makes it a property of the island — so the check means the same thing whoever runs
+   * it, and "not in an archipelago" stops reading as unfinished work.
+   */
+  standalone?: boolean;
   tag: string;
   component: ComponentType<any>;
   options: Omit<DefineOptions<P>, 'css' | 'defaultTheme'> & { defaultTheme?: MotuTheme };

@@ -19,10 +19,13 @@ The authoritative rule set is whatever `motu island verify` enforces — do not 
 - `demo-app/src/ui/<kebab>/<Pascal>.tsx` — the plain, mode-agnostic component (props in, callbacks
   out). In `ui/` (the "mainland"); may import `@motu/contract`, `shared/`, other `ui/` — never
   `islands/` or `archipelagos/`.
-- `demo-app/src/islands/<kebab>/{element.ts, fixtures.mock.ts, index.ts}` — the mount point: the
-  registry row (`tag` → ui component + `contract` {input/output/coupling} + `legacy` fit), the lagoon
+- `demo-app/src/islands/<kebab>.island.ts` — the island: one file holding the
+  registry row (`tag` → component + `contract` {input/output/ambient/coupling}, plus `legacy` fit ONLY
+  where the host has a legacy skin). Evidence, when there is any, lives beside it in
+  `<kebab>.evidence.ts` — never inside the island, because the registry is imported by the host app
+  and fixtures must not reach a production bundle. The lagoon
   fixtures + `scenarios`, and a one-line barrel.
-- `demo-app/src/archipelagos/<id>/<id>.archipelago.ts` — the region the island joins (at integrate).
+- `demo-app/src/archipelagos/<id>/<id>.archipelago.ts` — the PAGE the island joins (at integrate).
 
 Mount points never import each other. Islands coordinate ONLY through the archipelago **store** (an
 island writes a key via an `on` handler; siblings read it via `bind`) and DOM events — never directly.
@@ -30,9 +33,18 @@ island writes a key via an `on` handler; siblings read it via `bind`) and DOM ev
 ## The chain (follow in order)
 
 ### 1 — Identify or create the archipelago FIRST
-An island exists to sit on a page (an archipelago). Decide which one before building.
-- Reuse an existing region if the island belongs on that page: see `demo-app/src/archipelagos/`.
+An island exists to sit on a page, and the archipelago IS that page. Decide which one before building.
+- Reuse the existing one if the island belongs on that page: see `demo-app/src/archipelagos/`.
 - Otherwise scaffold one: `pnpm motu archipelago create <id>`.
+
+Scope it to the PAGE, never to a DOM subtree: the islands are referenced by slot and scattered
+wherever the page puts them. Scoping to a container puts a boundary through the middle of any coupling
+that crosses it — which is exactly how a count produced in one corner of a page ended up written to a
+store nothing in the region read.
+
+Most islands on a page couple with NOTHING — fed by props, or reading the backend themselves. That is
+normal; membership is not a claim of coupling. Declare the grouping and the bindings; `motu contract
+check` derives the coupling graph.
 Know up front which **store keys** the island will read/write and which **sibling islands** it
 coordinates with (e.g. a search island writes `criteria`; a results island reads it). This is the
 contract you design the island around.
@@ -46,9 +58,14 @@ Then, entirely offline:
 - **Component**: write `ui/<kebab>/<Pascal>.tsx`. Mode-agnostic (no `fetch`/`$http`, no
   `history`/`location`, no `document` reach-out); all server I/O via `@motu/contract`; renders from
   default props alone; outward navigation/actions are `onXxx` intent callbacks.
-- **Contract** in `element.ts`: declare INPUT (`input` props), OUTPUT (`output` events). Fill the
+- **Contract** in the island file: declare INPUT (`input` props), OUTPUT (`output` events), and
+  AMBIENT (host contexts/hooks/service modules the component reaches for). DEFAULTS BELONG IN THE
+  COMPONENT — an island renders from its defaults alone, and a default that could not be honest in
+  production is evidence, not a default. Fill the
   `contract` in ONE place.
-- **Mock fixtures** in `fixtures.mock.ts`: shapes matching the contract return types, with `roles`.
+- **Evidence** in `<kebab>.evidence.ts`, and ONLY when there is something real to put there: fixtures
+  recorded with `motu fixtures record`, or scenarios you wrote because you needed them. Never scaffold
+  an empty one — an empty fixtures file looks like coverage and invites a hand-written response shape.
   For REACTIVE behaviour (type a filter → results narrow), make a fixture `response` a **function of
   the args** (`response: (args) => filter(dataset, args[1])`) — a client-side STUB so any input works
   offline. Declare `scenarios` (two+ seeds with different output).

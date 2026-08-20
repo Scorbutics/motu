@@ -18,30 +18,37 @@
 // mounts into (markup rendered by a CMS, a slot filled imperatively) is the case the custom element
 // still serves — that path remains, unchanged.
 import {
+  Children,
+  cloneElement,
   createContext,
   createElement,
+  isValidElement,
   useContext,
   useEffect,
   useMemo,
   useReducer,
   useRef,
+  type ReactElement,
   type ReactNode,
 } from 'react';
 import {
   defineArchipelago,
   getArchipelagoStore,
+  registerIslandDefinition,
   registerMountedIsland,
   runWithWriteSource,
+  type AnyArchipelagoConfig,
   type ArchipelagoConfig,
   type Channel,
   type HostBridge,
+  type IslandElementOptions,
   type MotuFit,
   type Store,
 } from '@motu/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap.js';
 
 interface ArchipelagoValue {
-  config: ArchipelagoConfig;
+  config: AnyArchipelagoConfig;
   store: Store;
   host: HostBridge | undefined;
   byTag: Map<string, ReactElementSpec>;
@@ -65,7 +72,7 @@ function declaredOutputs(spec: ReactElementSpec): Record<string, string> {
 }
 
 export interface ArchipelagoProviderProps {
-  config: ArchipelagoConfig;
+  config: AnyArchipelagoConfig;
   /** The project's element registry — the same one the lagoon and the custom-element path use. */
   elements: ElementSpec[];
   /** Outward seam for navigate/action intents. */
@@ -82,8 +89,21 @@ export interface ArchipelagoProviderProps {
  * it. The store, the slot registry and the host bridge are the SAME ones the custom-element path
  * registers, so the debug overlay, `provide()` and channels behave identically either way.
  */
-export function ArchipelagoProvider({ config, elements, host, seed, channels, children }: ArchipelagoProviderProps) {
+export function ArchipelagoProvider({ config, elements, host, seed, channels, children }: ArchipelagoProviderProps): ReactElement {
   const value = useMemo<ArchipelagoValue>(() => {
+    // The islands' DECLARED shape, for the seam lens. On the custom-element path `defineIsland` does
+    // this; the React path defines no elements, so without this call the overlay knew every island's
+    // store binds but none of its props, and reported both "No declared props" and — since coupling is
+    // derived from those props' store keys — "No shared store keys". Debug-only and idempotent.
+    // Self-registering entries (`define`) are left alone: they run defineIsland themselves.
+    for (const entry of elements) {
+      // Same widening `defineReactElement` does when it hands these options to `defineIsland`: the
+      // registry types attributes per-prop, the element machinery by name.
+      if ('component' in entry) {
+        registerIslandDefinition(entry.tag, (entry.options ?? {}) as unknown as IslandElementOptions);
+      }
+    }
+
     // defineArchipelago builds a NEW Store and re-registers every slot. React StrictMode and Fast
     // Refresh both re-run this, and a second call would silently swap the store out from under any
     // island already bound to the first one. Reuse the registered store when the id is already known.
@@ -102,6 +122,16 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.id]);
 
+  // `createElement`, with the return type ANNOTATED — not JSX.
+  //
+  // Two constraints meet here. Left uninferred, `createElement(Context.Provider, …)` infers
+  // `FunctionComponentElement<ProviderProps<…>>`, which React 19's types reject in a child position
+  // (its `ReactPortal` requires `children`), so a host app on React 19 compiling motu's sources fails
+  // with "ArchipelagoProvider cannot be used as a JSX component". Writing it as JSX fixes the type and
+  // breaks the RUNTIME: this file is transformed by whatever the consumer uses, and a loader that does
+  // not pick up the workspace's `jsx: react-jsx` emits a classic transform needing `React` in scope —
+  // `ReferenceError: React is not defined`, at render, in a package that has no JSX anywhere else.
+  // Annotating the return keeps the call plain and satisfies both type versions.
   return createElement(ArchipelagoContext.Provider, { value }, children);
 }
 
@@ -120,6 +150,16 @@ export interface IslandProps {
   /** Escape hatch for a prop the archipelago does not declare (a page-local callback, say). */
   props?: Record<string, unknown>;
   className?: string;
+  /**
+   * The host page's OWN element for this slot — `<Island slot="x"><Panel a={a} /></Island>`.
+   *
+   * This is the "page seeds, store augments" shape. The page keeps writing its own JSX with its own
+   * props; motu publishes those props into the region store and overrides them only where a sibling
+   * has driven the key. Deleting the `<Archipelago>`/`<Island>` wrappers then leaves the page's own
+   * markup rendering exactly as before — which is what makes removing motu a no-op rather than a
+   * breakage. Without children, the island is rendered from the registry (the original path).
+   */
+  children?: ReactNode;
 }
 
 /**
@@ -129,7 +169,7 @@ export interface IslandProps {
  * defaults, then the archipelago's static `props`, then reactive `bind` values — so an island cannot
  * behave differently depending on which path mounted it.
  */
-export function Island({ slot, fit, props: extra, className }: IslandProps) {
+export function Island({ slot, fit, props: extra, className, children }: IslandProps) {
   const ctx = useContext(ArchipelagoContext);
   if (!ctx) throw new Error(`motu: <Island slot="${slot}"> must be used inside <ArchipelagoProvider>`);
 
@@ -164,6 +204,30 @@ export function Island({ slot, fit, props: extra, className }: IslandProps) {
     return out;
   }, [spec, elementSpec, slot, ctx.store, ctx.host]);
 
+  // The page's own element for this slot, if it supplied one.
+  const hosted = children != null && isValidElement(children) ? (Children.only(children) as ReactElement) : null;
+  const hostedProps = (hosted?.props ?? {}) as Record<string, unknown>;
+
+  // THE PAGE SEEDS. Publish the props the page passed into the region store, under the archipelago's
+  // declared bind keys, so a sibling can read what this island was given without the page having to
+  // hand its state to motu.
+  //
+  // Published on CHANGE, not on every render, and that is the whole subtlety: re-publishing an
+  // unchanged prop on every render would clobber a sibling's write to the same key the moment
+  // anything re-rendered. While the page keeps passing a value, the page owns it (the store is a
+  // read-mirror); a key becomes store-owned only when the page stops passing it.
+  const publishedRef = useRef<Record<string, unknown>>({});
+  useEffect(() => {
+    if (!hosted || !spec?.bind) return;
+    for (const [prop, key] of Object.entries(spec.bind)) {
+      if (!(prop in hostedProps)) continue;
+      const value = hostedProps[prop];
+      if (Object.is(publishedRef.current[key], value)) continue;
+      publishedRef.current[key] = value;
+      runWithWriteSource(slot, () => ctx.store.set(key, value));
+    }
+  });
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!spec || !wrapperRef.current) return;
@@ -190,13 +254,36 @@ export function Island({ slot, fit, props: extra, className }: IslandProps) {
   }
   // 2. Static props from the archipelago.
   Object.assign(resolved, spec.props ?? {});
-  // 3. Reactive binds. An undefined store value must not clobber a declared default.
+  // 3. Reactive binds.
+  //
+  //    Registry path (no children): an undefined store value must not clobber a declared default.
+  //
+  //    Hosted path (the page supplied the element): ONE precedence rule — the store wins when the key
+  //    is bound and HAS BEEN SET, otherwise the page's own prop stands. `has()` rather than a value
+  //    test, so a sibling that deliberately sets a key to `undefined` is honoured instead of silently
+  //    falling back to the page.
   for (const [prop, key] of Object.entries(spec.bind ?? {})) {
-    const value = ctx.store.get(key);
-    if (value !== undefined) resolved[prop] = value;
+    if (hosted) {
+      if (ctx.store.has(key)) resolved[prop] = ctx.store.get(key);
+    } else {
+      const value = ctx.store.get(key);
+      if (value !== undefined) resolved[prop] = value;
+    }
   }
   // 4. Output: each declared callback routes to the archipelago's handler for that event name.
-  Object.assign(resolved, handlers);
+  //    Hosted path: the page's own handler still fires. motu OBSERVES the output; it does not take it
+  //    over, or deleting the wrapper would silently drop wiring the page already had.
+  if (hosted) {
+    for (const [callbackProp, handler] of Object.entries(handlers)) {
+      const pageHandler = hostedProps[callbackProp];
+      resolved[callbackProp] = (detail: unknown) => {
+        if (typeof pageHandler === 'function') (pageHandler as (d: unknown) => void)(detail);
+        handler(detail);
+      };
+    }
+  } else {
+    Object.assign(resolved, handlers);
+  }
   if (fit) resolved.fit = fit;
   Object.assign(resolved, extra ?? {});
 
@@ -211,6 +298,6 @@ export function Island({ slot, fit, props: extra, className }: IslandProps) {
       'data-motu-slot': slot,
       style: className ? undefined : { display: 'contents' },
     },
-    createElement(Component as never, resolved),
+    hosted ? cloneElement(hosted, resolved) : createElement(Component as never, resolved),
   );
 }

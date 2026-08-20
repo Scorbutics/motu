@@ -20,7 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { resolve, sep } from 'node:path';
-import { REPO_ROOT, APP_ROOT, paths, names, color, VITE_BIN } from '../lib/util.mjs';
+import { fileURLToPath } from 'node:url';
+import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
+
+/** The framework's own lagoon build runner — replaces the vite.config.ts each project used to carry. */
+const LAGOON_BUILD = fileURLToPath(new URL('../lagoon-build.mjs', import.meta.url));
 
 
 /**
@@ -58,8 +62,9 @@ function resolveTarget(argv) {
 
 /** Build the chosen entry as one chunk, mock-backed. Returns the built HTML path. */
 function buildSingleFile({ entry, target, fit }) {
-  const res = spawnSync(process.execPath, [VITE_BIN, 'build'], {
-    cwd: paths.lagoonDir,
+  const res = spawnSync(process.execPath, [LAGOON_BUILD], {
+    // The project root, not the lagoon: the build resolves motu.config.json by walking up from cwd.
+    cwd: REPO_ROOT,
     env: {
       ...process.env,
       MOTU_SINGLEFILE: entry,
@@ -74,7 +79,7 @@ function buildSingleFile({ entry, target, fit }) {
     encoding: 'utf8',
   });
   if (res.status !== 0)
-    throw new Error(`vite build failed:\n${(res.stdout || '') + (res.stderr || '')}`);
+    throw new Error(`lagoon build failed:\n${(res.stdout || '') + (res.stderr || '')}`);
   const html = resolve(paths.lagoonDir, 'dist', entry === 'lagoon' ? 'lagoon.html' : 'index.html');
   if (!existsSync(html)) throw new Error(`build produced no ${paths.rel(html)}`);
   return html;
@@ -401,4 +406,59 @@ export function lagoonServeCommand(argv) {
     server.close(() => process.exit(0));
   });
   return 0;
+}
+
+
+/**
+ * `motu lagoon dev` — the iteration loop: the lagoon served by Vite with HMR.
+ *
+ * Replaces the per-project `npm run dev` inside roots/lagoon, which existed only because each project
+ * carried its own package.json and vite.config.ts. Runs the dev server in THIS process (foreground,
+ * Ctrl-C to stop) rather than spawning one, since nothing here needs to outlive the command.
+ */
+export async function lagoonDevCommand(argv) {
+  const { entry, target } = resolveTarget(argv);
+  const { buildLagoonViteConfig, resolveVite } = await import('../lib/lagoon-vite.mjs');
+  const { loadMotuConfig } = await import('../lib/config.mjs');
+  // The FULL resolved config, not util.mjs's `paths` — that one is a curated subset for path
+  // formatting and carries no `host`/`motuRoot`, which would silently yield an alias-free lagoon.
+  const cfg = loadMotuConfig();
+  const vite = await resolveVite(cfg);
+  const config = await buildLagoonViteConfig(cfg, {
+    ...process.env,
+    ...(target ? { MOTU_TARGET: target } : {}),
+    ...(argv.fit ? { MOTU_FIT: String(argv.fit) } : {}),
+  });
+  if (argv.port) config.server.port = Number(argv.port);
+  config.clearScreen = false;
+  const server = await vite.createServer(config);
+  await server.listen();
+  console.log(color.dim(`  lagoon: ${paths.rel(cfg.lagoonDir)}  (host: ${cfg.host})`));
+  if (target) console.log(color.dim(`  focused on ${target} — open /lagoon.html`));
+  server.printUrls();
+}
+
+
+/**
+ * `motu lagoon eject` — write the framework's lagoon entries into the project.
+ *
+ * The escape hatch C1 promises: everything motu derives, motu can also write out. After ejecting, the
+ * project owns `index.html` and the entries, the materializer stops running for it (ownership is
+ * decided by `index.html`), and the files are yours to diverge — which is exactly the state the
+ * reference ocean is in, and why its 180-line composition root was never at risk from this.
+ */
+export async function lagoonEjectCommand() {
+  const { loadMotuConfig } = await import('../lib/config.mjs');
+  const { materializeLagoon, projectOwnsLagoon } = await import('../lib/lagoon-materialize.mjs');
+  const cfg = loadMotuConfig();
+  if (projectOwnsLagoon(cfg)) {
+    console.error(color.red(`already ejected: ${paths.rel(cfg.lagoonDir)}/index.html exists`));
+    console.log(color.dim('  delete it (and src/main.tsx, src/lagoon.tsx, src/fixtures.ts, src/env.ts)'));
+    console.log(color.dim('  to hand the lagoon back to the framework.'));
+    process.exit(2);
+  }
+  materializeLagoon(cfg, cfg.lagoonDir);
+  console.log(`ejected into ${paths.rel(cfg.lagoonDir)}`);
+  console.log(color.dim('  index.html, lagoon.html, src/{main.tsx,lagoon.tsx,fixtures.ts,env.ts}'));
+  console.log(color.dim('  the project now owns these — motu will not regenerate them.'));
 }

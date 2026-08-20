@@ -85,6 +85,17 @@ export function loadMotuConfig() {
     /** Whether `legacy` fit is a required strategy + a verified runtime mount for this host. */
     legacyFit: cfg.legacyFit ?? LEGACY_FIT_HOSTS.has(cfg.host ?? 'angularjs'),
     hostRoot: resolve(root, cfg.hostRoot ?? cfg.app ?? '.'),
+    /**
+     * Where the motu framework checkout lives. @motu/* are unpublished packages whose entry point is
+     * raw TypeScript, so a project resolves them BY PATH rather than through node_modules — which is
+     * what lets a project adopt motu with no install step. MOTU_ROOT overrides for CI or a
+     * differently-placed checkout; `motuRoot` in motu.config.json is the committed default.
+     */
+    motuRoot: process.env.MOTU_ROOT ? resolve(process.env.MOTU_ROOT) : resolve(root, cfg.motuRoot ?? '.'),
+    /** Generated, never-committed build inputs (see `.gitignore`: `.motu/`). */
+    cacheDir: resolve(root, '.motu/cache'),
+    /** The raw config object, for keys the CLI does not model. */
+    raw: cfg,
     islandsDir: inApp(cfg.islands),
     uiDir: inApp(cfg.ui),
     archipelagosDir: inApp(cfg.archipelagos),

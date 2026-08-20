@@ -113,8 +113,15 @@ export interface IslandElementOptions {
   css?: string;
   /** Default skin when nothing sets data-motu-theme. */
   defaultTheme?: MotuTheme;
-  /** REQUIRED legacy-fit strategy, reflected as data-motu-legacy for per-strategy CSS. */
-  legacy: LegacyStrategy;
+  /**
+   * Legacy-fit strategy, reflected as data-motu-legacy for per-strategy CSS.
+   *
+   * Required only where the host HAS a legacy skin — that requirement lives in `motu island verify`,
+   * which knows the project's posture, rather than in this type, which does not. Declaring it under
+   * `host: next` would be a field every island fills with a value nothing reads: fitting an island to
+   * a legacy footprint is meaningless when there is no legacy footprint. Absent => no attribute.
+   */
+  legacy?: LegacyStrategy;
   /** Default footprint when nothing sets data-motu-fit. Defaults to 'native'. */
   defaultFit?: MotuFit;
   /** Maps a callback prop name to the CustomEvent it dispatches, e.g. { onReset: 'reset' }. */
@@ -152,7 +159,7 @@ export interface IslandDefinition {
   props: string[];
   attributes: Record<string, AttrType>;
   events: Record<string, string>;
-  legacy: LegacyStrategy;
+  legacy?: LegacyStrategy;
   defaultFit: MotuFit;
   defaultTheme: MotuTheme;
   isolation: IslandIsolation;
@@ -170,6 +177,36 @@ export function getIslandDefinition(tag: string): IslandDefinition | undefined {
 /** Every registered island definition (debug only; empty in production). */
 export function getIslandDefinitions(): IslandDefinition[] {
   return [...islandDefinitions.values()];
+}
+
+/**
+ * Capture an island's declared shape WITHOUT defining a custom element.
+ *
+ * `defineIsland` used to be the only way into this map, which quietly tied the overlay to the
+ * custom-element path: under `mount: 'react'` — the default for a React host, and what the lagoon
+ * uses — no element is ever defined, so every island reported "No declared props" and, because the
+ * coupling view is computed from those prop rows' store keys, "No shared store keys" too. The
+ * declarations were right; nothing had registered them. Registering elements just to fix the overlay
+ * would be the wrong trade (it defines global custom elements a React host has no use for, and the
+ * lagoon skips `defineMotuApp` for a real reason — `defineArchipelago` must not run twice), so the
+ * metadata is registrable on its own.
+ *
+ * Debug-only, like the map it fills: a no-op in production builds.
+ */
+export function registerIslandDefinition(tag: string, opts: IslandElementOptions): void {
+  if (!DEBUG) return;
+  const inputProps = opts.contract?.input ?? opts.props ?? [];
+  islandDefinitions.set(tag, {
+    tag,
+    props: inputProps.map((p) => (typeof p === 'string' ? p : p.name)),
+    attributes: { ...(opts.attributes ?? {}) },
+    events: { ...(opts.contract?.output ?? opts.events ?? {}) },
+    legacy: opts.legacy,
+    defaultFit: opts.defaultFit ?? 'native',
+    defaultTheme: opts.defaultTheme ?? 'legacy',
+    isolation: opts.isolation ?? defaultIsolation,
+    coupling: opts.contract?.coupling ? { ...opts.contract.coupling } : undefined,
+  });
 }
 
 const THEME_ATTR = 'data-motu-theme';
@@ -260,19 +297,7 @@ export function defineIsland(tag: string, render: IslandRenderer, opts: IslandEl
   const propNames = propSpecs.map((s) => s.name);
 
   const isolation: IslandIsolation = opts.isolation ?? defaultIsolation;
-  if (DEBUG) {
-    islandDefinitions.set(tag, {
-      tag,
-      props: [...propNames],
-      attributes: { ...(opts.attributes ?? {}) },
-      events: { ...events },
-      legacy: opts.legacy,
-      defaultFit: opts.defaultFit ?? 'native',
-      defaultTheme: opts.defaultTheme ?? 'legacy',
-      isolation,
-      coupling: opts.contract?.coupling ? { ...opts.contract.coupling } : undefined,
-    });
-  }
+  registerIslandDefinition(tag, { ...opts, isolation });
   const sheet = isolation === 'shadow' && opts.css ? new CSSStyleSheet() : undefined;
   if (sheet && opts.css) sheet.replaceSync(opts.css);
 
@@ -335,7 +360,9 @@ export function defineIsland(tag: string, render: IslandRenderer, opts: IslandEl
     connectedCallback() {
       this.#reflectTheme();
       this.#reflectFit();
-      if (this.getAttribute(LEGACY_ATTR) !== opts.legacy) this.setAttribute(LEGACY_ATTR, opts.legacy);
+      // No strategy declared (a host with no legacy skin) => no attribute, so `[data-motu-legacy]`
+      // CSS cannot match something that was never a real posture.
+      if (opts.legacy && this.getAttribute(LEGACY_ATTR) !== opts.legacy) this.setAttribute(LEGACY_ATTR, opts.legacy);
       if (!this.#container) this.#setupContainer();
       this.#applyDefaults();
       this.#instance = render({ container: this.#container!, host: this, props: this.#currentProps() });

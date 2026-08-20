@@ -7,7 +7,11 @@ import { createConnection } from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { REPO_ROOT, paths, color, VITE_BIN } from './lib/util.mjs';
+import { fileURLToPath } from 'node:url';
+import { REPO_ROOT, paths, color } from './lib/util.mjs';
+
+/** The framework's own lagoon dev-server runner (see lagoon-dev.mjs). */
+const LAGOON_DEV = fileURLToPath(new URL('./lagoon-dev.mjs', import.meta.url));
 
 const LAGOON_DIR = paths.lagoonDir;
 
@@ -26,13 +30,7 @@ function assertLagoonBootable() {
         `one, or point "lagoon" in motu.config.json at an existing composition root.`,
     );
   }
-  if (!existsSync(VITE_BIN)) {
-    throw new Error(
-      `vite not found — the lagoon is a Vite app. Searched node_modules from ${paths.rel(LAGOON_DIR)} ` +
-        `up to the filesystem root, and the motu checkout. Install dependencies in the project ` +
-        `(${paths.rel(REPO_ROOT)}) first.`,
-    );
-  }
+
 }
 
 function waitForPort(port, timeoutMs = 30000) {
@@ -62,9 +60,10 @@ async function startLagoon({ target, fit = 'native', port, forceError, transport
   // would connect to the stale server. `detached: true` lets us SIGKILL the whole group in stop().
   const child = spawn(
     process.execPath,
-    [VITE_BIN, '--port', String(port), '--strictPort', '--clearScreen', 'false'],
+    [LAGOON_DEV, '--port', String(port), '--strictPort'],
     {
-      cwd: LAGOON_DIR,
+      // The project root, not the lagoon: the runner resolves motu.config.json by walking up from cwd.
+      cwd: REPO_ROOT,
       env: {
         ...process.env,
         MOTU_NO_SSL: '1',

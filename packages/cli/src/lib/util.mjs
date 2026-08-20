@@ -44,9 +44,28 @@ export const paths = {
   // The component lives in ui/<kebab>/ (a mount point owns no component of its own).
   uiDir: (kebab) => resolve(UI_DIR, kebab),
   componentFile: (kebab, pascal) => resolve(UI_DIR, kebab, `${pascal}.tsx`),
-  elementFile: (kebab) => resolve(ISLANDS_DIR, kebab, 'element.ts'),
+  /**
+   * The file declaring an island's ElementSpec, in either supported layout — flat
+   * `<kebab>.island.ts(x)` (preferred) or the original `<kebab>/element.ts` (the reference ocean).
+   * Falls back to the folder form so a not-yet-created island still reports a sensible path.
+   */
+  elementFile: (kebab) => {
+    for (const p of [
+      resolve(ISLANDS_DIR, `${kebab}.island.ts`),
+      resolve(ISLANDS_DIR, `${kebab}.island.tsx`),
+      resolve(ISLANDS_DIR, kebab, 'element.ts'),
+    ]) {
+      if (existsSync(p)) return p;
+    }
+    return resolve(ISLANDS_DIR, kebab, 'element.ts');
+  },
   islandIndexFile: (kebab) => resolve(ISLANDS_DIR, kebab, 'index.ts'),
-  fixturesFile: (kebab) => resolve(ISLANDS_DIR, kebab, 'fixtures.mock.ts'),
+  /** An island's lagoon evidence: `<kebab>.evidence.ts` (flat) or `<kebab>/fixtures.mock.ts` (folder). */
+  fixturesFile: (kebab) => {
+    const flat = resolve(ISLANDS_DIR, `${kebab}.evidence.ts`);
+    if (existsSync(flat)) return flat;
+    return resolve(ISLANDS_DIR, kebab, 'fixtures.mock.ts');
+  },
   /** The one shared island stylesheet (linted at region scope until islands own their own CSS). */
   sharedStyles: resolve(cfg.sharedDir, 'styles.css'),
   /** Project-relative display path for messages — derived from config, never hardcoded. */
@@ -155,7 +174,10 @@ export function resolveModuleSpecifier(spec, fromDir) {
  * it mounts, and fall back to the ui/ convention when there is nothing to follow.
  */
 export function islandComponentPath(kebab, pascal) {
-  const elementPath = resolve(ISLANDS_DIR, kebab, 'element.ts');
+  // Whichever layout the island uses. A relative import in the declaration resolves against the
+  // FILE's own directory — the islands dir for a flat `<kebab>.island.ts`, the island's folder for
+  // the original `<kebab>/element.ts` — so the base has to come from the resolved path, not a guess.
+  const elementPath = paths.elementFile(kebab);
   if (existsSync(elementPath)) {
     const text = readFileSync(elementPath, 'utf8');
     const componentName = text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1];
@@ -163,7 +185,7 @@ export function islandComponentPath(kebab, pascal) {
       for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
         const named = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/).pop().trim());
         if (!named.includes(componentName)) continue;
-        const resolved = resolveModuleSpecifier(m[2], resolve(ISLANDS_DIR, kebab));
+        const resolved = resolveModuleSpecifier(m[2], dirname(elementPath));
         if (resolved) return resolved;
       }
     }

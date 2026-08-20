@@ -22,9 +22,9 @@ An island is a **mount point** plus its **ui component** (the CLI scaffolds them
 1. `demo-app/src/ui/<kebab>/<Pascal>.tsx` — the plain, mode-agnostic component (props in, callbacks
    out). Lives in `ui/` (the "mainland") so mount points can never import each other — `ui/` may import
    `@motu/contract`, `shared/`, and other `ui/`, but never `islands/` or `archipelagos/`.
-2. `demo-app/src/islands/<kebab>/element.ts` — the mount-point registry row: `tag` → ui component +
+2. `demo-app/src/islands/<kebab>.island.ts` — the mount-point registry row: `tag` → ui component +
    the `contract` (input / output / coupling) + the required `legacy` fit strategy.
-3. `demo-app/src/islands/<kebab>/fixtures.mock.ts` — lagoon fixtures (offline `MockTransport` replay)
+3. `demo-app/src/islands/<kebab>.evidence.ts` — lagoon fixtures (offline `MockTransport` replay)
    + `scenarios` (input cases proving reactive behaviour).
 4. `demo-app/src/archipelagos/<id>/<id>.archipelago.ts` — archipelago membership (only at integrate).
 
@@ -83,7 +83,7 @@ error handling, and the debounce/sequence pattern.
 
 ## Step 5 — Fixtures + legacy-fit strategy
 
-- Fill `demo-app/src/islands/<kebab>/fixtures.mock.ts` with responses whose **shape matches the
+- Fill `demo-app/src/islands/<kebab>.evidence.ts` with responses whose **shape matches the
   contract return types** (see the method's `call<…>()` return in `@motu/contract`). Include the
   `roles` a caller needs so role-gated paths can be demoed offline.
 - For REACTIVE behaviour (e.g. type a filter → results narrow), a fixture `response` may be a

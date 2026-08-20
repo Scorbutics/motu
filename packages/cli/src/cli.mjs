@@ -12,7 +12,10 @@ import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
 import { fixturesRecordCommand } from './commands/fixtures.mjs';
-import { lagoonPublishCommand, lagoonServeCommand } from './commands/lagoon.mjs';
+import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mjs';
+import { removalCheckCommand } from './commands/removal-check.mjs';
+import { contractCheckCommand } from './commands/contract.mjs';
+import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand } from './commands/lagoon.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
 import { color } from './lib/util.mjs';
@@ -41,14 +44,20 @@ ${color.bold('Usage:')}
   motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
   motu island verify <name>                         run the island rules + lagoon mount (the loop)
+  motu island defaults [name]                       classify declared defaults: component default, or evidence?
+  motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
   motu archipelago create <id>                      scaffold + register a new archipelago
   motu archipelago verify <id>                      boot the whole region in the lagoon + config checks
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
+  motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
+  motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
   motu lagoon serve --watch --host                  ...and keep it current: rebuild on save, reload viewers
+  motu contract check [--update]                    the app's boundary + coupling graph, as one artifact
+  motu removal-check                                prove motu is removable from the host app (C2)
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
   motu skills list                                  list the skills this motu checkout ships
@@ -103,6 +112,8 @@ async function main() {
   if (group === 'island') {
     if (sub === 'create') return createCommand(argv);
     if (sub === 'verify') return verifyCommand(argv);
+    if (sub === 'defaults') return islandDefaultsCommand(argv);
+    if (sub === 'sync') return islandSyncCommand(argv);
     if (sub === 'integrate') return integrateCommand(argv);
     console.error(color.red(`unknown: motu island ${sub ?? ''}`));
     console.log(USAGE);
@@ -135,10 +146,20 @@ async function main() {
   }
 
   if (group === 'lagoon') {
+    if (sub === 'dev') return lagoonDevCommand(argv);
+    if (sub === 'eject') return lagoonEjectCommand(argv);
     if (sub === 'publish') return lagoonPublishCommand(argv);
     if (sub === 'serve') return lagoonServeCommand(argv);
     console.error(color.red(`unknown: motu lagoon ${sub ?? ''}`));
     console.log(USAGE);
+    process.exit(2);
+  }
+
+  if (group === 'removal-check') return removalCheckCommand(argv);
+
+  if (group === 'contract') {
+    if (sub === 'check') return contractCheckCommand(argv);
+    console.error(color.red(`unknown: motu contract ${sub ?? ''}`));
     process.exit(2);
   }
 

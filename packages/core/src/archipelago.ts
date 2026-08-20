@@ -30,22 +30,39 @@ export interface IslandContext {
   host: HostBridge;
 }
 
-export interface IslandSpec {
+export interface IslandSpec<TRegion = Record<string, unknown>> {
   /** Marker name the page references: <motu-island slot="member-results">. */
   slot: string;
   /** Custom element tag to instantiate. */
   element: string;
   /** Static properties set once on mount. */
   props?: Record<string, unknown>;
-  /** Reactively bind an element property to a store key (elementProp -> storeKey). */
-  bind?: Record<string, string>;
+  /**
+   * Reactively bind an element property to a store key (elementProp -> storeKey).
+   *
+   * The store key is `keyof TRegion`, so a region that declares its shape gets the binding checked by
+   * the compiler: rename the key in the app and this fails to build. That matters because the page and
+   * the archipelago otherwise name the same value twice and nothing links them — in peps the page
+   * already called it `loadingReceived` while the store key was `receivedLoading`.
+   */
+  bind?: Record<string, keyof TRegion & string>;
   /** Handle a CustomEvent the island emits; typically writes the store or fires a host intent. */
   on?: Record<string, (detail: unknown, ctx: IslandContext) => void>;
 }
 
-export interface ArchipelagoConfig {
+/**
+ * A region's declared shape.
+ *
+ * `TRegion` is the CONTRACT TYPE, and it is extracted from the host application — it contains no motu
+ * import and it erases at runtime, so removing motu leaves it (and the page that uses it) untouched.
+ * It defaults to an open record for the ocean, where there IS no app-side type to extract: region
+ * state lives in `$scope` and motu declares it. Under a modern host, `motu archipelago verify`
+ * requires the parameter, because there the page owns the state and motu must reference it rather
+ * than restate it.
+ */
+export interface ArchipelagoConfig<TRegion = Record<string, unknown>> {
   id: string;
-  islands: IslandSpec[];
+  islands: IslandSpec<TRegion>[];
   /**
    * The "new design" layout: HTML arranging the island slots (e.g. hero + toolbar + results). It is
    * rendered natively by <motu-archipelago name="id"> in the standalone app, and swapped in as a
@@ -53,6 +70,18 @@ export interface ArchipelagoConfig {
    */
   layout?: string;
 }
+
+/**
+ * A region whose declared shape is not known to the code holding it.
+ *
+ * Registries, resolvers and the framework's own mount paths only ROUTE archipelagos — they never read
+ * a bind key, so the region type is genuinely irrelevant to them, and insisting on it would force
+ * every such signature to become generic for no checking gained. The `any` is the erasure, and it is
+ * confined to these positions: the place the type actually earns its keep — an archipelago's own
+ * declaration — keeps it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyArchipelagoConfig = ArchipelagoConfig<any>;
 
 export interface ArchipelagoOptions {
   /** Outward channel for navigation/actions. Defaults to a warning no-op. */

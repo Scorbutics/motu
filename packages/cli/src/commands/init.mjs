@@ -205,7 +205,7 @@ export async function initCommand(argv) {
       appDep: argv.motuDep ? relPosix(lagoonDir, appRoot) : 'workspace:*',
       tagPrefix: 'x-',
       // Baked at scaffold time: a glob cannot go through a tsconfig alias reliably.
-      fixturesGlob: relPosix(resolve(lagoonDir, 'src'), resolve(appRoot, 'src/islands')) + '/*/fixtures.mock.ts',
+      fixturesGlob: `['${relPosix(resolve(lagoonDir, 'src'), resolve(appRoot, 'src/islands'))}/*.evidence.ts', '${relPosix(resolve(lagoonDir, 'src'), resolve(appRoot, 'src/islands'))}/*/fixtures.mock.ts']`,
       configFromLagoon: relPosix(lagoonDir, configPath),
       hostRootFromLagoon: relPosix(lagoonDir, hostRoot),
       // Tailwind/autoprefixer are the host's toolchain, but the lagoon runs its own postcss pass.
@@ -215,7 +215,7 @@ export async function initCommand(argv) {
       // theme tokens, so islands render unstyled — a preview that lies about how they look in the app.
       hostGlobalCss: hostGlobalCssImport(lagoonDir, hostRoot),
       // FIRST import in both entries: host modules read process.env while being imported.
-      envShim: host === 'angularjs' ? '' : "import './env.js';\n",
+      envShim: host === 'angularjs' ? '' : "import '{{envImport}}';\n",
       // A Next/shadcn app exposes --primary / --primary-foreground; borrow them so motu's chrome
       // wears the application's colour rather than motu's own.
       lagoonChrome: host === 'next' ? LAGOON_CHROME_SHADCN : '',
@@ -228,6 +228,16 @@ export async function initCommand(argv) {
       // The AngularJS ocean needs a host present for islands that read host scope; the React hosts
       // need nothing — the store is the only seam.
       hostImport: host === 'angularjs' ? "import { angularHostScopeChannel } from '@motu/adapter-angularjs';\n" : '',
+      // Paths the entries import by. `init` writes into the lagoon root, so these are the plain
+      // relative forms; `motu lagoon dev|build` renders the SAME templates into .motu/cache and
+      // overrides them with paths computed from there (see lib/lagoon-materialize.mjs).
+      lagoonConfigImport: '../lagoon.config.json',
+      overridesImport: './lagoon.js',
+      fixturesImport: './fixtures.js',
+      framesGlob: './frames/*.css',
+      galleryEntrySrc: '/src/main.tsx',
+      focusEntrySrc: '/src/lagoon.tsx',
+      envImport: './env.js',
       hostOption: '',
       hostOptionInline: '',
     };

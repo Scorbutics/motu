@@ -17,8 +17,12 @@ host. Every constraint below exists to keep an island's output mechanically veri
 - **Island** — a component embedded in a legacy page (an established term this project didn't
   invent).
 - **Ocean** — the legacy application the islands sit in.
-- **Archipelago** — several islands on one page, coordinating through a shared store
-  (`Store` in `@motu/core`) instead of talking to each other directly.
+- **Archipelago** — the islands of ONE PAGE, referenced by slot and scattered wherever the page puts
+  them, sharing a store (`Store` in `@motu/core`) instead of talking to each other directly. It is a
+  declared grouping, never a DOM container: scoping one to a subtree puts a boundary through the
+  middle of any coupling that crosses it. A page is a MIX — most islands couple with nothing, being
+  fed by props or reading the backend themselves, and that is normal. You declare the grouping;
+  `motu contract check` derives the coupling graph from the bindings.
 - **Lagoon** — isolated mode: an island rendered with no ocean present, against fixtures
   (`MockTransport` in `@motu/runtime`). Where the loop closes. Realized by the `demo-app/roots/lagoon`
   app: `main.tsx` shows every archipelago with a switcher, and a `lagoon.html` entry focuses one
@@ -39,7 +43,7 @@ These terms stay in the prose. They do not appear in imports or type names — t
 2. **Verify in the lagoon**: mount it with `MockTransport` fixtures, no session, no legacy CSS, no
    AngularJS digest cycle. The feedback loop here is closed and fast, so an agent can iterate
    against it without asking a human to check the real page.
-3. **Integrate**: register the mount point (`demo-app/src/islands/<kebab>/element.ts` — a thin
+3. **Integrate**: declare the island (`demo-app/src/islands/<kebab>.island.ts` — a thin
    custom-element wrapper over the ui component), add it to an archipelago, and drop a
    `<motu-island slot="…">` marker into the legacy template.
 
@@ -59,6 +63,32 @@ between independently deployed fragments, debugging across bundle boundaries, fr
 integration-only test coverage — comes from assembling independently built artifacts at runtime.
 motu refuses that composition model outright, so those problems have nowhere to occur rather than
 needing to be mitigated after the fact.
+
+## Scope: the lagoon has no backend
+
+The lagoon proves **a component and its declared boundary**: one island or one page's islands, no
+backend, fixtures, deterministic, headless, exit-coded, publishable as a page that opens on a phone.
+
+It does not prove **the system**. Cross-page behaviour — island A changes what island B shows on
+another page — is mediated by the database, and the honest tools for it are the real app running
+locally with auth bypassed, plus Playwright. Simulating that backend inside the lagoon (a stateful
+fake, or the schema in pglite) was investigated and declined: it reimplements business logic that
+cannot be diffed against the original, and the moment the lagoon has a backend it loses determinism,
+one-cause failures, speed, and the artifact with nothing behind it. What is left is a worse local
+environment.
+
+So motu does not compete with integration tests. It makes them unnecessary for the FIRST class of bug.
+
+## What motu is for in a healthy project
+
+Not a test runner — a **boundary instrument**. A component's inputs, outputs, ambient needs and
+couplings are declared and mechanically checked, and the lagoon is the PROOF OBLIGATION that keeps the
+declarations honest: a component that cannot render alone against fixtures has a wrong boundary.
+
+That forcing function is the point. Declarations without one rot — this repo has watched scaffolded
+fixture files sit empty for months, and a `legacy` field be declared on every island while nothing read
+it. The value scales with how much implicit coupling an app has accumulated; a small, prop-driven
+codebase with no coupling pain gets little beyond the contract seam.
 
 ## Non-goals
 
@@ -81,7 +111,10 @@ rest remain convention, upheld by code review and by the fact that violating the
 
 - An island must render correctly from its default props alone, with no channels connected and no
   fixtures loaded. This is what makes the lagoon a real test rather than a demo (see
-  `CompanyLookup`'s default `prefix = ''`).
+  `CompanyLookup`'s default `prefix = ''`). **Defaults belong in the component**, where they are an
+  improvement to the app rather than a motu artifact — and a default that cannot be honest in
+  production is not a default, it is missing evidence: put it in the island's `.evidence.ts` as a
+  scenario seed. (`motu island defaults` classifies them.)
 - Islands never touch `history` or `pushState`. The ocean owns the URL — outward navigation is an
   intent (`HostBridge.navigate`) that only the composition root turns into a real navigation
   (AngularJS `$location`, `window.location.hash`, …).
@@ -96,11 +129,19 @@ rest remain convention, upheld by code review and by the fact that violating the
   the store; a component refetches through the contract instead.
 - Channels are wired at the composition root (`defineArchipelago`, `installChannels`). Islands read
   the store via `bind`; they never subscribe to the ocean directly.
+- An island declares its **ambient**: the host capabilities it reaches for without being handed them —
+  a React context, a session hook, a feature gate, a service module it imports directly. This is the
+  coupling most likely to make an island unmountable somewhere else, and it used to hide in the
+  lagoon's `alias` table, where standing a module down looks like build configuration.
+- Under a React host the page owns the **arrangement** and the **vocabulary**: the layout is a
+  component in the app (motu renders the same one in the lagoon), and the region's shared keys are a
+  TYPE in the app that the archipelago's `bind` is checked against. motu references both; it restates
+  neither. Removing motu leaves both behind, working.
 
 ## Exit
 
 An island is a plain component (`demo-app/src/ui/`) plus a thin custom-element wrapper
-(`defineReactElement`, in the mount point's `element.ts`). Ship it to the mainland by dropping the
+(`defineReactElement`, in the island file). Ship it to the mainland by dropping the
 wrapper and mounting the same component directly. The `ui/` layer is designed to be that survivor —
 it depends only on `@motu/*` + the contract, so it lifts out cleanly. There
 is no measured diff size for this in the repo yet — treat "near-trivial diff to de-wrap" as a design
@@ -200,8 +241,11 @@ packages/                 # the framework (published @motu/* packages)
   debug-overlay/ dev-only seam lens (outlines, input/output/coupling panel, record button).
 demo-app/               # the app (proven against a real ocean app) — copy-pasteable into the ocean repo
   src/ui/<kebab>/         Mode-agnostic components (the "mainland"). May import contract/shared/other ui.
-  src/islands/<kebab>/    Mount points: element.ts (tag -> ui component + contract + legacy fit),
-                          fixtures.mock.ts (+ scenarios), index.ts. NO component here (structural
+  src/islands/<kebab>.island.ts   The island: tag -> component + its declared boundary (input,
+                          output, ambient). Evidence, when it has any, sits beside it in
+                          <kebab>.evidence.ts — kept OUT of the island so the registry (which the
+                          host app imports) cannot pull fixtures into a production bundle.
+                          NO component here (structural
                           "islands can't import each other"). islands/registry.ts = ELEMENT_REGISTRY.
   src/archipelagos/<id>/  Region compositions (slots + layout + store wiring). archipelagos/registry.ts.
   src/shared/             Shared types + the one island stylesheet.
@@ -229,11 +273,17 @@ config via AST, and — the point of it — **verifies** that a component is act
 
 ```
 pnpm motu init [dir] --host next|angularjs|none       # scaffold config + registries + a working lagoon
-pnpm motu island create <name>                        # component + registry row + fixtures stub
+pnpm motu island create <name>                        # one island file (+ component if motu owns it)
+pnpm motu island sync                                 # regenerate the registry from the files on disk
+pnpm motu island defaults [name]                      # classify declared defaults: component, or evidence?
 pnpm motu island verify <name>                        # the loop: rules + lagoon mount (PASS/FAIL + exit code)
 pnpm motu island integrate <name> --archipelago <id>  # AST membership + layout marker
 pnpm motu archipelago create <id>                     # scaffold + register a new archipelago
 pnpm motu archipelago verify <id>                     # config + shared-CSS lint + whole-region lagoon mount
+pnpm motu contract check [--update]                   # the app's boundary + coupling graph, as one artifact
+pnpm motu removal-check                               # prove motu is removable from the host app
+pnpm motu lagoon dev [target]                         # the lagoon, served with HMR
+pnpm motu lagoon eject                                # write the framework's lagoon entries into the project
 pnpm motu codegen [manifest] [outDir]                 # regenerate @motu/contract (wraps @motu/codegen)
 ```
 
@@ -244,8 +294,10 @@ gate. It runs static, config and runtime layers:
   `document` reach-out, server I/O only via `@motu/contract`, no reach into `islands/`/`archipelagos/`
   (a ui component must stay liftable — `ui`→`ui` composition is fine), every `@motu/contract` call
   resolves to a real contract method, and the component renders from default props alone.
-- **config** (AST over `element.ts` + the registry): registered in `ELEMENT_REGISTRY` with the required
-  `legacy` fit strategy; the island's `contract` (input/output) reconciles with the component's actual
+- **config** (AST over the island file + the registry): registered in `ELEMENT_REGISTRY`; the `legacy`
+  fit strategy where the host HAS a legacy skin — under a modern host that rule is *skipped*, not
+  blank, and declaring it there is a warning; the island's **ambient** (host contexts, session hooks,
+  feature gates, service modules it imports directly) reconciled against what it actually reaches for; the island's `contract` (input/output) reconciles with the component's actual
   props (a stale entry errors, an unwired prop/callback warns); the mount point imports no sibling
   island; archipelago membership (a warning if standalone). For an AngularJS island, the adapter's own
   verify layer checks the declared host-scope `coupling`. If the island owns a `.css` file it is linted.
@@ -258,7 +310,7 @@ gate. It runs static, config and runtime layers:
   `response` may be a function of the call args, a client-side stub that filters a dataset so any input
   works offline.) An island that legitimately renders nothing from defaults is a warning, not a failure.
 
-Props may be declared as `{ name, default, required }` in `element.ts`, not just a bare name: the wrapper
+Props may be declared as `{ name, default, required }` in the island file, not just a bare name: the wrapper
 fills declared defaults at mount (so "renders from defaults" holds) and flags a missing required prop.
 
 `motu archipelago verify <id>` applies the same idea to a whole region — every island tag in the config is
@@ -342,7 +394,7 @@ That produces a project where the loop already closes:
 my-app/
   motu/
     motu.config.json          layout + host declaration (the only file the CLI reads)
-    src/islands/              mount points  (element.ts, fixtures.mock.ts)
+    src/islands/              islands  (<kebab>.island.ts, and <kebab>.evidence.ts where there is evidence)
     src/ui/                   the components — the part that survives to the mainland
     src/archipelagos/         region compositions + the shared Store
     src/shared/styles.css     the island stylesheet
@@ -444,7 +496,7 @@ motu island verify phone-display
 
 `--from` takes the specifier **the app itself uses** — host tsconfig aliases included — and writes
 only the mount point. The component stays where it is and every existing call site keeps working;
-`motu island verify` follows `element.ts` to wherever it lives.
+`motu island verify` follows the island file to wherever its component lives.
 
 Requiring props is fine. The app's component was never written to render from nothing, so declare the
 default on the island instead — the wrapper fills declared defaults at mount, leaving the component

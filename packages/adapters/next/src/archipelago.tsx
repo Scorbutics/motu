@@ -20,11 +20,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArchipelagoProvider, Island, defineMotuApp, type ElementSpec, type MotuArchipelago } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
-import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motu/core';
+import type { AnyArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motu/core';
 
 export interface ArchipelagoProps {
-  /** The archipelago being mounted (from the project's archipelagos registry). */
-  config: ArchipelagoConfig;
+  /**
+   * The archipelago being mounted (from the project's archipelagos registry).
+   *
+   * Erased region type: mounting only ROUTES a region — it never reads a bind key — so insisting on the
+   * declared shape here would force every composition root to be generic for no checking gained. The
+   * checking happens where the archipelago is declared.
+   */
+  config: AnyArchipelagoConfig;
   /** The project's element registry — the same one the lagoon uses. */
   elements: ElementSpec[];
   /** Compiled island stylesheet text (the project's shared sheet). Only used by `mount="element"`. */

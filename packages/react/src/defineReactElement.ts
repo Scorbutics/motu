@@ -27,6 +27,16 @@ export interface DefineOptions<P> {
     output?: Record<string, string>;
     /** COUPLING — dependencies beyond the store (usually absent for a React island). */
     coupling?: IslandCoupling;
+    /**
+     * AMBIENT — host capabilities this island reaches for without being handed them: a React context,
+     * a session hook, a feature gate, a service module it imports directly.
+     *
+     * The third leg of the boundary. Input and output were always declared; this was not, and it is
+     * the coupling most likely to make an island unmountable somewhere else — it hid in the lagoon's
+     * `alias` table, where standing a module down looks like build configuration rather than a
+     * dependency. Verify derives the true list from that table and reconciles it with this one.
+     */
+    ambient?: string[];
   };
   /**
    * Props set imperatively from JS (structured data goes here, never attributes). Either a bare name
@@ -41,12 +51,15 @@ export interface DefineOptions<P> {
   /** Default skin when nothing sets data-motu-theme. Embedded should pass 'legacy' (match host). */
   defaultTheme?: MotuTheme;
   /**
-   * REQUIRED legacy-fit strategy. Every island MUST declare how it satisfies the host's footprint
-   * when mounted in legacy fit — this is the framework-level guarantee that no new island can ship
-   * without a legacy compatibility mode. 'fill'/'inline' are CSS-only (zero component code);
-   * 'structural' means the component branches on the injected `fit` prop. See LegacyStrategy.
+   * Legacy-fit strategy — how this island satisfies the host's footprint when mounted in legacy fit.
+   * 'fill'/'inline' are CSS-only (zero component code); 'structural' means the component branches on
+   * the injected `fit` prop. See LegacyStrategy.
+   *
+   * REQUIRED when the project's host has a legacy skin, and that requirement is enforced by
+   * `motu island verify` (which reads the posture from motu.config.json) rather than by this type
+   * (which cannot). Under `host: next` it is not optional but ABSENT — see the `legacy-strategy` rule.
    */
-  legacy: LegacyStrategy;
+  legacy?: LegacyStrategy;
   /** Default footprint when nothing sets data-motu-fit. Defaults to 'native' (modern shape). */
   defaultFit?: MotuFit;
   /**

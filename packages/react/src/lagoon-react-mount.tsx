@@ -8,9 +8,11 @@
 //
 // So the React host's lagoon renders through the same `<ArchipelagoProvider>` / `<Island>` its pages
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
+import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { provideToArchipelago, type ArchipelagoConfig, type Channel, type HostBridge, type MotuFit } from '@motu/core';
 import { ArchipelagoProvider, Island } from './react-island.js';
+import { renderArchipelagoLayout } from './archipelago-layout.js';
 import type { ElementSpec } from './bootstrap.js';
 
 /** One React root per container, so a re-mount replaces rather than stacks. */
@@ -29,6 +31,13 @@ export interface ReactLagoonOptions {
    * apply to either mount path.
    */
   view?: 'region' | 'mountpoints';
+  /**
+   * The APPLICATION's own arrangement for this region, called with a renderer for each slot.
+   *
+   * Preferred over the archipelago's `layout` template: the template is a second copy of an
+   * arrangement the host page already expresses, and it drifts. See `LagoonOverrides.layout`.
+   */
+  layout?: (island: (slot: string) => ReactNode) => ReactNode;
 }
 
 declare global {
@@ -84,7 +93,16 @@ export function mountReactLagoon(
       seed={opts.seed}
       channels={opts.channels}
     >
-      {opts.view === 'mountpoints' ? <div className="motu-gallery">{islands}</div> : islands}
+      {opts.view === 'mountpoints' ? (
+        <div className="motu-gallery">{islands}</div>
+      ) : (
+        // Preference order, most faithful first: the APP's own layout component (one arrangement,
+        // shared with the page), then the archipelago's `layout` template (an ocean, whose legacy page
+        // cannot hand React anything), then declared order.
+        (opts.layout?.((slot) => <Island key={slot} slot={slot} fit={opts.fit} />) ??
+          renderArchipelagoLayout(config.layout, (slot) => <Island key={slot} slot={slot} fit={opts.fit} />) ??
+          islands)
+      )}
     </ArchipelagoProvider>
   );
 

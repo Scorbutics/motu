@@ -240,8 +240,12 @@ const STYLES = `
 .box.hover { background: rgba(15, 118, 110, .05); }
 .box.link { background: rgba(18, 152, 143, .08); }
 .box.sel { box-shadow: 0 0 0 2px rgba(255,255,255,.7), 0 0 0 4px currentColor; }
+/* pointer-events:none, deliberately. The label overlaps the top-left corner of every island, and with
+   it clickable that corner stopped belonging to the page — a control there (peps' view toggle sits
+   exactly at the top-left of its island) could not be clicked while the lens was open. Selecting an
+   island already has two ways in that do not steal a pixel from the page: the picker, and Alt-click. */
 .tag {
-  position: absolute; top: -10px; left: 8px; pointer-events: auto; cursor: pointer;
+  position: absolute; top: -10px; left: 8px; pointer-events: none;
   display: none; align-items: center; gap: 5px; height: 19px; padding: 0 9px;
   border-radius: 999px; font: 700 10px/1 var(--mono); color: #fff; white-space: nowrap;
   background: var(--accent); box-shadow: 0 3px 10px color-mix(in srgb, var(--_p) 34%, transparent);

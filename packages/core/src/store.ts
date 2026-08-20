@@ -99,6 +99,16 @@ export function recordSeedWrite(key: string, value: unknown, source: 'host' | 'c
 export class Store {
   private data: Record<string, unknown>;
   private listeners = new Set<StoreListener>();
+  /**
+   * Cached snapshot, rebuilt only when something actually changes.
+   *
+   * `useSyncExternalStore` re-reads the snapshot on every render and compares it by IDENTITY: a fresh
+   * object each call is an infinite render loop, not a wasted allocation. Caching here rather than in
+   * the hook keeps the guarantee where the writes are.
+   */
+  private snapshotCache: Record<string, unknown> | null = null;
+  /** Bumped on every real change — the cheapest thing a subscriber can compare. */
+  private revision = 0;
 
   constructor(seed: Record<string, unknown> = {}) {
     this.data = { ...seed };
@@ -131,6 +141,8 @@ export class Store {
     // precedence rule above silently reads the wrong side.
     if (this.has(key) && Object.is(this.data[key], value)) return;
     this.data[key] = value;
+    this.snapshotCache = null;
+    this.revision++;
     if (DEBUG) {
       // Ownership. A produced key has exactly one writer; anyone else reaching it — the host through
       // `provide()`, a sibling island, a bare `store.set` — is the coupling the archipelago is
@@ -157,9 +169,19 @@ export class Store {
     this.listeners.forEach((l) => l());
   }
 
-  /** Every key currently held, as a plain object — for a host reading the region (see `useRegion`). */
+  /**
+   * Every key currently held, as a plain object — for a host reading the region (see `useRegion`).
+   *
+   * The SAME object until the next write, so it can be compared by identity.
+   */
   snapshot(): Record<string, unknown> {
-    return { ...this.data };
+    if (!this.snapshotCache) this.snapshotCache = { ...this.data };
+    return this.snapshotCache;
+  }
+
+  /** How many changes this store has seen. Stable between writes, so it is a valid store snapshot. */
+  getRevision(): number {
+    return this.revision;
   }
 
   subscribe(l: StoreListener): () => void {

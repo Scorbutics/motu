@@ -23,11 +23,12 @@ import {
   createContext,
   createElement,
   isValidElement,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
+  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
 } from 'react';
@@ -177,9 +178,8 @@ export function useRegionValue<
   K extends keyof R & string = keyof R & string,
 >(key: K): R[K] | undefined {
   const store = useMotuStore();
-  const [, bump] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => store.subscribe(bump), [store]);
-  return store.get(key) as R[K] | undefined;
+  const read = useCallback(() => store.get(key) as R[K] | undefined, [store, key]);
+  return useSyncExternalStore(useStoreSubscribe(store), read, read);
 }
 
 /**
@@ -197,9 +197,20 @@ export function useRegionValue<
  */
 export function useRegion<R = Record<string, unknown>>(): Partial<R> {
   const store = useMotuStore();
-  const [, bump] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => store.subscribe(bump), [store]);
-  return store.snapshot() as Partial<R>;
+  const read = useCallback(() => store.snapshot() as Partial<R>, [store]);
+  return useSyncExternalStore(useStoreSubscribe(store), read, read);
+}
+
+/**
+ * The store's `subscribe` as a stable callback — React's own subscription primitive rather than a
+ * hand-rolled `useEffect` + forced re-render.
+ *
+ * `useSyncExternalStore` is what this always wanted to be: it re-reads after every commit (so a store
+ * written during render cannot tear), and it takes a server snapshot, which the `useReducer` version
+ * had no answer for at all — a client component still renders on the server under Next.
+ */
+function useStoreSubscribe(store: Store): (onChange: () => void) => () => void {
+  return useCallback((onChange: () => void) => store.subscribe(onChange), [store]);
 }
 
 export interface IslandProps {
@@ -239,8 +250,14 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   // Re-render on any store write. The store is a coarse notifier by design (one listener list, no
   // per-key subscriptions), so this mirrors what the custom element does: re-apply all binds on any
   // change. Islands are few and their renders cheap; a finer scheme would be optimising the wrong end.
-  const [, bump] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => ctx.store.subscribe(bump), [ctx.store]);
+  // Re-render on any store write. The store is a coarse notifier by design (one listener list, no
+  // per-key subscriptions), so the revision is exactly the right snapshot: it changes when anything
+  // changed, and is stable between writes.
+  useSyncExternalStore(
+    useStoreSubscribe(ctx.store),
+    () => ctx.store.getRevision(),
+    () => ctx.store.getRevision(),
+  );
 
   // Output callbacks, built ONCE per island rather than per render.
   //

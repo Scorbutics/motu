@@ -46,6 +46,11 @@ function unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec) {
   return names;
 }
 
+/** `Actions.Island` -> `Actions`: what a qualified JSX tag was imported as. */
+function rootTagName(tag) {
+  return tag.split('.')[0];
+}
+
 /** Framework/runtime imports a composition root legitimately needs; they say nothing about ownership. */
 const INFRA = /^react$|^react-dom|^next\//;
 
@@ -144,13 +149,15 @@ export function removalCheckCommand(argv) {
     if (notes.length) ejected.push([p, notes]);
     // Form 2: unwrap motu's JSX, keep the children, drop the imports.
     for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxElement)].reverse()) {
-      const name = el.getOpeningElement().getTagNameNode().getText();
+      // `<Actions.Island>` — a region binding namespaces its surface, so the tag is qualified and the
+      // thing that came from motu is the object it hangs off.
+      const name = rootTagName(el.getOpeningElement().getTagNameNode().getText());
       if (!tags.has(name)) continue;
       const inner = el.getJsxChildren().map((c) => c.getText()).join('').trim();
       el.replaceWithText(inner.startsWith('<') || inner.startsWith('{') ? inner : `<>${inner}</>`);
     }
     for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)].reverse()) {
-      if (tags.has(el.getTagNameNode().getText())) el.replaceWithText('null');
+      if (tags.has(rootTagName(el.getTagNameNode().getText()))) el.replaceWithText('null');
     }
     for (const imp of sf.getImportDeclarations()) {
       const spec = imp.getModuleSpecifierValue();

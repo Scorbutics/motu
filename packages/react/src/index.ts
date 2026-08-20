@@ -9,6 +9,8 @@ export { mountTideLine } from './tideline.js';
 export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCorner, TideLens } from './tideline.js';
 export { bootstrapLagoon } from './lagoon-bootstrap.js';
 export { ArchipelagoProvider, Island, useMotuStore, useRegionValue, useRegion } from './react-island.js';
+export { createRegion } from './create-region.js';
+export type { CreateRegionOptions, RegionBinding } from './create-region.js';
 export { mountReactLagoon } from './lagoon-react-mount.js';
 export type { ArchipelagoProviderProps, IslandProps } from './react-island.js';
 export { startLagoon } from './lagoon-gallery.js';

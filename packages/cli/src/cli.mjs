@@ -3,6 +3,7 @@
 //
 //   motu island create <name>    scaffold a new island (component + registry row + fixtures)
 //   motu island verify <name>    run the deterministic island rules + lagoon mount (the moat)
+//                                `--all` sweeps every island; one line each, findings only where there are any
 //
 // Kept dependency-light and plain-ESM (like @motu/codegen) so it runs with a bare `node`.
 import { createCommand } from './commands/create.mjs';
@@ -43,12 +44,12 @@ const USAGE = `${color.bold('motu')} — island / archipelago CLI
 ${color.bold('Usage:')}
   motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
-  motu island verify <name>                         run the island rules + lagoon mount (the loop)
+  motu island verify <name|--all>                   run the island rules + lagoon mount (the loop)
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
   motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
   motu archipelago create <id>                      scaffold + register a new archipelago
-  motu archipelago verify <id>                      boot the whole region in the lagoon + config checks
+  motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
@@ -63,6 +64,8 @@ ${color.bold('Usage:')}
   motu skills list                                  list the skills this motu checkout ships
 
 ${color.bold('verify flags:')}
+  --all           every island / every region, one after another; one line each, findings where there are any
+                  ${color.dim('with the runtime checks that is a lagoon per island — pair it with --no-runtime for a fast sweep')}
   --fast          use the in-process happy-dom lagoon mount instead of the real browser (Playwright)
   --no-runtime    skip the lagoon mount entirely (static + config checks only)
   --standalone    the island is intentionally not in an archipelago (no membership warning)

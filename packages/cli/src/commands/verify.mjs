@@ -780,10 +780,36 @@ async function adapterChecks(report, kebab, componentPath) {
 
 export async function verifyCommand(argv) {
   const name = argv._[0];
-  if (!name) {
-    console.error('usage: motu island verify <name> [--no-runtime] [--fast] [--standalone] [--json]');
+  if (!name && !argv.all) {
+    console.error('usage: motu island verify <name|--all> [--no-runtime] [--fast] [--standalone] [--json]');
     process.exit(2);
   }
+
+  // --all: every island in the project, one after another. Sequential on purpose — each runtime check
+  // boots a lagoon on its own port, and a CI box does not thank you for fourteen browsers at once.
+  if (argv.all) {
+    const islands = listIslands(paths.islandsDir);
+    const results = [];
+    for (const island of islands) results.push(await runIslandVerify(argv, island.kebab));
+    if (argv.json) {
+      console.log(JSON.stringify({ islands: results.map(summaryOf) }, null, 2));
+    } else {
+      printSweep('motu island verify — all islands', results);
+    }
+    process.exit(results.every((r) => r.errors.length === 0) ? 0 : 1);
+  }
+
+  const result = await runIslandVerify(argv, name);
+  if (argv.json) {
+    console.log(JSON.stringify({ island: result.kebab, tag: result.tag, pass: result.errors.length === 0, findings: result.report.findings }, null, 2));
+  } else {
+    printReport(result.report, `motu island verify — ${result.kebab} (${result.tag})`, result.errors, result.warns);
+  }
+  process.exit(result.errors.length === 0 ? 0 : 1);
+}
+
+/** One island's checks, as data — printing and exiting belong to the caller (see `--all`). */
+async function runIslandVerify(argv, name) {
   const { pascal, kebab, tag } = names(name);
   // Follow element.ts to the component it mounts: on a React host the island wraps a component the
   // app already owns, which does not live under ui/.
@@ -797,12 +823,12 @@ export async function verifyCommand(argv) {
     !isReactIsland &&
     existsSync(uiDir) &&
     readdirSync(uiDir).some((f) => f.endsWith('.ng.ts'));
+  const report = makeReport();
   if (!isReactIsland && !isAdapterIsland) {
-    console.error(color.red(`✗ no island component at ${componentPath}`));
-    process.exit(1);
+    report.error('component', `no island component at ${paths.rel(componentPath)}`);
+    return { kebab, tag, report, errors: report.findings, warns: [] };
   }
 
-  const report = makeReport();
   let componentProps = null;
   let resolvedTag = tag;
   if (isReactIsland) {
@@ -839,16 +865,47 @@ export async function verifyCommand(argv) {
     await runtimeDifferentiationCheck(report, resolvedTag, fixturesPath, port++, Boolean(argv.fast));
   }
 
-  const errors = report.findings.filter((f) => f.level === 'error');
-  const warns = report.findings.filter((f) => f.level === 'warn');
+  return {
+    kebab,
+    tag: resolvedTag,
+    report,
+    errors: report.findings.filter((f) => f.level === 'error'),
+    warns: report.findings.filter((f) => f.level === 'warn'),
+  };
+}
 
-  if (argv.json) {
-    console.log(JSON.stringify({ island: kebab, tag: resolvedTag, pass: errors.length === 0, findings: report.findings }, null, 2));
-  } else {
-    printReport(report, `motu island verify — ${kebab} (${resolvedTag})`, errors, warns);
+/** `--json` shape for one member of a sweep. */
+function summaryOf(r) {
+  return { name: r.kebab, tag: r.tag, pass: r.errors.length === 0, findings: r.report.findings };
+}
+
+/**
+ * A sweep's result: one line per member, and findings only for those that have something to say.
+ *
+ * A full report per island is unreadable at fourteen of them, and what a sweep answers is "is anything
+ * wrong, and where" — so a clean island costs one line.
+ */
+function printSweep(title, results) {
+  console.log(color.bold(`\n${title}\n`));
+  for (const r of results) {
+    const mark = r.errors.length ? color.red('✗') : r.warns.length ? color.yellow('!') : color.green('✓');
+    const tally = r.errors.length
+      ? color.red(`${r.errors.length} error(s)`) + color.dim(`, ${r.warns.length} warning(s)`)
+      : color.dim(`${r.warns.length} warning(s)`);
+    console.log(`  ${mark} ${color.dim(r.kebab.padEnd(20))} ${tally}`);
+    for (const f of r.report.findings) {
+      if (f.level !== 'error' && f.level !== 'warn') continue;
+      const m = f.level === 'error' ? color.red('✗') : color.yellow('!');
+      console.log(`      ${m} ${color.dim(f.check.padEnd(18))} ${f.msg}${f.line ? color.dim(`  (line ${f.line})`) : ''}`);
+    }
   }
-
-  process.exit(errors.length === 0 ? 0 : 1);
+  const failed = results.filter((r) => r.errors.length).length;
+  const warned = results.reduce((n, r) => n + r.warns.length, 0);
+  console.log('');
+  const head = failed
+    ? color.red(color.bold('FAIL')) + `  ${failed}/${results.length} with errors`
+    : color.green(color.bold('PASS')) + `  ${results.length}/${results.length} clean`;
+  console.log(head + color.dim(` · ${warned} warning(s) total`));
 }
 
 /** Pretty-print a report's findings + the PASS/FAIL summary line (shared by island + archipelago verify). */
@@ -903,15 +960,15 @@ function archipelagoConfigChecks(report, id) {
   if (LEGACY_FIT) {
     report.skip('region-type', `region state is motu's on host '${HOST}' — no app-side type to reference`);
   } else {
-    // The argument list can carry more than the region now (`<ActionsRegion, keyof ElementTypes>`),
-    // so stop at the first `,` or `>`.
-    const param = text.match(/ArchipelagoConfig<\s*([A-Za-z_$][\w$]*)\s*[,>]/);
+    // Either declaration form carries it — `satisfies ArchipelagoConfig<R, …>` or `archipelago<R, …>()`
+    // — and the argument list can carry more than the region, so stop at the first `,` or `>`.
+    const param = text.match(/(?:ArchipelagoConfig|\barchipelago)<\s*([A-Za-z_$][\w$]*)\s*[,>]/);
     if (param) {
       report.ok('region-type', `bind keys are checked against \`${param[1]}\``);
     } else {
       report.error(
         'region-type',
-        'ArchipelagoConfig has no region type — declare `ArchipelagoConfig<TRegion>` with a type ' +
+        'no region type — declare it as `archipelago<TRegion, keyof ElementTypes>()({…})` with a type ' +
           'EXTRACTED FROM THE APP (no motu import, erases at runtime) so bind keys cannot drift from it',
       );
     }
@@ -1053,11 +1110,38 @@ function archipelagoConfigChecks(report, id) {
 
 export async function archipelagoVerifyCommand(argv) {
   const id = argv._[0];
-  if (!id) {
-    console.error('usage: motu archipelago verify <id> [--no-runtime] [--json]');
+  if (!id && !argv.all) {
+    console.error('usage: motu archipelago verify <id|--all> [--no-runtime] [--json]');
     process.exit(2);
   }
 
+  if (argv.all) {
+    const ids = existsSync(paths.archipelagosDir)
+      ? readdirSync(paths.archipelagosDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory() && existsSync(paths.archipelagoFile(e.name)))
+          .map((e) => e.name)
+      : [];
+    const results = [];
+    for (const one of ids) results.push(await runArchipelagoVerify(argv, one));
+    if (argv.json) {
+      console.log(JSON.stringify({ archipelagos: results.map(summaryOf) }, null, 2));
+    } else {
+      printSweep('motu archipelago verify — all regions', results);
+    }
+    process.exit(results.every((r) => r.errors.length === 0) ? 0 : 1);
+  }
+
+  const result = await runArchipelagoVerify(argv, id);
+  if (argv.json) {
+    console.log(JSON.stringify({ archipelago: result.kebab, pass: result.errors.length === 0, findings: result.report.findings }, null, 2));
+  } else {
+    printReport(result.report, `motu archipelago verify — ${result.kebab}`, result.errors, result.warns);
+  }
+  process.exit(result.errors.length === 0 ? 0 : 1);
+}
+
+/** One region's checks, as data — see `runIslandVerify`. */
+async function runArchipelagoVerify(argv, id) {
   const report = makeReport();
   const hasLayout = archipelagoConfigChecks(report, id);
 
@@ -1097,14 +1181,10 @@ export async function archipelagoVerifyCommand(argv) {
     }
   }
 
-  const errors = report.findings.filter((f) => f.level === 'error');
-  const warns = report.findings.filter((f) => f.level === 'warn');
-
-  if (argv.json) {
-    console.log(JSON.stringify({ archipelago: id, pass: errors.length === 0, findings: report.findings }, null, 2));
-  } else {
-    printReport(report, `motu archipelago verify — ${id}`, errors, warns);
-  }
-
-  process.exit(errors.length === 0 ? 0 : 1);
+  return {
+    kebab: id,
+    report,
+    errors: report.findings.filter((f) => f.level === 'error'),
+    warns: report.findings.filter((f) => f.level === 'warn'),
+  };
 }

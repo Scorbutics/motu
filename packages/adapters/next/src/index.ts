@@ -11,6 +11,9 @@
 export { nextHostBridge, collectingHostBridge } from './host-bridge.js';
 export type { NextRouterLike, NextHostBridgeOptions } from './host-bridge.js';
 export { Archipelago } from './archipelago.js';
+// Re-exported so a Next host has one import site for the region surface.
+export { createRegion } from '@motu/react';
+export type { CreateRegionOptions, RegionBinding } from '@motu/react';
 export type { ArchipelagoProps } from './archipelago.js';
 // Re-exported so a page places islands without also importing @motu/react directly.
 export { Island, useMotuStore } from '@motu/react';

@@ -6,7 +6,7 @@ export { startSeedRecording, stopSeedRecording } from './store.js';
 export type { RecordedSeed } from './store.js';
 export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, applyMotuChrome } from './toolbar.js';
 export type { MotuChromeTheme } from './toolbar.js';
-export { applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
+export { archipelago, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
 export type {
   HostBridge,
   IslandContext,
@@ -19,6 +19,9 @@ export type {
   UnownedKeys,
   DisputedKeys,
   RegionOwnershipOk,
+  RegionBrand,
+  RegionOf,
+  SlotsOf,
   RegionWiringOk,
   EventsOf,
   HostRegion,

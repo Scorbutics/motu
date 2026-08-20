@@ -100,7 +100,7 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
  */
 export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag extends string = string> {
   id: string;
-  islands: IslandSpec<TRegion, TTag>[];
+  islands: readonly IslandSpec<TRegion, TTag>[];
   /**
    * Store keys fed from OUTSIDE the region — the host's own, written through `provideToArchipelago`
    * or a channel.
@@ -110,7 +110,7 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * `store.set` carries no source at all) and it is the one-word declaration a legacy region uses to
    * adopt ownership key by key (D3, D8).
    */
-  provides?: (keyof TRegion & string)[];
+  provides?: readonly (keyof TRegion & string)[];
   /**
    * The "new design" layout: HTML arranging the island slots (e.g. hero + toolbar + results). It is
    * rendered natively by <motu-archipelago name="id"> in the standalone app, and swapped in as a
@@ -187,23 +187,29 @@ export type EventsOf<E> = E extends { options: { contract: { output: infer O } }
  *
  *   const _wiring: RegionWiringOk<typeof actionsArchipelago, ElementTypes> = true;
  *
- * Checked against the project's whole event vocabulary, not per island: an array literal of
- * differently-shaped entries is normalised into a union whose members no longer carry their own
- * `element` alongside their own `writes`, so the tag cannot be matched to the entry that used it. A
- * typo therefore fails (it names no island's event); wiring island A's event onto island B does not,
- * and stays a runtime finding ("declared but never fired"). Per-entry precision needs the config
- * declared through a helper with a `const` type parameter, which is a bigger change to how a region
- * is authored.
+ * Checked PER ISLAND when the config is declared through `archipelago()` — wiring island A to island
+ * B's event fails, not just a typo. A `satisfies`-declared config degrades to the project's whole
+ * event vocabulary, because its entries lose the correlation between `element` and `writes`.
  */
 export type RegionWiringOk<A, TElements> = [Undeclared<A, TElements>] extends [never]
   ? true
-  : ['wired to an event no island declares:', Undeclared<A, TElements>];
+  : ['wired to an event its island does not declare:', Undeclared<A, TElements>];
 
-type Undeclared<A, TElements> = Exclude<AllWiredEvents<A>, AllDeclaredEvents<TElements>>;
+type Undeclared<A, TElements> = A extends { islands: readonly (infer I)[] } ? PerIsland<I, TElements> : never;
 
-type AllWiredEvents<A> = A extends { islands: readonly (infer I)[] } ? WiredEvents<I> : never;
-
-type AllDeclaredEvents<TElements> = { [K in keyof TElements]: EventsOf<TElements[K]> }[keyof TElements];
+/**
+ * Distributes over the entries, so each one's events are checked against ITS OWN island.
+ *
+ * This is only precise because the config is declared through `archipelago()`: a `satisfies` array
+ * literal is normalised into a union whose members no longer carry their own `element` beside their
+ * own `writes`, and the best you can do there is compare against the project's whole vocabulary —
+ * which catches a typo but not island A wired to island B's event.
+ */
+type PerIsland<I, TElements> = I extends { element: infer Tag }
+  ? Tag extends keyof TElements
+    ? Exclude<WiredEvents<I>, EventsOf<TElements[Tag]>>
+    : never
+  : never;
 
 /** Every event name an island entry mentions, in `writes` or in `on`. */
 type WiredEvents<I> = (I extends { writes: infer W } ? keyof W & string : never) | (I extends { on: infer H } ? keyof H & string : never);
@@ -234,6 +240,39 @@ export type ProducedKeysAre<A, Expected extends string> = [ProducedKeys<A>] exte
     ? true
     : ['declared by the app but not in any `produces`:', Exclude<Expected, ProducedKeys<A>>]
   : ['in `produces` but still assignable by the host:', Exclude<ProducedKeys<A>, Expected>];
+
+/**
+ * Phantom carrier for a region's app-side TYPE.
+ *
+ * `satisfies ArchipelagoConfig<ActionsRegion>` checks the config but throws the region type away —
+ * `typeof actionsArchipelago` remembers the literals and nothing else. Declaring through `archipelago()`
+ * brands the result so a consumer (`createRegion`) can recover the type without being told it again.
+ * Optional and never assigned: it erases completely.
+ */
+export interface RegionBrand<TRegion> {
+  readonly __region?: TRegion;
+}
+
+/** The region type carried by a branded config, or an open record when there is none. */
+export type RegionOf<C> = C extends RegionBrand<infer R> ? (unknown extends R ? Record<string, unknown> : R) : Record<string, unknown>;
+
+/** Every slot a config declares, as a union — literal only when declared through `archipelago()`. */
+export type SlotsOf<C> = C extends { islands: readonly (infer I)[] } ? (I extends { slot: infer S } ? (S extends string ? S : never) : never) : never;
+
+/**
+ * Declare an archipelago, keeping its literal types.
+ *
+ * `satisfies` checks a config but widens what it cannot: `slot: 'week-actions'` becomes `string`, and
+ * an array literal of differently-shaped entries is normalised into a union whose members no longer
+ * carry their own `element` beside their own `writes`. Both matter downstream — the first makes a
+ * typed `<Island slot>` possible, the second makes the wiring check per-island rather than per-project.
+ * A `const` type parameter keeps both.
+ *
+ *   export const actionsArchipelago = archipelago<ActionsRegion, keyof ElementTypes>()({ … });
+ */
+export function archipelago<TRegion, TTag extends string = string>() {
+  return <const A extends ArchipelagoConfig<TRegion, TTag>>(config: A): A & RegionBrand<TRegion> => config;
+}
 
 /**
  * A region whose declared shape is not known to the code holding it.

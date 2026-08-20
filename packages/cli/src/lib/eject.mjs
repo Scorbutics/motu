@@ -51,12 +51,12 @@ export function readRegions(archipelagosDir) {
 /**
  * The app-side region type a config is declared against, and the module it comes from.
  *
- * `ArchipelagoConfig<ActionsRegion, keyof ElementTypes>` — the type argument list can carry more than
- * the region, so stop at the first `,` or `>`, and find the import by the NAME just captured rather
- * than by anything hard-coded.
+ * Either declaration form carries it: `satisfies ArchipelagoConfig<ActionsRegion, …>` or
+ * `archipelago<ActionsRegion, …>()`. The argument list can carry more than the region, so stop at the
+ * first `,` or `>`, and find the import by the NAME just captured rather than by anything hard-coded.
  */
 function regionTypeOf(text) {
-  const regionType = text.match(/ArchipelagoConfig<\s*([A-Za-z_$][\w$]*)\s*[,>]/)?.[1] ?? null;
+  const regionType = text.match(/(?:ArchipelagoConfig|\barchipelago)<\s*([A-Za-z_$][\w$]*)\s*[,>]/)?.[1] ?? null;
   if (!regionType) return { regionType: null, regionTypeFrom: null };
   const imported = [...text.matchAll(/import type \{([^}]*)\}\s*from\s*'([^']+)'/g)].find(([, names]) =>
     new RegExp(`\\b${regionType}\\b`).test(names),
@@ -106,9 +106,17 @@ export function readOutputs(islandFiles) {
  * producer. Returns [] when the file holds no region reads or seeds.
  */
 export function ejectFile(sf, regions, outputs) {
-  // Region types, so generated state is typed rather than `undefined`. One region per host file in
-  // practice; when several apply, the first that declares a type wins and the rest fall back.
-  const typed = regions.find((r) => r.regionType && r.regionTypeFrom) ?? null;
+  // WHICH region this file belongs to, by the slots it actually places — a project has several, and
+  // picking the first typed one silently typed a page's state with another region's shape.
+  const usedSlots = new Set(
+    sf
+      .getDescendantsOfKind(SyntaxKind.JsxElement)
+      .filter((el) => el.getOpeningElement().getTagNameNode().getText().split('.').pop() === 'Island')
+      .map((el) => jsxStringProp(el.getOpeningElement(), 'slot'))
+      .filter(Boolean),
+  );
+  const mine = regions.filter((r) => r.islands.some((i) => usedSlots.has(i.slot)));
+  const typed = (mine.length ? mine : regions).find((r) => r.regionType && r.regionTypeFrom) ?? null;
   // A key with no fallback in the host's read has no value until its producer fires, so the generated
   // state is `T | undefined` — the same thing `useRegionValue` returned.
   const typeOf = (key, initial) =>
@@ -117,7 +125,8 @@ export function ejectFile(sf, regions, outputs) {
   const calls = sf.getDescendantsOfKind(SyntaxKind.CallExpression);
   const reads = calls.filter((c) => isCall(c, 'useRegionValue'));
   const regionReads = calls.filter((c) => isCall(c, 'useRegion'));
-  const seeds = calls.filter((c) => isCall(c, 'seedArchipelago'));
+  // `seedArchipelago(id, key, value)` and a binding's `seed(key, value)` — same act, one argument apart.
+  const seeds = calls.filter((c) => isCall(c, 'seedArchipelago', 'seed'));
   if (!reads.length && !regionReads.length && !seeds.length) return notes;
 
   // The component the reads live in, captured BEFORE any rewrite: replacing a node forgets it, and
@@ -169,15 +178,18 @@ export function ejectFile(sf, regions, outputs) {
 
   // 2. Seeds become a plain setState on that key's state.
   for (const call of seeds) {
-    const key = literalArg(call, 1);
+    // The archipelago id is only present on the bare form, so find the key by shape, not by position.
+    const keyIndex = literalArg(call, 0) && !literalArg(call, 1) ? 0 : literalArg(call, 1) ? 1 : -1;
+    const key = keyIndex === -1 ? null : literalArg(call, keyIndex);
     if (!key) continue;
     const s = claim(key, key, 'undefined');
-    call.replaceWithText(`${s.setter}(${call.getArguments()[2]?.getText() ?? 'undefined'})`);
+    call.replaceWithText(`${s.setter}(${call.getArguments()[keyIndex + 1]?.getText() ?? 'undefined'})`);
   }
 
   // 3. The producer's output prop gets the wiring the archipelago's `writes` mapping described.
   for (const island of sf.getDescendantsOfKind(SyntaxKind.JsxElement)) {
-    if (island.getOpeningElement().getTagNameNode().getText() !== 'Island') continue;
+    // `<Island>` or a binding's `<Actions.Island>`.
+    if (island.getOpeningElement().getTagNameNode().getText().split('.').pop() !== 'Island') continue;
     const slot = jsxStringProp(island.getOpeningElement(), 'slot');
     const spec = regions.flatMap((r) => r.islands).find((i) => i.slot === slot);
     if (!spec) continue;
@@ -229,8 +241,15 @@ export function ejectFile(sf, regions, outputs) {
   return notes;
 }
 
-function isCall(call, name) {
-  return call.getExpression().getText().replace(/<.*>$/s, '') === name;
+/**
+ * A call to `name`, however it is reached: bare (`useRegion()`), namespaced by a region binding
+ * (`Actions.useRegion()`), or with type arguments. Aliases are the point of `createRegion` — the host
+ * calls the region's own surface, not the framework's.
+ */
+function isCall(call, ...names) {
+  const text = call.getExpression().getText().replace(/<.*>$/s, '');
+  const last = text.split('.').pop();
+  return names.includes(text) || names.includes(last);
 }
 
 function literalArg(call, index) {

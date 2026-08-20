@@ -332,8 +332,12 @@ work in both shadow and light isolation (a bare `:host` is inert in light DOM); 
 
 Both verbs exit non-zero on any error and take `--json` for a machine-readable report — so an agent loops on
 them directly. `--fast` swaps the real-browser mount for a quicker (weaker) in-process `happy-dom` check.
-The runtime lane shares ONE dev server and ONE browser across every island and region it checks (the
-target travels in the URL), so a sweep pays for the lagoon once rather than once per check. Iterate visually with `MOTU_NO_SSL=1 pnpm dev:lagoon`. The real-browser
+The runtime lane opens the lagoon ONCE — one dev server, one browser, one page — and re-aims it: each
+check asks the page already standing to show a different island, a whole region, or the same island
+with a failing backend, then feeds it data and fires the declared outputs. That is the lagoon's own
+advantage over a browser-per-spec suite: there is nothing to re-mock and nothing to log into, so a
+scenario costs a store write rather than a page load. In peps the first island pays the Vite boot
+(~15s) and every island after it is under a second per check. Iterate visually with `MOTU_NO_SSL=1 pnpm dev:lagoon`. The real-browser
 check needs Chromium once: `cd packages/cli && npx playwright install chromium`.
 
 `motu fixtures record <island> [--transport http|mock]` captures a session's contract responses AND

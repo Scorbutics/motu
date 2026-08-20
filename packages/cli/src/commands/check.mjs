@@ -93,7 +93,12 @@ export async function checkCommand(argv) {
     const ejected = removal.ejected.reduce((n, e) => n + e.notes.length, 0);
     console.log(
       `  ${color.green('✓')} ${color.dim('removable'.padEnd(20))}` +
-        color.dim(`${removal.deleted.length} deleted, ${removal.stripped.length} unwrapped, ${ejected} ejected`),
+        color.dim(
+          `${removal.deleted.length} deleted, ${removal.stripped.length} unwrapped, ${ejected} ejected` +
+            // Say when it was not re-proved. A cached verdict is still a verdict, but a reader has to
+            // know which one they are looking at.
+            (removal.cached ? ' · unchanged since the last proof' : ''),
+        ),
     );
   } else {
     console.log(`  ${color.red('✗')} ${color.dim('load-bearing'.padEnd(20))} ${color.red('the host does not compile without motu')}`);

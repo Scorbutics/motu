@@ -33,7 +33,9 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    in it, and every declared write reaches its key. It costs SECONDS PER ISLAND — a browser pass per
    scenario × viewport — so it is a PUNCTUAL gate: before handing work over, in CI, or nightly across
    the project. Not the dev loop. While you work, iterate in the lagoon and lean on the static checks;
-   `--verbose` names each runtime step with what it cost. Viewports and the a11y severity policy are
+   `--verbose` names each runtime step with what it cost. The lane opens ONE lagoon page for the whole
+   run and re-aims it per island (data in, declared outputs fired), so the cost is the first boot, not
+   a boot per island — do not add checks that navigate or restart it. Viewports and the a11y severity policy are
    declared once in `lagoon.config.json`.
  - A region declares its FLOWS in `<id>.evidence.ts` beside the archipelago: a seed, an island's
    declared `emit`, and the keys the region must hold afterwards. That is where a coupling becomes

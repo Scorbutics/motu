@@ -6,7 +6,8 @@
 // copy them and get one wrong. What is left for a person to decide is the part that is actually a
 // decision: which region keys those props bind to, and what the events are called.
 import { existsSync, readFileSync } from 'node:fs';
-import { Project, SyntaxKind } from 'ts-morph';
+import { SyntaxKind } from 'ts-morph';
+import { sourceFileAt } from './ts-project.mjs';
 
 /** Host capabilities an island reaches for without being handed them — declared as `contract.ambient`. */
 const AMBIENT = [/^@\/lib\/contexts\//, /^@\/hooks\//, /^@\/lib\/services\//, /^@\/contexts\//, /^@\/services\//];
@@ -42,12 +43,7 @@ export function readComponentContract(file, exportName) {
 }
 
 function readComponentContractUncached(file, exportName) {
-  const project = new Project({
-    skipAddingFilesFromTsConfig: true,
-    skipFileDependencyResolution: true,
-    compilerOptions: { allowJs: true, jsx: 4 },
-  });
-  const sf = project.addSourceFileAtPath(file);
+  const sf = sourceFileAt(file, { allowJs: true, jsx: 4 });
 
   const fn =
     (exportName && (sf.getFunction(exportName) ?? sf.getVariableDeclaration(exportName)?.getInitializerIfKind(SyntaxKind.ArrowFunction))) ??

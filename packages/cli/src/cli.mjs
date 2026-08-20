@@ -62,7 +62,7 @@ ${color.bold('Usage:')}
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
   motu lagoon serve --watch --host                  ...and keep it current: rebuild on save, reload viewers
   motu contract check [--update]                    the app's boundary + coupling graph, as one artifact
-  motu removal-check                                prove motu is removable from the host app (C2)
+  motu removal-check [--force]                      prove motu is removable from the host app (C2)
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
   motu skills list                                  list the skills this motu checkout ships
@@ -72,6 +72,11 @@ ${color.bold('snapshot flags:')}
   --all           every island
   --json          machine-readable report
   ${color.dim('baselines live in <islands>/<kebab>.snapshots/, one per scenario × viewport; commit them.')}
+
+${color.bold('removal-check flags:')}
+  --force         re-prove it even when nothing it depends on has changed
+  ${color.dim('the proof is cached against the files it touches + the islands/archipelagos it generates from;')}
+  ${color.dim('an unchanged repo skips the application typecheck, which is nearly all of the cost.')}
 
 ${color.bold('check flags:')}
   --runtime       also drive the lagoon in a browser (mount, data-flow, viewports, axe, live wiring)

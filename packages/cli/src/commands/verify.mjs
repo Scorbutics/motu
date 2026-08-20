@@ -12,7 +12,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { Project, SyntaxKind } from 'ts-morph';
+import { SyntaxKind } from 'ts-morph';
+import { sourceFileAt } from '../lib/ts-project.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
@@ -85,12 +86,7 @@ function makeReport() {
 
 /** Static analysis of the component source. */
 function staticChecks(report, componentPath, pascal) {
-  const project = new Project({
-    skipAddingFilesFromTsConfig: true,
-    skipFileDependencyResolution: true,
-    compilerOptions: { allowJs: true, jsx: 4 /* react-jsx */ },
-  });
-  const sf = project.addSourceFileAtPath(componentPath);
+  const sf = sourceFileAt(componentPath, { allowJs: true, jsx: 4 /* react-jsx */ });
   const line = (n) => n.getStartLineNumber();
 
   let sawFetch = false,
@@ -255,12 +251,7 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     report.error('registered', `no element.ts at ${paths.rel(elementPath)}`);
     return null;
   }
-  const project = new Project({
-    skipAddingFilesFromTsConfig: true,
-    skipFileDependencyResolution: true,
-    compilerOptions: { allowJs: true },
-  });
-  const sf = project.addSourceFileAtPath(elementPath);
+  const sf = sourceFileAt(elementPath, { allowJs: true });
 
   // Mount-point discipline: an island's element.ts must never import ANOTHER island — mount points
   // coordinate only at runtime through the store. Its own component lives in ui/ (`../../ui/…`, which
@@ -820,12 +811,7 @@ const HOST_ADAPTER_VERIFY = { next: '@motu/adapter-next/verify' };
 
 /** Extract the structured `contract.coupling` from an island's element.ts (AST, not regex). */
 function extractCoupling(elementPath) {
-  const project = new Project({
-    skipAddingFilesFromTsConfig: true,
-    skipFileDependencyResolution: true,
-    compilerOptions: { allowJs: true },
-  });
-  const sf = project.addSourceFileAtPath(elementPath);
+  const sf = sourceFileAt(elementPath, { allowJs: true });
   const strAt = (obj, name) => {
     const init = obj.getProperty(name)?.getInitializer();
     return init && init.getKind() === SyntaxKind.StringLiteral ? init.getText().replace(/['"]/g, '') : undefined;

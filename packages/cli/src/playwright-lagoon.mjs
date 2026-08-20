@@ -118,6 +118,18 @@ async function getBrowser() {
 // with a failing backend. Feeding data and firing declared outputs then happen in the page that is
 // already standing, which is the thing a browser-per-spec suite cannot do.
 const pages = new Map();
+/**
+ * How long to wait for an island to paint.
+ *
+ * It used to be fifteen seconds because the page was loading from cold each time — Vite's first-run
+ * dep optimization can reload underneath the check. The page is loaded once now, so a re-aimed mount
+ * paints in tens of milliseconds, and the only thing the long wait still bought was thirty seconds per
+ * island that legitimately renders nothing from its defaults. The first load keeps the long deadline;
+ * everything after it gets the short one.
+ */
+const PAINT_TIMEOUT_COLD = 15000;
+const PAINT_TIMEOUT_WARM = 3000;
+let paintTimeout = PAINT_TIMEOUT_COLD;
 /** Diagnostics of the CHECK currently running — console/pageerror listeners are per page, not per check. */
 let diagnosticSink = [];
 
@@ -126,6 +138,7 @@ async function lagoonPage(server, target) {
   const existing = pages.get(server.key);
   if (existing && !existing.isClosed()) {
     // Re-aim it. `false` means this build has no harness (an older lagoon entry) — fall back to a load.
+    paintTimeout = PAINT_TIMEOUT_WARM;
     const aimed = await existing
       .evaluate(
         ([t, fit, forceError]) => !!window.__motuLagoonHarness?.mount(t, { fit, forceError }),
@@ -321,8 +334,9 @@ function normalizeRender(html) {
  *
  * Settled = non-empty and unchanged across consecutive samples. Returns '' if it never rendered.
  */
-async function waitForStableRender(page, tag, { timeoutMs = 15000, quietSamples = 3, intervalMs = 120 } = {}) {
-  const deadline = Date.now() + timeoutMs;
+async function waitForStableRender(page, tag, { timeoutMs, quietSamples = 3, intervalMs = 120 } = {}) {
+  const started = Date.now();
+  const deadline = started + (timeoutMs ?? paintTimeout);
   let last = null;
   let stable = 0;
   while (Date.now() < deadline) {
@@ -333,12 +347,18 @@ async function waitForStableRender(page, tag, { timeoutMs = 15000, quietSamples 
       // Execution context destroyed by Vite's dep re-optimization reload — re-poll on the new one.
       last = null;
       stable = 0;
+      html = null;
     }
-    if (html && html === last) {
-      if (++stable >= quietSamples) return html;
-    } else {
+    if (html !== null && html === (last ?? '')) {
+      // EMPTY settles too, after a grace period. Only counting non-empty output as settled meant an
+      // island that legitimately renders nothing from its defaults (a pure projection with no input)
+      // burned the whole timeout on every check — fifteen seconds to observe an emptiness that was
+      // decided in the first frame.
+      const grace = html === '' ? started + 1000 : started;
+      if (++stable >= quietSamples && Date.now() >= grace) return html;
+    } else if (html !== null) {
       stable = 0;
-      last = html || null;
+      last = html;
     }
     await sleep(intervalMs);
   }
@@ -360,7 +380,7 @@ export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPa
     // waitForFunction because Vite's first-run dep re-optimization can trigger a full page reload that
     // destroys the execution context mid-check — we simply re-poll on the new one.
     let result = { mounted: false, shadowLength: 0 };
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       try {
         result = await page.evaluate((t) => {
@@ -572,7 +592,7 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
   const require = createRequire(import.meta.url);
   const axeSource = readFileSync(require.resolve('axe-core'), 'utf8');
   return onLagoonPage({ target: `island:${tag}`, port, viewport: { width: 1280, height: 900 } }, async (page, server) => {
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       const ready = await page
         .evaluate((t) => {
@@ -636,7 +656,7 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
   const { chromium } = await import('playwright');
   return onLagoonPage({ target: `island:${tag}`, port, viewport: { width: viewports[0]?.width ?? 1280, height: 900 } }, async (page, server) => {
 
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       const ready = await page
         .evaluate((t) => {
@@ -699,7 +719,7 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
     async (page) => {
     // Poll for a PAINTED island, not just a mounted one: Vite's first-run dep re-optimization reloads
     // the page, and an island that fetches its own data paints a frame later.
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       const ready = await page
         .evaluate((t) => {
@@ -778,7 +798,7 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
   return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1200, height: 900 }, diagnostics }, async (page, server) => {
 
     let result = { region: false, islands: [] };
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       try {
         result = await page.evaluate(() => {
@@ -838,7 +858,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
 
     // Wait for the island to upgrade and paint.
     let mounted = false;
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       try {
         const r = await page.evaluate((t) => {
@@ -911,7 +931,7 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
 
     // Wait for the island to upgrade and paint (its mount fetch fires here).
     let mounted = false;
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       try {
         const r = await page.evaluate((t) => {

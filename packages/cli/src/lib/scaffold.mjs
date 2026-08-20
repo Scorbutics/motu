@@ -253,6 +253,9 @@ bootstrapLagoon({
   mount: config.mount,
 {{hostOption}}  target,
   fit: params.get('fit') || (typeof __MOTU_FIT__ === 'string' ? __MOTU_FIT__ : ''),
+  // From the URL, like the target: the wiring/flow checks ask for 'mountpoints' so every declared
+  // slot mounts regardless of where the page's own arrangement would put it.
+  view: params.get('view') === 'mountpoints' ? 'mountpoints' : undefined,
   // Also from the URL, and for the same reason as the target: the error-resilience check wants ONE
   // island mounted against a failing transport, not a second dev server that differs by an env var.
   forceErrorStatus: (() => {

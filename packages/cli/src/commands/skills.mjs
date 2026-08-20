@@ -125,7 +125,8 @@ export async function skillsInstallCommand(argv) {
     console.log(color.yellow(`  ${out.skipped.length} file(s) left untouched — rerun with --force to overwrite`));
     process.exit(1);
   }
-  console.log('Use them: ' + color.bold('/island-create') + ' or ' + color.bold('/island-extract') + color.dim(' (Claude Code skill or Copilot agent/prompt)'));
+  // Name what was actually installed — a hardcoded pair goes stale the day a skill is added.
+  console.log('Use them: ' + skills.map((s) => color.bold(`/${s.name}`)).join(', ') + color.dim(' (Claude Code skill or Copilot agent/prompt)'));
 }
 
 export async function skillsListCommand(argv) {

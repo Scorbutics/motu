@@ -574,9 +574,25 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
   const store = new Store(opts.seed);
   // Who owns which key, for the store's write check. A seed is not a write (it goes through the
   // constructor), so first paint never trips it — `produces` is about UPDATES (D4).
-  const producers = new Map<string, string>();
+  //
+  // A key may be claimed by SEVERAL slots when they are the same island mounted more than once — the
+  // responsive duplicate (one filter panel, a desktop sidebar and a mobile drawer) is one owner at two
+  // slots. Keyed by slot alone, the second declaration silently replaced the first and every write
+  // from the other slot was reported as a stranger reaching into the region. Slots of DIFFERENT
+  // elements still collide, because that is a real dispute.
+  const producers = new Map<string, string[]>();
+  const producingElement = new Map<string, string>();
   for (const island of config.islands) {
-    for (const key of writtenKeys(island)) producers.set(key, island.slot);
+    for (const key of writtenKeys(island)) {
+      const claimed = producingElement.get(key);
+      if (claimed !== undefined && claimed !== island.element) {
+        producers.set(key, [island.slot]); // a genuine two-island dispute: last declaration wins, as before
+        producingElement.set(key, island.element);
+        continue;
+      }
+      producers.set(key, [...(producers.get(key) ?? []), island.slot]);
+      producingElement.set(key, island.element);
+    }
   }
   declareProducers(store, producers);
   // Who READS each key, so a host write to one can be recognised as feeding an island (see the

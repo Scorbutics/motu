@@ -28,6 +28,8 @@ export interface LagoonBootstrapOptions {
   fit?: string;
   /** Outward channel; a console-logging no-op by default. */
   host?: HostBridge;
+  /** 'region' (the app's arrangement) or 'mountpoints' (every declared slot, framed separately). */
+  view?: 'region' | 'mountpoints';
   /** Initial store contents so bound islands render meaningfully. Overrides `overrides.seed`. */
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store (same as the real composition roots). */
@@ -212,6 +214,11 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElemen
       // one-slot config, and the app's layout would place slots that mount does not have.
       layout: target.kind === 'archipelago' && regionId ? opts.overrides?.layout?.[regionId] : undefined,
       fit: target.kind === 'island' ? target.fit : undefined,
+      // The harness drives DECLARED wires in 'mountpoints', where every slot the archipelago names is
+      // framed on its own. In 'region' the app's arrangement decides what exists — an island behind a
+      // closed drawer is simply absent — and a check for "does this declared wire carry something"
+      // must not depend on that.
+      view: opts.view,
     });
     return mountEl ?? document.body;
   }

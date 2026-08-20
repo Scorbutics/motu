@@ -951,6 +951,9 @@ export async function runIslandVerify(argv, name) {
     }
     // Error-resilience mount (real browser only; the happy-dom --fast path can't host the lagoon).
     if (!argv.fast) await runtimeErrorCheck(report, resolvedTag, port++);
+    // A seed only helps if it SURVIVES the trip. Checked before the checks that use one, because
+    // every one of them fails misleadingly otherwise.
+    if (!argv.fast) await seedTransportCheck(report, kebab);
     // Data-flow differentiation (opt-in via declared `scenarios`).
     await runtimeDifferentiationCheck(report, resolvedTag, fixturesPath, port++, Boolean(argv.fast));
     // Every declared viewport — the phone included, which nothing checked before.
@@ -1030,6 +1033,40 @@ async function a11yCheck(report, tag, kebab, port) {
   for (const f of kept) {
     if ((rank[f.impact] ?? 0) >= bar) report.error('a11y', say(f));
     else report.warn('a11y', say(f));
+  }
+}
+
+/**
+ * Scenario seeds have to cross into the browser, and the crossing is JSON.
+ *
+ * A `Set`, a `Map`, a function or a Date in a seed arrives as `{}` — so the island renders against a
+ * value of the wrong SHAPE. When that throws (`favoriteIds.has is not a function`), the mount dies and
+ * EVERY scenario renders empty, which the differentiation check then reports as "scenarios rendered
+ * identically" and the responsive check as "renders nothing" — three misleading findings, none of them
+ * naming the cause. Name it here instead, once, before those checks run.
+ *
+ * The fix is always at the component: take the ITERABLE, not the Set, and rebuild it inside.
+ */
+async function seedTransportCheck(report, kebab) {
+  const scenarios = await islandScenarios(kebab);
+  if (!scenarios.length) return;
+  const kind = (v) =>
+    v instanceof Set ? 'Set' : v instanceof Map ? 'Map' : typeof v === 'function' ? 'function' : v instanceof Date ? 'Date' : null;
+  const bad = [];
+  for (const s of scenarios) {
+    for (const [key, value] of Object.entries(s?.seed ?? {})) {
+      const k = kind(value);
+      if (k) bad.push(`${s.name ?? '(unnamed)'} → ${key} (${k})`);
+    }
+  }
+  if (bad.length) {
+    report.error(
+      'seed-transport',
+      `seed value(s) that do not survive the trip into the browser: ${bad.join(', ')} — they arrive as {}, ` +
+        `which breaks EVERY scenario, not just this one. Take an iterable/plain value in the component and rebuild the Set inside.`,
+    );
+  } else {
+    report.ok('seed-transport', `${scenarios.length} scenario seed(s) cross into the browser intact`);
   }
 }
 
@@ -1114,6 +1151,7 @@ async function regionFlowCheck(report, id, port) {
     const run = await runRegionFlows({ id, port, scenarios });
     results = run.flows;
     suspects = run.suspects ?? [];
+    reportStoreComplaints(report, run.diagnostics, 'declared flows');
   } catch (err) {
     report.warn('region-flow', `could not run declared flows: ${err.message}`);
     return;
@@ -1149,7 +1187,9 @@ async function wiringProbe(report, id, port) {
   if (!islands.length) return;
   let results;
   try {
-    results = await step('wiring-live', () => probeWiring({ id, port, islands }));
+    const probe = await step('wiring-live', () => probeWiring({ id, port, islands }));
+    results = probe.results;
+    reportStoreComplaints(report, probe.diagnostics, 'wiring probe');
   } catch (err) {
     report.warn('wiring-live', `could not probe declared writes: ${err.message}`);
     return;
@@ -1459,6 +1499,21 @@ export async function archipelagoVerifyCommand(argv) {
   process.exit(result.errors.length === 0 ? 0 : 1);
 }
 
+/**
+ * What the STORE said while the region was being driven.
+ *
+ * `no-console-errors` runs on a page that only mounts the region — it never writes, so motu's own
+ * ownership guard ("key X is produced by island A, but it was written by B") could fire on every
+ * driven page and never reach a report. That is the shape of miss this exists for: the framework had
+ * already caught it, in a console nobody was reading.
+ */
+function reportStoreComplaints(report, diagnostics, where) {
+  const motu = (diagnostics ?? []).filter((d) => /console\.error:\s*motu:/.test(d));
+  for (const line of [...new Set(motu)]) {
+    report.error('store-guard', `${line.replace(/^console\.error:\s*/, '')} (seen during the ${where})`);
+  }
+}
+
 /** One region's checks, as data — see `runIslandVerify`. */
 export async function runArchipelagoVerify(argv, id) {
   setVerbose(argv?.verbose);
@@ -1486,7 +1541,21 @@ export async function runArchipelagoVerify(argv, id) {
           if (r.islands.length === 0) {
             report.error('lagoon-render', 'archipelago region rendered no island slots');
           } else if (unmounted.length === 0) {
+            // "all N" used to mean "all N I happened to find". A slot the arrangement never places —
+            // an island behind a closed drawer, a conditional branch — simply was not in the list, so
+            // the check congratulated itself on a region missing an island. Say what is declared.
+            const declared = (readRegions(paths.archipelagosDir).find((x) => x.id === id)?.islands ?? []).map((i) => i.slot);
+            const placed = new Set(r.islands.map((i) => i.slot).filter(Boolean));
+            const unplaced = declared.filter((slot) => !placed.has(slot));
             report.ok('lagoon-render', `region + all ${r.islands.length} island(s) mounted in the lagoon`);
+            if (unplaced.length) {
+              report.warn(
+                'lagoon-render',
+                `${unplaced.join(', ')} declared but not placed by this arrangement — behind an overlay or a ` +
+                  `conditional branch. Declared wires are still driven (the probe uses the mountpoints view), ` +
+                  `but nothing here shows it to a human: confirm that is what the page does.`,
+              );
+            }
           } else {
             report.error('lagoon-render', `slot(s) with no island mounted: ${unmounted.map((i) => i.slot || '?').join(', ')}`);
           }

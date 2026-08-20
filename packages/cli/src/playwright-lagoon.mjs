@@ -134,9 +134,17 @@ let paintTimeout = PAINT_TIMEOUT_COLD;
 let diagnosticSink = [];
 
 /** The page for a build posture, opened on first use. */
-async function lagoonPage(server, target) {
+/** The view each pooled page is currently showing, so a check never inherits the previous one's. */
+const pageView = new Map();
+
+async function lagoonPage(server, target, view) {
   const existing = pages.get(server.key);
-  if (existing && !existing.isClosed()) {
+  const wanted = view ?? 'region';
+  // A view change is a different render, not a re-aim: the warm path swaps the TARGET in place and
+  // keeps whatever view the page already had. Left unhandled it is a silent contaminated result —
+  // the region-render check inherited the wiring probe's 'mountpoints' page and reported every
+  // declared slot as mounted, including one the arrangement never places.
+  if (existing && !existing.isClosed() && pageView.get(server.key) === wanted) {
     // Re-aim it. `false` means this build has no harness (an older lagoon entry) — fall back to a load.
     paintTimeout = PAINT_TIMEOUT_WARM;
     const aimed = await existing
@@ -146,13 +154,15 @@ async function lagoonPage(server, target) {
       )
       .catch(() => false);
     if (aimed) return existing;
-    await existing.goto(lagoonUrl(server, target), { waitUntil: 'load' });
+    pageView.set(server.key, view ?? 'region');
+    await existing.goto(lagoonUrl(server, target, view), { waitUntil: 'load' });
     return existing;
   }
   const browser = await getBrowser();
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await setupPageDiagnostics(page, null);
-  await page.goto(lagoonUrl(server, target), { waitUntil: 'load' });
+  pageView.set(server.key, view ?? 'region');
+  await page.goto(lagoonUrl(server, target, view), { waitUntil: 'load' });
   pages.set(server.key, page);
   return page;
 }
@@ -161,9 +171,9 @@ async function lagoonPage(server, target) {
  * Run one check against the shared page: re-aim it, collect this check's diagnostics, restore the
  * viewport it was handed.
  */
-async function onLagoonPage({ target, fit, forceError, transport, port, viewport, diagnostics }, fn) {
+async function onLagoonPage({ target, fit, forceError, transport, port, viewport, diagnostics, view }, fn) {
   const server = await startLagoon({ target, fit, forceError, transport, port });
-  const page = await lagoonPage(server, target);
+  const page = await lagoonPage(server, target, view);
   const previousSink = diagnosticSink;
   diagnosticSink = diagnostics ?? [];
   try {
@@ -175,8 +185,9 @@ async function onLagoonPage({ target, fit, forceError, transport, port, viewport
 }
 
 /** `/lagoon.html` for a target, on a pooled server. */
-function lagoonUrl(server, target) {
+function lagoonUrl(server, target, view) {
   const q = new URLSearchParams({ target: target ?? '' });
+  if (view) q.set('view', view);
   if (server.fit) q.set('fit', server.fit);
   if (server.forceError) q.set('forceError', String(server.forceError));
   return `http://localhost:${server.port}/lagoon.html?${q}`;
@@ -456,7 +467,9 @@ async function remountAndCompare(page, tag) {
  */
 export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
   const { chromium } = await import('playwright');
-  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 } }, async (page, server) => {
+  // See probeWiring: the flows are where writes happen, so this is where a store complaint lands.
+  const diagnostics = [];
+  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 }, diagnostics, view: 'mountpoints' }, async (page, server) => {
     await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
     await sleep(400);
 
@@ -473,7 +486,10 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
           async ({ seed, step: st }) => {
             const lagoon = window.__motuLagoon;
             if (!lagoon || typeof lagoon.emit !== 'function') return { error: 'no emit seam on this mount path' };
-            for (const [k, v] of Object.entries(seed ?? {})) lagoon.provide(k, v);
+            // A flow's `seed` is a SEED — the page establishing a starting value — even when the key
+            // belongs to an island. Applying it as a host write made the harness trip motu's own
+            // ownership guard on every produced key a flow starts from.
+            for (const [k, v] of Object.entries(seed ?? {})) (lagoon.seed ?? lagoon.provide)(k, v);
             await new Promise((r) => setTimeout(r, 120));
             // Setup done. From here, a host write is a RESPONSE to what the island did.
             window.__motuSuspects?.reset?.();
@@ -508,7 +524,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     // key some island reads. Declared ownership cannot see this — the declaration is consistent, it is
     // just not honest — so it is reported as a suspicion, never as a violation.
     const suspects = await page.evaluate(() => window.__motuSuspects?.list?.() ?? []).catch(() => []);
-    return { flows: out, suspects };
+    return { flows: out, suspects, diagnostics };
   });
 }
 
@@ -525,7 +541,11 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
  */
 export async function probeWiring({ id, port = 5199, islands = [] }) {
   const { chromium } = await import('playwright');
-  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 } }, async (page, server) => {
+  // Diagnostics belong to the page that WRITES. The console check runs on a page that only mounts the
+  // region, so anything the store says about a bad write — the ownership guard above all — was raised
+  // where nobody was listening. Collect them here and hand them back with the results.
+  const diagnostics = [];
+  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 }, diagnostics, view: 'mountpoints' }, async (page, server) => {
     await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
     await sleep(400);
 
@@ -563,7 +583,9 @@ export async function probeWiring({ id, port = 5199, islands = [] }) {
             const rows = ks.map((k, i) => ({ key: k, moved: before[i] !== after[i] }));
             // Put the region back the way it was, so a later probe measures the page and not the wake
             // of this one.
-            ks.forEach((k, i) => lagoon.provide(k, before[i]));
+            // Put it back as a SEED, not a host write: a rollback must not look like the host
+            // reaching into a key an island owns (that is what the ownership guard is for).
+            ks.forEach((k, i) => (lagoon.seed ?? lagoon.provide)(k, before[i]));
             return { kind: 'measured', rows };
           },
           { slot: island.slot, event, keys, fields },
@@ -575,7 +597,7 @@ export async function probeWiring({ id, port = 5199, islands = [] }) {
         }
       }
     }
-    return results;
+    return { results, diagnostics };
   });
 }
 

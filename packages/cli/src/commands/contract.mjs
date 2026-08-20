@@ -68,6 +68,21 @@ function islands() {
   return out;
 }
 
+/** The text of one `name:` clause in an island entry — brace/bracket balanced, '' when absent. */
+function clause(block, name) {
+  const start = block.search(new RegExp(`\\b${name}\\s*:\\s*[[{]`));
+  if (start === -1) return '';
+  const open = block.slice(start).search(/[[{]/) + start;
+  const pairs = { '{': '}', '[': ']' };
+  const closer = pairs[block[open]];
+  let depth = 0;
+  for (let i = open; i < block.length; i++) {
+    if (block[i] === block[open]) depth++;
+    else if (block[i] === closer && --depth === 0) return block.slice(open, i + 1);
+  }
+  return block.slice(open);
+}
+
 /** Each archipelago's bindings, and the coupling those bindings imply. */
 function archipelagos() {
   const out = {};
@@ -85,8 +100,26 @@ function archipelagos() {
     for (const m of raw.matchAll(/slot:\s*'([^']+)'[\s\S]*?(?=slot:\s*'|\n\s{2}\][\s\S]*$)/g)) {
       const [, slot] = m;
       const block = m[0];
-      const bind = Object.fromEntries([...block.matchAll(/(\w+):\s*'([^']+)'/g)].filter(([, k]) => !['slot', 'element'].includes(k)).map(([, k, v]) => [k, v]));
-      const writes = [...block.matchAll(/store\.set\(\s*'([^']+)'/g)].map((w) => w[1]);
+      // READS from the `bind` clause only. Taken from the whole block, every produced key came back
+      // as a read of itself (it appears as a value in `writes`), so every owned key looked "shared".
+      const bindBlock = clause(block, 'bind');
+      const bind = Object.fromEntries(
+        [...bindBlock.matchAll(/(\w+):\s*'([^']+)'/g)].filter(([, k]) => !['slot', 'element'].includes(k)).map(([, k, v]) => [k, v]),
+      );
+      // Bare entries: `bind: ['compactMode', { stats: 'networkStats' }]` — the strings that are not
+      // part of a rename pair are keys read under their own name.
+      for (const [, key] of bindBlock.matchAll(/(?:^|[[,]\s*)'([^']+)'/g)) bind[key] = key;
+      // WRITES from the `writes` clause. It used to look for `store.set('key')`, which nothing has
+      // written since regions started DECLARING their outputs — so the graph silently went empty and
+      // `--update` accepted the loss. Both declaration shapes count:
+      //   writes: { 'compact-toggled': 'compactMode' }
+      //   writes: { 'week-progress': { overallProgress: 'overallProgress', … } }
+      // Event names are object KEYS, so matching only values takes the store keys and nothing else.
+      const writesBlock = clause(block, 'writes');
+      const writes = [
+        ...[...writesBlock.matchAll(/:\s*'([^']+)'/g)].map((w) => w[1]),
+        ...[...block.matchAll(/store\.set\(\s*'([^']+)'/g)].map((w) => w[1]),
+      ];
       bindsBySlot[slot] = { reads: bind, writes };
     }
     const reads = new Set(Object.values(bindsBySlot).flatMap((b) => Object.values(b.reads)));

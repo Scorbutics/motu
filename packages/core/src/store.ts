@@ -13,7 +13,7 @@ export type StoreListener = () => void;
 // write passes through, so it is where a write from the wrong source is caught. Debug-only: in
 // production the map is never filled and the check never runs.
 
-const producerOfKey = new WeakMap<Store, Map<string, string>>();
+const producerOfKey = new WeakMap<Store, Map<string, string[]>>();
 const ownershipWarned = new Set<string>();
 
 // --- Dev-only laundering smell (docs/plan-key-ownership.md, verify check 4) ----------------------
@@ -66,12 +66,23 @@ export function declareReaders(store: Store, readers: Map<string, string[]>): vo
 }
 
 /** Called by `defineArchipelago` with `key -> producing slot` for this region. */
-export function declareProducers(store: Store, producers: Map<string, string>): void {
-  if (DEBUG) producerOfKey.set(store, producers);
+export function declareProducers(store: Store, producers: Map<string, string | string[]>): void {
+  if (!DEBUG) return;
+  // Normalised to a LIST because one island can legitimately be mounted twice — the same filter panel
+  // in a desktop sidebar and a mobile drawer is one owner at two slots, not two owners. The caller
+  // decides what counts as the same island; here they are simply the slots allowed to write the key.
+  const normalised = new Map<string, string[]>();
+  for (const [key, slots] of producers) normalised.set(key, Array.isArray(slots) ? slots : [slots]);
+  producerOfKey.set(store, normalised);
 }
 
 /** The producing slot for a key, or undefined when the key is unowned (debug only). */
 export function producerOf(store: Store, key: string): string | undefined {
+  return producerOfKey.get(store)?.get(key)?.[0];
+}
+
+/** Every slot allowed to write a key — more than one only for an island mounted at several slots. */
+export function producersOf(store: Store, key: string): string[] | undefined {
   return producerOfKey.get(store)?.get(key);
 }
 
@@ -203,8 +214,9 @@ export class Store {
       // supposed to be holding, going around it. Loud, once per key+source, and never fatal: this
       // runs in a browser, where throwing would take the page down over a diagnostic.
       // 'seed' is the host establishing a starting value, not updating one — see seedArchipelago.
-      const owner = producerOfKey.get(this)?.get(key);
-      if (owner && writeSource !== owner && writeSource !== 'seed') {
+      const owners = producerOfKey.get(this)?.get(key);
+      const owner = owners?.[0];
+      if (owners && writeSource && !owners.includes(writeSource) && writeSource !== 'seed') {
         const mark = `${key}:${writeSource ?? 'unattributed'}`;
         if (!ownershipWarned.has(mark)) {
           ownershipWarned.add(mark);

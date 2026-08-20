@@ -15,6 +15,7 @@ import {
   getArchipelagoStore,
   getMountedIslands,
   provideToArchipelago,
+  seedArchipelago,
   runWithWriteSource,
   type ArchipelagoConfig,
   type Channel,
@@ -55,6 +56,8 @@ declare global {
     /** The verify harness's handle on this mount path: the `provide` seam and a real re-mount. */
     __motuLagoon?: {
       provide: (key: string, value: unknown) => void;
+      /** Establish a value (attributed as a seed, not a host write). */
+      seed: (key: string, value: unknown) => void;
       remount: () => void;
       /** Fire one of an island's DECLARED outputs, as if the component had. */
       emit: (slot: string, event: string, detail: unknown) => boolean;
@@ -134,6 +137,11 @@ export function mountReactLagoon(
   window.__motuLagoon = {
     archipelago: config.id,
     provide: (key, value) => provideToArchipelago(config.id, key, value),
+    //  - seed: ESTABLISH a value rather than update one. The wiring probe puts a produced key back
+    //    the way it found it, and doing that through `provide` made the harness itself look like a
+    //    host reaching into island-owned state — motu's ownership guard fired on every probed key.
+    //    A rollback is not the host updating the region; it is a re-seed, so say so.
+    seed: (key, value) => seedArchipelago(config.id, key, value),
     //  - emit: fire an island's declared output without touching its DOM.
     //
     //    This is the only interaction primitive the harness gets, and deliberately so: it can drive

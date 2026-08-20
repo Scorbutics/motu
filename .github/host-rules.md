@@ -4,6 +4,10 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    state is an island EVEN IF other islands sit inside it — DOM nesting says nothing about ownership,
    and `slots` (prop -> slot, in the archipelago) declares which island fills which of its props, so
    the region composes the same way in the page and in the lagoon.
+ - Before a PAGE gets islands, SURVEY it (`/island-locate`) and write the answer down: which regions
+   become islands, which stay host, who owns each shared key, and whether the page becomes an
+   archipelago. The scope of a region is the PAGE, never a DOM subtree — an archipelago drawn around
+   the div that happens to contain the islands cuts through the coupling it exists to declare.
  - NEW UI content starts as an island with at least one scenario in its `*.evidence.ts`, and is looked
    at in the lagoon (`motu lagoon serve --watch`, or `motu island verify <name>`) BEFORE it is placed
    on a page. An island must render from defaults alone — every input optional, with a default.

@@ -22,9 +22,9 @@ An island is a **mount point** plus its **ui component** (the CLI scaffolds them
 1. `demo-app/src/ui/<kebab>/<Pascal>.tsx` — the plain, mode-agnostic component (props in, callbacks
    out). Lives in `ui/` (the "mainland") so mount points can never import each other — `ui/` may import
    `@motu/contract`, `shared/`, and other `ui/`, but never `islands/` or `archipelagos/`.
-2. `demo-app/src/islands/<kebab>/element.ts` — the mount-point registry row: `tag` → ui component +
+2. `demo-app/src/islands/<kebab>.island.ts` — the mount-point registry row: `tag` → ui component +
    the `contract` (input / output / coupling) + the required `legacy` fit strategy.
-3. `demo-app/src/islands/<kebab>/fixtures.mock.ts` — lagoon fixtures (offline `MockTransport` replay)
+3. `demo-app/src/islands/<kebab>.evidence.ts` — lagoon fixtures (offline `MockTransport` replay)
    + `scenarios` (input cases proving reactive behaviour).
 4. `demo-app/src/archipelagos/<id>/<id>.archipelago.ts` — archipelago membership (only at integrate).
 
@@ -83,7 +83,7 @@ error handling, and the debounce/sequence pattern.
 
 ## Step 5 — Fixtures + legacy-fit strategy
 
-- Fill `demo-app/src/islands/<kebab>/fixtures.mock.ts` with responses whose **shape matches the
+- Fill `demo-app/src/islands/<kebab>.evidence.ts` with responses whose **shape matches the
   contract return types** (see the method's `call<…>()` return in `@motu/contract`). Include the
   `roles` a caller needs so role-gated paths can be demoed offline.
 - For REACTIVE behaviour (e.g. type a filter → results narrow), a fixture `response` may be a
@@ -98,19 +98,13 @@ error handling, and the debounce/sequence pattern.
 ## Step 6 — Close the loop in the lagoon
 
 ```bash
-pnpm motu island verify <name>            # STATIC — the dev loop: about a second, run it as often as you like
-pnpm motu island verify <name> --runtime  # the browser lane — run it before you integrate, not on every save
+pnpm motu island verify <name>          # static + config + REAL-browser lagoon mount (native & legacy fit)
 ```
 
-Static verify is the drift check: the island against its component, its contract and its region. That
-is the loop you close on while you work.
-
-`--runtime` boots the focused lagoon and mounts the island in **Playwright/Chromium**, so real
-layout/CSS/paint are checked — not just an in-process DOM. It costs seconds per island (a browser pass
-per scenario × viewport), which is why it is opt-in: use it as a gate before integrating, in CI, or
-nightly across the project — running it on every edit is how a harness becomes something people skip.
-One-time setup for the browser: `cd packages/cli && npx playwright install chromium`. `--fast` gives a
-quicker in-process happy-dom mount, and `--verbose` names each step with what it cost.
+The runtime layer boots the focused lagoon and mounts the island in **Playwright/Chromium**, so real
+layout/CSS/paint are checked — not just an in-process DOM. One-time setup for the browser:
+`cd packages/cli && npx playwright install chromium`. Use `--fast` for a quicker in-process happy-dom
+mount when iterating, but let the real-browser check be the gate before you integrate.
 
 Fix every `✗` and re-run until it prints **PASS**. For visual iteration, run the lagoon and open it:
 

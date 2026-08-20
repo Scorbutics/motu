@@ -221,6 +221,24 @@ function injectReloadClient(page) {
  * Nested roots are dropped (the lagoon lives inside the app root), because a recursive watch on both
  * would deliver every event twice.
  */
+/**
+ * The live `FSWatcher`s, held at module scope so nothing collects them AND so they can be re-armed.
+ *
+ * Two failures, one symptom — `--watch` stops rebuilding, silently, while the server keeps serving a
+ * stale page. That is the worst shape this can take: on the phone in your hand there is no console,
+ * and a page that loads looks like a page that is current.
+ *
+ * 1. `fsWatch()`'s return value was dropped on the floor. An FSWatcher nobody references can be
+ *    garbage-collected, and when V8 takes it the watch ends.
+ * 2. The BUILD kills the watch. Node's recursive watch on Linux is per-directory underneath, and a
+ *    vite build churns directories inside the watched root (`.motu/`, vite's caches); when those go,
+ *    the watcher can close without ever emitting an error anyone sees.
+ *
+ * So holding the reference is necessary and not sufficient: they are also re-armed after every
+ * rebuild, which is precisely when they die. Re-arming is a handful of inotify calls.
+ */
+const WATCHERS = [];
+
 function watchRoots() {
   const candidates = [APP_ROOT, paths.lagoonDir, resolve(REPO_ROOT, 'packages')].filter((p) => existsSync(p));
   return candidates.filter((p) => !candidates.some((other) => other !== p && p.startsWith(other + sep)));
@@ -378,6 +396,9 @@ export function lagoonServeCommand(argv) {
         console.error(color.dim(`  ${err.message.split('\n')[0]}`));
       } finally {
         building = false;
+        // The build is what kills the watch, so re-arm on the way out — before any queued rebuild,
+        // because that one is a build too.
+        arm();
         if (queued) {
           queued = false;
           rebuild();
@@ -385,15 +406,31 @@ export function lagoonServeCommand(argv) {
       }
     };
 
-    for (const root of roots) {
-      try {
-        fsWatch(root, { recursive: true }, (_event, file) => {
-          if (!isSourceChange(file)) return;
-          clearTimeout(timer);
-          timer = setTimeout(rebuild, 250);
-        });
-      } catch (err) {
-        console.error(color.red(`✗ cannot watch ${paths.rel(root)} — ${err.message}`));
+    arm();
+
+    /** (Re)create every watcher. Idempotent: the previous set is closed first. */
+    function arm() {
+      for (const w of WATCHERS.splice(0)) {
+        try {
+          w.close();
+        } catch {
+          /* already closed — that is the case this exists for */
+        }
+      }
+      for (const root of roots) {
+        try {
+          const w = fsWatch(root, { recursive: true }, (_event, file) => {
+            if (!isSourceChange(file)) return;
+            clearTimeout(timer);
+            timer = setTimeout(rebuild, 250);
+          });
+          // An 'error' on an EventEmitter with no listener THROWS. A dying watcher must not take the
+          // server with it — re-arm instead, since the watch is exactly what we are trying to keep.
+          w.on('error', () => setTimeout(arm, 100));
+          WATCHERS.push(w);
+        } catch (err) {
+          console.error(color.red(`✗ cannot watch ${paths.rel(root)} — ${err.message}`));
+        }
       }
     }
     console.log(color.dim(`  watching ${roots.map((r) => paths.rel(r)).join(', ')} — saves rebuild and reload viewers`));

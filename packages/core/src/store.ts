@@ -8,6 +8,24 @@ const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
 
 export type StoreListener = () => void;
 
+// --- Dev-only key ownership (docs/plan-key-ownership.md) -----------------------------------------
+// `bind` says who READS a key; `produces` says who may write it. The store is the only place every
+// write passes through, so it is where a write from the wrong source is caught. Debug-only: in
+// production the map is never filled and the check never runs.
+
+const producerOfKey = new WeakMap<Store, Map<string, string>>();
+const ownershipWarned = new Set<string>();
+
+/** Called by `defineArchipelago` with `key -> producing slot` for this region. */
+export function declareProducers(store: Store, producers: Map<string, string>): void {
+  if (DEBUG) producerOfKey.set(store, producers);
+}
+
+/** The producing slot for a key, or undefined when the key is unowned (debug only). */
+export function producerOf(store: Store, key: string): string | undefined {
+  return producerOfKey.get(store)?.get(key);
+}
+
 // --- Dev-only write attribution (debug overlay) --------------------------------------------------
 // Reads are declarative (an island's `bind`), but writes happen inside opaque `on` handlers and
 // channels. To answer "which island writes which key" (the archipelago coupling view) we tag each
@@ -114,12 +132,34 @@ export class Store {
     if (this.has(key) && Object.is(this.data[key], value)) return;
     this.data[key] = value;
     if (DEBUG) {
+      // Ownership. A produced key has exactly one writer; anyone else reaching it — the host through
+      // `provide()`, a sibling island, a bare `store.set` — is the coupling the archipelago is
+      // supposed to be holding, going around it. Loud, once per key+source, and never fatal: this
+      // runs in a browser, where throwing would take the page down over a diagnostic.
+      // 'seed' is the host establishing a starting value, not updating one — see seedArchipelago.
+      const owner = producerOfKey.get(this)?.get(key);
+      if (owner && writeSource !== owner && writeSource !== 'seed') {
+        const mark = `${key}:${writeSource ?? 'unattributed'}`;
+        if (!ownershipWarned.has(mark)) {
+          ownershipWarned.add(mark);
+          console.error(
+            `motu: "${key}" is produced by island "${owner}", but it was written by ` +
+              `${writeSource ? `"${writeSource}"` : 'unattributed host code'}. Route it through that ` +
+              `island's output, or change who the archipelago declares as its producer.`,
+          );
+        }
+      }
       const w: StoreWrite = { store: this, key, source: writeSource, at: Date.now() };
       writeListeners.forEach((l) => l(w));
       // provide() tags its writes 'host'; capture them (with the value) as lagoon seed.
       if (seedSink && writeSource === 'host') seedSink.push({ key, value, source: 'host' });
     }
     this.listeners.forEach((l) => l());
+  }
+
+  /** Every key currently held, as a plain object — for a host reading the region (see `useRegion`). */
+  snapshot(): Record<string, unknown> {
+    return { ...this.data };
   }
 
   subscribe(l: StoreListener): () => void {

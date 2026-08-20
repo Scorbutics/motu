@@ -194,6 +194,29 @@ export function islandComponentPath(kebab, pascal) {
 }
 
 /**
+ * The name of the component an island mounts, as EXPORTED by the component's own file.
+ *
+ * Not the name derived from the island's own kebab: on a modern host an island wraps a component the
+ * app already ships, whose name is the app's business (`WeekActionsView`, `NetworkStatsBanner`). Every
+ * check that reads the component — default props, the `${Name}Props` interface — has to look for what
+ * is actually there, or it reports "couldn't find" for a component sitting right in front of it.
+ */
+export function islandComponentExport(kebab, fallback) {
+  const elementPath = paths.elementFile(kebab);
+  if (!existsSync(elementPath)) return fallback;
+  const text = readFileSync(elementPath, 'utf8');
+  const local = text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1];
+  if (!local) return fallback;
+  for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"][^'"]+['"]/g)) {
+    for (const entry of m[1].split(',')) {
+      const [exported, alias] = entry.split(/\s+as\s+/).map((n) => n.trim());
+      if ((alias ?? exported) === local) return exported;
+    }
+  }
+  return local;
+}
+
+/**
  * Locate the vite binary that serves/builds the lagoon.
  *
  * A single `REPO_ROOT/node_modules/vite` join only works when the project root is also the install

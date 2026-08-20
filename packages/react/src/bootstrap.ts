@@ -35,6 +35,47 @@ export interface ReactElementSpec<P extends object = any> {
  * css/defaultTheme, it registers its own custom element (via defineAngularElement, etc.). This keeps
  * registerElements — and @motu/react — free of any renderer-specific import.
  */
+/**
+ * Declare a React-backed island, with its contract checked against the component's own props.
+ *
+ * A plain `const element: ElementSpec = {…}` annotation cannot do this: `ElementSpec` defaults its
+ * props type to `any`, so `input: ['missinos']` and `output: { onProgres: 'x' }` both compile and the
+ * island quietly binds — and emits — nothing. Inferring `P` from `component` is what makes the
+ * contract answerable by the compiler:
+ *
+ *   export const element = islandElement({
+ *     tag: 'x-week-actions',
+ *     component: WeekActionsView,
+ *     options: { contract: { input: ['missions'], output: { onProgress: 'week-progress' } } },
+ *   });
+ *
+ * The `const` type parameter keeps the literals — `'week-progress'`, not `string` — so an archipelago
+ * can check its `writes` and `on` keys against the events this island actually declares (see
+ * `RegionWiringOk`). Without it the tag and every event name widen and the wiring is unverifiable.
+ */
+export function islandElement<const S extends IslandElementShape>(spec: S & ContractOf<S>): S {
+  return spec;
+}
+
+/** The loose shape S is inferred against — literals intact, nothing checked yet. */
+interface IslandElementShape {
+  standalone?: boolean;
+  tag: string;
+  component: ComponentType<any>;
+  options: { contract?: { input?: readonly unknown[]; output?: Readonly<Record<string, string>> } } & Record<string, unknown>;
+}
+
+/**
+ * The same spec, with its contract re-typed against the component's own props — checked in a second
+ * pass, once `S` (and with it the component) has been inferred. Inferring `P` in the same position it
+ * is constrained would collapse it to `never`.
+ */
+type ContractOf<S extends IslandElementShape> = {
+  options: Omit<DefineOptions<PropsOf<S['component']>>, 'css' | 'defaultTheme'> & { defaultTheme?: MotuTheme };
+};
+
+type PropsOf<C> = C extends ComponentType<infer P> ? P : never;
+
 export interface CustomElementSpec {
   tag: string;
   define: (shared: RegisterElementsOptions) => void;

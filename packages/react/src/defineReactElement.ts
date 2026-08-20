@@ -23,8 +23,14 @@ export interface DefineOptions<P> {
   contract?: {
     /** INPUT — props fed from the store/host (data in). */
     input?: PropEntry<P>[];
-    /** OUTPUT — callback prop -> CustomEvent name (data out), e.g. `{ onReset: 'reset' }`. */
-    output?: Record<string, string>;
+    /**
+     * OUTPUT — callback prop -> CustomEvent name (data out), e.g. `{ onReset: 'reset' }`.
+     *
+     * The prop is `keyof P`: an island whose declared output does not exist on the component emits
+     * nothing, silently, for as long as nobody notices. That was a runtime discovery ("declared but
+     * never fired"); here it is a build error.
+     */
+    output?: Partial<Record<keyof P & string, string>>;
     /** COUPLING — dependencies beyond the store (usually absent for a React island). */
     coupling?: IslandCoupling;
     /**

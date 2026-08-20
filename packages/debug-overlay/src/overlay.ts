@@ -103,13 +103,19 @@ export function subscribeDebugOverlay(fn: (open: boolean) => void): () => void {
 
 // --- Read-only computations over framework data --------------------------------------------------
 
+/** The store keys an island reads. `bind` values are optional in the type (see IslandSpec), so a
+ *  declaration that leaves one out must not become an `undefined` key in the graph. */
+function bindKeys(info: MountedIslandInfo): string[] {
+  return Object.values(info.spec.bind ?? {}).filter((k): k is string => typeof k === 'string');
+}
+
 function computeProps(info: MountedIslandInfo, def: IslandDefinition | undefined): PropRow[] {
   if (!def) return [];
   const bind = info.spec.bind ?? {};
   const staticProps = info.spec.props ?? {};
   return def.props.map((name): PropRow => {
-    if (name in bind) {
-      const storeKey = bind[name];
+    const storeKey = bind[name];
+    if (storeKey) {
       const value = info.store.get(storeKey);
       return { name, state: value === undefined ? 'bound-empty' : 'bound', storeKey, value };
     }
@@ -638,7 +644,7 @@ class Overlay {
   #channelReaders(ch: ChannelInfo): MountedIslandInfo[] {
     const keys = ch.keys;
     return getMountedIslands().filter(
-      (info) => info.store === ch.store && Object.values(info.spec.bind ?? {}).some((k) => keys.has(k)),
+      (info) => info.store === ch.store && bindKeys(info).some((k) => keys.has(k)),
     );
   }
 
@@ -652,15 +658,37 @@ class Overlay {
   // Islands don't talk directly — they couple THROUGH a shared store key. So the coupling graph is a
   // hub per key (touched by >=2 islands) with a spoke to each island that reads or writes it. Red hub
   // = 3+ islands (coupling accreting), amber = a plain producer/consumer pair.
+  //
+  // An island with NO BOX still gets its spoke, drawn faint to a named ghost. It is the common case on
+  // a responsive page — the other end of the coupling is real, mounted and bound, but the page does not
+  // render it at this width (`lg:hidden`) — and requiring both ends on screen was hiding the graph
+  // exactly when it explains the most: the surviving end lit up as "coupled" with nothing to couple to.
   #drawCoupling() {
     for (const [, byKey] of this.#couplingByStore()) {
       for (const [key, islands] of byKey) {
         if (islands.size < 2) continue;
-        const anchors = [...islands].map((i) => islandAnchor(i.el)).filter((a): a is Point => !!a);
-        if (anchors.length < 2) continue;
-        const hub = { x: avg(anchors.map((a) => a.x)), y: avg(anchors.map((a) => a.y)) };
+        const anchors: Point[] = [];
+        const boxless: MountedIslandInfo[] = [];
+        for (const i of islands) {
+          const a = islandAnchor(i.el);
+          if (a) anchors.push(a);
+          else boxless.push(i);
+        }
+        if (!anchors.length) continue;
+        // With one end on screen there is no midpoint to sit on, so the hub parks just above it.
+        const hub =
+          anchors.length > 1
+            ? { x: avg(anchors.map((a) => a.x)), y: avg(anchors.map((a) => a.y)) }
+            : { x: anchors[0].x, y: Math.max(16, anchors[0].y - 52) };
         const color = islands.size >= 3 ? '#b91c1c' : '#b45309';
         for (const a of anchors) this.#wires.append(wire(hub.x, hub.y, a.x, a.y, color));
+        boxless.forEach((info, n) => {
+          const ghost = { x: hub.x, y: Math.max(12, hub.y - 34 - n * 30) };
+          const spoke = wire(hub.x, hub.y, ghost.x, ghost.y, color);
+          spoke.setAttribute('stroke-opacity', '.4');
+          this.#wires.append(spoke);
+          this.#wires.append(svgLabel(ghost.x, ghost.y, `${info.slot} \u00b7 not rendered`, color));
+        });
         const ring = svgDot(hub.x, hub.y, color, 5);
         ring.setAttribute('stroke', '#fffefb');
         ring.setAttribute('stroke-width', '2');
@@ -689,7 +717,7 @@ class Overlay {
       s.add(info);
     };
     for (const info of islands) {
-      for (const key of Object.values(info.spec.bind ?? {})) add(info.store, key, info);
+      for (const key of bindKeys(info)) add(info.store, key, info);
     }
     for (const [store, byKey] of this.#writes) {
       for (const [key, slots] of byKey) {
@@ -1101,7 +1129,7 @@ class Overlay {
     // OUTPUT — events it emits, store keys it has written (observed), host intents it pushed OUT to
     // the ocean, and contract calls it made to the backend (both cross the motu boundary).
     const output = this.#group('output', '#b45309');
-    const emits = Object.keys(info.spec.on ?? {});
+    const emits = Object.entries(info.spec.on ?? {}).filter(([, h]) => h).map(([e]) => e);
     if (emits.length) {
       output.append(this.#subLabel('emits events'));
       const chips = h('div', { class: 'chips' });
@@ -1164,7 +1192,7 @@ class Overlay {
   }
 
   #readKeys(info: MountedIslandInfo): string[] {
-    return Object.values(info.spec.bind ?? {});
+    return bindKeys(info);
   }
 
   #islandWrites(info: MountedIslandInfo): string[] {
@@ -1321,7 +1349,7 @@ class Overlay {
     const keys = new Set<string>();
     for (const info of getMountedIslands()) {
       if (info.store !== store) continue;
-      for (const k of Object.values(info.spec.bind ?? {})) keys.add(k);
+      for (const k of bindKeys(info)) keys.add(k);
     }
     return keys;
   }
@@ -1350,7 +1378,7 @@ class Overlay {
     for (const [store, islands] of groups) {
       const readers = new Map<string, Set<string>>();
       for (const info of islands) {
-        for (const key of Object.values(info.spec.bind ?? {})) {
+        for (const key of bindKeys(info)) {
           let set = readers.get(key);
           if (!set) readers.set(key, (set = new Set()));
           set.add(info.slot);

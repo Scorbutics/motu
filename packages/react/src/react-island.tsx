@@ -32,8 +32,10 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  applyOutput,
   defineArchipelago,
   getArchipelagoStore,
+  producerOf,
   registerIslandDefinition,
   registerMountedIsland,
   runWithWriteSource,
@@ -69,6 +71,20 @@ function declaredInputs(spec: ReactElementSpec): { name: string; default?: unkno
 function declaredOutputs(spec: ReactElementSpec): Record<string, string> {
   const options = spec.options as { contract?: { output?: Record<string, string> }; events?: Record<string, string> } | undefined;
   return options?.contract?.output ?? options?.events ?? {};
+}
+
+/** One line per (slot, key), so a page that re-renders 60 times a second says it once. */
+const unpublishedWarned = new Set<string>();
+
+function warnUnpublished(slot: string, key: string, owner: string): void {
+  const mark = `${slot}:${key}`;
+  if (unpublishedWarned.has(mark)) return;
+  unpublishedWarned.add(mark);
+  console.warn(
+    `motu: <Island slot="${slot}"> was passed a prop bound to "${key}", which island "${owner}" ` +
+      `produces — not published. The prop still renders this island; the store keeps the producer's ` +
+      `value. Feed it from "${owner}"'s output, or stop passing it.`,
+  );
 }
 
 export interface ArchipelagoProviderProps {
@@ -142,6 +158,50 @@ export function useMotuStore(): Store {
   return ctx.store;
 }
 
+/**
+ * Read one region key from the host's own tree — the direction that only becomes legal once removal is
+ * an EJECT rather than an unwrap (docs/plan-key-ownership.md, D1).
+ *
+ * A page that has handed a value's ownership to an island still has chrome of its own to render with
+ * it (peps' week navigator shows the same progress the banner does). Before ownership, the page kept
+ * deriving it a second time, which is two sources of truth for one number; this is the one source,
+ * read. Eject materialises the call into `useState` + the producer's callback.
+ *
+ * Prefer `useRegion<Region>()` for typed reads — see below. This per-key form cannot derive the value
+ * type from the key when the region is supplied explicitly: TypeScript stops inferring the remaining
+ * type parameters as soon as one is given, so `K` falls back to its default and the result widens to
+ * every value type in the region.
+ */
+export function useRegionValue<
+  R = Record<string, unknown>,
+  K extends keyof R & string = keyof R & string,
+>(key: K): R[K] | undefined {
+  const store = useMotuStore();
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => store.subscribe(bump), [store]);
+  return store.get(key) as R[K] | undefined;
+}
+
+/**
+ * Read the region as a typed object — the form to reach for.
+ *
+ * ```ts
+ * const { overallProgress = 0, completedCount = 0 } = useRegion<ActionsRegion>()
+ * ```
+ *
+ * One type argument, and everything else follows: each property's type comes from the region, an
+ * unknown key is a build error at the destructuring site, and defaults sit where they are read. It
+ * also avoids the partial-inference trap of the per-key form.
+ *
+ * The object is rebuilt on every store change — destructure it, do not put it in a dependency list.
+ */
+export function useRegion<R = Record<string, unknown>>(): Partial<R> {
+  const store = useMotuStore();
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => store.subscribe(bump), [store]);
+  return store.snapshot() as Partial<R>;
+}
+
 export interface IslandProps {
   /** The slot this island fills, as declared in the archipelago config. */
   slot: string;
@@ -193,12 +253,11 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
     const out: Record<string, (detail: unknown) => void> = {};
     if (!spec || !elementSpec) return out;
     for (const [callbackProp, eventName] of Object.entries(declaredOutputs(elementSpec))) {
-      const handler = spec.on?.[eventName];
       out[callbackProp] = (detail: unknown) => {
-        if (!handler) return;
         // Tag the island as the writer, so the lens attributes store writes the same way it does for
-        // an event dispatched by the custom element.
-        runWithWriteSource(slot, () => handler(detail, { store: ctx.store, host: ctx.host! }));
+        // an event dispatched by the custom element. `applyOutput` is shared with the element path:
+        // declared `writes` first, then any `on` handler, so an island behaves the same either way.
+        runWithWriteSource(slot, () => applyOutput(spec, eventName, detail, { store: ctx.store, host: ctx.host! }));
       };
     }
     return out;
@@ -216,15 +275,36 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   // unchanged prop on every render would clobber a sibling's write to the same key the moment
   // anything re-rendered. While the page keeps passing a value, the page owns it (the store is a
   // read-mirror); a key becomes store-owned only when the page stops passing it.
+  const provided = useMemo(
+    () => new Set((ctx.config as { provides?: string[] }).provides ?? []),
+    [ctx.config],
+  );
   const publishedRef = useRef<Record<string, unknown>>({});
   useEffect(() => {
     if (!hosted || !spec?.bind) return;
     for (const [prop, key] of Object.entries(spec.bind)) {
-      if (!(prop in hostedProps)) continue;
+      if (!key || !(prop in hostedProps)) continue;
+      // OWNED KEYS ARE NOT THE PAGE'S TO PUBLISH (docs/plan-key-ownership.md, D5).
+      //
+      // This is where a host-mediated coupling used to become invisible: the page computes a value
+      // from what ANOTHER island did, passes it as a prop, and this loop publishes it under the
+      // RECEIVING island's name. The store then looks fed and the real producer is nowhere. When the
+      // key has a declared producer, the prop stays a prop — it renders this island and nothing else —
+      // and the store keeps whatever the producer put there.
+      const owner = producerOf(ctx.store, key);
+      if (owner) {
+        warnUnpublished(slot, key, owner);
+        continue;
+      }
       const value = hostedProps[prop];
       if (Object.is(publishedRef.current[key], value)) continue;
       publishedRef.current[key] = value;
-      runWithWriteSource(slot, () => ctx.store.set(key, value));
+      // Attributed to the HOST when the region declares the key as host-fed, and to the island
+      // otherwise. The page passing a prop IS the host feeding the region, and calling it a write by
+      // the island that received it made every fed key read as an island feeding itself — the same
+      // mis-attribution that hid the page's coupling in the first place.
+      const source = provided.has(key) ? 'host' : slot;
+      runWithWriteSource(source, () => ctx.store.set(key, value));
     }
   });
 
@@ -263,6 +343,7 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   //    test, so a sibling that deliberately sets a key to `undefined` is honoured instead of silently
   //    falling back to the page.
   for (const [prop, key] of Object.entries(spec.bind ?? {})) {
+    if (!key) continue;
     if (hosted) {
       if (ctx.store.has(key)) resolved[prop] = ctx.store.get(key);
     } else {

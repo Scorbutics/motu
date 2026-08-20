@@ -1,14 +1,14 @@
 export { renderArchipelagoLayout } from './archipelago-layout.js';
 export { defineReactElement } from './defineReactElement.js';
 export type { DefineOptions } from './defineReactElement.js';
-export { registerElements, defineMotuApp, defineLagoon } from './bootstrap.js';
+export { registerElements, defineMotuApp, defineLagoon, islandElement } from './bootstrap.js';
 export { resolveTransportMode, mountTransportToggle } from './transport-toggle.js';
 export type { TransportMode } from './transport-toggle.js';
 export { resolveFitMode, mountFitToggle } from './fit-toggle.js';
 export { mountTideLine } from './tideline.js';
 export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCorner, TideLens } from './tideline.js';
 export { bootstrapLagoon } from './lagoon-bootstrap.js';
-export { ArchipelagoProvider, Island, useMotuStore } from './react-island.js';
+export { ArchipelagoProvider, Island, useMotuStore, useRegionValue, useRegion } from './react-island.js';
 export { mountReactLagoon } from './lagoon-react-mount.js';
 export type { ArchipelagoProviderProps, IslandProps } from './react-island.js';
 export { startLagoon } from './lagoon-gallery.js';

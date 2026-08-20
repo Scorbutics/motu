@@ -16,6 +16,8 @@ import { relative, resolve, dirname } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
 import { paths, color } from '../lib/util.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
+import { listIslands } from '../lib/islands.mjs';
+import { ejectFile, readOutputs, readRegions } from '../lib/eject.mjs';
 
 /** Specifiers that only exist because motu does. */
 const MOTU_SPECIFIER = /^@motu\/|^motu-islands(\/|$)/;
@@ -117,9 +119,14 @@ export function removalCheckCommand(argv) {
   const motuDir = relative(hostRoot, cfg.root) || 'motu';
   const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(project, hostRoot, motuDir);
 
+  // The wiring the archipelagos hold, read from their configs and the islands' declared outputs.
+  const regions = readRegions(paths.archipelagosDir);
+  const outputs = readOutputs(listIslands(paths.islandsDir).map((i) => i.element));
+
   const deleted = [];
   const stripped = [];
   const touched = [];
+  const ejected = [];
 
   for (const sf of project.getSourceFiles()) {
     const p = sf.getFilePath();
@@ -131,6 +138,10 @@ export function removalCheckCommand(argv) {
     const tags = unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec);
     if (!tags.size && !sf.getImportDeclarations().some((i) => isMotuSpec(i.getModuleSpecifierValue()))) continue;
     touched.push(p);
+    // EJECT FIRST, while `<Island slot="…">` is still there to say which element produces what: region
+    // reads and seeds become plain state, and the producer's output prop is wired to its setters.
+    const notes = ejectFile(sf, regions, outputs);
+    if (notes.length) ejected.push([p, notes]);
     // Form 2: unwrap motu's JSX, keep the children, drop the imports.
     for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxElement)].reverse()) {
       const name = el.getOpeningElement().getTagNameNode().getText();
@@ -184,6 +195,10 @@ export function removalCheckCommand(argv) {
   console.log(color.bold('\nmotu removal-check — is motu removable from the host application?\n'));
   for (const p of deleted) console.log(`  ${color.dim('delete ')} ${relative(hostRoot, p)} ${color.dim('(100% motu)')}`);
   for (const p of stripped) console.log(`  ${color.dim('unwrap ')} ${relative(hostRoot, p)}`);
+  for (const [p, notes] of ejected) {
+    console.log(`  ${color.dim('eject  ')} ${relative(hostRoot, p)}`);
+    for (const n of notes) console.log(`           ${color.dim(n)}`);
+  }
   console.log('');
 
   const out = ((result?.stdout ?? '') + (result?.stderr ?? '')).trim();

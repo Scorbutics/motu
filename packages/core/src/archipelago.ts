@@ -2,7 +2,7 @@
 // Store, and a HostBridge for outward intents (navigation/actions). The page only drops thin
 // <motu-island slot="…"> markers; all composition lives here, shipped in the composition root.
 
-import { Store } from './store.js';
+import { Store, declareProducers } from './store.js';
 import { installChannels, type Channel } from './channel.js';
 import { runWithWriteSource, currentWriteSource } from './store.js';
 
@@ -30,11 +30,18 @@ export interface IslandContext {
   host: HostBridge;
 }
 
-export interface IslandSpec<TRegion = Record<string, unknown>> {
+export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends string = string> {
   /** Marker name the page references: <motu-island slot="member-results">. */
   slot: string;
-  /** Custom element tag to instantiate. */
-  element: string;
+  /**
+   * Custom element tag to instantiate.
+   *
+   * `TTag` defaults to `string`, which is what an ocean needs. Narrow it to `keyof ElementTypes` (the
+   * map `motu island sync` generates) and two things follow: an unknown tag is a compile error rather
+   * than a runtime warning, and the tag stays a LITERAL — without which nothing downstream can look
+   * the island up to check the events this entry wires (`RegionWiringOk`).
+   */
+  element: TTag;
   /** Static properties set once on mount. */
   props?: Record<string, unknown>;
   /**
@@ -44,10 +51,41 @@ export interface IslandSpec<TRegion = Record<string, unknown>> {
    * the compiler: rename the key in the app and this fails to build. That matters because the page and
    * the archipelago otherwise name the same value twice and nothing links them — in peps the page
    * already called it `loadingReceived` while the store key was `receivedLoading`.
+   *
+   * `| undefined` is not an invitation to write one: it is what lets a region be declared with
+   * `satisfies` (which `ProducedKeys` needs — see below), because an array literal of differently
+   * shaped island entries infers each absent key as `?: undefined`. Readers skip falsy keys.
    */
-  bind?: Record<string, keyof TRegion & string>;
-  /** Handle a CustomEvent the island emits; typically writes the store or fires a host intent. */
-  on?: Record<string, (detail: unknown, ctx: IslandContext) => void>;
+  bind?: Record<string, (keyof TRegion & string) | undefined>;
+  /**
+   * Handle a CustomEvent the island emits; typically writes the store or fires a host intent.
+   *
+   * `| undefined` for the same reason as `bind`: it keeps a `satisfies`-declared region assignable.
+   */
+  on?: Record<string, ((detail: unknown, ctx: IslandContext) => void) | undefined>;
+  /**
+   * What this island's output WRITES: event name -> the store key it owns, or a map from fields of the
+   * event's detail to keys. Declaring it does three things a handler function cannot:
+   *
+   *  1. it declares OWNERSHIP — nobody else may update those keys (see `producerOf`), which is what
+   *     stops a page wiring two islands together through its own state (docs/plan-key-ownership.md);
+   *  2. it makes the region's graph readable WITHOUT running it — event, key and reader are all
+   *     declared, so the lens can draw the wiring before anything fires;
+   *  3. it is EJECTABLE. Removing motu has to leave the coupling working, and a `useState` + callback
+   *     prop can be generated from this mapping. It cannot be generated reliably from an arbitrary
+   *     function body, which is why writing goes here and `on` keeps only what has no store effect
+   *     (host intents).
+   *
+   * Declared on the region's wiring rather than on the island: the same island can own a key in one
+   * region and be a pure consumer of it in another (D2).
+   *
+   * Ownership is about UPDATES, not first paint — a key is normally host-seeded and island-produced
+   * afterwards (D4), so `seed` and this coexist.
+   *
+   *   writes: { 'new-count': 'newReceivedCount' }                       // detail IS the value
+   *   writes: { 'week-progress': { overallProgress: 'overallProgress' } } // detail.field -> key
+   */
+  writes?: Record<string, (keyof TRegion & string) | Record<string, keyof TRegion & string> | undefined>;
 }
 
 /**
@@ -60,9 +98,19 @@ export interface IslandSpec<TRegion = Record<string, unknown>> {
  * requires the parameter, because there the page owns the state and motu must reference it rather
  * than restate it.
  */
-export interface ArchipelagoConfig<TRegion = Record<string, unknown>> {
+export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag extends string = string> {
   id: string;
-  islands: IslandSpec<TRegion>[];
+  islands: IslandSpec<TRegion, TTag>[];
+  /**
+   * Store keys fed from OUTSIDE the region — the host's own, written through `provideToArchipelago`
+   * or a channel.
+   *
+   * The counterpart of `IslandSpec.produces`: between them, every key an island binds has exactly one
+   * declared owner. Claiming a key here changes no behaviour; it makes host feeding visible (a bare
+   * `store.set` carries no source at all) and it is the one-word declaration a legacy region uses to
+   * adopt ownership key by key (D3, D8).
+   */
+  provides?: (keyof TRegion & string)[];
   /**
    * The "new design" layout: HTML arranging the island slots (e.g. hero + toolbar + results). It is
    * rendered natively by <motu-archipelago name="id"> in the standalone app, and swapped in as a
@@ -70,6 +118,122 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>> {
    */
   layout?: string;
 }
+
+/**
+ * The keys a region declares as island-produced, as a union.
+ *
+ * Only meaningful when the config keeps its literal types — declare it with `satisfies
+ * ArchipelagoConfig<Region>` rather than a type annotation, or every `produces` entry widens to
+ * `keyof Region` and this yields the whole region.
+ */
+export type ProducedKeys<A> = A extends { islands: readonly (infer I)[] } ? ProducesOf<I> : never;
+
+/** Distributes over the island union; an entry without `writes` contributes nothing. */
+type ProducesOf<I> = I extends { writes: infer W } ? KeysIn<W[keyof W]> : never;
+
+/** A `writes` value is the key itself, or a map of detail fields to keys. */
+type KeysIn<V> = V extends string ? V : V extends Record<string, infer K> ? (K extends string ? K : never) : never;
+
+/** Every store key an island reads, as a union. Entries without `bind` contribute nothing. */
+export type BoundKeys<A> = A extends { islands: readonly (infer I)[] } ? BindsOf<I> : never;
+type BindsOf<I> = I extends { bind: infer B } ? B[keyof B] & string : never;
+
+/** Every key the region declares as host-fed. */
+export type ProvidedKeys<A> = A extends { provides: readonly (infer K)[] } ? (K extends string ? K : never) : never;
+
+/** Bound, but claimed by nobody: neither `provides` nor any island's `writes`. */
+export type UnownedKeys<A> = Exclude<BoundKeys<A>, ProvidedKeys<A> | ProducedKeys<A>>;
+
+/** Claimed twice — the host says it feeds it, an island says it writes it. */
+export type DisputedKeys<A> = ProvidedKeys<A> & ProducedKeys<A>;
+
+/**
+ * Ownership as a COMPILE failure rather than a report.
+ *
+ * `verify` can only say these things after the fact, in a separate step someone has to run. They are
+ * set operations over declarations the compiler already holds, so they can be a build error instead —
+ * in the same loop as the edit that caused them, with `tsc`'s already-machine-readable output. One
+ * line per region:
+ *
+ *   const _ownership: RegionOwnershipOk<typeof actionsArchipelago> = true;
+ *
+ * Resolves to `true` when every bound key has exactly one owner, and otherwise to a labelled tuple —
+ * so the error names the offending keys rather than just failing.
+ *
+ * What CANNOT move here, and is why `verify` still exists: whether a declared output ever fires, and
+ * whether a declaration is HONEST. Both are runtime facts; types can only check consistency.
+ */
+export type RegionOwnershipOk<A> = [UnownedKeys<A>] extends [never]
+  ? [DisputedKeys<A>] extends [never]
+    ? true
+    : ['declared in `provides` AND written by an island:', DisputedKeys<A>]
+  : ['bound but owned by nobody — add to `provides`, or to an island\'s `writes`:', UnownedKeys<A>];
+
+/** The CustomEvent names an island declares as outputs, from its element spec's contract. */
+export type EventsOf<E> = E extends { options: { contract: { output: infer O } } }
+  ? O[keyof O] & string
+  : never;
+
+/**
+ * Wiring as a COMPILE failure: every event an island entry wires must be one the island declares.
+ *
+ * This is the last silently-dead declaration. `writes: { 'week-progres': 'x' }` is a well-typed
+ * mapping onto a well-typed key — nothing about it is wrong except that no island will ever dispatch
+ * it, which used to be discoverable only by running the region and noticing nothing moved.
+ *
+ * It needs the project's tag -> element-spec map, which `motu island sync` generates beside the
+ * registry; pass it as `TElements`. Type-only, so the archipelago gains no runtime dependency on the
+ * island modules:
+ *
+ *   const _wiring: RegionWiringOk<typeof actionsArchipelago, ElementTypes> = true;
+ *
+ * Checked against the project's whole event vocabulary, not per island: an array literal of
+ * differently-shaped entries is normalised into a union whose members no longer carry their own
+ * `element` alongside their own `writes`, so the tag cannot be matched to the entry that used it. A
+ * typo therefore fails (it names no island's event); wiring island A's event onto island B does not,
+ * and stays a runtime finding ("declared but never fired"). Per-entry precision needs the config
+ * declared through a helper with a `const` type parameter, which is a bigger change to how a region
+ * is authored.
+ */
+export type RegionWiringOk<A, TElements> = [Undeclared<A, TElements>] extends [never]
+  ? true
+  : ['wired to an event no island declares:', Undeclared<A, TElements>];
+
+type Undeclared<A, TElements> = Exclude<AllWiredEvents<A>, AllDeclaredEvents<TElements>>;
+
+type AllWiredEvents<A> = A extends { islands: readonly (infer I)[] } ? WiredEvents<I> : never;
+
+type AllDeclaredEvents<TElements> = { [K in keyof TElements]: EventsOf<TElements[K]> }[keyof TElements];
+
+/** Every event name an island entry mentions, in `writes` or in `on`. */
+type WiredEvents<I> = (I extends { writes: infer W } ? keyof W & string : never) | (I extends { on: infer H } ? keyof H & string : never);
+
+/**
+ * The half of a region the HOST may still assign — everything it does not declare an island to
+ * produce. Put it where the page already declares its shape (`… satisfies HostRegion<R, typeof arch>`)
+ * and assigning a produced key becomes a compile error naming the file that was doing the laundering.
+ *
+ * A host that also wants `motu removal-check` to stay green should not import this type into page
+ * code: write the split as a plain `Omit` in the APP (no motu import, erases with the framework) and
+ * assert the two agree from the archipelago file, which is deleted with motu anyway. See
+ * `ProducedKeysAre`.
+ */
+export type HostRegion<R, A> = Omit<R, ProducedKeys<A> & keyof R>;
+
+/**
+ * Compile-time cross-check between an app-side host/produced split and what the archipelago declares.
+ *
+ * Resolves to `true` when they agree, and to a labelled tuple when they do not — so the type error
+ * shows which keys are missing on which side:
+ *
+ *   type _Check = ProducedKeysAre<typeof actionsArchipelago, 'overallProgress' | 'completedCount'>;
+ *   const _check: _Check = true;   // fails to compile when the two drift apart
+ */
+export type ProducedKeysAre<A, Expected extends string> = [ProducedKeys<A>] extends [Expected]
+  ? [Expected] extends [ProducedKeys<A>]
+    ? true
+    : ['declared by the app but not in any `produces`:', Exclude<Expected, ProducedKeys<A>>]
+  : ['in `produces` but still assignable by the host:', Exclude<ProducedKeys<A>, Expected>];
 
 /**
  * A region whose declared shape is not known to the code holding it.
@@ -81,7 +245,7 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>> {
  * declaration — keeps it.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyArchipelagoConfig = ArchipelagoConfig<any>;
+export type AnyArchipelagoConfig = ArchipelagoConfig<any, string>;
 
 export interface ArchipelagoOptions {
   /** Outward channel for navigation/actions. Defaults to a warning no-op. */
@@ -162,6 +326,29 @@ export function provideToArchipelago(id: string, key: string, value: unknown): v
 }
 
 /**
+ * (Re-)establish the INITIAL value of a key from outside the region — including a key an island owns.
+ *
+ * `provide()` is the host feeding a key it owns; this is the host saying "this is where the data
+ * starts", which is a different act and the only legitimate way to touch a produced key from outside
+ * (D4: a seed is first paint, `writes` owns what happens next). A page that fetches the week and then
+ * lets the island mutate it needs exactly this, and needs it again on every refetch — otherwise the
+ * store keeps the island's stale list and the host's new one never lands.
+ *
+ * Tagged 'seed', so the ownership check lets it through and the lens can tell it from an update. A
+ * host that seeds the same key over and over is deriving it, not seeding it — that is the laundering
+ * smell in a new hat, and it is worth reporting rather than blocking.
+ */
+export function seedArchipelago(id: string, key: string, value: unknown): void {
+  const store = stores.get(id);
+  if (!store) {
+    console.warn(`motu: no archipelago "${id}" to seed("${key}")`);
+    return;
+  }
+  if (DEBUG) runWithWriteSource('seed', () => store.set(key, value));
+  else store.set(key, value);
+}
+
+/**
  * Register an island mounted by something other than the custom element — the React host path, where
  * an island renders inside the page's own tree and no <motu-island> is created.
  *
@@ -235,12 +422,50 @@ function notifyMounts(): void {
   mountListeners.forEach((l) => l());
 }
 
+/** Every store key an island's `writes` mapping can update. */
+export function writtenKeys(spec: IslandSpec): string[] {
+  const out: string[] = [];
+  for (const target of Object.values(spec.writes ?? {})) {
+    if (typeof target === 'string') out.push(target);
+    else if (target) out.push(...Object.values(target));
+  }
+  return out;
+}
+
+/** Event names this island's outputs are wired to — declarative writes and intent handlers alike. */
+export function outputEvents(spec: IslandSpec): string[] {
+  return [...new Set([...Object.keys(spec.writes ?? {}), ...Object.keys(spec.on ?? {})])];
+}
+
+/**
+ * Apply one output event: the declared writes first, then the handler (which exists for effects that
+ * are NOT store writes — a host intent, a refetch). Shared by both mount paths so an island behaves
+ * the same however it was mounted.
+ */
+export function applyOutput(spec: IslandSpec, eventName: string, detail: unknown, ctx: IslandContext): void {
+  const target = spec.writes?.[eventName];
+  if (typeof target === 'string') {
+    ctx.store.set(target, detail);
+  } else if (target) {
+    const fields = (detail ?? {}) as Record<string, unknown>;
+    for (const [field, key] of Object.entries(target)) ctx.store.set(key, fields[field]);
+  }
+  spec.on?.[eventName]?.(detail, ctx);
+}
+
 /**
  * Registers an archipelago. Each island becomes mountable by slot, all sharing one store and host.
  * Returns the store so a composition root can seed or observe it.
  */
 export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOptions = {}): Store {
   const store = new Store(opts.seed);
+  // Who owns which key, for the store's write check. A seed is not a write (it goes through the
+  // constructor), so first paint never trips it — `produces` is about UPDATES (D4).
+  const producers = new Map<string, string>();
+  for (const island of config.islands) {
+    for (const key of writtenKeys(island)) producers.set(key, island.slot);
+  }
+  declareProducers(store, producers);
   const host = DEBUG ? instrumentHost(opts.host ?? warnHost) : opts.host ?? warnHost;
   for (const island of config.islands) {
     slots.set(island.slot, { spec: island, store, host });
@@ -281,6 +506,7 @@ export function mountIsland(slot: string, hostEl: HTMLElement): HTMLElement | nu
   if (spec.bind) {
     const apply = () => {
       for (const [prop, key] of Object.entries(spec.bind!)) {
+        if (!key) continue;
         el[prop] = store.get(key);
       }
     };
@@ -288,16 +514,14 @@ export function mountIsland(slot: string, hostEl: HTMLElement): HTMLElement | nu
     unsub = store.subscribe(apply);
   }
 
-  if (spec.on) {
-    for (const [eventName, handler] of Object.entries(spec.on)) {
-      el.addEventListener(eventName, (e) => {
-        const detail = (e as CustomEvent).detail;
-        // Tag any store write the handler makes with this island, so the overlay's coupling view can
-        // attribute writers (reads are already declarative via spec.bind).
-        if (DEBUG) runWithWriteSource(slot, () => handler(detail, { store, host }));
-        else handler(detail, { store, host });
-      });
-    }
+  for (const eventName of outputEvents(spec)) {
+    el.addEventListener(eventName, (e) => {
+      const detail = (e as CustomEvent).detail;
+      // Tag every store write this event causes with the island, so the overlay's coupling view can
+      // attribute writers (reads are already declarative via spec.bind).
+      if (DEBUG) runWithWriteSource(slot, () => applyOutput(spec, eventName, detail, { store, host }));
+      else applyOutput(spec, eventName, detail, { store, host });
+    });
   }
 
   let info: MountedIslandInfo | undefined;

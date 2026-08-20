@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
 import { listIslands } from '../lib/islands.mjs';
-import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath } from '../lib/util.mjs';
+import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
 import { runLagoon, runArchipelagoLagoon, differentiateLagoon } from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -180,11 +180,31 @@ function staticChecks(report, componentPath, pascal) {
     }
   }
 
-  // The component's declared prop names (authoritative: the `${Pascal}Props` interface, not the
-  // destructure, which only carries defaults). Used by the registry reconciliation in configChecks.
-  const iface = sf.getInterface(`${pascal}Props`);
-  const propNames = iface ? iface.getProperties().map((m) => m.getName()) : null;
+  // The component's declared prop names, for the registry reconciliation in configChecks.
+  //
+  // Read from the props PARAMETER'S TYPE, not from a `${Pascal}Props` interface by name. The name
+  // lookup only saw components written for this check: an app's own components type their props
+  // inline, so the reconciliation silently skipped exactly the components a modern host wraps — and
+  // made the framework ask for an interface it did not actually need. The parameter's type covers
+  // every shape (inline literal, named interface, intersection); the interface lookup stays as the
+  // fallback for when types cannot be resolved from this file alone (an imported props type).
+  const propNames = paramPropNames(fn) ?? sf.getInterface(`${pascal}Props`)?.getProperties().map((m) => m.getName()) ?? null;
   return { propNames };
+}
+
+/** Property names of a component's props parameter, or null when its type resolves to nothing. */
+function paramPropNames(fn) {
+  const param = fn?.getParameters?.()[0];
+  if (!param) return null;
+  let props;
+  try {
+    props = param.getType().getProperties();
+  } catch {
+    return null;
+  }
+  // `getProperties()` on an unresolved type is empty, not an error — treat that as "unknown", so the
+  // caller falls back rather than reporting a component with props as having none.
+  return props.length ? props.map((p) => p.getName()) : null;
 }
 
 /** Registry + archipelago membership checks. Returns the tag if registered. */
@@ -234,9 +254,11 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     report.error('registered', `${pascal} has no ElementSpec in ${paths.rel(elementPath)}`);
     return null;
   }
+  // The identifier must resolve to something imported here; its NAME is the app's business (an island
+  // wraps the app's own component), so a difference from the island's kebab is not a finding.
   const comp = row.getProperty('component')?.getText().replace(/^component:\s*/, '').trim();
-  if (comp && comp !== pascal) {
-    report.warn('registered', `element.ts component is '${comp}', expected ${pascal}`);
+  if (comp && !sf.getImportDeclarations().some((i) => i.getNamedImports().some((n) => (n.getAliasNode() ?? n.getNameNode()).getText() === comp))) {
+    report.warn('registered', `element.ts mounts '${comp}', which is not imported in this file`);
   }
 
   // Confirm it's wired into the assembled ELEMENT_REGISTRY.
@@ -473,6 +495,50 @@ function islandOwnCss(kebab) {
   if (!existsSync(dir)) return null;
   const css = readdirSync(dir).find((f) => f.endsWith('.css'));
   return css ? resolve(dir, css) : null;
+}
+
+/**
+ * The balanced block that follows `label` — `{...}` or `[...]`, nesting included.
+ *
+ * The naive `label:\s*\{([^}]*)\}` this replaces stops at the first inner `}`, which silently
+ * truncated any nested declaration (`writes: { 'e': { field: 'key' } }` lost everything after it).
+ */
+function blockAfter(code, label, open, from = 0) {
+  const at = code.indexOf(label, from);
+  if (at === -1) return null;
+  const start = code.indexOf(open, at);
+  if (start === -1) return null;
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  for (let i = start; i < code.length; i++) {
+    if (code[i] === open) depth++;
+    else if (code[i] === close && --depth === 0) return { body: code.slice(start + 1, i), end: i };
+  }
+  return null;
+}
+
+/** Every balanced block introduced by `label` in the file. */
+function blocksAfter(code, label, open) {
+  const out = [];
+  let from = 0;
+  for (;;) {
+    const at = code.indexOf(label, from);
+    if (at === -1) return out;
+    const block = blockAfter(code, label, open, at);
+    if (!block) return out;
+    out.push(block.body);
+    from = block.end;
+  }
+}
+
+/** Store keys in a `bind` / `writes` block: every quoted string that sits on the VALUE side. */
+function keysIn(blocks) {
+  return blocks.flatMap((b) => [...b.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
+}
+
+/** Every quoted string in a block (used for the `provides: [...]` array). */
+function quotedIn(block) {
+  return block ? [...block.body.matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]) : [];
 }
 
 /** True if any archipelago file contains the given substring. */
@@ -722,6 +788,8 @@ export async function verifyCommand(argv) {
   // Follow element.ts to the component it mounts: on a React host the island wraps a component the
   // app already owns, which does not live under ui/.
   const componentPath = islandComponentPath(kebab, pascal);
+  // What the component is actually CALLED where it lives — see islandComponentExport.
+  const componentName = islandComponentExport(kebab, pascal);
   const uiDir = paths.uiDir(kebab);
   const isReactIsland = existsSync(componentPath);
   // An AngularJS island has no React `.tsx` — its component is a `*.ng.ts` spec (in ui/<kebab>/).
@@ -738,8 +806,8 @@ export async function verifyCommand(argv) {
   let componentProps = null;
   let resolvedTag = tag;
   if (isReactIsland) {
-    componentProps = staticChecks(report, componentPath, pascal);
-    resolvedTag = configChecks(report, kebab, pascal, tag, argv.standalone, componentProps, componentPath) ?? tag;
+    componentProps = staticChecks(report, componentPath, componentName);
+    resolvedTag = configChecks(report, kebab, componentName, tag, argv.standalone, componentProps, componentPath) ?? tag;
   } else {
     report.ok('adapter-island', `AngularJS island (no React component) — running config-lite + adapter + runtime checks`);
   }
@@ -835,7 +903,9 @@ function archipelagoConfigChecks(report, id) {
   if (LEGACY_FIT) {
     report.skip('region-type', `region state is motu's on host '${HOST}' — no app-side type to reference`);
   } else {
-    const param = text.match(/ArchipelagoConfig<\s*([A-Za-z_$][\w$]*)\s*>/);
+    // The argument list can carry more than the region now (`<ActionsRegion, keyof ElementTypes>`),
+    // so stop at the first `,` or `>`.
+    const param = text.match(/ArchipelagoConfig<\s*([A-Za-z_$][\w$]*)\s*[,>]/);
     if (param) {
       report.ok('region-type', `bind keys are checked against \`${param[1]}\``);
     } else {
@@ -868,9 +938,18 @@ function archipelagoConfigChecks(report, id) {
     const code = text
       .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
       .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
-    const written = new Set([...code.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
-    const bindBlocks = [...code.matchAll(/bind:\s*\{([^}]*)\}/g)].map((m) => m[1]).join(',');
-    const read = new Set([...bindBlocks.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
+
+    // WHO OWNS WHAT (docs/plan-key-ownership.md). Three declarations, all static:
+    //   provides: [...]        the host feeds these
+    //   writes:   { ev: key }  an island owns these, and the mapping is what makes them ejectable
+    //   bind:     { prop: key} who reads
+    // A `store.set` left inside an `on` handler still writes, but opaquely — it is counted as written
+    // and reported, because nothing can draw it or generate wiring from it.
+    const provided = new Set(quotedIn(blockAfter(code, 'provides:', '[')));
+    const declaredWritten = new Set(keysIn(blocksAfter(code, 'writes:', '{')));
+    const opaqueWritten = new Set([...code.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
+    const written = new Set([...declaredWritten, ...opaqueWritten]);
+    const read = new Set(keysIn(blocksAfter(code, 'bind:', '{')));
     const shared = [...written].filter((k) => read.has(k));
 
     const orphanKeys = [...written].filter((k) => !read.has(k));
@@ -888,6 +967,49 @@ function archipelagoConfigChecks(report, id) {
       // Always say something. A check that reports nothing is indistinguishable from one that did not
       // run — and "these islands are independent" is a real, useful answer, not an absence.
       report.ok('coupling', 'no shared state between islands — a page whose islands are independent');
+    }
+
+    // --- ownership: every key an island READS should have exactly one declared owner --------------
+    const unowned = [...read].filter((k) => !provided.has(k) && !written.has(k));
+    const disputed = [...declaredWritten].filter((k) => provided.has(k));
+    const owned = [...read].filter((k) => provided.has(k) || written.has(k));
+
+    if (disputed.length) {
+      report.error(
+        'ownership',
+        `key(s) declared in \`provides\` AND written by an island: ${disputed.join(', ')} — two owners is ` +
+          `the ambiguity the declaration exists to remove. Drop it from \`provides\` if the island owns ` +
+          `it, or stop writing it if the host does`,
+      );
+    }
+    if (unowned.length) {
+      // A warning, not an error: ownership is adopted per key (D3), so an un-migrated region is not
+      // broken — it is un-migrated, and this is its backlog.
+      report.warn(
+        'ownership',
+        `key(s) read here with no declared owner: ${unowned.join(', ')} — add them to \`provides\` if the ` +
+          `host feeds them, or to an island's \`writes\` if one produces them. Until then nothing stops ` +
+          `the page wiring two islands together through its own state`,
+      );
+    }
+    if (read.size) {
+      report.ok(
+        'ownership',
+        `${owned.length}/${read.size} bound key(s) owned — ${[...read].filter((k) => provided.has(k)).length} host, ` +
+          `${[...read].filter((k) => declaredWritten.has(k)).length} island`,
+      );
+    }
+
+    // An opaque write is the static cousin of the laundering smell: it updates a key, but nothing can
+    // draw it in the region graph and no wiring can be generated from it when motu is removed.
+    const opaqueOnly = [...opaqueWritten].filter((k) => !declaredWritten.has(k));
+    if (opaqueOnly.length) {
+      report.warn(
+        'ownership',
+        `key(s) written from a handler body: ${opaqueOnly.join(', ')} — declare \`writes: { <event>: '<key>' }\` ` +
+          `instead. A handler can do anything, so it cannot be drawn before it fires, and it cannot be ` +
+          `materialised when motu is ejected; \`on\` is for effects that are NOT store writes`,
+      );
     }
   }
 

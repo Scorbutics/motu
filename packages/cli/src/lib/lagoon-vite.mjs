@@ -221,6 +221,17 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // inferred from the root, so say explicitly what may be served or the dev server 403s the very
       // modules the lagoon exists to render.
       fs: { allow: [...new Set([root, paths.root, paths.hostRoot, paths.motuRoot])] },
+      // WHO IS ALLOWED TO ASK. Vite 5.4 rejects a request whose Host header it does not recognise —
+      // DNS-rebinding protection, and correct for a dev server on a laptop. Behind a tunnel every
+      // request arrives with the PUBLIC hostname, so the lagoon answered 403 to the one audience it
+      // was exposed for, with nothing in the CLI to say so. `hosts` in lagoon.config.json names the
+      // hostnames a project expects; `true` (or `--allow-any-host`) accepts all of them, which is
+      // what a throwaway tunnel wants and what a shared machine should not have by default.
+      ...(lagoonJson.hosts !== undefined
+        ? { allowedHosts: lagoonJson.hosts }
+        : env.MOTU_ALLOW_ANY_HOST
+          ? { allowedHosts: true }
+          : {}),
       ...(host.server ?? {}),
     },
   };

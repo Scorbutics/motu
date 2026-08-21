@@ -465,6 +465,8 @@ export async function lagoonDevCommand(argv) {
     ...process.env,
     ...(target ? { MOTU_TARGET: target } : {}),
     ...(argv.fit ? { MOTU_FIT: String(argv.fit) } : {}),
+    // Explicit, because it lowers a real protection: only a run that ASKS accepts any Host header.
+    ...(argv.allowAnyHost || argv['allow-any-host'] ? { MOTU_ALLOW_ANY_HOST: '1' } : {}),
   });
   if (argv.port) config.server.port = Number(argv.port);
   config.clearScreen = false;

@@ -280,6 +280,22 @@ What stays open is the tautology class — a check that cannot fail. Mutation (p
 require the check to fail) is the mechanism, and `data-flow` is the precedent: it already fails a
 scenario set whose members render identically.
 
+## The parallel-agent conflict was not actually caught
+
+Two islands declaring `writes` for one key — the canonical conflict when agents work in parallel —
+passed every static check. `ownership` reported "4/4 bound key(s) owned" for a key with two owners,
+because `declaredWritten` is a Set and the duplicates collapsed into one entry. Only the runtime
+store guard caught it, during a `--runtime` pass, after both islands existed and both agents were
+done.
+
+It is now an error in the fast loop, grouped by ELEMENT rather than slot — peps rejected the first
+version of the rule as a false positive, correctly: its filter panel is ONE island placed in two
+slots, both writing `filters`, which is what "two slots, one island" has to mean.
+
+That closes the question of whether parallel agents need a claim ledger. They do not: declare the
+whole region in the survey, and every agent branches from an archipelago that already holds the other
+agents' ownership, so a second claim fails in their own branch on their first check.
+
 ## What is still unproven
 
 The integration is verified at typecheck level and in the lagoon. **Twenty has never been run in a

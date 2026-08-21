@@ -1528,6 +1528,39 @@ function archipelagoConfigChecks(report, id) {
     }
 
     // --- ownership: every key an island READS should have exactly one declared owner --------------
+    //
+    // ONE PRODUCER, checked per island rather than over the file. `declaredWritten` is a Set, so two
+    // islands claiming the same key collapse into one entry and the region reported "4/4 bound key(s)
+    // owned" for a key with two owners — caught only later, at runtime, by the store guard.
+    //
+    // The timing is the point. Two agents working in parallel each add an island in their own branch;
+    // neither branch is wrong on its own, and the conflict appears where both declarations meet. If
+    // the region is declared UP FRONT (the survey writes every slot and owner before implementation),
+    // that meeting happens in each agent's own branch on their first `motu check` — which is why this
+    // has to be static, in the fast loop, and not a runtime gate they reach after the work is done.
+    // Grouped by ELEMENT, not by slot. peps caught the first version of this rule as a false positive:
+    // its filter panel is one island placed twice (`filters-desktop`, `filters-mobile`), both writing
+    // `filters` — which is exactly what "two slots, one island" has to mean, and the region's evidence
+    // says so on purpose. Two SLOTS may share a producer; two IMPLEMENTATIONS may not.
+    const writersByKey = new Map();
+    for (const island of readRegions(paths.archipelagosDir).find((r) => r.id === id)?.islands ?? []) {
+      for (const key of Object.values(island.writes ?? {})) {
+        const k = typeof key === 'string' ? key : null;
+        if (!k) continue;
+        writersByKey.set(k, [...(writersByKey.get(k) ?? []), { slot: island.slot, element: island.element }]);
+      }
+    }
+    for (const [key, writers] of writersByKey) {
+      const elements = [...new Set(writers.map((w) => w.element))];
+      if (elements.length < 2) continue;
+      report.error(
+        'ownership',
+        `"${key}" is written by ${elements.length} different islands (${writers.map((w) => `${w.slot} → ${w.element}`).join(', ')}) — ` +
+          `a key has ONE producer. If both really write it, the producer is something they SHARE (their ` +
+          `container, the page) and that is what should declare it; if not, one of them is reading, not writing`,
+      );
+    }
+
     const unowned = [...read].filter((k) => !provided.has(k) && !written.has(k));
     const disputed = [...declaredWritten].filter((k) => declaredProvided.has(k));
     const owned = [...read].filter((k) => provided.has(k) || written.has(k));

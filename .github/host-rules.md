@@ -168,3 +168,15 @@ When you add an escape hatch, TEST THE HATCH. `hostSources` was added for exactl
 message telling users to set it, and did nothing for a day: `loadMotuConfig` returns a hand-built
 whitelist and silently drops any key not in it. Add the key there, then reproduce the original bug and
 watch the fix refuse it.
+
+## One producer per key, checked in the fast loop
+
+Two islands declaring `writes` for the same key is an error, statically — not a runtime store-guard
+complaint you reach after the work is done. Grouped by ELEMENT, not by slot: one island placed in two
+slots (peps' filter panel, desktop + mobile drawer) is one producer and must stay legal.
+
+This is what makes parallel agents safe without any new mechanism. Declare the WHOLE region in the
+survey — every slot, every owner — before any island is implemented. Each agent then branches from an
+archipelago that already contains the other agents' ownership, so a second claim on a key fails in
+that agent's own branch, on their first `motu check`. The archipelago IS the claim registry; a
+separate ledger would only restate it.

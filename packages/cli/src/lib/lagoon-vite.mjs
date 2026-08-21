@@ -114,6 +114,26 @@ export function loadLagoonJson(paths) {
  * 'pkg/styles.css' (the query is part of the id), and '@motu/runtime' happily swallows
  * '@motu/runtime/mock'. Anchored regexes make each mapping mean exactly what it says.
  */
+/**
+ * The host's workspace root — where a monorepo hoists the dependencies the host imports.
+ *
+ * Walks up for the markers a workspace leaves (a lockfile, a pnpm/yarn workspace declaration) rather
+ * than importing Vite's `searchForWorkspaceRoot`: this module is loaded before Vite is resolved, and
+ * the rule is simple enough that a dependency for it would be the more surprising choice.
+ */
+function workspaceRootOf(hostRoot) {
+  const MARKERS = ['pnpm-workspace.yaml', 'yarn.lock', 'pnpm-lock.yaml', 'package-lock.json', 'bun.lock', 'lerna.json'];
+  let dir = hostRoot;
+  let found = null;
+  for (let up = 0; up < 10; up++) {
+    if (MARKERS.some((m) => existsSync(resolve(dir, m)))) found = dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return found;
+}
+
 export function noInstallAliases(paths) {
   const motu = (p) => resolve(paths.motuRoot, p);
   const pkg = paths.appPackage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -132,7 +152,7 @@ export function noInstallAliases(paths) {
 
 /** The host adapter's Vite contribution, if it ships one. */
 async function hostContribution(ctx) {
-  const dir = ctx.paths.host === 'angularjs' ? 'angularjs' : ctx.paths.host === 'next' ? 'next' : null;
+  const dir = ['angularjs', 'next', 'vite'].includes(ctx.paths.host) ? ctx.paths.host : null;
   if (!dir) return {};
   const mod = resolve(ctx.paths.motuRoot, `packages/adapters/${dir}/vite.mjs`);
   if (!existsSync(mod)) return {};
@@ -174,7 +194,9 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
     root,
     // The whole point: no vite.config.ts on disk in the project.
     configFile: false,
-    plugins: [react(), ...(host.plugins ?? [])],
+    // The host's React transform wins when it has one: two JSX transforms in one pipeline is a
+    // duplicated runtime, and it surfaces as hooks failing with nothing to point at.
+    plugins: [...(host.ownsReactTransform ? [] : [react()]), ...(host.plugins ?? [])],
     // These defines are the contract with `motu island verify`, which sets the matching MOTU_* env
     // when it boots this server. Dropping one silently weakens verification — keep them in sync.
     define: {
@@ -199,6 +221,8 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // above warns about, from a different cause. A project's lagoon must not depend on motu having
       // written an adapter for its framework.
       alias: [...noInstallAliases(paths), ...(host.alias ?? [])],
+      // e.g. `tsconfigPaths: true` — often the ONLY thing mapping a Vite app's `@/…` imports.
+      ...(host.resolveExtra ?? {}),
     },
     ...(host.css ? { css: host.css } : {}),
     build: {
@@ -220,7 +244,16 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // application's components, the motu checkout — is OUTSIDE it. Vite's default fs allow-list is
       // inferred from the root, so say explicitly what may be served or the dev server 403s the very
       // modules the lagoon exists to render.
-      fs: { allow: [...new Set([root, paths.root, paths.hostRoot, paths.motuRoot])] },
+      // THE HOST'S DEPENDENCIES ARE NOT UNDER THE HOST. In a monorepo the app is a package and its
+      // node_modules is hoisted to the workspace root, so a stylesheet the app imports (`twenty-ui/
+      // style.css`, a @fontsource font file) resolves to a path OUTSIDE every root listed here and
+      // Vite refuses to serve it — which surfaces as a lagoon rendering the app's components with
+      // none of the app's theme. `searchForWorkspaceRoot` is Vite's own answer to the same question.
+      fs: {
+        allow: [
+          ...new Set([root, paths.root, paths.hostRoot, paths.motuRoot, workspaceRootOf(paths.hostRoot)].filter(Boolean)),
+        ],
+      },
       // WHO IS ALLOWED TO ASK. Vite 5.4 rejects a request whose Host header it does not recognise —
       // DNS-rebinding protection, and correct for a dev server on a laptop. Behind a tunnel every
       // request arrives with the PUBLIC hostname, so the lagoon answered 403 to the one audience it

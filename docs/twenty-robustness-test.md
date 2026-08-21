@@ -168,6 +168,36 @@ The remaining `catalogue` warning is deliberate. Twenty's own capture answers th
 with `[]`, so pointing the check at the lagoon seed would be checking declarations against a fixture
 written to satisfy them. It correctly refuses to claim.
 
+## The lagoon renders the REAL components, not stand-ins
+
+The first version of this region rendered hand-written stand-ins — a heading and the word "idle" —
+and everything was green. Replacing them with Twenty's own `FieldsWidget` and `NoteWidget` needed no
+new motu concept, only one adapter: `host: 'vite'` **loads the host's own `vite.config.ts`** and
+borrows its plugins (linaria, lingui, svgr) and aliases, rather than motu restating what a Vite app
+might need. A Vite application IS its config; any list motu wrote would drift the day the app adds a
+plugin.
+
+What the island file then contains is the app's own recipe, taken from
+`FieldsWidget.stories.tsx`: an app that can render a component in Storybook can render it in the
+lagoon, because both need the same thing and the app already owns it. Getting there was a converging
+loop — each error named exactly one missing context (`useTargetRecord` → `ApolloCoreClient` →
+`Router` → `I18nProvider` → `FileUploadProvider`), which is a good failure mode: the app tells you
+what it needs.
+
+Two more framework fixes fell out. A monorepo hoists the host's dependencies ABOVE the host, so
+`twenty-ui/style.css` and the `@fontsource` files resolved outside every root in Vite's `fs.allow`
+and were refused — surfacing as the app's components rendered with none of the app's theme. And the
+host's global stylesheets are named in its entry file, so the lagoon's overrides load the same ones
+in the same order.
+
+**And it invalidated a passing check, which is the point.** The declared flow asserted that providing
+`editingWidgetId` flipped one island's text to "editing" and left the other "idle". It passed —
+against components that said those words because I wrote them. Against the real widgets every step
+failed: Twenty surfaces that affordance in `WidgetCardShell`, which this region does not mount. The
+coupling is real (both islands bind the key) and simply is not observable in these widgets' text, so
+the flow now asserts what the application actually renders — a field label out of the object
+metadata, and `NoteWidget`'s own empty state. A promise about a stand-in is a promise about nothing.
+
 ## What is still unproven
 
 The integration is verified at typecheck level and in the lagoon. **Twenty has never been run in a

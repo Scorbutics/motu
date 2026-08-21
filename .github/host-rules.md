@@ -237,3 +237,21 @@ it mount, is it placed" skip it, and a `planned` warning keeps it visible.
 The flag REMOVES ITSELF: once the island is registered, `planned: true` becomes an error. A survey
 that quietly turns into a list of things nobody built is worse than no survey, so the state cannot
 persist past the moment it stops being true.
+
+## Three outcomes, three exit codes
+
+A check that did not RUN is not a check that failed. `report.inconclusive` is for the environment
+giving out — a port that never opened, Chromium missing, a dev server losing a race — and the verdict
+line says INCONCLUSIVE rather than PASS or FAIL.
+
+    0  the declarations hold
+    1  something contradicted them        -> repair
+    2  a check could not run              -> retry, do NOT repair
+
+This exists for unattended loops. A human shrugs at a port timeout and re-runs; an agent reads `✗` and
+repairs a bug that does not exist, and several agents produce several confident wrong repairs.
+
+The classifier requires BOTH a known environmental signature AND the absence of any application cause
+in the output — because a port that never opened *because the project does not build* is a finding,
+whatever the headline says. Verified in both directions: a missing browser gives exit 2, a missing
+import in the region's frame still gives exit 1.

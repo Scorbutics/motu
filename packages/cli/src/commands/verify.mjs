@@ -103,6 +103,16 @@ function makeReport() {
      * the reason.
      */
     skip: (check, msg) => findings.push({ level: 'skip', check, msg }),
+    /**
+     * COULD NOT LOOK — the check did not run, for a reason that is not the code's fault.
+     *
+     * A port that never opened, a browser that is not installed, a dev server that lost a race. A
+     * human shrugs and re-runs. An AGENT reads `✗` and repairs a bug that does not exist, and with
+     * several agents that is several confident wrong repairs — so this is the third outcome the
+     * report needs, distinct from both "holds" and "contradicted", and the run exits 2 rather than 1
+     * so a loop can tell "retry" from "fix".
+     */
+    inconclusive: (check, msg) => findings.push({ level: 'inconclusive', check, msg }),
   };
 }
 
@@ -778,6 +788,28 @@ function reportDifferentiation(report, r) {
  * about the cause. Keep the headline, then append the first line of vite output that actually names
  * the problem.
  */
+/**
+ * Was this the ENVIRONMENT failing, rather than the code?
+ *
+ * Decided on two signals, and the second one matters more than the first: a known environmental
+ * signature, AND the absence of any application cause in the output. `lagoonFailure` already appends
+ * the first line of vite's output that names a problem — when that line exists, something in the
+ * project is broken and this is a finding, whatever the headline says.
+ */
+const ENVIRONMENTAL =
+  /did not open port .* in time|Executable doesn't exist|playwright install|EADDRINUSE|ECONNREFUSED|ETIMEDOUT|Target page, context or browser has been closed|browserType\.launch/i;
+
+function environmentalCause(err) {
+  const full = String(err?.message || err);
+  if (!ENVIRONMENTAL.test(full)) return null;
+  // An application cause anywhere in the output disqualifies it: the port never opened BECAUSE the
+  // project does not build, and that is a finding.
+  const appCause = full
+    .split('\n')
+    .find((l) => /^(Error|\s*failed to|.*ERR_[A-Z_]+|.*Cannot find)/.test(l) && !l.includes('did not open port'));
+  return appCause ? null : full.split('\n')[0];
+}
+
 function lagoonFailure(err) {
   const full = String(err?.message || err);
   const headline = full.split('\n')[0];
@@ -797,8 +829,11 @@ async function runtimeCheckBrowser(report, tag, fit, port) {
     reportRuntimeDiagnostics(report, r, `fit=${fit}`);
   } catch (err) {
     const msg = lagoonFailure(err);
+    const env = environmentalCause(err);
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
-      report.error('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli), or use --fast for the happy-dom mount`);
+      report.inconclusive('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli), or use --fast for the happy-dom mount`);
+    } else if (env) {
+      report.inconclusive('lagoon-render', `could not boot the lagoon (fit=${fit}): ${env} — the environment, not the island`);
     } else {
       report.error('lagoon-render', `lagoon failed (fit=${fit}): ${msg}`);
     }
@@ -914,7 +949,7 @@ export async function verifyCommand(argv) {
   } else {
     printReport(result.report, `motu island verify — ${result.kebab} (${result.tag})`, result.errors, result.warns);
   }
-  process.exit(result.errors.length === 0 ? 0 : 1);
+  process.exit(verifyExitCode(result));
 }
 
 /** One island's checks, as data — printing and exiting belong to the caller (see `--all`). */
@@ -998,6 +1033,18 @@ export async function runIslandVerify(argv, name) {
   };
 }
 
+/**
+ * 0 pass · 1 contradicted · 2 could not look.
+ *
+ * The third code is the whole point: an unattended loop must be able to tell "the declarations are
+ * wrong, fix them" from "the check never ran, try again". Collapsing them into 1 is what makes an
+ * agent repair a bug that does not exist.
+ */
+export function verifyExitCode(result) {
+  if (result.errors.length) return 1;
+  return result.report.findings.some((f) => f.level === 'inconclusive') ? 2 : 0;
+}
+
 /** `--json` shape for one member of a sweep. */
 export function summaryOf(r) {
   return { name: r.kebab, tag: r.tag, pass: r.errors.length === 0, findings: r.report.findings };
@@ -1043,7 +1090,7 @@ async function a11yCheck(report, tag, kebab, port) {
   try {
     findings = await step('a11y', async () => axeLagoon({ tag, port, scenarios: await islandScenarios(kebab) }));
   } catch (err) {
-    report.warn('a11y', `could not run axe: ${err.message}`);
+    report[environmentalCause(err) ? 'inconclusive' : 'warn']('a11y', `could not run axe: ${err.message}`);
     return;
   }
   const policy = lagoonA11y();
@@ -1361,7 +1408,10 @@ async function flowMutationCheck(report, id, port, scenarios) {
     survived = [...lastOf.values()].filter((f) => f.ok);
   } catch (err) {
     if (err instanceof ReferenceError || err instanceof TypeError) throw err;
-    report.warn('flow-mutation', `could not run mutants: ${err.message}`);
+    report[environmentalCause(err) ? 'inconclusive' : 'warn'](
+      'flow-mutation',
+      `could not run mutants: ${err.message}`,
+    );
     return;
   }
 
@@ -1445,7 +1495,10 @@ async function regionFlowCheck(report, id, port, region) {
     // driven — and reporting it as a warning meant the flows silently stopped running twice today
     // while the check still passed. Fail loudly for those; keep the warning for real inability.
     if (err instanceof ReferenceError || err instanceof TypeError) throw err;
-    report.warn('region-flow', `could not run declared flows: ${err.message}`);
+    report[environmentalCause(err) ? 'inconclusive' : 'warn'](
+      'region-flow',
+      `could not run declared flows: ${err.message}`,
+    );
     return;
   }
   for (const s of suspects) {
@@ -1484,7 +1537,10 @@ async function wiringProbe(report, id, port) {
     results = probe.results;
     reportStoreComplaints(report, probe.diagnostics, 'wiring probe');
   } catch (err) {
-    report.warn('wiring-live', `could not probe declared writes: ${err.message}`);
+    report[environmentalCause(err) ? 'inconclusive' : 'warn'](
+      'wiring-live',
+      `could not probe declared writes: ${err.message}`,
+    );
     return;
   }
   const noSeam = results.filter((r) => r.reason === 'no-seam');
@@ -1534,7 +1590,9 @@ function printReport(report, title, errors, warns) {
           ? color.yellow('!')
           : f.level === 'skip'
             ? color.dim('–')
-            : color.green('✓');
+            : f.level === 'inconclusive'
+              ? color.yellow('?')
+              : color.green('✓');
     const at = f.line ? color.dim(`  (line ${f.line})`) : '';
     // WHAT IT LOOKED AT, on the line itself. A reader skimming a wall of green cannot tell a check
     // that examined forty files from one that examined none, and an agent reporting the former while
@@ -1544,8 +1602,18 @@ function printReport(report, title, errors, warns) {
     console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${at}`);
   }
   console.log('');
-  if (errors.length === 0) console.log(color.green(color.bold(`PASS`)) + color.dim(`  ${warns.length} warning(s)`));
-  else console.log(color.red(color.bold(`FAIL`)) + `  ${errors.length} error(s), ${warns.length} warning(s)`);
+  const unknown = report.findings.filter((f) => f.level === 'inconclusive');
+  if (errors.length) {
+    console.log(color.red(color.bold('FAIL')) + `  ${errors.length} error(s), ${warns.length} warning(s)`);
+  } else if (unknown.length) {
+    // NOT a pass: nothing contradicted the declarations, but some of them were never examined.
+    console.log(
+      color.yellow(color.bold('INCONCLUSIVE')) +
+        color.dim(`  ${unknown.length} check(s) could not run, ${warns.length} warning(s) — retry, do not repair`),
+    );
+  } else {
+    console.log(color.green(color.bold('PASS')) + color.dim(`  ${warns.length} warning(s)`));
+  }
 }
 
 /** All island tags declared in the registry, gathered from each islands/<kebab>/element.ts `tag:`. */
@@ -1892,7 +1960,7 @@ export async function archipelagoVerifyCommand(argv) {
   } else {
     printReport(result.report, `motu archipelago verify — ${result.kebab}`, result.errors, result.warns);
   }
-  process.exit(result.errors.length === 0 ? 0 : 1);
+  process.exit(verifyExitCode(result));
 }
 
 /**
@@ -2178,8 +2246,11 @@ export async function runArchipelagoVerify(argv, id) {
         reportRuntimeDiagnostics(report, r, 'region');
       } catch (err) {
         const msg = String(err?.message || err).split('\n')[0];
+        const env = environmentalCause(err);
         if (/Executable doesn't exist|playwright install/i.test(msg)) {
-          report.error('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli)`);
+          report.inconclusive('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli)`);
+        } else if (env) {
+          report.inconclusive('lagoon-render', `could not boot the lagoon: ${env} — the environment, not the region`);
         } else {
           report.error('lagoon-render', `lagoon failed: ${msg}`);
         }

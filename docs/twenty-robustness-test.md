@@ -307,6 +307,35 @@ That closes the question of whether parallel agents need a claim ledger. They do
 whole region in the survey, and every agent branches from an archipelago that already holds the other
 agents' ownership, so a second claim fails in their own branch on their first check.
 
+## The parallel-agent experiment
+
+Two agents, two git worktrees, one region, blind to each other: implement `w-tasks` and `w-timeline`,
+both already declared by a survey commit. Each finished in about a minute, both followed the rule that
+an island on a host that owns the component IS that component (no wrapper), and each verified its own
+island green.
+
+**Every shared file conflicted.** `islands/registry.ts` and `contracts.generated.ts` are generated —
+regenerated, not merged. `shared/record-page-rows.ts` and the lagoon frame needed a real merge.
+
+**The merge is where it went wrong, and no check caught it.** Both agents had extended the frame's
+`rowFor` ternary, whose fallback was the NOTES row, so the naive resolution — take one side — makes
+the other agent's widget silently render as Notes. `archipelago verify --runtime` produced
+byte-identical output for the correct and the broken resolution. The frame is arrangement: not
+declared, not checked. What would have caught it is a flow asserting on the new island's own rendered
+content, and neither agent wrote one because nothing required it. That is now a rule.
+
+**The survey has a cost.** Declaring both slots up front made the region red in BOTH branches until
+the second island landed (`unknown island tag(s)`), so an agent can verify their island but not their
+region. Ownership conflicts fail early, at the price of a region that is red for the whole window.
+
+**My own setup broke the repo.** I symlinked `node_modules` into the worktrees; `git add -A` committed
+the symlinks, the merge replaced the real directory with a self-reference, and the next lagoon boot
+died on `ELOOP`. Worth recording as the practical hazard of worktree-based parallelism.
+
+One thing left unresolved rather than tidied: the CLI's `lagoon-render` reports "rendered no island
+slots" for this region while a browser at the same commit shows all five mounted. That is the check's
+own mount path, not the region, and it is not diagnosed.
+
 ## What is still unproven
 
 The integration is verified at typecheck level and in the lagoon. **Twenty has never been run in a

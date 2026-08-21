@@ -197,3 +197,23 @@ island that is NOT the one being driven.
 Know the limit. A stand-in's invented vocabulary passes both rules — an assertion on text you wrote
 into a stub is perfectly sensitive to its stimulus. Only rendering the application's own component
 makes that visible, which is why an island on a host that owns the component IS that component.
+
+## An island ships with evidence that asserts its OWN render
+
+Two agents added an island to one region in parallel. Both wrote correct islands; the merge is where
+it went wrong, and no check caught it.
+
+Both had extended the lagoon frame's `rowFor` ternary — whose fallback was the NOTES row — so taking
+either side of that conflict alone makes the other agent's widget render as Notes. Wrong, and
+rendering. `archipelago verify` was byte-identical between the correct and the naive resolution: the
+frame is ARRANGEMENT, it is not declared, and nothing checks it. The only thing that would have
+distinguished them is a flow asserting on the new island's own rendered content — which neither agent
+wrote, because nothing required it.
+
+So: adding an island means adding a step to `<id>.evidence.ts` that asserts what THAT island renders.
+Not the region's existing steps — its own. Without it a slot can be wired to another island's data and
+every check stays green.
+
+Two smaller ones from the same run. Prefer an append-only LOOKUP over a ternary chain in a frame two
+people may extend. And if you use git worktrees, do not symlink `node_modules` into them: `git add -A`
+commits the symlink, the merge replaces the real directory with it, and the next build dies on ELOOP.

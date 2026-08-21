@@ -6,6 +6,19 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as React from 'react';
 
+/**
+ * GENERATED IDS ARE MEANT TO DIFFER between mounts. React's `useId` counter is module state and Radix
+ * builds `aria-controls` from it, so comparing raw HTML across two mounts compares a counter: the
+ * browser reloads and the counter resets (pass), node reuses the registry (fail). Neither was testing
+ * what `remount-stable` claims, and the failure it printed — "likely accidental module-level state" —
+ * named the one thing that was not the cause.
+ */
+function withoutGeneratedIds(html) {
+  return String(html)
+    .replace(/(_r_|:r|«r)[0-9a-z]+(_|:|»)/gi, '<id>')
+    .replace(/\bradix-[\w:-]+/gi, 'radix-<id>');
+}
+
 async function main() {
   const [, , tag, fixturesPath, fit = 'native', mode = 'mount'] = process.argv;
 
@@ -145,12 +158,26 @@ async function main() {
   const ok = Boolean(island) && renderedHtml.trim().length > 0;
 
   // Re-mount identical: dispose this element and mount a fresh one, diff the rendered output.
+  //
+  // BOTH RENDERS MUST BE SETTLED, or this compares a finished render against a half-finished one. The
+  // first mount had 60ms plus whatever the module graph took; the second got a flat 60ms, so any
+  // island that loads asynchronously "changed on remount" — reported as accidental module-level state,
+  // which is a specific and alarming accusation to make on a timing artefact.
   let remountIdentical = null;
   if (ok) {
     document.body.removeChild(el); // disconnectedCallback -> __motuDispose
     mountOne();
-    await new Promise((r) => setTimeout(r, 60));
-    remountIdentical = rendered(findIsland()) === renderedHtml;
+    let previous = null;
+    let stable = 0;
+    const deadline = Date.now() + 2000;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 60));
+      const now = rendered(findIsland());
+      stable = now === previous ? stable + 1 : 0;
+      previous = now;
+      if (stable >= 2 || Date.now() > deadline) break;
+    }
+    remountIdentical = withoutGeneratedIds(previous) === withoutGeneratedIds(renderedHtml);
   }
 
   console.error = realConsoleError;

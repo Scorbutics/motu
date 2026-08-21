@@ -217,3 +217,18 @@ every check stays green.
 Two smaller ones from the same run. Prefer an append-only LOOKUP over a ternary chain in a frame two
 people may extend. And if you use git worktrees, do not symlink `node_modules` into them: `git add -A`
 commits the symlink, the merge replaces the real directory with it, and the next build dies on ELOOP.
+
+## Surveyed but not built: `planned: true`
+
+Declaring a whole region up front is what makes parallel work safe — an agent branches from an
+archipelago that already carries everyone else's ownership. Measured on a two-agent run, the cost was
+a region RED in every branch until the last island landed, and a permanently red region teaches
+everyone to ignore it.
+
+`planned: true` on an island entry splits the two questions. Ownership still counts it — a second
+claim on its keys fails exactly as if it were built — while the checks that ask "does it exist, does
+it mount, is it placed" skip it, and a `planned` warning keeps it visible.
+
+The flag REMOVES ITSELF: once the island is registered, `planned: true` becomes an error. A survey
+that quietly turns into a list of things nobody built is worse than no survey, so the state cannot
+persist past the moment it stops being true.

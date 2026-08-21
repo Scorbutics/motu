@@ -1756,10 +1756,34 @@ function archipelagoConfigChecks(report, id) {
     report.error('registered', `not wired into ${paths.rel(paths.archipelagosRegistry)}`);
   }
 
-  // Every `element: 'x-…'` the config references must be a registered island tag.
+  // Every `element: 'x-…'` the config references must be a registered island tag — EXCEPT the ones
+  // the survey declared and nobody has built yet. Those are the price of declaring a region up front
+  // so parallel work conflicts early; without this split the region is red in every branch until the
+  // last island lands, and a red region teaches everyone to ignore it.
   const known = registeredTags();
-  const used = [...text.matchAll(/element:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  const declared = readRegions(paths.archipelagosDir).find((r) => r.id === id)?.islands ?? [];
+  const plannedTags = new Set(declared.filter((i) => i.planned).map((i) => i.element));
+  const used = [...text.matchAll(/element:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]).filter((t) => !plannedTags.has(t));
   const unknown = [...new Set(used)].filter((t) => !known.has(t));
+
+  // The flag REMOVES ITSELF. Once the island exists, `planned` is no longer a promise, it is a stale
+  // claim — and a survey that quietly becomes a list of things nobody built is worse than no survey.
+  const built = [...plannedTags].filter((t) => known.has(t));
+  if (built.length) {
+    report.error(
+      'planned',
+      `${built.join(', ')} is registered but still marked \`planned: true\` — drop the flag; the checks that ` +
+        `skip a planned island (does it exist, does it mount, is it placed) are exactly the ones it now needs`,
+    );
+  }
+  const pending = [...plannedTags].filter((t) => !known.has(t));
+  if (pending.length) {
+    report.warn(
+      'planned',
+      `${pending.length} island(s) declared but not built: ${pending.join(', ')} — their ownership is being ` +
+        `enforced (a second claim on their keys fails), their existence is not checked`,
+    );
+  }
   if (used.length === 0) {
     report.warn('islands-registered', 'archipelago declares no islands');
   } else if (unknown.length === 0) {
@@ -2074,7 +2098,11 @@ export async function runArchipelagoVerify(argv, id) {
             // an island behind a closed drawer, a conditional branch — simply was not in the list, so
             // the check congratulated itself on a region missing an island. Say what is declared.
             const declaredRegion = readRegions(paths.archipelagosDir).find((x) => x.id === id);
-            const declared = declaredRegion?.membership === 'catalogue' ? [] : (declaredRegion?.islands ?? []).map((i) => i.slot);
+            // A planned island has nothing to mount yet; demanding it here would make the survey red.
+            const declared =
+              declaredRegion?.membership === 'catalogue'
+                ? []
+                : (declaredRegion?.islands ?? []).filter((i) => !i.planned).map((i) => i.slot);
             const placed = new Set(r.islands.map((i) => i.slot).filter(Boolean));
             const unplaced = declared.filter((slot) => !placed.has(slot));
             report.ok('lagoon-render', `region + all ${r.islands.length} island(s) mounted in the lagoon`, {

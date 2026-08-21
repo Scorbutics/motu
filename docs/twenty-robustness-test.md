@@ -324,9 +324,13 @@ byte-identical output for the correct and the broken resolution. The frame is ar
 declared, not checked. What would have caught it is a flow asserting on the new island's own rendered
 content, and neither agent wrote one because nothing required it. That is now a rule.
 
-**The survey has a cost.** Declaring both slots up front made the region red in BOTH branches until
-the second island landed (`unknown island tag(s)`), so an agent can verify their island but not their
-region. Ownership conflicts fail early, at the price of a region that is red for the whole window.
+**The survey had a cost, and it is now paid.** Declaring both slots up front made the region red in
+BOTH branches until the second island landed (`unknown island tag(s)`), so an agent could verify their
+island but not their region — and a permanently red region teaches everyone to ignore it.
+`planned: true` splits the two questions: ownership is still enforced against a planned island (a
+second claim on its keys fails), while existence, mounting and placement skip it. The flag removes
+itself — once the island is registered, `planned` is an error — so a survey cannot decay into a list
+of things nobody built. Both properties were verified by planting them.
 
 **My own setup broke the repo.** I symlinked `node_modules` into the worktrees; `git add -A` committed
 the symlinks, the merge replaced the real directory with a self-reference, and the next lagoon boot

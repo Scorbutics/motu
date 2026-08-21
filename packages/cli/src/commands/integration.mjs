@@ -78,8 +78,10 @@ function checkRegion(region, sources) {
   // MEMBERSHIP FIRST when it is DATA. A catalogue region's members are decided at runtime, so nothing
   // about them depends on the composition root existing — and the questions worth asking (does every
   // declared type have a contract?) are most useful during adoption, before anything is wired.
-  const catalogueMembers = region.membership === 'catalogue' ? region.islands.filter((i) => i.member) : [];
-  const placedIslands = region.membership === 'catalogue' ? region.islands.filter((i) => !i.member) : region.islands;
+  // Planned islands are surveyed, not built: nothing places a slot whose island does not exist.
+  const liveIslands = region.islands.filter((i) => !i.planned);
+  const catalogueMembers = region.membership === 'catalogue' ? liveIslands.filter((i) => i.member) : [];
+  const placedIslands = region.membership === 'catalogue' ? liveIslands.filter((i) => !i.member) : liveIslands;
 
   if (region.membership === 'catalogue') {
     add(

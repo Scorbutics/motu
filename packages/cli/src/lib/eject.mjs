@@ -86,7 +86,8 @@ function readIslands(text) {
     const member = block.body.match(/\bmember:\s*'([^']+)'/)?.[1];
     const readsBlock = block.body.match(/\breads:\s*\[([^\]]*)\]/)?.[1] ?? '';
     const reads = [...readsBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    islands.push({ slot: block.name, element, writes, member, reads });
+    const planned = /\bplanned:\s*true/.test(block.body);
+    islands.push({ slot: block.name, element, writes, member, reads, planned });
   }
   return islands;
 }

@@ -67,6 +67,22 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    * and asserts on what this island then renders.
    */
   reads?: readonly string[];
+  /**
+   * DECLARED, NOT YET BUILT — the survey's output before anyone implements it.
+   *
+   * Declaring a whole region up front is what makes parallel work safe: an agent branches from an
+   * archipelago that already carries everyone else's ownership, so a second claim on a key fails in
+   * their own branch instead of at merge. The cost, measured on a two-agent run, is that the region
+   * is RED in every branch until the last island lands — `islands-registered` cannot find a tag whose
+   * island nobody has written yet, and an agent can verify their island but not their region.
+   *
+   * `planned: true` separates the two questions. Ownership still counts this entry (that is the whole
+   * point — conflicts must fail early), while the checks that ask "does it exist and mount?" skip it.
+   *
+   * It removes itself: once the island IS registered, the flag becomes an ERROR rather than a
+   * courtesy, so the survey cannot quietly become a list of things nobody built.
+   */
+  planned?: boolean;
   /** Static properties set once on mount. */
   props?: Record<string, unknown>;
   /**

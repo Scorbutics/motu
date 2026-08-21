@@ -38,6 +38,15 @@ const DEFAULTS = {
 /** Hosts that have a legacy skin an island must be proven to survive. */
 const LEGACY_FIT_HOSTS = new Set(['angularjs']);
 
+/**
+ * WHICH PROJECT AM I? Not "whatever is above my cwd", when the cwd is not the project's.
+ *
+ * The runtime harness is spawned with `cwd` set to the CLI package — it has to be, or `--import tsx`
+ * does not resolve — and this walked up from there, straight into motu's OWN motu.config.json. So
+ * `motu island verify <name> --runtime --fast`, run in any project, loaded MOTU'S demo app and
+ * verified that instead, failing on a file the user's project has never heard of. `MOTU_PROJECT_ROOT`
+ * lets the spawner say which project it means, exactly as `MOTU_ROOT` says where the framework is.
+ */
 function findConfig(startDir) {
   let dir = startDir;
   for (;;) {
@@ -69,7 +78,7 @@ let cached;
 /** Resolve the motu project config (cached). All returned paths are absolute. */
 export function loadMotuConfig() {
   if (cached) return cached;
-  const found = findConfig(process.cwd());
+  const found = findConfig(process.env.MOTU_PROJECT_ROOT ? resolve(process.env.MOTU_PROJECT_ROOT) : process.cwd());
   const root = found ? found.dir : process.cwd();
   const cfg = { ...DEFAULTS, ...(found?.config ?? {}) };
   const appRoot = resolve(root, cfg.app);

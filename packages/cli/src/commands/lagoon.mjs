@@ -53,8 +53,16 @@ function resolveTarget(argv) {
   }
   if (island) {
     const { kebab, tag, pascal } = names(island);
-    if (!existsSync(paths.islandDir(kebab)))
-      throw new Error(`unknown island "${island}" — no ${paths.rel(paths.islandDir(kebab))}`);
+    // BOTH LAYOUTS. This looked for the FOLDER form (`src/islands/<kebab>/`) only, while
+    // `motu island create` scaffolds the FLAT form (`src/islands/<kebab>.island.ts`) — so the command
+    // that exists for looking at a new island rejected every island the scaffolder makes, with
+    // "unknown island" for one that is registered and passes verify. `paths.elementFile` already
+    // resolves either shape; the rest of the CLI has used it all along.
+    if (!existsSync(paths.elementFile(kebab)))
+      throw new Error(
+        `unknown island "${island}" — neither ${paths.rel(paths.islandDir(kebab))}/element.ts nor ` +
+          `src/islands/${kebab}.island.ts exists`,
+      );
     return { entry: 'lagoon', target: `island:${tag}`, slug: `island-${kebab}`, title: `${pascal} Lagoon` };
   }
   return { entry: 'main', target: '', slug: 'all', title: 'Motu Lagoon' };

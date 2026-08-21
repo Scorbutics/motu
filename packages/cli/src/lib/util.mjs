@@ -1,7 +1,7 @@
 // Shared helpers: project layout + island name derivation. The layout (WHERE each piece lands) is
 // declared in motu.config.json and resolved by loadMotuConfig(); the CLI holds no hardcoded app
 // paths. WHAT lives inside each root stays motu's convention (islands/<kebab>/…, ui/<kebab>/…).
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
 import { loadMotuConfig } from './config.mjs';
@@ -11,6 +11,8 @@ const cfg = loadMotuConfig();
 
 /** The motu project root (the directory that owns motu.config.json). */
 export const REPO_ROOT = cfg.root;
+/** Where the framework checkout lives (motu.config.json's `motuRoot`, or $MOTU_ROOT). */
+export const MOTU_CHECKOUT = cfg.motuRoot;
 /** The HOST application's root — where its instruction files and tsconfig live. */
 export const HOST_ROOT = cfg.hostRoot;
 /** The frontend app root (root/<app>) — everything below is motu-conventional. */
@@ -376,4 +378,37 @@ export function blankComments(text) {
     i++;
   }
   return out;
+}
+
+/**
+ * Make `@motu/*` resolvable BY NODE inside the project, without an install.
+ *
+ * The lagoon resolves the framework with Vite aliases and tsconfig maps it with `paths` — that is the
+ * no-install posture and it works. What it does not cover is plain node: the runtime harness and the
+ * evidence loaders `import()` the project's own files, which import `@motu/react`, and node knows
+ * nothing about either alias. In a workspace this is invisible because the workspace already linked
+ * them; in a standalone project `--fast` simply cannot load an island.
+ *
+ * So the links are created on demand, in the project's own gitignored `node_modules`, pointing at the
+ * checkout `motuRoot` names. An agent building an island in a fresh project hand-built exactly these
+ * by hand and inherited a duplicate-React problem for its trouble.
+ */
+export function ensureNoInstallLinks(root, motuRoot) {
+  const dir = resolve(root, 'node_modules', '@motu');
+  const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay'];
+  let made = 0;
+  for (const name of wanted) {
+    const target = resolve(motuRoot, 'packages', name);
+    if (!existsSync(target)) continue;
+    const link = resolve(dir, name);
+    try {
+      if (existsSync(link)) continue;
+      mkdirSync(dir, { recursive: true });
+      symlinkSync(target, link, 'dir');
+      made++;
+    } catch {
+      // A read-only checkout or a real install already there: nothing to do, and nothing to say.
+    }
+  }
+  return made;
 }

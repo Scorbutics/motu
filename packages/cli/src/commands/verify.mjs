@@ -18,7 +18,7 @@ import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { islandContract, contractsDrift } from '../lib/contracts.mjs';
-import { blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
+import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
 import {
   runLagoon,
   runArchipelagoLagoon,
@@ -697,9 +697,35 @@ function reportRuntimeDiagnostics(report, r, label) {
 /** Fast in-process lagoon mount under happy-dom for one fit (used with --fast). */
 function runtimeCheckFast(report, tag, fixturesPath, fit) {
   const args = ['--import', 'tsx', HARNESS, tag, fixturesPath || '', fit];
-  const res = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: CLI_PKG });
+  // Node has to be able to resolve @motu/* from the project's own files before it can load them.
+  ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
+  const res = spawnSync(process.execPath, args, {
+    encoding: 'utf8',
+    cwd: CLI_PKG,
+    // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
+    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT },
+  });
   if (res.status !== 0) {
-    report.error('lagoon-render', `lagoon mount failed (fit=${fit}) — ${(res.stderr || '').trim().split('\n').pop() || 'no output'}`);
+    // The LAST stderr line is a stack frame; the useful one is what the harness said it died of.
+    const lines = (res.stderr || '').trim().split('\n').filter(Boolean);
+    const why = lines.find((l) => /harness-fatal|^Error|^[A-Za-z]*Error:/.test(l)) ?? lines.pop() ?? 'no output';
+
+    // TWO COPIES OF REACT is this path's own failure, not the island's.
+    //
+    // `--fast` is plain node: the project resolves `react` from its own node_modules and the framework
+    // packages resolve theirs, so a component that calls a hook meets a null dispatcher. The browser
+    // lagoon does not have this problem — vite dedupes — and the island that fails here passes there,
+    // which is exactly what happened to `promo-box` the first time this ran. Reporting it as a defect
+    // would send an agent to rewrite a component that is fine.
+    if (/Invalid hook call|Cannot read properties of null \(reading 'use[A-Z]/.test(res.stderr || '')) {
+      report.inconclusive(
+        'lagoon-render',
+        `--fast cannot mount this island: two copies of React (the project's and the framework's) meet ` +
+          `in one tree, so hooks see a null dispatcher. Re-run without --fast; the browser lagoon dedupes`,
+      );
+      return;
+    }
+    report.error('lagoon-render', `lagoon mount failed (fit=${fit}) — ${why.trim()}`);
     return;
   }
   const jsonLine = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
@@ -726,7 +752,14 @@ function runtimeCheckFast(report, tag, fixturesPath, fit) {
  */
 function readScenarios(fixturesPath) {
   const args = ['--import', 'tsx', HARNESS, '', fixturesPath, 'native', 'scenarios'];
-  const res = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: CLI_PKG });
+  // Node has to be able to resolve @motu/* from the project's own files before it can load them.
+  ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
+  const res = spawnSync(process.execPath, args, {
+    encoding: 'utf8',
+    cwd: CLI_PKG,
+    // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
+    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT },
+  });
   if (res.status !== 0) return [];
   const jsonLine = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
   try {
@@ -744,7 +777,14 @@ async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast
   if (fast) {
     // In-process happy-dom: mount once per seed and diff (works when the registry has no vite-only imports).
     const args = ['--import', 'tsx', HARNESS, tag, fixturesPath, 'native', 'differentiate'];
-    const res = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: CLI_PKG });
+    // Node has to be able to resolve @motu/* from the project's own files before it can load them.
+  ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
+  const res = spawnSync(process.execPath, args, {
+    encoding: 'utf8',
+    cwd: CLI_PKG,
+    // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
+    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT },
+  });
     if (res.status !== 0) return;
     const jsonLine = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
     let parsed;
@@ -1229,7 +1269,7 @@ async function catalogueCheck(report, id, region) {
   const res = spawnSync(process.execPath, ['--import', 'tsx', HARNESS, '', file, 'native', 'catalogue'], {
     encoding: 'utf8',
     cwd: CLI_PKG,
-    env: { ...process.env, MOTU_CATALOGUE_DECLARED: JSON.stringify(members.map((i) => i.member)) },
+    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT, MOTU_CATALOGUE_DECLARED: JSON.stringify(members.map((i) => i.member)) },
   });
   let parsed = {};
   try {

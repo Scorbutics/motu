@@ -180,3 +180,20 @@ survey — every slot, every owner — before any island is implemented. Each ag
 archipelago that already contains the other agents' ownership, so a second claim on a key fails in
 that agent's own branch, on their first `motu check`. The archipelago IS the claim registry; a
 separate ledger would only restate it.
+
+## A flow step must be able to fail
+
+`flow-mutation` runs with the region's flows and asks whether they could have failed. Two rules:
+
+- **By construction** — a step whose `expect` names only keys that same step `provide`d asserts that
+  the lagoon stored what it was handed. Decidable without a browser, and always an error.
+- **By mutation** — each assertion-bearing step is re-run with its stimulus changed (a value the
+  region cannot mistake for the real one). If the assertion still holds, it does not depend on the
+  input and is asserting a constant.
+
+Write flows that survive both: end on a key another island produces, or on `expectRender` of an
+island that is NOT the one being driven.
+
+Know the limit. A stand-in's invented vocabulary passes both rules — an assertion on text you wrote
+into a stub is perfectly sensitive to its stimulus. Only rendering the application's own component
+makes that visible, which is why an island on a host that owns the component IS that component.

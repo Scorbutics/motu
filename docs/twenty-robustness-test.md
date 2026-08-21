@@ -276,9 +276,20 @@ Verifying that fix found one more of the same: `hostSources`, the escape hatch a
 was silently dropped by `loadMotuConfig`'s hand-built whitelist and had never worked. The lesson is
 the discipline, not the line: reproduce the original failure against the fix, or the fix is a claim.
 
-What stays open is the tautology class — a check that cannot fail. Mutation (perturb an assertion,
-require the check to fail) is the mechanism, and `data-flow` is the precedent: it already fails a
-scenario set whose members render identically.
+**A flow step must be able to fail.** `flow-mutation` closes the third sub-class. Each
+assertion-bearing step is re-run with its stimulus changed; an assertion that still holds does not
+depend on the input and is reported as asserting a constant. A cheaper static rule sits beside it: a
+step whose `expect` names only the keys it just `provide`d is a tautology by construction. Both were
+verified by planting one of each — the static rule caught the first, mutation the second — and peps'
+seven real `emit` steps kill their mutants without a false positive.
+
+Writing it produced one more instance of the very failure it targets: a mutant replays its untouched
+prefix steps, those pass correctly, and counting them as survivors made every mutant look like a
+tautology. A check about checks that cannot fail, which could not fail.
+
+The limit is worth stating: an assertion on a stand-in's invented vocabulary passes both rules. Text
+written into a stub is perfectly sensitive to its stimulus. Only rendering the app's own component
+makes that visible — which is the rule, not a check.
 
 ## The parallel-agent conflict was not actually caught
 

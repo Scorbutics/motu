@@ -1228,6 +1228,130 @@ async function catalogueCheck(report, id, region) {
     );
 }
 
+
+/**
+ * A step that cannot fail is not a check.
+ *
+ * Every green flow in this project has, at some point, been a tautology. The worst one asserted that
+ * providing `editingWidgetId` made one island render "editing" and the other "idle" — and passed for
+ * hours against stand-in components that printed those words because I had written them. Nothing
+ * mechanical caught it; swapping in the app's real components did.
+ *
+ * TWO RULES, one static and one that runs:
+ *
+ *   BY CONSTRUCTION — a step whose `expect` names only keys that same step `provide`d asserts that the
+ *   lagoon stored what it was handed. That cannot fail unless the lagoon itself is broken, and it is
+ *   decidable without a browser.
+ *
+ *   BY MUTATION — change the STIMULUS and re-run. If the assertion still holds, it does not depend on
+ *   the input, so the step is asserting a constant. This is the `data-flow` idea (a scenario set whose
+ *   members render identically fails) applied per step to a region's flows.
+ *
+ * What neither rule catches, and it should be said rather than implied: an assertion on a stand-in's
+ * invented vocabulary is sensitive to its stimulus and mutates correctly. Only rendering the
+ * application's own component makes that one visible.
+ */
+/** The region's declared scenarios, by the same two paths `regionFlowCheck` uses. */
+function readScenariosFor(id) {
+  const file = paths.archipelagoEvidence(id);
+  if (!existsSync(file)) return [];
+  const viaTsx = readScenarios(file);
+  return Array.isArray(viaTsx) ? viaTsx : [];
+}
+
+async function flowMutationCheck(report, id, port, scenarios) {
+  // --- by construction ---------------------------------------------------------------------------
+  let vacuous = 0;
+  for (const scenario of scenarios) {
+    for (const [i, step] of (scenario.steps ?? []).entries()) {
+      const expected = Object.keys(step.expect ?? {});
+      const provided = Object.keys(step.provide ?? {});
+      if (!expected.length || !provided.length) continue;
+      if (expected.every((k) => provided.includes(k)) && !Object.keys(step.expectRender ?? {}).length) {
+        vacuous++;
+        report.error(
+          'flow-mutation',
+          `"${scenario.name ?? 'flow'}" step ${i + 1} expects only ${expected.join(', ')} — the key(s) it just ` +
+            `provided. That asserts the lagoon stored what it was handed, not that the region did anything. ` +
+            `End on a key another island produces, or on \`expectRender\` of an island that is not the one driven`,
+        );
+      }
+    }
+  }
+
+  // --- by mutation -------------------------------------------------------------------------------
+  // One mutant per assertion-bearing step: the same scenario truncated there, with that step's
+  // stimulus changed. The assertion is left EXACTLY as declared — the question is whether it notices.
+  const mutants = [];
+  for (const scenario of scenarios) {
+    for (const [i, step] of (scenario.steps ?? []).entries()) {
+      if (!Object.keys(step.expect ?? {}).length && !Object.keys(step.expectRender ?? {}).length) continue;
+      const mutated = mutateStimulus(step);
+      if (!mutated) continue;
+      mutants.push({
+        name: `${scenario.name ?? 'flow'} § ${i + 1}`,
+        seed: scenario.seed,
+        steps: [...(scenario.steps ?? []).slice(0, i), mutated],
+      });
+    }
+  }
+  if (!mutants.length) {
+    report.skip('flow-mutation', 'no step carries both a stimulus and an assertion, so there is nothing to mutate');
+    return;
+  }
+
+  let survived = [];
+  try {
+    const run = await step('flow-mutation', () => runRegionFlows({ id, port, scenarios: mutants }));
+    // ONLY THE MUTATED STEP COUNTS. A mutant is the scenario truncated at step i, so the runner also
+    // replays steps 1..i-1 untouched — and those pass, correctly. Counting them made every mutant
+    // report survivors, which would have turned this check into the thing it exists to catch.
+    const lastOf = new Map();
+    for (const f of run.flows ?? []) {
+      const prev = lastOf.get(f.scenario);
+      if (!prev || f.step > prev.step) lastOf.set(f.scenario, f);
+    }
+    survived = [...lastOf.values()].filter((f) => f.ok);
+  } catch (err) {
+    if (err instanceof ReferenceError || err instanceof TypeError) throw err;
+    report.warn('flow-mutation', `could not run mutants: ${err.message}`);
+    return;
+  }
+
+  for (const s of survived) {
+    report.error(
+      'flow-mutation',
+      `"${s.scenario}" still holds when its input is changed — the assertion does not depend on what the ` +
+        `step does, so it is asserting a constant. Assert something the stimulus actually moves`,
+    );
+  }
+  if (!survived.length && !vacuous)
+    report.ok('flow-mutation', `${mutants.length} step(s) fail when their input is mutated`, {
+      n: mutants.length,
+      of: 'mutant(s) killed',
+    });
+}
+
+/**
+ * The same step, driven differently.
+ *
+ * Deliberately crude: a value the region cannot mistake for the real one. Subtlety would only make it
+ * possible for a mutant to accidentally reproduce the original behaviour, which turns a tautology into
+ * a pass — the exact failure this check exists to remove.
+ */
+function mutateStimulus(step) {
+  if (step.provide) {
+    const provide = Object.fromEntries(
+      Object.entries(step.provide).map(([k, v]) => [k, v === null || v === undefined ? '__motu_mutant__' : null]),
+    );
+    return { ...step, provide };
+  }
+  if (step.emit) {
+    return { ...step, emit: { ...step.emit, detail: step.emit.detail === null ? '__motu_mutant__' : null } };
+  }
+  return null;
+}
+
 /**
  * The region's declared flows end where they say they do.
  *
@@ -1929,6 +2053,12 @@ export async function runArchipelagoVerify(argv, id) {
   if (argv.runtime === true) {
     if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);
+    // After the flows, and only when they exist: mutation asks whether the flows that just passed
+    // COULD have failed.
+    if (hasLayout) {
+      const declared = readScenariosFor(id);
+      if (declared.length) await flowMutationCheck(report, id, 5300 + Math.floor(Math.random() * 400), declared);
+    }
     if (!hasLayout) {
       report.warn('lagoon-render', 'no layout — islands are placed individually across the host, not as a region; region render skipped');
     } else {

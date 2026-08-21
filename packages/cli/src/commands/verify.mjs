@@ -1387,8 +1387,14 @@ function readScenariosFor(id) {
   return Array.isArray(viaTsx) ? viaTsx : [];
 }
 
-async function flowMutationCheck(report, id, port, scenarios) {
-  // --- by construction ---------------------------------------------------------------------------
+/**
+ * The mutants for a scenario set, and the findings that need no browser at all.
+ *
+ * Split out so the mutants can ride ALONG with the real flows in one page session. They used to be a
+ * second `runRegionFlows` call, which meant a second lagoon boot — and booting is most of what a flow
+ * check costs. One boot, both sets, partitioned by name afterwards.
+ */
+function buildMutants(report, scenarios) {
   let vacuous = 0;
   for (const scenario of scenarios) {
     for (const [i, step] of (scenario.steps ?? []).entries()) {
@@ -1407,9 +1413,6 @@ async function flowMutationCheck(report, id, port, scenarios) {
     }
   }
 
-  // --- by mutation -------------------------------------------------------------------------------
-  // One mutant per assertion-bearing step: the same scenario truncated there, with that step's
-  // stimulus changed. The assertion is left EXACTLY as declared — the question is whether it notices.
   const mutants = [];
   let coverageOnly = 0;
   for (const scenario of scenarios) {
@@ -1417,65 +1420,25 @@ async function flowMutationCheck(report, id, port, scenarios) {
       if (!Object.keys(step.expect ?? {}).length && !Object.keys(step.expectRender ?? {}).length) continue;
       const mutated = mutateStimulus(step);
       if (!mutated) {
-        // No stimulus to change — a coverage step. Counted, not mutated, and said out loud rather
-        // than quietly dropped, because "0 mutants" and "3 steps nothing could mutate" are different.
         coverageOnly++;
         continue;
       }
       mutants.push({
-        name: `${scenario.name ?? 'flow'} § ${i + 1}`,
+        name: `${MUTANT_PREFIX}${scenario.name ?? 'flow'} § ${i + 1}`,
         seed: scenario.seed,
         steps: [...(scenario.steps ?? []).slice(0, i), mutated],
       });
     }
   }
-  if (!mutants.length) {
-    report.skip('flow-mutation', 'no step carries both a stimulus and an assertion, so there is nothing to mutate');
-    return;
-  }
-
-  let survived = [];
-  try {
-    const run = await step('flow-mutation', () => runRegionFlows({ id, port, scenarios: mutants }));
-    // ONLY THE MUTATED STEP COUNTS. A mutant is the scenario truncated at step i, so the runner also
-    // replays steps 1..i-1 untouched — and those pass, correctly. Counting them made every mutant
-    // report survivors, which would have turned this check into the thing it exists to catch.
-    const lastOf = new Map();
-    for (const f of run.flows ?? []) {
-      const prev = lastOf.get(f.scenario);
-      if (!prev || f.step > prev.step) lastOf.set(f.scenario, f);
-    }
-    survived = [...lastOf.values()].filter((f) => f.ok);
-  } catch (err) {
-    if (err instanceof ReferenceError || err instanceof TypeError) throw err;
-    report[environmentalCause(err) ? 'inconclusive' : 'warn'](
-      'flow-mutation',
-      `could not run mutants: ${err.message}`,
-    );
-    return;
-  }
-
-  for (const s of survived) {
-    report.error(
-      'flow-mutation',
-      `"${s.scenario}" still holds when its input is changed — the assertion does not depend on what the ` +
-        `step does, so it is asserting a constant. Assert something the stimulus actually moves`,
-    );
-  }
-  if (!survived.length && !vacuous)
-    report.ok(
-      'flow-mutation',
-      `${mutants.length} step(s) fail when their input is mutated` +
-        (coverageOnly ? `; ${coverageOnly} coverage step(s) have no input to mutate` : ''),
-      { n: mutants.length, of: 'mutant(s) killed' },
-    );
+  return { mutants, coverageOnly, vacuous };
 }
+
 
 /**
  * The same step, driven differently.
  *
  * Deliberately crude: a value the region cannot mistake for the real one. Subtlety would only make it
- * possible for a mutant to accidentally reproduce the original behaviour, which turns a tautology into
+ * possible for a mutant to reproduce the original behaviour by accident, which turns a tautology into
  * a pass — the exact failure this check exists to remove.
  */
 function mutateStimulus(step) {
@@ -1483,12 +1446,74 @@ function mutateStimulus(step) {
     const provide = Object.fromEntries(
       Object.entries(step.provide).map(([k, v]) => [k, v === null || v === undefined ? '__motu_mutant__' : null]),
     );
-    return { ...step, provide };
+    return { ...step, provide, __mutant: true };
   }
   if (step.emit) {
-    return { ...step, emit: { ...step.emit, detail: step.emit.detail === null ? '__motu_mutant__' : null } };
+    return {
+      ...step,
+      emit: { ...step.emit, detail: step.emit.detail === null ? '__motu_mutant__' : null },
+      __mutant: true,
+    };
   }
   return null;
+}
+
+/** Mutant scenarios are tagged so one run can carry both sets and tell them apart afterwards. */
+const MUTANT_PREFIX = 'µ mutant · ';
+
+/** Report what the mutants did — no browser here; they ran with the real flows. */
+function reportMutants(report, flows, { mutants, coverageOnly, vacuous }) {
+  if (!mutants.length) {
+    report.skip('flow-mutation', 'no step carries both a stimulus and an assertion, so there is nothing to mutate');
+    return;
+  }
+  const lastOf = new Map();
+  for (const f of flows) {
+    if (!String(f.scenario).startsWith(MUTANT_PREFIX)) continue;
+    const prev = lastOf.get(f.scenario);
+    if (!prev || f.step > prev.step) lastOf.set(f.scenario, f);
+  }
+  const survived = [...lastOf.values()].filter((f) => f.ok);
+  // A mutant that BROKE the region proves nothing. Crude values are deliberate — they must not
+  // reproduce the original behaviour by accident — but emitting one can crash the island receiving it,
+  // and a crash is not the assertion discriminating. Counting those as kills was hiding exactly the
+  // tautology this check exists to find: a step asserting a total the PREVIOUS step already produced
+  // was reported killed, because its mutant died on the way rather than on the claim.
+  const broke = [...lastOf.values()].filter((f) => !f.ok && f.error && !(f.mismatches ?? []).length);
+
+  // COUNT WHAT CAME BACK, not what was sent. Reporting `mutants.length` killed regardless of results
+  // meant that when the mutants failed to come back at all — a tag that did not survive the round
+  // trip, say — the check printed a confident green for work it never saw. Which is the exact failure
+  // `report.ok(…, seen)` exists to prevent, reproduced inside the check that polices tautologies.
+  if (lastOf.size !== mutants.length) {
+    report.inconclusive(
+      'flow-mutation',
+      `sent ${mutants.length} mutant(s) and got ${lastOf.size} back — the run did not answer for all of ` +
+        `them, so nothing is proved about the ones missing`,
+    );
+    return;
+  }
+  for (const s of survived) {
+    report.error(
+      'flow-mutation',
+      `"${String(s.scenario).replace(MUTANT_PREFIX, '')}" still holds when its input is changed — the assertion ` +
+        `does not depend on what the step does, so it is asserting a constant. Assert something the stimulus moves`,
+    );
+  }
+  for (const b of broke) {
+    report.warn(
+      'flow-mutation',
+      `"${String(b.scenario).replace(MUTANT_PREFIX, '')}" broke the region when its input was mutated ` +
+        `(${b.error}) — the assertion was never evaluated, so this step's discrimination is unproven`,
+    );
+  }
+  if (!survived.length && !vacuous)
+    report.ok(
+      'flow-mutation',
+      `${lastOf.size - broke.length}/${mutants.length} step(s) fail on their assertion when mutated` +
+        (coverageOnly ? `; ${coverageOnly} coverage step(s) have no input to mutate` : ''),
+      { n: mutants.length, of: 'mutant(s) killed' },
+    );
 }
 
 /**
@@ -1522,11 +1547,16 @@ async function regionFlowCheck(report, id, port, region) {
     report.warn('region-flow', 'evidence declares no steps — a flow is a seed, an emit and an expectation');
     return;
   }
+  // The mutants ride along: one lagoon boot answers "do the flows hold?" and "could they have
+  // failed?" together. Booting is most of what a flow check costs, and this was paying it twice.
+  const mutation = buildMutants(report, scenarios);
+
   let results;
   let suspects = [];
   try {
-    const run = await runRegionFlows({ id, port, scenarios });
-    results = run.flows;
+    const run = await runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants] });
+    results = (run.flows ?? []).filter((f) => !String(f.scenario).startsWith(MUTANT_PREFIX));
+    reportMutants(report, run.flows ?? [], mutation);
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
     sourcesLiveCheck(report, id, run.channels, region);
@@ -2243,13 +2273,8 @@ export async function runArchipelagoVerify(argv, id) {
   // Same line as the islands: static by default, browser on request (see runIslandVerify).
   if (argv.runtime === true) {
     if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
+    // One call, both questions: do the flows hold, and could they have failed.
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);
-    // After the flows, and only when they exist: mutation asks whether the flows that just passed
-    // COULD have failed.
-    if (hasLayout) {
-      const declared = readScenariosFor(id);
-      if (declared.length) await flowMutationCheck(report, id, 5300 + Math.floor(Math.random() * 400), declared);
-    }
     if (!hasLayout) {
       report.warn('lagoon-render', 'no layout — islands are placed individually across the host, not as a region; region render skipped');
     } else {

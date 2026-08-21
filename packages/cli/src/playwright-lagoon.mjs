@@ -530,12 +530,20 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
             // a store subscriber, an effect, a real component's render pass. Polling keeps the check
             // exactly as strict (it still fails if the claim never becomes true) while removing the
             // race that a single fixed wait bakes in.
+            // A MUTANT IS EXPECTED TO FAIL, so waiting the full budget for it is pure cost: every
+            // mutant polled 2s before concluding what it was always going to conclude, and
+            // flow-mutation became 30% of a whole `check --runtime` run. A mutant that DOES still hold
+            // holds immediately — the prefix steps already settled the region — so a short budget
+            // loses nothing. Real steps keep the long one, because that is where a slow effect is
+            // genuinely being waited for.
+            const budgetMs = st.__mutant ? 300 : 2000;
             const settled = async (check) => {
-              for (let i = 0; i < 40; i++) {
+              const until = Date.now() + budgetMs;
+              for (;;) {
                 if (check()) return true;
+                if (Date.now() >= until) return check();
                 await new Promise((r) => setTimeout(r, 50));
               }
-              return check();
             };
             await new Promise((r) => setTimeout(r, 60));
             const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

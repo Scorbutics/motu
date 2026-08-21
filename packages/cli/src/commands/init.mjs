@@ -219,7 +219,9 @@ export async function initCommand(argv) {
       // theme tokens, so islands render unstyled — a preview that lies about how they look in the app.
       hostGlobalCss: hostGlobalCssImport(lagoonDir, hostRoot),
       // FIRST import in both entries: host modules read process.env while being imported.
-      envShim: host === 'angularjs' ? '' : "import '{{envImport}}';\n",
+      // Only where there IS a shim to import: `src/env.ts` is written for the Next host alone, so
+      // every other host got an entry file importing a module that was never created.
+      envShim: host === 'next' ? "import '{{envImport}}';\n" : '',
       // A Next/shadcn app exposes --primary / --primary-foreground; borrow them so motu's chrome
       // wears the application's colour rather than motu's own.
       lagoonChrome: host === 'next' ? LAGOON_CHROME_SHADCN : '',
@@ -246,16 +248,22 @@ export async function initCommand(argv) {
       hostOptionInline: '',
     };
 
-    writeNew(resolve(lagoonDir, 'package.json'), render(LAGOON_PACKAGE_JSON, vars), created, skipped);
-    writeNew(resolve(lagoonDir, 'index.html'), render(LAGOON_INDEX_HTML, vars), created, skipped);
-    writeNew(resolve(lagoonDir, 'lagoon.html'), render(LAGOON_FOCUS_HTML, vars), created, skipped);
-    writeNew(resolve(lagoonDir, 'vite.config.ts'), render(LAGOON_VITE_CONFIG, vars), created, skipped);
+    // ENTRIES ARE NOT SCAFFOLDED, and the reason is a name collision the old layout could not survive.
+    //
+    // It wrote the focus ENTRY to `src/lagoon.tsx` and the OVERRIDES stub to `src/lagoon.ts`, and
+    // writing `index.html` made the project "own" its lagoon — which turns off materialization, so
+    // those two files became the ones Vite actually serves. But a region's `layout` override returns
+    // JSX, so overrides must live in a `.tsx`, which is the entry's name. Following the scaffold
+    // produced a lagoon that served the overrides file as its entry and rendered an empty div.
+    //
+    // peps never hit it because peps has no index.html: it materializes, and its `src/lagoon.tsx` is
+    // the overrides. That is the working shape, so it is now the shape `init` creates — entries,
+    // index.html and the vite config are rendered into `.motu/cache` by `motu lagoon dev|build`,
+    // which is where generated code belongs anyway.
     writeNew(resolve(lagoonDir, 'src/fixtures.ts'), render(LAGOON_FIXTURES, vars), created, skipped);
-    writeNew(resolve(lagoonDir, 'src/lagoon.tsx'), render(LAGOON_FOCUS_ENTRY, vars), created, skipped);
-    writeNew(resolve(lagoonDir, 'src/main.tsx'), render(LAGOON_GALLERY_ENTRY, vars), created, skipped);
     // Declared, not coded: what the lagoon IS lives here; what it DOES lives in @motu/react.
     writeNew(resolve(lagoonDir, 'lagoon.config.json'), render(LAGOON_CONFIG, vars), created, skipped);
-    writeNew(resolve(lagoonDir, 'src/lagoon.ts'), LAGOON_OVERRIDES, created, skipped);
+    writeNew(resolve(lagoonDir, 'src/lagoon.tsx'), LAGOON_OVERRIDES, created, skipped);
     if (host === 'next') {
       writeNew(resolve(lagoonDir, 'src/next-stubs.tsx'), NEXT_STUBS, created, skipped);
       writeNew(resolve(lagoonDir, 'src/env.ts'), ENV_SHIM, created, skipped);

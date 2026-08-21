@@ -7,7 +7,16 @@
 
 /** Substitute {{key}} placeholders. An unknown placeholder is left alone (so it shows up in review). */
 export function render(tpl, vars) {
-  return tpl.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+  // TO A FIXPOINT, because a var's VALUE may itself be a template: `envShim` expands to
+  // `import '{{envImport}}';`, and `String.replace` never re-scans what it inserted. One pass left
+  // that placeholder verbatim in the generated entry files — valid TypeScript, unresolvable module.
+  let out = tpl;
+  for (let pass = 0; pass < 5; pass++) {
+    const next = out.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+    if (next === out) return out;
+    out = next;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------

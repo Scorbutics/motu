@@ -190,7 +190,15 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
     resolve: {
       // One React, always. Two copies break hooks in any island rendering a host component.
       dedupe: ['react', 'react-dom'],
-      ...(host.alias ? { alias: host.alias } : {}),
+      // THE FRAMEWORK'S OWN ALIASES ARE NOT THE HOST'S TO SUPPLY.
+      //
+      // These used to come only from the host adapter's contribution, and both adapters that exist
+      // start by spreading `noInstallAliases`. Which meant the "no install step" promise held for
+      // exactly the two hosts that ship an adapter: with `host: "none"`, the lagoon booted with an
+      // empty alias list and died on `@motu/react could not be resolved` — the very error the guard
+      // above warns about, from a different cause. A project's lagoon must not depend on motu having
+      // written an adapter for its framework.
+      alias: [...noInstallAliases(paths), ...(host.alias ?? [])],
     },
     ...(host.css ? { css: host.css } : {}),
     build: {

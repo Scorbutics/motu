@@ -8,7 +8,6 @@
 import { resolve, dirname } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { noInstallAliases } from '../../cli/src/lib/lagoon-vite.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -67,7 +66,7 @@ export async function contribute({ paths, lagoonJson, resolveBuildDep }) {
       'process.env': JSON.stringify({ NODE_ENV: 'development', ...(lagoonJson.env ?? {}) }),
     },
     alias: [
-      ...noInstallAliases(paths),
+      // (the framework's own @motu/* aliases are added unconditionally by buildLagoonViteConfig)
       // Project aliases from lagoon.config.json "alias" — BEFORE the host's own '@/…' rule, because the
       // first matching entry wins and '^@/' would otherwise rewrite the specifier to the real module
       // before this ever sees it. This is the seam for standing a host module down inside the lagoon —

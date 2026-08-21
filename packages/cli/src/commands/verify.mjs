@@ -598,6 +598,11 @@ function blocksAfter(code, label, open) {
  * file, reporting keys nobody binds.
  */
 function boundKeysIn(code) {
+  return boundKeyGroups(code).flat();
+}
+
+/** The same keys, GROUPED — one array per `bind:` block, which is one per island. */
+function boundKeyGroups(code) {
   const out = [];
   const re = /\bbind:\s*([[{])/g;
   for (const m of code.matchAll(re)) {
@@ -613,7 +618,7 @@ function boundKeysIn(code) {
             ...[...block.body.matchAll(/:\s*'([^']+)'/g)].map((x) => x[1]),
           ]
         : [...block.body.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((x) => x[1]);
-    out.push(...keys);
+    out.push(keys);
   }
   return out;
 }
@@ -1411,6 +1416,14 @@ function archipelagoConfigChecks(report, id) {
     const provided = new Set([...declaredProvided, ...[...read].filter((k) => !written.has(k))]);
     const shared = [...written].filter((k) => read.has(k));
 
+    // Keys more than one island READS and no island writes: the host drives them, and two islands
+    // moving together because of one is a coupling even though motu owns neither end of it.
+    const readCount = new Map();
+    for (const group of boundKeyGroups(code)) {
+      for (const k of new Set(group)) readCount.set(k, (readCount.get(k) ?? 0) + 1);
+    }
+    const hostShared = [...readCount].filter(([k, n]) => n > 1 && !written.has(k)).map(([k]) => k);
+
     const orphanKeys = [...written].filter((k) => !read.has(k));
     if (orphanKeys.length) {
       report.warn(
@@ -1422,6 +1435,16 @@ function archipelagoConfigChecks(report, id) {
     }
     if (shared.length) {
       report.ok('coupling', `shared state: ${shared.join(', ')}`);
+    } else if (hostShared.length) {
+      // NOT independent, and saying so mattered: Twenty's two record-page widgets both bind
+      // `editingWidgetId`, which the app writes, and driving the lagoon showed one flipping to
+      // "editing" while the other stayed idle — a visible coupling this check called independence,
+      // because `shared` is the intersection of ISLAND-written and island-read.
+      report.ok(
+        'coupling',
+        `coupled through the host: ${hostShared.join(', ')} — read by more than one island, written by ` +
+          `none of them, so the application is what couples them and the lagoon must seed it to show them apart`,
+      );
     } else {
       // Always say something. A check that reports nothing is indistinguishable from one that did not
       // run — and "these islands are independent" is a real, useful answer, not an absence.

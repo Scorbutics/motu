@@ -190,6 +190,21 @@ and were refused — surfacing as the app's components rendered with none of the
 host's global stylesheets are named in its entry file, so the lagoon's overrides load the same ones
 in the same order.
 
+Two more things the real components taught, both invisible with stand-ins:
+
+- **The GALLERY was blank while the focused view worked.** The notes island rendered only because the
+  fields island's module had already run `initialI18nActivate()` at import time; in the gallery the
+  load order differs and the tree died on "attempted to call a translation function without setting a
+  locale". A side effect in one island quietly making another island work is not a setup, it is a
+  coincidence — so the activation, the store seeding and the providers moved into one shared frame
+  both islands import. **Check both views**: the focused lagoon is what `verify` drives, and it is not
+  the one a human opens first.
+- **The page's card chrome cannot be the app's own `WidgetCardShell`.** That component renders
+  `WidgetContentRenderer`, which now contains `<RecordPage.Island>` — an island rendering the shell
+  would summon itself forever. Composing the card's own parts (`WidgetCard` / `WidgetCardHeader` /
+  `WidgetCardContent`) gives the same chrome without the cycle. Worth knowing as the cost of "wrap,
+  don't replace" when the thing being wrapped is a dispatch table.
+
 **And it invalidated a passing check, which is the point.** The declared flow asserted that providing
 `editingWidgetId` flipped one island's text to "editing" and left the other "idle". It passed —
 against components that said those words because I wrote them. Against the real widgets every step

@@ -317,12 +317,19 @@ island green.
 **Every shared file conflicted.** `islands/registry.ts` and `contracts.generated.ts` are generated —
 regenerated, not merged. `shared/record-page-rows.ts` and the lagoon frame needed a real merge.
 
-**The merge is where it went wrong, and no check caught it.** Both agents had extended the frame's
-`rowFor` ternary, whose fallback was the NOTES row, so the naive resolution — take one side — makes
-the other agent's widget silently render as Notes. `archipelago verify --runtime` produced
-byte-identical output for the correct and the broken resolution. The frame is arrangement: not
-declared, not checked. What would have caught it is a flow asserting on the new island's own rendered
-content, and neither agent wrote one because nothing required it. That is now a rule.
+**The merge conflicted in both hand-written files.** Both agents had extended the frame's `rowFor`
+ternary, whose fallback was another island's row.
+
+**A correction to what this section first claimed.** I wrote that the naive resolution "silently
+renders the wrong widget", and that no check caught it — on the evidence that verify was
+byte-identical for both resolutions. Tested properly afterwards, the render is byte-identical too:
+`rowFor` only supplies a widget-instance id, and these widgets ignore it. There was nothing to catch.
+The measurement was real; the conclusion drawn from it was not, and it took writing the check and
+re-running the mis-merge to find that out.
+
+What IS caught, verified by planting it: a genuine cross-wiring — an island bound to another island's
+key — fails every flow step. And `render-coverage` names the slots no flow looks at, which on this
+region was three of five including both agents' islands.
 
 **The survey had a cost, and it is now paid.** Declaring both slots up front made the region red in
 BOTH branches until the second island landed (`unknown island tag(s)`), so an agent could verify their

@@ -211,8 +211,13 @@ distinguished them is a flow asserting on the new island's own rendered content 
 wrote, because nothing required it.
 
 So: adding an island means adding a step to `<id>.evidence.ts` that asserts what THAT island renders.
-Not the region's existing steps — its own. Without it a slot can be wired to another island's data and
-every check stays green.
+Not the region's existing steps — its own. `render-coverage` names the slots no flow looks at.
+
+A step may assert with NO stimulus. Some islands take no input — Twenty's tasks and timeline widgets
+ignore the row they are bound to and render from the record context — so `provide`ing something just
+to have a stimulus produces a constant, and `flow-mutation` will (correctly) reject it. Write
+`{ expectRender: { '<slot>': '<text>' } }` alone: the claim is "this slot renders THIS island", which
+is not a data flow and is still worth making.
 
 Two smaller ones from the same run. Prefer an append-only LOOKUP over a ternary chain in a frame two
 people may extend. And if you use git worktrees, do not symlink `node_modules` into them: `git add -A`

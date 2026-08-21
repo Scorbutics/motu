@@ -1229,6 +1229,47 @@ async function catalogueCheck(report, id, region) {
 }
 
 
+
+/**
+ * Every slot a region declares should be asserted by some flow's `expectRender`.
+ *
+ * The gap this closes was found by running two agents in parallel. Both implemented their island
+ * correctly; the MERGE went wrong — each had extended the lagoon frame's slot→row lookup, whose
+ * fallback was another island's row, so resolving the conflict naively made one agent's widget render
+ * as the other's. `archipelago verify --runtime` was byte-identical between the correct and the broken
+ * resolution, because the frame is arrangement: not declared, and therefore not checked.
+ *
+ * What distinguishes them is an assertion on the island's OWN rendered output. A slot no flow looks at
+ * can be wired to anything and stay green.
+ *
+ * A WARNING, not an error, and deliberately: the rule is new, and regions written before it would go
+ * red wholesale — which teaches people to ignore the report rather than to fix it. It states the count
+ * so the backlog is visible.
+ */
+function renderCoverageCheck(report, id) {
+  const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
+  const slots = (region?.islands ?? []).filter((i) => !i.planned).map((i) => i.slot);
+  if (!slots.length) return;
+
+  const asserted = new Set();
+  for (const scenario of readScenariosFor(id)) {
+    for (const st of scenario.steps ?? []) {
+      for (const slot of Object.keys(st.expectRender ?? {})) asserted.add(slot);
+    }
+  }
+  const uncovered = slots.filter((s) => !asserted.has(s));
+  if (!uncovered.length) {
+    report.ok('render-coverage', `every declared slot is asserted by a flow`, { n: slots.length, of: 'slot(s) asserted' });
+    return;
+  }
+  report.warn(
+    'render-coverage',
+    `${uncovered.length}/${slots.length} slot(s) no flow asserts: ${uncovered.join(', ')} — nothing distinguishes ` +
+      `"this slot renders its own island" from "it renders someone else's data". Add a step with ` +
+      `\`expectRender: { '<slot>': '<text the island itself produces>' }\``,
+  );
+}
+
 /**
  * A step that cannot fail is not a check.
  *
@@ -1283,11 +1324,17 @@ async function flowMutationCheck(report, id, port, scenarios) {
   // One mutant per assertion-bearing step: the same scenario truncated there, with that step's
   // stimulus changed. The assertion is left EXACTLY as declared — the question is whether it notices.
   const mutants = [];
+  let coverageOnly = 0;
   for (const scenario of scenarios) {
     for (const [i, step] of (scenario.steps ?? []).entries()) {
       if (!Object.keys(step.expect ?? {}).length && !Object.keys(step.expectRender ?? {}).length) continue;
       const mutated = mutateStimulus(step);
-      if (!mutated) continue;
+      if (!mutated) {
+        // No stimulus to change — a coverage step. Counted, not mutated, and said out loud rather
+        // than quietly dropped, because "0 mutants" and "3 steps nothing could mutate" are different.
+        coverageOnly++;
+        continue;
+      }
       mutants.push({
         name: `${scenario.name ?? 'flow'} § ${i + 1}`,
         seed: scenario.seed,
@@ -1326,10 +1373,12 @@ async function flowMutationCheck(report, id, port, scenarios) {
     );
   }
   if (!survived.length && !vacuous)
-    report.ok('flow-mutation', `${mutants.length} step(s) fail when their input is mutated`, {
-      n: mutants.length,
-      of: 'mutant(s) killed',
-    });
+    report.ok(
+      'flow-mutation',
+      `${mutants.length} step(s) fail when their input is mutated` +
+        (coverageOnly ? `; ${coverageOnly} coverage step(s) have no input to mutate` : ''),
+      { n: mutants.length, of: 'mutant(s) killed' },
+    );
 }
 
 /**
@@ -2064,6 +2113,9 @@ export async function runArchipelagoVerify(argv, id) {
   // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
   if (region) channelSourceCheck(report, id, region);
+
+  // Static, so an uncovered slot shows up in the fast loop rather than behind a browser.
+  renderCoverageCheck(report, id);
 
   // Membership as data: static, so it runs whether or not a browser was asked for.
   if (region?.membership === 'catalogue') await catalogueCheck(report, id, region);

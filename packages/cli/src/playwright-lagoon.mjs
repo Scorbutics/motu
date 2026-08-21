@@ -507,8 +507,14 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
             } else if (st.provide) {
               // The APPLICATION moving its own state, which is how a host-fed key ever changes.
               for (const [k, v] of Object.entries(st.provide)) lagoon.provide(k, v);
+            } else if (Object.keys(st.expectRender ?? {}).length) {
+              // A COVERAGE step: no stimulus, only "this slot renders its own island". Legitimate and
+              // not a data flow — some islands take no input at all (Twenty's tasks and timeline
+              // widgets ignore the row they are bound to and render from the record context), so
+              // there is nothing to drive and the claim is still worth making: it is what catches a
+              // slot wired to another island's data.
             } else {
-              return { error: 'a step must `emit` an island output or `provide` a host key' };
+              return { error: 'a step must `emit`, `provide`, or assert with `expectRender`' };
             }
             // Settle, then re-check: an assertion may become true a tick or three after the write —
             // a store subscriber, an effect, a real component's render pass. Polling keeps the check

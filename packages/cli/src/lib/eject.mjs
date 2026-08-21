@@ -18,6 +18,7 @@
 // It is a CODEMOD, not a refactor: it may leave state the page also keeps under another name. That is
 // the honest trade — the ejected app compiles and behaves the same, and a human can tidy after.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { blankComments as blankCommentsShared } from './util.mjs';
 import { resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
 import { readGeneratedContracts } from './contracts.mjs';
@@ -296,11 +297,9 @@ function ensureUseState(sf) {
 
 // --- text helpers (shared shape with verify's balanced-block reader) -----------------------------
 
-function blankComments(text) {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
-}
+// One implementation, in util: a glob is a string containing `/*`, and three hand-rolled copies of
+// this got that wrong in three places.
+const blankComments = blankCommentsShared;
 
 function blockAfter(code, label, open, from = 0) {
   const at = code.indexOf(label, from);

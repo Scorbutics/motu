@@ -18,7 +18,7 @@ import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { islandContract, contractsDrift } from '../lib/contracts.mjs';
-import { paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
+import { blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
 import {
   runLagoon,
   runArchipelagoLagoon,
@@ -1638,9 +1638,7 @@ function sourcesLiveCheck(report, id, channels, region) {
 
 /** Comments blanked, because an apostrophe in prose opens a string as far as a regex is concerned —
  *  "the week's missions" inside a `produces` array became a key named ` missions, so it comes...`. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '');
-}
+const stripComments = blankComments;
 
 /**
  * The text of the `factory:` belonging to one `channelFrom({ … id: '<id>' … })`, brace-balanced.

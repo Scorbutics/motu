@@ -327,3 +327,53 @@ export function resolveAppImport(fromFile, spec) {
   if (spec.startsWith('.')) return strip(resolve(dirname(fromFile), spec));
   return null;
 }
+
+/**
+ * Comments blanked, WITHOUT mistaking a string for one.
+ *
+ * The regex version (`/\/\*[\s\S]*?\*\//`) cannot tell code from text, and a path glob is text
+ * containing `/*`: the moment an island declared `owns: 'src/modules/.../fields/**'`, everything from
+ * that quote to the next `*\/` — two more islands and a JSDoc away — was blanked, and the archipelago
+ * parsed as having ONE island instead of three. Silently, because a parser that finds less than is
+ * there has nothing to complain about.
+ *
+ * So it scans. Strings and templates are skipped whole; only real comments become spaces, and newlines
+ * survive so line numbers still mean something.
+ */
+export function blankComments(text) {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    // A string or template: copy it verbatim, including whatever slashes and stars it contains.
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === '\\') j += 2;
+        else if (text[j] === quote) break;
+        else j++;
+      }
+      out += text.slice(i, Math.min(j + 1, text.length));
+      i = j + 1;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      out += text.slice(i, stop).replace(/[^\n]/g, ' ');
+      i = stop;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '/') {
+      let j = i;
+      while (j < text.length && text[j] !== '\n') j++;
+      out += ' '.repeat(j - i);
+      i = j;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}

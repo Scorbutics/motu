@@ -9,12 +9,15 @@ export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, ap
 export type { MotuChromeTheme } from './toolbar.js';
 export {
   observeForeignStore,
+  ownedWrite,
   expectForeignWrites,
   unattributedWrites,
+  foreignWriters,
+  foreignObservations,
   subscribeUnattributedWrites,
   resetUnattributedWrites,
 } from './foreign-store.js';
-export type { StoreAdapter, UnattributedWrite } from './foreign-store.js';
+export type { StoreAdapter, UnattributedWrite, WriteSite, ForeignObservation } from './foreign-store.js';
 export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
 export type {
   HostBridge,

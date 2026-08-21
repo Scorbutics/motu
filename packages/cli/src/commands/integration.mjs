@@ -13,7 +13,7 @@
 // a separate lane.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
+import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
 
 /** `client-portfolio` -> `clientPortfolioArchipelago`, the const an archipelago file exports. */
@@ -54,9 +54,7 @@ function hostSources() {
 }
 
 /** Comments blanked, so a commented-out `<X.Island>` never counts as a placement. */
-function code(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '');
-}
+const code = blankComments;
 
 /** Every store key an island produces (the `writes` values, both shapes). */
 function producedKeys(region) {

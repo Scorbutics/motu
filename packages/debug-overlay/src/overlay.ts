@@ -8,6 +8,7 @@ import {
   launderingSuspects,
   unattributedWrites,
   subscribeUnattributedWrites,
+  foreignObservations,
   subscribeMounts,
   getIslandDefinition,
   getChannels,
@@ -1452,6 +1453,26 @@ class Overlay {
         g.append(row);
         any = true;
       }
+    }
+    // An observation that has seen NOTHING. Silence from an instrument reads exactly like a clean
+    // region, and is the more likely of the two: the adapter derives its keys from the host's store,
+    // and a convention it depends on can change without anyone noticing here.
+    for (const o of foreignObservations()) {
+      if (o.writesSeen > 0) continue;
+      const row = h('div', { class: 'cp' });
+      row.append(h('span', { class: 'k' }, o.regionId));
+      row.append(
+        h('span', { class: 'who' }, document.createTextNode(`watching ${o.watching.length} key(s)`)),
+      );
+      row.append(
+        h(
+          'span',
+          { class: 'flag demote', title: 'nothing has been observed since this region mounted — is the adapter still finding its keys?' },
+          o.instrumented ? 'instrumented, nothing observed' : 'subscribed, nothing observed',
+        ),
+      );
+      g.append(row);
+      any = true;
     }
     // A key an island DECLARES it owns, moved in a store motu does not own, with no declared output to
     // account for it. Only ever populated when the host installs a `StoreAdapter` — an app whose state

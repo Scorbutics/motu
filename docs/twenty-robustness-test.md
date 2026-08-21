@@ -236,6 +236,26 @@ And the resulting nesting disproved a claim I had written into a comment ("free,
 providers"): React Router throws on a nested `<Router>`, and both cards rendered as "Invalid
 Configuration". Providers that cannot nest must gate themselves.
 
+## The coupling, and the limit it found
+
+The two widgets were genuinely independent, so the region proved placement and removability but never
+coupling. Adding the third island — Twenty's own `WidgetSettingsManageSection` — fixed that: clicking
+a widget card calls the app's `useOpenWidgetSettingsInSidePanel`, which sets
+`pageLayoutEditingWidgetId`, and the panel renders that widget's settings. Empty → populated, driven
+in a browser, through the app's own click path rather than a `set` I wrote.
+
+Making motu SEE it needed a new declaration. `bind` is the prop path and the panel has no prop for
+this — it subscribes to a Jotai atom — so a real coupling read as "no shared state between islands".
+`reads: ['editingWidgetId']` declares a consumer motu cannot otherwise find. It is a claim, not a
+wire, and that is the honest half of auditing a store you do not own.
+
+Then the ownership guard fired, and it was right. Declaring `writes` on BOTH widget members
+(any card can open settings) is not one producer, and motu allows exactly one. **A catalogue can have
+no single producer for a key its members share** — the writer is the CARD, chrome shared by every
+member rather than any member. The correct model is motu's own rule (a control that owns region state
+is an island even when others sit inside it): the card becomes an island CONTAINING the widget, via
+nested slots. Until that exists here, the key is declared host-written, which is what it is.
+
 ## What is still unproven
 
 The integration is verified at typecheck level and in the lagoon. **Twenty has never been run in a

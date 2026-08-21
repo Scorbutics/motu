@@ -84,7 +84,9 @@ function readIslands(text) {
       }
     }
     const member = block.body.match(/\bmember:\s*'([^']+)'/)?.[1];
-    islands.push({ slot: block.name, element, writes, member });
+    const readsBlock = block.body.match(/\breads:\s*\[([^\]]*)\]/)?.[1] ?? '';
+    const reads = [...readsBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    islands.push({ slot: block.name, element, writes, member, reads });
   }
   return islands;
 }

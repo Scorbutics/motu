@@ -51,6 +51,22 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    * neither of those has ever heard of a motu slot. Defaults to `slot` when the two coincide.
    */
   member?: string;
+  /**
+   * Keys this island CONSUMES without taking them as props — because the host's own store hands them
+   * over directly.
+   *
+   * `bind` is the prop path and it is the only reader motu can see by itself. That is enough while
+   * motu owns the store, and it is not enough for an application that already has one: Twenty's side
+   * panel subscribes to `pageLayoutEditingWidgetId` from a Jotai atom, renders the settings for
+   * whichever widget it names, and takes no prop for it at all. Declared reads make that reader
+   * visible — without them the key is written by an island, read by nobody motu knows about, and the
+   * `coupling` check reports a real coupling as one that escapes the archipelago.
+   *
+   * This is a CLAIM, not a wire: motu cannot enforce a store it does not own (see `foreign-store.ts`).
+   * What it buys is that the claim can be contradicted — by the lens, and by a flow that moves the key
+   * and asserts on what this island then renders.
+   */
+  reads?: readonly string[];
   /** Static properties set once on mount. */
   props?: Record<string, unknown>;
   /**

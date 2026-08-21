@@ -1418,8 +1418,13 @@ function archipelagoConfigChecks(report, id) {
     const declaredWritten = new Set(keysIn(blocksAfter(code, 'writes:', '{')));
     const opaqueWritten = new Set([...code.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
     const written = new Set([...declaredWritten, ...opaqueWritten]);
-    // Both forms of `bind`: the rename map, and the short array where prop and key are the same word.
-    const read = new Set(boundKeysIn(code));
+    // Both forms of `bind`, PLUS declared `reads` — a key an island consumes straight from the host's
+    // own store, which has no prop to find. Without those, a region whose islands talk through the
+    // app's state looks uncoupled.
+    const declaredReads = [...code.matchAll(/\breads:\s*\[([^\]]*)\]/g)].flatMap((m) =>
+      [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]),
+    );
+    const read = new Set([...boundKeysIn(code), ...declaredReads]);
     // Host-fed is DERIVED — bound here, written by no island — with the explicit list still honoured
     // for a key nothing binds.
     const provided = new Set([...declaredProvided, ...[...read].filter((k) => !written.has(k))]);
@@ -1428,10 +1433,16 @@ function archipelagoConfigChecks(report, id) {
     // Keys more than one island READS and no island writes: the host drives them, and two islands
     // moving together because of one is a coupling even though motu owns neither end of it.
     const readCount = new Map();
-    for (const group of boundKeyGroups(code)) {
+    for (const group of [...boundKeyGroups(code), ...[...code.matchAll(/\breads:\s*\[([^\]]*)\]/g)].map((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]))]) {
       for (const k of new Set(group)) readCount.set(k, (readCount.get(k) ?? 0) + 1);
     }
-    const hostShared = [...readCount].filter(([k, n]) => n > 1 && !written.has(k)).map(([k]) => k);
+    // n > 1, OR one island that DECLARED the read. `reads` is an explicit statement that this island
+    // depends on host state — the whole reason to write it down — so reporting it needs no second
+    // reader. Twenty's side panel is the case: one island, one key, and a coupling that is the point
+    // of the region.
+    const hostShared = [...readCount]
+      .filter(([k, n]) => !written.has(k) && (n > 1 || declaredReads.includes(k)))
+      .map(([k]) => k);
 
     const orphanKeys = [...written].filter((k) => !read.has(k));
     if (orphanKeys.length) {

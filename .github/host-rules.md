@@ -136,3 +136,19 @@ throws, and both cards rendered as "Invalid Configuration"). Gate the ones that 
 Evidence must not import the frame. `<id>.evidence.ts` is read by plain node where the app's `@/…`
 alias does not resolve, so keep the rows in a module with no application imports and let both sides
 import THAT. The failure is a silent "flows could not be read", not an error at the import.
+
+## An island that reads the host's store has to say so
+
+`bind` is the prop path, and it is the only reader motu sees by itself. An app with its own state has
+readers with no prop at all — Twenty's side panel subscribes to a Jotai atom and renders the settings
+for whichever widget it names. Declare those with `reads: ['key']` on the island, or the key is
+written by an island, read by nobody motu knows about, and `coupling` reports a real coupling as one
+that escapes the archipelago. It is a CLAIM, not a wire: motu cannot enforce a store it does not own,
+but the claim can be contradicted by the lens and by a flow.
+
+**One producer per key, and a catalogue can break that.** Any widget card in Twenty writes
+`pageLayoutEditingWidgetId`, so declaring `writes` on two members made the ownership guard fire — and
+it was right: "either of these writes it" is not a producer. The writer is the CARD, chrome shared by
+every member. When that happens the honest model is motu's own rule — a control that owns region
+state is an island even when others sit inside it — so the card becomes an island containing the
+widget, via nested `slots`. Until then the key is host-written, and say so.

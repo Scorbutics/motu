@@ -84,4 +84,206 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    proved by the region that is running.
  - `docs/plan-key-ownership.md` in the motu repo is the design record for ownership, eject and the
    verify checks; read it before changing how a region declares anything.
+
+## A UI that lives in the database, not the repository
+
+A metadata-driven app (Twenty: widgets and views are rows, dispatched on a codegen'd enum) has no
+`islands: [...]` in source. Declare the region `membership: 'catalogue'` and give every data-summoned
+island a `member:` — the app's own discriminator, not the motu slot. Islands WITHOUT `member` are
+chrome and are still checked for placement; a catalogue region is mixed, and treating it as pure
+reports the chrome as a hallucinated widget type.
+
+Do NOT hand-write fixtures to make the lagoon render. The app already had to solve this: its tests
+and stories need the metadata too, so it carries a capture in-repo plus a script that refreshes it
+from a live instance (Twenty: `scripts/mock-data/generate-*.ts` → 2.3 MB under
+`testing/mock-data/generated/`). Point `capture` in `<id>.evidence.ts` at THAT, with `universe` read
+from the schema enum. Both sides are then the app's artifacts and motu only compares.
+
+What the comparison buys, and why data-driven UI is an advantage rather than an obstacle: a declared
+member absent from the schema enum is UNREACHABLE (it can never render — a typo or a hallucination),
+a captured type nobody declares is UNCOVERED (the region renders less than the page does). Neither is
+answerable when membership lives in JSX. Watch for the empty answer: Twenty's own transport serves
+`FindAllRecordPageLayouts` with `[]`, which renders as an empty page and looks like a working one —
+`unservedOperations()` catches the missing handler, coverage 0% catches the empty one.
+
+## A flow the host drives, asserted on what renders
+
+A region whose islands only READ has no `emit` to declare — and it still has a promise. Use a
+`provide` step (the app moving its own state) and end on `expectRender`, not on `expect`.
+
+`expect` names region keys, so a step whose `expect` names the key its own `provide`/`emit` targets
+cannot fail unless the lagoon itself is broken. The assertion worth writing is what ANOTHER island
+shows: Twenty's record page proves `editingWidgetId` moves exactly one of two widgets, in both
+directions, and back to neither. Negate one clause and re-run before believing a green flow — a step
+that cannot fail is not a check.
+
+## An island can BE the application's component
+
+If the host already owns the component, the island declares it directly — `component: FieldsWidget` —
+and no wrapper is written. A wrapper that only installs providers or draws chrome is motu-only code
+in the app's repository, which is what adopting motu is supposed to avoid.
+
+Where the pieces go: what an island CANNOT RENDER WITHOUT is `providers` in the lagoon overrides
+(installed in EVERY view, per island, like a channel); the ARRANGEMENT is `layout` (region view
+only); the widget row or props are `seed` DATA. Getting this wrong is invisible in the region view
+and fatal in the mountpoints view — which is the one the flow checks drive, so it reads as "the
+region rendered nothing" rather than "no providers".
+
+Providers must be IDEMPOTENT. The frame installs them for its own chrome and each island installs
+them for itself, so they nest — fine for context providers, fatal for a `<Router>` (React Router
+throws, and both cards rendered as "Invalid Configuration"). Gate the ones that cannot nest
+(`useInRouterContext()`).
+
+Evidence must not import the frame. `<id>.evidence.ts` is read by plain node where the app's `@/…`
+alias does not resolve, so keep the rows in a module with no application imports and let both sides
+import THAT. The failure is a silent "flows could not be read", not an error at the import.
+
+## An island that reads the host's store has to say so
+
+`bind` is the prop path, and it is the only reader motu sees by itself. An app with its own state has
+readers with no prop at all — Twenty's side panel subscribes to a Jotai atom and renders the settings
+for whichever widget it names. Declare those with `reads: ['key']` on the island, or the key is
+written by an island, read by nobody motu knows about, and `coupling` reports a real coupling as one
+that escapes the archipelago. It is a CLAIM, not a wire: motu cannot enforce a store it does not own,
+but the claim can be contradicted by the lens and by a flow.
+
+**One producer per key, and a catalogue can break that.** Any widget card in Twenty writes
+`pageLayoutEditingWidgetId`, so declaring `writes` on two members made the ownership guard fire — and
+it was right: "either of these writes it" is not a producer. The writer is the CARD, chrome shared by
+every member. When that happens the honest model is motu's own rule — a control that owns region
+state is an island even when others sit inside it — so the card becomes an island containing the
+widget, via nested `slots`. Until then the key is host-written, and say so.
+
+## A check that looked at nothing has not passed
+
+`report.ok(check, msg, seen)` takes what it examined, and `seen: 0` becomes a `skip` automatically —
+so a check cannot report success from an empty search whether or not its author thought about
+emptiness. Pass a count (or the array) at every `ok` where the input set can be empty, and the report
+prints it: `✓ islands-registered  all 3 island tag(s) are registered · 3 declared tag(s)`.
+
+This exists because `removal-check` printed "no motu references in the host application" over a fully
+integrated app — it scanned Next's directories, found none of the host's, and called the emptiness a
+pass. It now exits 1 with "scanned 0 files … nothing was examined, so nothing is proved".
+
+When you add an escape hatch, TEST THE HATCH. `hostSources` was added for exactly that bug, with a
+message telling users to set it, and did nothing for a day: `loadMotuConfig` returns a hand-built
+whitelist and silently drops any key not in it. Add the key there, then reproduce the original bug and
+watch the fix refuse it.
+
+## One producer per key, checked in the fast loop
+
+Two islands declaring `writes` for the same key is an error, statically — not a runtime store-guard
+complaint you reach after the work is done. Grouped by ELEMENT, not by slot: one island placed in two
+slots (peps' filter panel, desktop + mobile drawer) is one producer and must stay legal.
+
+This is what makes parallel agents safe without any new mechanism. Declare the WHOLE region in the
+survey — every slot, every owner — before any island is implemented. Each agent then branches from an
+archipelago that already contains the other agents' ownership, so a second claim on a key fails in
+that agent's own branch, on their first `motu check`. The archipelago IS the claim registry; a
+separate ledger would only restate it.
+
+## A flow step must be able to fail
+
+`flow-mutation` runs with the region's flows and asks whether they could have failed. Two rules:
+
+- **By construction** — a step whose `expect` names only keys that same step `provide`d asserts that
+  the lagoon stored what it was handed. Decidable without a browser, and always an error.
+- **By mutation** — each assertion-bearing step is re-run with its stimulus changed (a value the
+  region cannot mistake for the real one). If the assertion still holds, it does not depend on the
+  input and is asserting a constant.
+
+Write flows that survive both: end on a key another island produces, or on `expectRender` of an
+island that is NOT the one being driven.
+
+Know the limit. A stand-in's invented vocabulary passes both rules — an assertion on text you wrote
+into a stub is perfectly sensitive to its stimulus. Only rendering the application's own component
+makes that visible, which is why an island on a host that owns the component IS that component.
+
+## An island ships with evidence that asserts its OWN render
+
+Two agents added an island to one region in parallel. Both wrote correct islands; the merge is where
+it went wrong, and no check caught it.
+
+Both had extended the lagoon frame's `rowFor` ternary — whose fallback was the NOTES row — so taking
+either side of that conflict alone makes the other agent's widget render as Notes. Wrong, and
+rendering. `archipelago verify` was byte-identical between the correct and the naive resolution: the
+frame is ARRANGEMENT, it is not declared, and nothing checks it. The only thing that would have
+distinguished them is a flow asserting on the new island's own rendered content — which neither agent
+wrote, because nothing required it.
+
+So: adding an island means adding a step to `<id>.evidence.ts` that asserts what THAT island renders.
+Not the region's existing steps — its own. `render-coverage` names the slots no flow looks at.
+
+`expectRender` asserts what a person can PERCEIVE in that slot, not one DOM property: rendered text,
+a control's accessible name (`aria-label`/`alt`/`title`), a field's current value, and a checkbox's
+`checked`/`unchecked` state. `innerText` alone could not see a passenger's name in an input or a
+seat's identity in an aria-label, which left an island made of form controls with almost nothing
+assertable. Widening the haystack does not weaken the check — a wrong value and another island's text
+both still fail — and the failure message prints the whole surface, so what WAS there is visible.
+
+A step may assert with NO stimulus. Some islands take no input — Twenty's tasks and timeline widgets
+ignore the row they are bound to and render from the record context — so `provide`ing something just
+to have a stimulus produces a constant, and `flow-mutation` will (correctly) reject it. Write
+`{ expectRender: { '<slot>': '<text>' } }` alone: the claim is "this slot renders THIS island", which
+is not a data flow and is still worth making.
+
+Two smaller ones from the same run. Prefer an append-only LOOKUP over a ternary chain in a frame two
+people may extend. And if you use git worktrees, do not symlink `node_modules` into them: `git add -A`
+commits the symlink, the merge replaces the real directory with it, and the next build dies on ELOOP.
+
+## Surveyed but not built: `planned: true`
+
+Declaring a whole region up front is what makes parallel work safe — an agent branches from an
+archipelago that already carries everyone else's ownership. Measured on a two-agent run, the cost was
+a region RED in every branch until the last island landed, and a permanently red region teaches
+everyone to ignore it.
+
+`planned: true` on an island entry splits the two questions. Ownership still counts it — a second
+claim on its keys fails exactly as if it were built — while the checks that ask "does it exist, does
+it mount, is it placed" skip it, and a `planned` warning keeps it visible.
+
+The flag REMOVES ITSELF: once the island is registered, `planned: true` becomes an error. A survey
+that quietly turns into a list of things nobody built is worse than no survey, so the state cannot
+persist past the moment it stops being true.
+
+## Three outcomes, three exit codes
+
+A check that did not RUN is not a check that failed. `report.inconclusive` is for the environment
+giving out — a port that never opened, Chromium missing, a dev server losing a race — and the verdict
+line says INCONCLUSIVE rather than PASS or FAIL.
+
+    0  the declarations hold
+    1  something contradicted them        -> repair
+    2  a check could not run              -> retry, do NOT repair
+
+This exists for unattended loops. A human shrugs at a port timeout and re-runs; an agent reads `✗` and
+repairs a bug that does not exist, and several agents produce several confident wrong repairs.
+
+The classifier requires BOTH a known environmental signature AND the absence of any application cause
+in the output — because a port that never opened *because the project does not build* is a finding,
+whatever the headline says. Verified in both directions: a missing browser gives exit 2, a missing
+import in the region's frame still gives exit 1.
+
+## When several agents build one region at once
+
+These bind you whether or not someone launched you as part of a fan-out.
+
+- **You own ONE slot.** Do not edit another island's files, another island's entry in the archipelago,
+  or the region's shared type. If you believe the shared type is wrong, SAY SO in your report and stop
+  — changing it is a decision about everyone's work, made by someone who can see all of it.
+- **Remove `planned: true` from your own entry only.** It is how the region learns your island exists.
+- **Ship a coverage step for your slot** in the region's `<id>.evidence.ts`: `expectRender` naming text
+  your island alone produces. Without it, a slot wired to a neighbour's data passes every check.
+- **Do not repair shared infrastructure.** A failing install, a missing browser, a path that resolves
+  outside the project — that is exit 2, "could not run". Report it. An agent that symlinks its way past
+  a broken environment inherits a problem it then has to explain, and does it in everyone's tree. This
+  happened: one agent stopped and reported, another improvised and produced a false runtime failure.
+- **Say what got in your way.** Framework friction is the most valuable thing you can return, and it
+  is invisible to whoever reads only your diff.
+
+The files several agents WILL collide in: `islands/registry.ts` and `islands/contracts.generated.ts`
+(generated — regenerate with `motu island sync`, never hand-merge), the shared stylesheet (append-only,
+keep both sides), and the archipelago (one entry each, so a line-level merge is usually right). In a
+lagoon frame, prefer an append-only LOOKUP over a ternary chain: two people extending one chain cannot
+both win, and the loser's island renders someone else's data.
 <!-- /motu:rules -->

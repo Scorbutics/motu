@@ -262,3 +262,26 @@ The classifier requires BOTH a known environmental signature AND the absence of 
 in the output — because a port that never opened *because the project does not build* is a finding,
 whatever the headline says. Verified in both directions: a missing browser gives exit 2, a missing
 import in the region's frame still gives exit 1.
+
+## When several agents build one region at once
+
+These bind you whether or not someone launched you as part of a fan-out.
+
+- **You own ONE slot.** Do not edit another island's files, another island's entry in the archipelago,
+  or the region's shared type. If you believe the shared type is wrong, SAY SO in your report and stop
+  — changing it is a decision about everyone's work, made by someone who can see all of it.
+- **Remove `planned: true` from your own entry only.** It is how the region learns your island exists.
+- **Ship a coverage step for your slot** in the region's `<id>.evidence.ts`: `expectRender` naming text
+  your island alone produces. Without it, a slot wired to a neighbour's data passes every check.
+- **Do not repair shared infrastructure.** A failing install, a missing browser, a path that resolves
+  outside the project — that is exit 2, "could not run". Report it. An agent that symlinks its way past
+  a broken environment inherits a problem it then has to explain, and does it in everyone's tree. This
+  happened: one agent stopped and reported, another improvised and produced a false runtime failure.
+- **Say what got in your way.** Framework friction is the most valuable thing you can return, and it
+  is invisible to whoever reads only your diff.
+
+The files several agents WILL collide in: `islands/registry.ts` and `islands/contracts.generated.ts`
+(generated — regenerate with `motu island sync`, never hand-merge), the shared stylesheet (append-only,
+keep both sides), and the archipelago (one entry each, so a line-level merge is usually right). In a
+lagoon frame, prefer an append-only LOOKUP over a ternary chain: two people extending one chain cannot
+both win, and the loser's island renders someone else's data.

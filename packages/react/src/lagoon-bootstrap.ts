@@ -6,6 +6,7 @@ import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
 import { applyMotuChrome, bindEntries } from '@motu/core';
+import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap.js';
@@ -33,7 +34,7 @@ export interface LagoonBootstrapOptions {
   /** Initial store contents so bound islands render meaningfully. Overrides `overrides.seed`. */
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store (same as the real composition roots). */
-  channels?: Channel[];
+  channels?: DeclaredChannel[];
   /**
    * The project's lagoon overrides — the same `lagoon.ts` the GALLERY entry uses, keyed by archipelago
    * id.
@@ -47,7 +48,7 @@ export interface LagoonBootstrapOptions {
    */
   overrides?: {
     seed?: Record<string, Record<string, unknown>>;
-    channels?: Record<string, Channel[]>;
+    channels?: Record<string, DeclaredChannel[]>;
     layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
   };
   /** Every archipelago, so an `island:` target can find the region that declares it. */

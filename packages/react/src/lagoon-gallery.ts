@@ -14,6 +14,7 @@
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { setDefaultIsolation, applyMotuChrome } from '@motu/core';
+import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineMotuApp, type ElementSpec } from './bootstrap.js';
@@ -54,7 +55,7 @@ export interface LagoonOverrides {
   /** Outward seam. Defaults to logging intents, which is what you want with no router present. */
   host?: HostBridge;
   /** Inbound channels per archipelago id — host signals mirrored into the store. */
-  channels?: Record<string, Channel[]>;
+  channels?: Record<string, DeclaredChannel[]>;
   /** Initial store contents per archipelago id, so bound islands render meaningfully. */
   seed?: Record<string, Record<string, unknown>>;
   /**

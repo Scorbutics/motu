@@ -184,7 +184,18 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * exactly one declared producer, and both the page and the lagoon must install THAT module rather
    * than restate what it does.
    */
-  sources?: Readonly<Record<string, { module: string; produces: readonly (keyof TRegion & string)[] }>>;
+  sources?: Readonly<
+    Record<
+      string,
+      {
+        module: string;
+        /** The EXPORT that builds it. Named here so a channel supplies data, never code: motu calls
+         *  `module[symbol](...args)` itself, and there is no factory for anything else to hide in. */
+        symbol?: string;
+        produces: readonly (keyof TRegion & string)[];
+      }
+    >
+  >;
 }
 
 /**
@@ -536,6 +547,189 @@ export interface HostIntent {
 }
 
 const intentListeners = new Set<(i: HostIntent) => void>();
+
+/**
+ * A region's data source: a snapshot, a subscription, and — where the region drives it — the keys it
+ * CONSUMES and what to do when they change.
+ *
+ * `inputs`/`applyInputs` live here and not on the channel deliberately. The page has the same mapping
+ * ("the navigator moved, load that week"), so a channel that declared it too would be the input half
+ * of the duplication `sources` exists to kill. The source owns both directions; both consumers just
+ * install it.
+ */
+export interface SourceLike {
+  /** `object`, not `Record<string, unknown>`: a declared interface has no index signature, so the
+   *  stricter shape rejects every real source. The keys that matter are constrained per-channel from
+   *  the archipelago's `produces`, which is the check worth having. */
+  getState(): object;
+  subscribe(listener: () => void): () => void;
+  /** Region keys this source consumes, if any. */
+  inputs?: readonly string[];
+  /** Called when one of them changes — with every input, keyed. */
+  applyInputs?(values: Record<string, unknown>): void;
+  /** Host intents this source answers: an island asks, the page acts, this is the page's half. */
+  intents?: Record<string, (source: never, detail: unknown) => void>;
+  dispose?(): void;
+}
+
+/** The sources a config declares, as a type. */
+type SourcesOf<A> = A extends { sources: infer S } ? S : never;
+/** The keys one declared source produces, as a union of literals. */
+type SourceProduces<A, Id extends keyof SourcesOf<A>> = SourcesOf<A>[Id] extends { produces: readonly (infer K)[] }
+  ? K extends string
+    ? K
+    : never
+  : never;
+
+declare const CHANNEL_FROM: unique symbol;
+/**
+ * A channel motu can vouch for.
+ *
+ * `channels` accepts THIS, not a bare function, and only `channelFrom` (or a deliberate `rawChannel`)
+ * produces one. That is the difference between a convention and a rule: an agent that hand-writes
+ * `({ store }) => { … }` does not get a warning, it gets a type error.
+ */
+export type DeclaredChannel = Channel & { readonly [CHANNEL_FROM]: true };
+
+/**
+ * The escape hatch, and it costs a sentence.
+ *
+ * Some inbound seam will not be a source — a DOM event mirrored into the region, a socket. Wrapping it
+ * says so out loud and leaves the reason in the file, which a check can find; an anonymous function is
+ * not findable.
+ */
+export function rawChannel(reason: string, channel: Channel): DeclaredChannel {
+  if (!reason) throw new Error('motu: rawChannel needs a reason — it is the whole point of the wrapper');
+  return channel as DeclaredChannel;
+}
+
+/** What a source answers when the host asks it something an island could not do itself. */
+type IntentHandlers = Record<string, (source: never, detail: unknown) => void>;
+
+/** Region id -> intent name -> the installed answer. Filled while a channel is mounted. */
+const intentAnswers = new Map<string, Map<string, (detail: unknown) => void>>();
+
+/**
+ * Answer a host intent from whatever source declared it.
+ *
+ * The composition root used to name each intent by hand (`if (name === 'directory-load-more') …`),
+ * which is the same freehand glue as a hand-written `publish()` and rots the same way. A source
+ * declares what it answers; the host just passes the message on.
+ */
+export function answerHostIntent(regionId: string, name: string, detail: unknown): boolean {
+  const answer = intentAnswers.get(regionId)?.get(name);
+  if (!answer) return false;
+  answer(detail);
+  return true;
+}
+
+/** The export name one declared source is built by. */
+type SourceSymbol<A, Id extends keyof SourcesOf<A>> = SourcesOf<A>[Id] extends { symbol: infer N }
+  ? N extends string
+    ? N
+    : never
+  : never;
+
+/**
+ * A CHANNEL from a declared source — and there is nowhere to put anything else.
+ *
+ * The earlier shape took a `factory`, which is a closure, which is arbitrary code: it could assemble a
+ * source inline and re-implement the page inside the very construct meant to prevent that. Checks
+ * could chase it (does the factory import the declared module? does it CALL it? is the call dead?) but
+ * every one of those is a heuristic over text, and the last one is not decidable that way.
+ *
+ * So the shape changed instead. A channel now supplies a MODULE and DATA:
+ *
+ *   channelFrom({ to: actionsArchipelago, id: 'week', from: weekSource, args: [fixtures, { now }] })
+ *
+ * motu calls `from[symbol](...args)` where `symbol` is what the archipelago declared. The types check
+ * that the module exports it, that the arguments match its signature, and that what it returns
+ * produces the declared keys. There is no expression position left for hand-written orchestration —
+ * not "detected", not "discouraged": absent.
+ */
+export function channelFrom<
+  A extends AnyArchipelagoConfig,
+  Id extends keyof SourcesOf<A> & string,
+  M extends Record<SourceSymbol<A, Id>, (...args: never[]) => SourceLike & { getState(): { [K in SourceProduces<A, Id>]: unknown } }>,
+>(spec: {
+  to: A;
+  id: Id;
+  /** The module NAMESPACE the source is built by — `import * as weekSource from '…'`. */
+  from: M;
+  /** The arguments it takes: data, and nothing else. */
+  args: Parameters<M[SourceSymbol<A, Id>]>;
+  channelName?: string;
+}): DeclaredChannel {
+  const declared = (spec.to.sources as Record<string, { module: string; symbol?: string; produces: readonly string[] }> | undefined)?.[
+    spec.id
+  ];
+  if (!declared) {
+    throw new Error(
+      `motu: archipelago "${spec.to.id}" declares no source "${spec.id}" — add it to \`sources\` so the keys ` +
+        `it produces are named, or this channel is feeding the region from nowhere.`,
+    );
+  }
+  if (!declared.symbol) {
+    throw new Error(
+      `motu: source "${spec.id}" declares no \`symbol\` — name the export that builds it, so a channel can ` +
+        `supply data instead of code.`,
+    );
+  }
+  const build = (spec.from as Record<string, unknown>)[declared.symbol];
+  if (typeof build !== 'function') {
+    throw new Error(`motu: ${declared.module} does not export "${declared.symbol}"`);
+  }
+  const islandOwned = new Set<string>();
+  for (const island of spec.to.islands) for (const key of writtenKeys(island)) islandOwned.add(key);
+
+  const channel: Channel = ({ store }) => {
+    const source = (build as (...a: unknown[]) => SourceLike)(...(spec.args as unknown[]));
+
+    const publish = () => {
+      const state = source.getState() as Record<string, unknown>;
+      for (const key of declared.produces) {
+        // A key an island UPDATES is seeded, not written: the page establishing a value is first
+        // paint, and writing it from the host is the ownership violation the store guard reports.
+        if (islandOwned.has(key)) seedArchipelago(spec.to.id, key, state[key]);
+        else store.set(key, state[key]);
+      }
+    };
+    // On CHANGE, deliberately not on install: a seed is first paint (D4), and a source that has not
+    // answered yet holds empty defaults — publishing them overwrote the region's seed with nothing.
+    const unpublish = source.subscribe(publish);
+
+    let unsubscribe = () => {};
+    const inputs = source.inputs;
+    if (inputs?.length && source.applyInputs) {
+      let last = '';
+      const onRegionChange = () => {
+        const values = Object.fromEntries(inputs.map((key) => [key, store.get(key)]));
+        const signature = JSON.stringify(inputs.map((key) => values[key] ?? null));
+        if (signature === last) return; // our own echo, or a key we do not consume
+        last = signature;
+        source.applyInputs!(values);
+      };
+      onRegionChange();
+      unsubscribe = store.subscribe(onRegionChange);
+    }
+
+    // What this source answers when an island asks the host for something.
+    const answers = new Map<string, (detail: unknown) => void>();
+    for (const [name, handler] of Object.entries((source.intents ?? {}) as IntentHandlers)) {
+      answers.set(name, (detail) => (handler as (s: SourceLike, d: unknown) => void)(source, detail));
+    }
+    if (answers.size) intentAnswers.set(spec.to.id, answers);
+
+    return () => {
+      unsubscribe();
+      unpublish();
+      if (answers.size && intentAnswers.get(spec.to.id) === answers) intentAnswers.delete(spec.to.id);
+      source.dispose?.();
+    };
+  };
+  if (spec.channelName) (channel as { channelName?: string }).channelName = spec.channelName;
+  return channel as DeclaredChannel;
+}
 
 /** Observe outbound host intents (navigate/action) crossing the boundary (debug only). */
 export function observeHostIntents(cb: (i: HostIntent) => void): () => void {

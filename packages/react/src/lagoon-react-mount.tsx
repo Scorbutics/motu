@@ -23,6 +23,7 @@ import {
   type HostBridge,
   type MotuFit,
 } from '@motu/core';
+import type { DeclaredChannel } from '@motu/core';
 import { ArchipelagoProvider, Island } from './react-island.js';
 import { renderArchipelagoLayout } from './archipelago-layout.js';
 import type { ElementSpec } from './bootstrap.js';
@@ -34,7 +35,7 @@ export interface ReactLagoonOptions {
   elements: ElementSpec[];
   host?: HostBridge;
   seed?: Record<string, unknown>;
-  channels?: Channel[];
+  channels?: DeclaredChannel[];
   fit?: MotuFit;
   /**
    * 'region' renders the archipelago as one area; 'mountpoints' frames each slot separately, standing

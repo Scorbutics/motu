@@ -1133,7 +1133,7 @@ async function responsiveCheck(report, tag, kebab, port) {
  * Optional: a region with no `<id>.evidence.ts` is reported as having none, rather than passing
  * quietly — a check that says nothing is indistinguishable from one that did not run.
  */
-async function regionFlowCheck(report, id, port) {
+async function regionFlowCheck(report, id, port, region) {
   const file = paths.archipelagoEvidence(id);
   if (!existsSync(file)) {
     report.warn('region-flow', 'no declared flows — add `<id>.evidence.ts` with the couplings this region promises');
@@ -1165,7 +1165,7 @@ async function regionFlowCheck(report, id, port) {
     results = run.flows;
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
-    sourcesLiveCheck(report, id, run.channels);
+    sourcesLiveCheck(report, id, run.channels, region);
   } catch (err) {
     report.warn('region-flow', `could not run declared flows: ${err.message}`);
     return;
@@ -1566,6 +1566,22 @@ function channelSourceCheck(report, id, region) {
       .find((f) => existsSync(f));
     if (!file) continue;
     const text = readFileSync(file, 'utf8');
+
+    // FIRST, and it does not depend on anything being typechecked: was this channel produced by the
+    // tool at all? `channels` only accepts a `DeclaredChannel`, which only `channelFrom` (or a
+    // deliberate `rawChannel`) makes — but a project can exclude its lagoon from `tsconfig`, and this
+    // one does, which makes the type-level rule inert precisely where it matters. So the rule is
+    // checked here too, where excluding a folder cannot silence it.
+    if (!/\bchannelFrom\s*\(/.test(text) && !/\brawChannel\s*\(/.test(text)) {
+      report.error(
+        'channel-source',
+        `${paths.rel(file)} is a hand-written channel — build it with \`channelFrom({ to, id, factory })\` so ` +
+          `the copy into the region comes from the archipelago's \`sources\`, or wrap it in ` +
+          `\`rawChannel('<why>', fn)\` if this seam genuinely is not a source`,
+      );
+      continue;
+    }
+
     const reactive = /store\.subscribe\s*\(/.test(text);
     const written = new Set([
       ...[...text.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
@@ -1590,30 +1606,37 @@ function channelSourceCheck(report, id, region) {
     }
   }
 
-  // A DECLARED source raises the bar from "import something from the app" to "import THAT module":
-  // the whole point of naming the producer is that both consumers install the same one.
+  // THE DECLARED MODULE MUST BE THE ONE SUPPLIED.
+  //
+  // With `channelFrom({ from, args })` there is no factory and therefore no expression position for
+  // hand-written orchestration — the earlier chase (does it import the module? does it CALL it? is the
+  // call dead code?) was heuristics over text, and the last of those is not decidable that way. What
+  // is left to check is one thing: the namespace this channel hands over is the module the archipelago
+  // named.
   const declared = declaredSources(region.id);
-  for (const [name, src] of Object.entries(declared)) {
-    const feeders = names
-      .map((n) => channelFileOf(overrides, overridesFile, n))
-      .filter(Boolean)
-      .filter((f) => {
-        const t = readFileSync(f, 'utf8');
-        const written = [...t.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
-        return written.some((k) => src.produces.includes(k));
-      });
-    for (const file of feeders) {
-      // Specifier EQUALITY, not a substring: `…/directory-source-COPY` contains `…/directory-source`,
-      // so a near-miss import passed the first version of this rule while importing something else.
+  for (const name of names) {
+    const file = channelFileOf(overrides, overridesFile, name);
+    if (!file) continue;
+    const text = stripComments(readFileSync(file, 'utf8'));
+    for (const [, id] of text.matchAll(/channelFrom\s*\(\s*\{[\s\S]*?\bid:\s*'([^']+)'/g)) {
+      const src = declared[id];
+      if (!src) continue; // an unknown id is a type error and a runtime throw already
       const target = resolveAppImport(paths.archipelagoFile(region.id), src.module);
-      const imported = [...readFileSync(file, 'utf8').matchAll(/from\s*['"]([^'"]+)['"]/g)].map((m) =>
-        resolveAppImport(file, m[1]),
-      );
-      if (!imported.includes(target)) {
+      const namespaces = [...text.matchAll(/import\s*\*\s*as\s+(\w+)\s*from\s*['"]([^'"]+)['"]/g)];
+      const supplied = text.match(new RegExp(`channelFrom\\s*\\([\\s\\S]*?\\bfrom:\\s*(\\w+)`))?.[1];
+      const chosen = namespaces.find(([, alias]) => alias === supplied);
+      if (!chosen) {
         report.error(
           'channel-source',
-          `${paths.rel(file)} feeds key(s) of source "${name}", which the archipelago says come from ` +
-            `${src.module} — install that module here instead of producing them another way`,
+          `${paths.rel(file)} does not supply source "${id}" as a module namespace — write ` +
+            `\`import * as x from '${src.module}'\` and pass \`from: x\`, so what builds the source is the ` +
+            `declaration and not code written here`,
+        );
+      } else if (resolveAppImport(file, chosen[2]) !== target) {
+        report.error(
+          'channel-source',
+          `${paths.rel(file)} supplies "${id}" from ${chosen[2]}, but the archipelago declares it comes from ` +
+            `${src.module}`,
         );
       }
     }
@@ -1644,7 +1667,7 @@ function channelSourceCheck(report, id, region) {
  * Silent is a WARNING, because a source can legitimately be seeded in the lagoon rather than fed by a
  * channel; writing an unclaimed key is an ERROR, because nothing else explains it.
  */
-function sourcesLiveCheck(report, id, channels) {
+function sourcesLiveCheck(report, id, channels, region) {
   const declared = declaredSources(id);
   if (!Object.keys(declared).length || !channels) return;
   const claimed = new Map();
@@ -1662,7 +1685,11 @@ function sourcesLiveCheck(report, id, channels) {
       );
     }
   }
-  const silent = [...claimed.keys()].filter((k) => !written.has(k));
+  // An island-owned key a source establishes is SEEDED, not written, and a seed is not attributed to
+  // the channel that made it — so it can never appear as "produced" and would warn forever, which is
+  // how a signal becomes noise.
+  const islandOwned = region ? producedKeysOf(region) : new Set();
+  const silent = [...claimed.keys()].filter((k) => !written.has(k) && !islandOwned.has(k));
   if (silent.length) {
     report.warn('sources-live', `declared but produced by no channel while the region ran: ${silent.join(', ')} — seeded, or dead?`);
   }
@@ -1674,6 +1701,34 @@ function sourcesLiveCheck(report, id, channels) {
  *  "the week's missions" inside a `produces` array became a key named ` missions, so it comes...`. */
 function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '');
+}
+
+/**
+ * The text of the `factory:` belonging to one `channelFrom({ … id: '<id>' … })`, brace-balanced.
+ *
+ * Scoped deliberately: the question is not whether the app's source is mentioned in the file, it is
+ * whether the factory INSTALLS it.
+ */
+function factoryBody(text, id) {
+  // The CALL, not the word: `import { channelFrom }` matched first, and balancing from the next paren
+  // walked into whatever function happened to be declared above the call — which reported the real
+  // channel as never installing its source.
+  const call = /\bchannelFrom\s*\(/.exec(text);
+  if (!call) return null;
+  const open = call.index + call[0].length - 1;
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === '(') depth++;
+    else if (text[i] === ')' && --depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  const spec = text.slice(open, end === -1 ? undefined : end);
+  if (!new RegExp(`\\bid:\\s*'${id}'`).test(spec)) return null;
+  const factory = spec.indexOf('factory');
+  return factory === -1 ? null : spec.slice(factory);
 }
 
 /** `sources` as data, straight from the archipelago file. */
@@ -1745,7 +1800,7 @@ export async function runArchipelagoVerify(argv, id) {
   // Same line as the islands: static by default, browser on request (see runIslandVerify).
   if (argv.runtime === true) {
     if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
-    if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400));
+    if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);
     if (!hasLayout) {
       report.warn('lagoon-render', 'no layout — islands are placed individually across the host, not as a region; region render skipped');
     } else {

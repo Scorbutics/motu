@@ -55,13 +55,32 @@ export function setVerbose(on) {
   verbose = !!on;
 }
 
+/**
+ * Total time inside instrumented steps. Read by `motu check --verbose` to print the REMAINDER.
+ *
+ * A list of timed parts reads as a partition of the run, and it is not one: after the flow session was
+ * merged into `regionFlowCheck` it stopped being wrapped, and a `--runtime` profile accounted for 13.8s
+ * of 31.8 — 57% invisible, while every printed line looked precise. A profile that cannot say what it
+ * missed is a profile you will optimise the wrong half of.
+ */
+let stepMsTotal = 0;
+export const profiledMs = () => stepMsTotal;
+
 export async function step(name, run) {
-  if (!verbose) return run();
+  const started = Date.now();
+  if (!verbose) {
+    try {
+      return await run();
+    } finally {
+      stepMsTotal += Date.now() - started;
+    }
+  }
   const at = Date.now();
   process.stderr.write(color.dim(`  · ${progressLabel ? `${progressLabel} ` : ''}${name}…`));
   try {
     return await run();
   } finally {
+    stepMsTotal += Date.now() - at;
     process.stderr.write(color.dim(` ${((Date.now() - at) / 1000).toFixed(1)}s\n`));
   }
 }
@@ -1561,7 +1580,9 @@ async function regionFlowCheck(report, id, port, region) {
   let results;
   let suspects = [];
   try {
-    const run = await runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants] });
+    const run = await step('region-flow', () =>
+      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants] }),
+    );
     results = (run.flows ?? []).filter((f) => !String(f.scenario).startsWith(MUTANT_PREFIX));
     reportMutants(report, run.flows ?? [], mutation);
     suspects = run.suspects ?? [];

@@ -14,7 +14,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { color, paths } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
-import { runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
+import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
 import { integrationResults } from './integration.mjs';
@@ -30,6 +30,7 @@ function islands0Drift() {
 }
 
 export async function checkCommand(argv) {
+  const startedAt = Date.now();
   // `--runtime` opts IN, the same way it does for a single `verify` — the sub-checks read the flag
   // directly, so this only has to pass it through.
   const runtime = argv.runtime === true;
@@ -134,6 +135,20 @@ export async function checkCommand(argv) {
   }
 
   console.log('');
+  // WHAT THE PROFILE MISSED, said out loud. Timed steps are not a partition of the run — boot, the
+  // static passes and anything nobody wrapped live in the gap — and a parts list that hides the
+  // remainder gets you optimising the wrong half. This printed 13.8s of 31.8 once, every line precise.
+  if (argv.verbose) {
+    const wall = Date.now() - startedAt;
+    const profiled = profiledMs();
+    const rest = Math.max(0, wall - profiled);
+    console.log(
+      color.dim(
+        `  profiled ${(profiled / 1000).toFixed(1)}s of ${(wall / 1000).toFixed(1)}s · ` +
+          `${(rest / 1000).toFixed(1)}s (${Math.round((rest / wall) * 100)}%) outside any timed step`,
+      ),
+    );
+  }
   console.log(
     pass
       ? color.green(color.bold('PASS')) + color.dim(`  ${islandResults.length} island(s), ${regionResults.length} region(s), removable`)

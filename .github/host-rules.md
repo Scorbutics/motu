@@ -213,6 +213,13 @@ wrote, because nothing required it.
 So: adding an island means adding a step to `<id>.evidence.ts` that asserts what THAT island renders.
 Not the region's existing steps — its own. `render-coverage` names the slots no flow looks at.
 
+`expectRender` asserts what a person can PERCEIVE in that slot, not one DOM property: rendered text,
+a control's accessible name (`aria-label`/`alt`/`title`), a field's current value, and a checkbox's
+`checked`/`unchecked` state. `innerText` alone could not see a passenger's name in an input or a
+seat's identity in an aria-label, which left an island made of form controls with almost nothing
+assertable. Widening the haystack does not weaken the check — a wrong value and another island's text
+both still fail — and the failure message prints the whole surface, so what WAS there is visible.
+
 A step may assert with NO stimulus. Some islands take no input — Twenty's tasks and timeline widgets
 ignore the row they are bound to and render from the record context — so `provide`ing something just
 to have a stimulus produces a constant, and `flow-mutation` will (correctly) reject it. Write

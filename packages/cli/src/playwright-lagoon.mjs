@@ -548,9 +548,39 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
 
             // What the islands SHOW. Read off the mountpoints the lagoon already marks, so this needs
             // no selector from the project and cannot drift from where the region actually mounted.
+            /**
+             * What a person can PERCEIVE in this slot — not merely what is text.
+             *
+             * `innerText` alone cannot see a text field's value or a control's accessible name, so a
+             * booking flow could not assert that the passenger form shows "Ada Lovelace" (an input
+             * value) or that the seat map offers "Seat 2A, available" (an aria-label). Both are
+             * plainly perceivable — one on screen, one to a screen reader — and an island made of form
+             * controls had almost nothing assertable without them.
+             *
+             * Checkbox and radio state is included as `checked`/`unchecked` for the same reason: it is
+             * the control's value, and it is the only thing that distinguishes a ticked box from an
+             * empty one.
+             */
+            const perceivable = (el) => {
+              const parts = [el.innerText ?? el.textContent ?? ''];
+              const own = el.getAttribute?.('aria-label');
+              if (own) parts.push(own);
+              for (const f of el.querySelectorAll('input, textarea, select')) {
+                if (f.type === 'checkbox' || f.type === 'radio') parts.push(f.checked ? 'checked' : 'unchecked');
+                else if (f.value) parts.push(f.value);
+                if (f.placeholder) parts.push(f.placeholder);
+              }
+              for (const n of el.querySelectorAll('[aria-label], [alt], [title]')) {
+                for (const a of ['aria-label', 'alt', 'title']) {
+                  const v = n.getAttribute(a);
+                  if (v) parts.push(v);
+                }
+              }
+              return parts.join(' ').replace(/\s+/g, ' ').trim();
+            };
             const renderText = (slot) => {
               const el = document.querySelector(`[data-motu-slot="${slot}"]`);
-              return el ? (el.innerText ?? el.textContent ?? '').replace(/\s+/g, ' ').trim() : null;
+              return el ? perceivable(el) : null;
             };
             await settled(() =>
               Object.entries(st.expectRender ?? {}).every(([slot, want]) => {
@@ -570,7 +600,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
                 renderMismatches.push({ key: `render:${slot}`, expected: want, actual: 'nothing mounted under that slot' });
                 continue;
               }
-              const text = (el.innerText ?? el.textContent ?? '').replace(/\s+/g, ' ').trim();
+              const text = perceivable(el);
               const wants = typeof want === 'string' ? { text: want } : want;
               if (wants.text != null && !text.includes(wants.text)) {
                 renderMismatches.push({ key: `render:${slot}`, expected: `text containing ${JSON.stringify(wants.text)}`, actual: text });

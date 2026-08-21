@@ -488,7 +488,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
       await page
         .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
         .catch(() => {});
-      for (const [index, step] of (scenario.steps ?? []).entries()) {
+      for (let [index, step] of (scenario.steps ?? []).entries()) {
+        // The first step of a scenario establishes the page's starting state; the rest build on it.
+        step = index === 0 ? { ...step, __seedNow: true } : step;
         const result = await page.evaluate(
           async ({ seed, step: st }) => {
             const lagoon = window.__motuLagoon;
@@ -496,8 +498,16 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
             // A flow's `seed` is a SEED — the page establishing a starting value — even when the key
             // belongs to an island. Applying it as a host write made the harness trip motu's own
             // ownership guard on every produced key a flow starts from.
-            for (const [k, v] of Object.entries(seed ?? {})) (lagoon.seed ?? lagoon.provide)(k, v);
-            await new Promise((r) => setTimeout(r, 120));
+            //
+            // ONCE PER SCENARIO, not per step. Re-seeding before every step silently undid whatever
+            // the previous steps had done: a booking flow that picked two seats, then applied a promo,
+            // asserted the discounted total against a fare whose seats had been reset to zero. Every
+            // flow written before this had a single step, so nothing noticed. A journey is a sequence
+            // or it is three unrelated assertions wearing one name.
+            if (st.__seedNow) {
+              for (const [k, v] of Object.entries(seed ?? {})) (lagoon.seed ?? lagoon.provide)(k, v);
+              await new Promise((r) => setTimeout(r, 120));
+            }
             // Setup done. From here, a host write is a RESPONSE to what the island did.
             window.__motuSuspects?.reset?.();
             if (st.emit) {

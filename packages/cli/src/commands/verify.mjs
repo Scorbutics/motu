@@ -10,7 +10,7 @@
 //           Chromium) so layout/CSS/paint are exercised; `--fast` uses an in-process happy-dom mount.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
 import { sourceFileAt } from '../lib/ts-project.mjs';
@@ -18,6 +18,7 @@ import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { islandContract, contractsDrift } from '../lib/contracts.mjs';
+import { nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
 import {
   runLagoon,
@@ -714,15 +715,17 @@ function reportRuntimeDiagnostics(report, r, label) {
 }
 
 /** Fast in-process lagoon mount under happy-dom for one fit (used with --fast). */
-function runtimeCheckFast(report, tag, fixturesPath, fit) {
-  const args = ['--import', 'tsx', HARNESS, tag, fixturesPath || '', fit];
+async function runtimeCheckFast(report, tag, fixturesPath, fit) {
+  // The alias hook goes AFTER tsx so tsx compiles what it resolves.
+  const ALIAS_LOADER = resolve(dirname(fileURLToPath(import.meta.url)), '../alias-register.mjs');
+  const args = ['--import', 'tsx', '--import', pathToFileURL(ALIAS_LOADER).href, HARNESS, tag, fixturesPath || '', fit];
   // Node has to be able to resolve @motu/* from the project's own files before it can load them.
   ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
   const res = spawnSync(process.execPath, args, {
     encoding: 'utf8',
     cwd: CLI_PKG,
     // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
-    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT },
+    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT, MOTU_NODE_ALIASES: await nodeAliasEnv() },
   });
   if (res.status !== 0) {
     // The LAST stderr line is a stack frame; the useful one is what the harness said it died of.
@@ -1065,7 +1068,7 @@ export async function runIslandVerify(argv, name) {
     // legacy skin — it would verify the same thing twice and double the wall clock.
     for (const fit of LEGACY_FIT ? ['native', 'legacy'] : ['native']) {
       if (argv.fast) {
-        runtimeCheckFast(report, resolvedTag, fixturesPath, fit);
+        await runtimeCheckFast(report, resolvedTag, fixturesPath, fit);
       } else {
         await runtimeCheckBrowser(report, resolvedTag, fit, port++);
       }

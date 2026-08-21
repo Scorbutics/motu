@@ -10,6 +10,8 @@ island**: a plain, mode-agnostic React component that renders in the *lagoon* ag
 only later gets integrated into the real page. You do the *judgement* work — reading messy legacy
 code and rewriting it. The `motu` CLI does the *deterministic* work — scaffolding, config edits, and
 verification. **Lean on `motu island verify`: it is the loop you close on, not your own eyeballing.**
+Iterate with `--fast` (happy-dom, no browser); spend the browser once at the end with `--runtime`, and
+`--audit` before integrating. See "Which level, when" in `island-create.agent.md`.
 
 Read `README.md` first (terminology, "The loop", "The rules that make islands verifiable", "Non-goals").
 Do **not** invent rules — the authoritative, mechanical rule set is whatever `motu island verify`

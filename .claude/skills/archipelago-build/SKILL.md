@@ -50,7 +50,9 @@ only the slot. Do not tell an agent about the others' internals; the archipelago
 > three scenarios that render visibly differently.
 > Add a coverage step to the region's evidence asserting text YOUR island alone produces.
 > Remove `planned: true` from your entry only.
-> Run `motu island sync`, then `motu island verify <name> --runtime`, then the project's typecheck.
+> Run `motu island sync`, then `motu island verify <name> --fast` while you iterate (happy-dom, no
+> browser), then `motu island verify <name> --runtime` ONCE when it looks right, then the project's
+> typecheck.
 > Exit codes: 0 pass · 1 a real finding, fix it · 2 could not run, retry or report — never "fix" code
 > for a 2.
 > Touch nothing belonging to another slot, and do not edit the shared region type — if you think it is
@@ -77,10 +79,20 @@ In `src/archipelagos/<id>/<id>.evidence.ts`, write the journey — several steps
 other, each ending on the island that READS rather than the one you drove. The seed establishes the
 starting state once; steps accumulate.
 
-`motu archipelago verify <id> --runtime` must pass with:
+A region's flows need a browser — `--fast` skips them and says so — so this step is where the browser
+work belongs. `motu archipelago verify <id> --runtime` must pass with:
 - `region-flow` — the journey ends as declared,
 - `flow-mutation` — every step dies when its stimulus is mutated,
 - `render-coverage` — every slot is asserted by some flow.
+
+### Which level, when
+
+    motu check                              STATIC       every change
+    motu check --runtime --fast --changed   NO BROWSER   the loop (~6s on a 16-island project)
+    motu check --runtime                    the coupling — before handing over
+    motu check --audit                      layout + a11y — before integrating, and in CI
+
+Fan-out agents iterate on the first two. The browser is paid once, by you, at steps 4 and 5.
 
 ## 5 — Look at it, then hand over
 

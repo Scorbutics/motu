@@ -79,8 +79,29 @@ MOTU_NO_SSL=1 pnpm dev:lagoon           # visual iteration (standalone app + swi
 
 ### 3 — Verify in the lagoon; raise integration concerns
 ```bash
-pnpm motu island verify <name>          # static + config + REAL-browser lagoon (native & legacy) + data-flow
+motu island verify <name> --fast        # while building: static + happy-dom mount + data-flow, no browser
+motu island verify <name> --runtime     # once it looks right: the real browser lagoon
+motu island verify <name> --audit       # before integrating: + responsive + a11y
 ```
+
+### Which level, when
+
+    motu check                       STATIC        ~1.4s   every change, in the loop
+    motu island verify <n> --fast    NO BROWSER            while building one island
+    motu check --runtime --fast --changed          ~6s     the loop, whole project
+    motu check --runtime             DOES IT WORK ~104s    before handing work over
+    motu check --audit               IS IT USABLE          before integrating, and in CI
+
+(seconds measured on a 16-island, 2-region project)
+
+`--fast` mounts islands under happy-dom in node: no browser at all. It SKIPS a region's flows, mutation
+and render, and says so — those only exist where islands are mounted together. `--audit` adds
+`responsive` and `a11y`, whose answer changes when the rendering changes, not when a key moves.
+
+So: iterate on `--fast`, and pay for the browser ONCE, at the end — for the coupling (region flows),
+the layout and the accessibility. Running `--runtime` on every edit is the single easiest way to make
+an agent stop running checks at all.
+
 Fix every `✗` until **PASS**. Then, BEFORE integrating, explicitly write down the integration risks the
 lagoon CANNOT cover — this is the honest boundary:
 - inputs still on defaults / channels that never fired (the overlay's ⚠ line; `bound-empty` props),

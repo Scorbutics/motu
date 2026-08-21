@@ -83,3 +83,24 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    proved by the region that is running.
  - `docs/plan-key-ownership.md` in the motu repo is the design record for ownership, eject and the
    verify checks; read it before changing how a region declares anything.
+
+## A UI that lives in the database, not the repository
+
+A metadata-driven app (Twenty: widgets and views are rows, dispatched on a codegen'd enum) has no
+`islands: [...]` in source. Declare the region `membership: 'catalogue'` and give every data-summoned
+island a `member:` — the app's own discriminator, not the motu slot. Islands WITHOUT `member` are
+chrome and are still checked for placement; a catalogue region is mixed, and treating it as pure
+reports the chrome as a hallucinated widget type.
+
+Do NOT hand-write fixtures to make the lagoon render. The app already had to solve this: its tests
+and stories need the metadata too, so it carries a capture in-repo plus a script that refreshes it
+from a live instance (Twenty: `scripts/mock-data/generate-*.ts` → 2.3 MB under
+`testing/mock-data/generated/`). Point `capture` in `<id>.evidence.ts` at THAT, with `universe` read
+from the schema enum. Both sides are then the app's artifacts and motu only compares.
+
+What the comparison buys, and why data-driven UI is an advantage rather than an obstacle: a declared
+member absent from the schema enum is UNREACHABLE (it can never render — a typo or a hallucination),
+a captured type nobody declares is UNCOVERED (the region renders less than the page does). Neither is
+answerable when membership lives in JSX. Watch for the empty answer: Twenty's own transport serves
+`FindAllRecordPageLayouts` with `[]`, which renders as an empty page and looks like a working one —
+`unservedOperations()` catches the missing handler, coverage 0% catches the empty one.

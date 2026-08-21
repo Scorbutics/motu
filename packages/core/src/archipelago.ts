@@ -42,6 +42,15 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    * the island up to check the events this entry wires (`RegionWiringOk`).
    */
   element: TTag;
+  /**
+   * For a CATALOGUE region only: the discriminator this island renders, as it appears in the data.
+   *
+   * `slot` is motu's name for the island; this is the APP'S name for the row that summons it —
+   * Twenty's `WidgetType.FIELDS`, a `ViewType.TABLE`. Keeping them separate matters because the check
+   * that becomes possible (`checkCatalogue`) compares against captured rows and a codegen'd enum, and
+   * neither of those has ever heard of a motu slot. Defaults to `slot` when the two coincide.
+   */
+  member?: string;
   /** Static properties set once on mount. */
   props?: Record<string, unknown>;
   /**
@@ -162,6 +171,23 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * whole region when previewing inside the legacy app. Shared so both stay in lock-step.
    */
   layout?: string;
+  /**
+   * Where the island LIST comes from.
+   *
+   * `placed` (the default): the page names its islands in source — `<X.Island slot="…">` — and every
+   * declared slot must appear there. That is true of most pages and it is what makes `integrate
+   * check` able to ask "is this wired".
+   *
+   * `catalogue`: the region's members are decided at RUNTIME, from data. Twenty's record page renders
+   * widgets from a database row through a `WidgetType` enum — users add, remove, drag and resize them
+   * — so there is no placement in source to check, and asking for one produces three findings that
+   * cannot be true or false. Dashboards, CRMs and BI tools are all this shape.
+   *
+   * What stays checkable is the CONTRACT: every type the layout may contain declares what it reads and
+   * writes, and ownership still has exactly one owner per key. Declaring the membership kind is what
+   * lets the checks ask the answerable question instead of the unanswerable one.
+   */
+  membership?: 'placed' | 'catalogue';
   /**
    * The region's INBOUND seam, named.
    *

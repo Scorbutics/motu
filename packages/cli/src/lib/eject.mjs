@@ -40,6 +40,8 @@ export function readRegions(archipelagosDir) {
     regions.push({
       id: entry.name,
       file,
+      /** `catalogue` when the island list is data — see ArchipelagoConfig.membership. */
+      membership: text.match(/\bmembership:\s*'(placed|catalogue)'/)?.[1] ?? 'placed',
       islands: readIslands(text),
       // The APP's own region type, and where it comes from. Generated state is typed with it —
       // `useState<ActionsRegion['weekMissions']>()` — so an ejected page keeps the exact types it had,
@@ -81,7 +83,8 @@ function readIslands(text) {
           : target.slice(1, -1);
       }
     }
-    islands.push({ slot: block.name, element, writes });
+    const member = block.body.match(/\bmember:\s*'([^']+)'/)?.[1];
+    islands.push({ slot: block.name, element, writes, member });
   }
   return islands;
 }

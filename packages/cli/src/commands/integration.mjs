@@ -75,6 +75,31 @@ function checkRegion(region, sources) {
   const constName = archConst(region.id);
   const rel = (f) => relative(HOST_ROOT, f);
 
+  // MEMBERSHIP FIRST when it is DATA. A catalogue region's members are decided at runtime, so nothing
+  // about them depends on the composition root existing — and the questions worth asking (does every
+  // declared type have a contract?) are most useful during adoption, before anything is wired.
+  const catalogueMembers = region.membership === 'catalogue' ? region.islands.filter((i) => i.member) : [];
+  const placedIslands = region.membership === 'catalogue' ? region.islands.filter((i) => !i.member) : region.islands;
+
+  if (region.membership === 'catalogue') {
+    add(
+      'ok',
+      'catalogue',
+      `${catalogueMembers.length} member type(s) summoned by data (${catalogueMembers.map((i) => i.member).join(', ')}), ` +
+        `${placedIslands.length} island(s) still placed in source — run \`motu verify catalogue\` against a capture ` +
+        `to learn whether the declared types are the types the data produces`,
+    );
+    const withoutContract = catalogueMembers.filter((i) => !i.writes || !Object.keys(i.writes).length);
+    if (withoutContract.length) {
+      add(
+        'warn',
+        'contract',
+        `${withoutContract.map((i) => i.slot).join(', ')} declare no \`writes\` — a catalogue member that ` +
+          `owns nothing is fine, but check it is not simply undeclared`,
+      );
+    }
+  }
+
   // 1 — COMPOSED? `createRegion(<id>Archipelago)` somewhere in the host.
   let binding = null;
   let bindingFile = null;
@@ -114,7 +139,10 @@ function checkRegion(region, sources) {
         `so the store exists and no island ever mounts`,
     );
 
-  // 2 — PLACED? every declared slot marked in the host's own JSX.
+  // 2 — PLACED? every declared slot marked in the host's own JSX. In a catalogue region this covers
+  //     the chrome only: an island summoned by a data row has no `<X.Island slot>` to find, and
+  //     demanding one would report the app's own design as an error.
+  {
   const placed = new Map();
   const slotRe = new RegExp(`<${binding}\\.Island\\s[^>]*?slot=["'\`]([^"'\`]+)`, 'g');
   for (const [file, text] of sources) {
@@ -122,7 +150,7 @@ function checkRegion(region, sources) {
       placed.set(slot, [...(placed.get(slot) ?? []), file]);
     }
   }
-  const declared = region.islands.map((i) => i.slot);
+  const declared = placedIslands.map((i) => i.slot);
   const missing = declared.filter((s) => !placed.has(s));
   const unknown = [...placed.keys()].filter((s) => !declared.includes(s));
   if (missing.length) {
@@ -136,7 +164,9 @@ function checkRegion(region, sources) {
   for (const slot of unknown) {
     add('error', 'placed', `<${binding}.Island slot="${slot}"> is placed but the archipelago declares no such slot`);
   }
-  if (!missing.length && !unknown.length) add('ok', 'placed', `all ${declared.length} declared slot(s) placed in the host`);
+  if (!missing.length && !unknown.length && declared.length)
+    add('ok', 'placed', `all ${declared.length} source-placed slot(s) placed in the host`);
+  }
 
   // 3 — READ? a region nobody reads is a store the page writes into and ignores.
   const readers = [...sources].filter(([, t]) => code(t).includes(`${binding}.useRegion(`));

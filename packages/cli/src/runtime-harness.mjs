@@ -26,6 +26,28 @@ async function main() {
     process.exit(0);
   }
 
+  // 'catalogue' mode: resolve a catalogue region's declared members against the app's own capture.
+  // Runs here rather than in the CLI for one reason: `@motu/core` is TS source, so `checkCatalogue`
+  // is importable under tsx and nowhere else — and a second copy of that set arithmetic in the CLI
+  // would drift from the one the framework actually ships.
+  if (mode === 'catalogue') {
+    const declared = JSON.parse(process.env.MOTU_CATALOGUE_DECLARED ?? '[]');
+    try {
+      const { capture } = await import(fixturesPath);
+      if (!capture) {
+        process.stdout.write(JSON.stringify({ error: 'no `capture` export' }) + '\n');
+        process.exit(0);
+      }
+      const { checkCatalogue } = await import('@motu/core');
+      const present = (typeof capture.present === 'function' ? capture.present() : capture.present) ?? [];
+      const universe = typeof capture.universe === 'function' ? capture.universe() : capture.universe;
+      process.stdout.write(JSON.stringify({ report: checkCatalogue({ declared, universe, present }), present: present.length }) + '\n');
+    } catch (err) {
+      process.stdout.write(JSON.stringify({ error: err?.message ?? String(err) }) + '\n');
+    }
+    process.exit(0);
+  }
+
   GlobalRegistrator.register();
   // The islands rely on the JSX transform and never `import React`. tsx/esbuild compiles the classic
   // runtime (React.createElement) here, so expose React as a free global for the island modules.

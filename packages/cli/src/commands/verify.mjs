@@ -1127,6 +1127,67 @@ async function responsiveCheck(report, tag, kebab, port) {
   }
 }
 
+
+/**
+ * A CATALOGUE region's declared members are the members the data actually produces.
+ *
+ * Static by design and it needs no browser: the two inputs are the app's captured payloads and the
+ * enum its own codegen emits. That is the whole reversal — a UI decided by data looked like the case
+ * motu could say nothing about, and it is the case where the answer can be READ instead of inferred
+ * from JSX. `<id>.evidence.ts` supplies them via `export const capture = { universe, present }`.
+ */
+async function catalogueCheck(report, id, region) {
+  const members = region.islands.filter((i) => i.member);
+  if (!members.length) {
+    report.warn('catalogue', 'region is declared `membership: \'catalogue\'` but no island declares a `member` — nothing ties a declaration to a data row');
+    return;
+  }
+  const file = paths.archipelagoEvidence(id);
+  if (!existsSync(file)) {
+    report.warn(
+      'catalogue',
+      `${members.length} member type(s) declared and no capture to check them against — export \`capture\` ` +
+        `from ${paths.rel(file)} pointing at the app's own fixtures, or the declaration is a guess`,
+    );
+    return;
+  }
+
+  const res = spawnSync(process.execPath, ['--import', 'tsx', HARNESS, '', file, 'native', 'catalogue'], {
+    encoding: 'utf8',
+    cwd: CLI_PKG,
+    env: { ...process.env, MOTU_CATALOGUE_DECLARED: JSON.stringify(members.map((i) => i.member)) },
+  });
+  let parsed = {};
+  try {
+    parsed = JSON.parse((res.stdout || '').trim().split('\n').filter(Boolean).pop());
+  } catch {
+    parsed = { error: (res.stderr || '').trim().split('\n').pop() || 'harness produced no output' };
+  }
+  if (parsed.error || !parsed.report) {
+    report.warn('catalogue', `capture could not be read from ${paths.rel(file)}: ${parsed.error ?? 'no report'}`);
+    return;
+  }
+  const { covered, uncovered, speculative, unreachable, coverage } = parsed.report;
+  const presentTypes = covered.length + uncovered.length;
+
+  if (unreachable.length)
+    report.error(
+      'catalogue',
+      `${unreachable.join(', ')} — not in the app's own enum of member types, so no data row can ever summon ` +
+        `${unreachable.length > 1 ? 'them' : 'it'}; the island is unreachable, not merely unexercised`,
+    );
+  if (uncovered.length)
+    report.error(
+      'catalogue',
+      `${uncovered.join(', ')} — the capture contains ${uncovered.length > 1 ? 'these member types' : 'this member type'} and no island declares ` +
+        `${uncovered.length > 1 ? 'them' : 'it'}; the region renders less than the page does, and the lagoon frame is short by that much`,
+    );
+  for (const t of speculative)
+    report.warn('catalogue', `${t} declared but absent from the capture — no evidence has ever exercised it`);
+  if (!uncovered.length && !unreachable.length)
+    report.ok('catalogue', `${covered.length}/${presentTypes} member type(s) in the capture are declared (${(coverage * 100).toFixed(0)}%)`);
+}
+
 /**
  * The region's declared flows end where they say they do.
  *
@@ -1736,6 +1797,9 @@ export async function runArchipelagoVerify(argv, id) {
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
   if (region) channelSourceCheck(report, id, region);
 
+  // Membership as data: static, so it runs whether or not a browser was asked for.
+  if (region?.membership === 'catalogue') await catalogueCheck(report, id, region);
+
   // Region styling: until islands own their CSS, the shared sheet is the region's stylesheet — lint it.
   if (existsSync(paths.sharedStyles)) {
     cssChecks(report, readFileSync(paths.sharedStyles, 'utf8'), paths.rel(paths.sharedStyles));
@@ -1759,7 +1823,8 @@ export async function runArchipelagoVerify(argv, id) {
             // "all N" used to mean "all N I happened to find". A slot the arrangement never places —
             // an island behind a closed drawer, a conditional branch — simply was not in the list, so
             // the check congratulated itself on a region missing an island. Say what is declared.
-            const declared = (readRegions(paths.archipelagosDir).find((x) => x.id === id)?.islands ?? []).map((i) => i.slot);
+            const declaredRegion = readRegions(paths.archipelagosDir).find((x) => x.id === id);
+            const declared = declaredRegion?.membership === 'catalogue' ? [] : (declaredRegion?.islands ?? []).map((i) => i.slot);
             const placed = new Set(r.islands.map((i) => i.slot).filter(Boolean));
             const unplaced = declared.filter((slot) => !placed.has(slot));
             report.ok('lagoon-render', `region + all ${r.islands.length} island(s) mounted in the lagoon`);

@@ -18,6 +18,17 @@ export {
   resetUnattributedWrites,
 } from './foreign-store.js';
 export type { StoreAdapter, UnattributedWrite, WriteSite, ForeignObservation } from './foreign-store.js';
+export {
+  observeForeignTransport,
+  transportCalls,
+  servedOperations,
+  unservedOperations,
+  transportObservations,
+  resetTransport,
+} from './foreign-transport.js';
+export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport.js';
+export { checkCatalogue } from './catalogue.js';
+export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue.js';
 export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
 export type {
   HostBridge,

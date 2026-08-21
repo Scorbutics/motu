@@ -104,3 +104,14 @@ a captured type nobody declares is UNCOVERED (the region renders less than the p
 answerable when membership lives in JSX. Watch for the empty answer: Twenty's own transport serves
 `FindAllRecordPageLayouts` with `[]`, which renders as an empty page and looks like a working one —
 `unservedOperations()` catches the missing handler, coverage 0% catches the empty one.
+
+## A flow the host drives, asserted on what renders
+
+A region whose islands only READ has no `emit` to declare — and it still has a promise. Use a
+`provide` step (the app moving its own state) and end on `expectRender`, not on `expect`.
+
+`expect` names region keys, so a step whose `expect` names the key its own `provide`/`emit` targets
+cannot fail unless the lagoon itself is broken. The assertion worth writing is what ANOTHER island
+shows: Twenty's record page proves `editingWidgetId` moves exactly one of two widgets, in both
+directions, and back to neither. Negate one clause and re-run before believing a green flow — a step
+that cannot fail is not a check.

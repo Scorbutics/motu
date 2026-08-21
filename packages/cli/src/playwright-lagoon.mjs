@@ -493,18 +493,47 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
             await new Promise((r) => setTimeout(r, 120));
             // Setup done. From here, a host write is a RESPONSE to what the island did.
             window.__motuSuspects?.reset?.();
-            if (!lagoon.emit(st.emit.slot, st.emit.event, st.emit.detail)) {
-              return { error: `no island mounted under slot "${st.emit.slot}"` };
+            if (st.emit) {
+              if (!lagoon.emit(st.emit.slot, st.emit.event, st.emit.detail)) {
+                return { error: `no island mounted under slot "${st.emit.slot}"` };
+              }
+            } else if (st.provide) {
+              // The APPLICATION moving its own state, which is how a host-fed key ever changes.
+              for (const [k, v] of Object.entries(st.provide)) lagoon.provide(k, v);
+            } else {
+              return { error: 'a step must `emit` an island output or `provide` a host key' };
             }
             await new Promise((r) => setTimeout(r, 120));
             const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
             const mismatches = Object.entries(st.expect ?? {})
               .map(([key, expected]) => ({ key, expected, actual: lagoon.read(key) }))
               .filter((m) => !same(m.expected, m.actual));
+
+            // What the islands SHOW. Read off the mountpoints the lagoon already marks, so this needs
+            // no selector from the project and cannot drift from where the region actually mounted.
+            const renderMismatches = [];
+            for (const [slot, want] of Object.entries(st.expectRender ?? {})) {
+              const el = document.querySelector(`[data-motu-slot="${slot}"]`);
+              if (!el) {
+                renderMismatches.push({ key: `render:${slot}`, expected: want, actual: 'nothing mounted under that slot' });
+                continue;
+              }
+              const text = (el.innerText ?? el.textContent ?? '').replace(/\s+/g, ' ').trim();
+              const wants = typeof want === 'string' ? { text: want } : want;
+              if (wants.text != null && !text.includes(wants.text)) {
+                renderMismatches.push({ key: `render:${slot}`, expected: `text containing ${JSON.stringify(wants.text)}`, actual: text });
+              }
+              if (wants.notText != null && text.includes(wants.notText)) {
+                renderMismatches.push({ key: `render:${slot}`, expected: `text NOT containing ${JSON.stringify(wants.notText)}`, actual: text });
+              }
+            }
+            if (!Object.keys(st.expect ?? {}).length && !Object.keys(st.expectRender ?? {}).length) {
+              return { error: 'a step must assert something — `expect` a region key or `expectRender` an island' };
+            }
             // Did the region survive its own flow? A step that leaves nothing on screen has broken
             // something, even when every key it asserted holds the right value.
             const alive = document.querySelectorAll('[data-motu-slot]').length > 0;
-            return { mismatches, alive };
+            return { mismatches: [...mismatches, ...renderMismatches], alive };
           },
           { seed: scenario.seed ?? {}, step },
         );

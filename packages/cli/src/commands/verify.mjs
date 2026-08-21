@@ -1169,7 +1169,16 @@ async function catalogueCheck(report, id, region) {
     parsed = { error: (res.stderr || '').trim().split('\n').pop() || 'harness produced no output' };
   }
   if (parsed.error || !parsed.report) {
-    report.warn('catalogue', `capture could not be read from ${paths.rel(file)}: ${parsed.error ?? 'no report'}`);
+    // An evidence file carrying flows but no `capture` is the NORMAL state, not a broken read: the two
+    // answer different questions (does the region move, vs are its declared members the real ones).
+    const missing = /no `capture` export/.test(parsed.error ?? '');
+    report.warn(
+      'catalogue',
+      missing
+        ? `${members.length} member type(s) declared and no capture to check them against — add a \`capture\` ` +
+            `export to ${paths.rel(file)} pointing at the app's own fixtures, or the declaration is a guess`
+        : `capture could not be read from ${paths.rel(file)}: ${parsed.error ?? 'no report'}`,
+    );
     return;
   }
   const { covered, uncovered, speculative, unreachable, coverage } = parsed.report;

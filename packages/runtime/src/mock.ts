@@ -62,9 +62,26 @@ export interface RegionScenario {
 
 export interface RegionStep {
   /** The island output to fire, in the region's own vocabulary. */
-  emit: { slot: string; event: string; detail?: unknown };
+  emit?: { slot: string; event: string; detail?: unknown };
+  /**
+   * The HOST feeding region keys — the other way a region moves.
+   *
+   * Every step used to be an `emit`, which quietly meant only regions whose islands WRITE could have
+   * flows at all. Twenty's record page is the counter-example: its two widgets both read
+   * `editingWidgetId`, the app owns it, and the coupling is real enough to watch one island change
+   * while the other does not. That flow was undeclarable until this existed.
+   */
+  provide?: Record<string, unknown>;
   /** Region keys and the values they must hold afterwards. Compared structurally. */
-  expect: Record<string, unknown>;
+  expect?: Record<string, unknown>;
+  /**
+   * What an island RENDERS afterwards, by slot — the assertion a store read cannot make.
+   *
+   * `expect` names region keys, so a step whose `expect` names the key its `emit` targets is a
+   * tautology: it cannot fail unless the wiring is broken. Ending on another island's rendered text
+   * is the thing that fails when the store is right and the screen is wrong.
+   */
+  expectRender?: Record<string, string | { text?: string; notText?: string }>;
 }
 
 /** Structural arg matching: `undefined` pattern slot = wildcard; plain objects match as a subset. */

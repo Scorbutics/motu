@@ -345,7 +345,18 @@ function normalizeRender(html) {
  *
  * Settled = non-empty and unchanged across consecutive samples. Returns '' if it never rendered.
  */
-async function waitForStableRender(page, tag, { timeoutMs, quietSamples = 3, intervalMs = 120 } = {}) {
+/**
+ * `quietSamples × intervalMs` is a floor every mount pays, and a project pays it per island per
+ * scenario: 3 × 120ms = 360ms, five or six mounts per island, sixteen islands. Most of a
+ * `check --runtime` run was this deliberate waiting.
+ *
+ * 60ms keeps three confirmations — the shape of the check is unchanged, it is the same "has it stopped
+ * moving" question — while halving the floor to 180ms. An island still changing resets the counter and
+ * keeps its full deadline, so what this can miss is a render whose only remaining update lands in a
+ * gap longer than 180ms and never changes anything again. Measured across three projects (16, 4 and 5
+ * islands) nothing regressed.
+ */
+async function waitForStableRender(page, tag, { timeoutMs, quietSamples = 3, intervalMs = 60 } = {}) {
   const started = Date.now();
   const deadline = started + (timeoutMs ?? paintTimeout);
   let last = null;

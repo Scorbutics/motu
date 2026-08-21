@@ -20,6 +20,18 @@ import { loadMotuConfig } from '../lib/config.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { ejectFile, readOutputs, readRegions } from '../lib/eject.mjs';
 
+/** The host's own typecheck, run the way the host would run it. */
+function hostTypecheck(hostRoot) {
+  const tsconfig = existsSync(resolve(hostRoot, 'tsconfig.json')) ? 'tsconfig.json' : null;
+  return spawnSync('npx', ['tsc', '--noEmit', ...(tsconfig ? ['-p', tsconfig] : [])], {
+    cwd: hostRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
+
 /**
  * Every app source and what it imports, read as TEXT.
  *
@@ -28,7 +40,7 @@ import { ejectFile, readOutputs, readRegions } from '../lib/eject.mjs';
  * an import graph is a regex over source text. The files that matter are then parsed properly; the
  * rest are never opened again.
  */
-function importGraph(hostRoot, motuRoot) {
+function importGraph(hostRoot, motuRoot, cfg) {
   const graph = new Map();
   const walk = (dir) => {
     let entries;
@@ -52,7 +64,19 @@ function importGraph(hostRoot, motuRoot) {
       }
     }
   };
-  for (const top of ['app', 'components', 'lib']) walk(resolve(hostRoot, top));
+  // WHERE THE HOST KEEPS ITS CODE is not a constant.
+  //
+  // This walked `app/`, `components/` and `lib/` — Next's layout, and the only host motu had ever been
+  // integrated into. Pointed at Twenty, whose source is all under `src/`, it found nothing and printed
+  // "no motu references in the host application" over a fully integrated app: the check answered
+  // "removable" because it had not looked anywhere. A green result from an empty search is the worst
+  // failure mode this tool has, so the roots are now the host's actual top-level source directories,
+  // and `hostSources` in motu.config.json overrides the guess for a layout nobody anticipated.
+  const configured = Array.isArray(cfg?.hostSources) ? cfg.hostSources : null;
+  const roots =
+    configured ??
+    ['app', 'components', 'lib', 'src', 'pages'].filter((d) => existsSync(resolve(hostRoot, d)));
+  for (const top of roots.length ? roots : ['.']) walk(resolve(hostRoot, top));
   return graph;
 }
 
@@ -184,7 +208,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   const backupDir = resolve(cfg.cacheDir, 'removal-check');
 
   // The app's own sources — never motu's own tree, which is what is being removed.
-  const graph = importGraph(hostRoot, cfg.root);
+  const graph = importGraph(hostRoot, cfg.root, cfg);
   const motuDir = relative(hostRoot, cfg.root) || 'motu';
   const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(graph, hostRoot, motuDir);
 
@@ -319,12 +343,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     for (const p of deleted) rmSync(p);
     for (const p of stripped) writeFileSync(p, project.getSourceFile(p).getFullText());
 
-    const tsconfig = existsSync(resolve(hostRoot, 'tsconfig.json')) ? 'tsconfig.json' : null;
-    result = spawnSync('npx', ['tsc', '--noEmit', ...(tsconfig ? ['-p', tsconfig] : [])], {
-      cwd: hostRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    result = hostTypecheck(hostRoot);
   } finally {
     for (const p of [...deleted, ...stripped]) {
       const src = resolve(backupDir, relative(hostRoot, p));
@@ -351,7 +370,26 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   // errors is how a green result stops meaning anything.
   const lines = out ? out.split('\n') : [];
   const generated = lines.filter((l) => /^\.?next[\/\\]|^\.next[\/\\]/.test(l.trim()));
-  const real = lines.filter((l) => l.trim() && !generated.includes(l));
+  let real = lines.filter((l) => l.trim() && !generated.includes(l));
+
+  // PRE-EXISTING errors are not evidence that motu is load-bearing.
+  //
+  // The check asks one question — does removing motu BREAK the host — and a host that did not
+  // typecheck to begin with still answers it. Real applications fail this the moment you try:
+  // Twenty's `tsc` reports 4 errors at a clean checkout because a package's generated file needs a
+  // build step that does not run here. Demanding zero would make every such app look like motu had
+  // welded itself in, which is the exact opposite of what the check exists to prove.
+  //
+  // The baseline runs only when something failed, on the RESTORED tree (the `finally` above put every
+  // file back). So the common case — a clean removal — still pays for exactly one typecheck.
+  let preExisting = [];
+  if (real.length) {
+    const before = hostTypecheck(hostRoot);
+    const beforeOut = ((before?.stdout ?? '') + (before?.stderr ?? '')).trim();
+    const baseline = new Set(beforeOut ? beforeOut.split('\n').map((l) => l.trim()).filter(Boolean) : []);
+    preExisting = real.filter((l) => baseline.has(l.trim()));
+    real = real.filter((l) => !baseline.has(l.trim()));
+  }
 
   const summary = {
     // A file the surgery could not rewrite is an UNANSWERED question, not a pass.
@@ -361,6 +399,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     stripped: stripped.map((p) => relative(hostRoot, p)),
     ejected: ejected.map(([p, notes]) => ({ file: relative(hostRoot, p), notes })),
     errors: [...surgeryErrors, ...real].slice(0, 15),
+    preExisting: preExisting.length,
   };
   // Remember it, so an unchanged repo does not pay for the same proof twice.
   try {
@@ -380,7 +419,11 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   if (quiet) return summary;
 
   if (summary.pass) {
-    console.log(color.green(color.bold('PASS')) + color.dim('  the host typechecks with motu removed'));
+    console.log(
+      color.green(color.bold('PASS')) +
+        color.dim('  the host typechecks with motu removed') +
+        (summary.preExisting ? color.dim(` · ${summary.preExisting} pre-existing error(s) in the host, unchanged by the removal`) : ''),
+    );
     if (generated.length) {
       console.log(color.dim(`  (${generated.length} stale generated route-type error(s) ignored — build artifacts of the deleted route)`));
     }

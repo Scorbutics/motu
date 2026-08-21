@@ -32,6 +32,8 @@ const UI_DIR = cfg.uiDir;
 
 export const paths = {
   islandsDir: ISLANDS_DIR,
+  /** The ui/ root itself (uiDir(kebab) is one island's folder inside it). */
+  uiRoot: UI_DIR,
   islandDir: (kebab) => resolve(ISLANDS_DIR, kebab),
   islandsRegistry: resolve(ISLANDS_DIR, 'registry.ts'),
   archipelagosDir: ARCHIPELAGOS_DIR,

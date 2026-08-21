@@ -14,6 +14,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { color, paths } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
+import { changedScope } from '../lib/changed.mjs';
 import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
@@ -42,7 +43,17 @@ export async function checkCommand(argv) {
   // The generated half, first and cheaply: every island's contract is READ from its component, so the
   // only way it can be wrong is by being stale. One comparison answers that for the whole project.
   const drift = islands0Drift();
-  const islands = listIslands(paths.islandsDir);
+  const allIslands = listIslands(paths.islandsDir);
+
+  // `--changed`: verify what this branch touched. Widens back to everything the moment a change
+  // cannot be attributed to one island or region, and says so — a run that is fast because it skipped
+  // your change is worse than a slow one.
+  const scope = argv.changed ? changedScope(typeof argv.changed === 'string' ? argv.changed : undefined) : null;
+  if (scope && !scope.scoped) {
+    console.log(color.dim(`  --changed: running everything — ${scope.reason}`));
+  }
+  const islands = scope?.scoped ? allIslands.filter((i) => scope.islands.includes(i.kebab)) : allIslands;
+
   const islandResults = [];
   for (const island of islands) islandResults.push(await runIslandVerify(sub, island.kebab));
 
@@ -51,8 +62,30 @@ export async function checkCommand(argv) {
         .filter((e) => e.isDirectory() && existsSync(paths.archipelagoFile(e.name)))
         .map((e) => e.name)
     : [];
+  // A touched ISLAND is a touched region too: its contract is what the region declares against.
+  const regionsToRun = scope?.scoped ? regionIds.filter((id) => scope.regions.includes(id)) : regionIds;
   const regionResults = [];
-  for (const id of regionIds) regionResults.push(await runArchipelagoVerify(sub, id));
+  for (const id of regionsToRun) regionResults.push(await runArchipelagoVerify(sub, id));
+
+  if (scope?.scoped) {
+    console.log(
+      color.dim(
+        `  --changed: ${islands.length}/${allIslands.length} island(s), ` +
+          `${regionsToRun.length}/${regionIds.length} region(s) — from ${scope.files} changed file(s)`,
+      ),
+    );
+    // NOTHING CHECKED IS NOT A PASS. `--changed` with no changes verified zero islands and printed
+    // green — the same "a check that examined nothing has not passed" rule this project keeps
+    // relearning, reproduced in the flag whose whole purpose is to examine less.
+    if (!islands.length && !regionsToRun.length) {
+      console.log('');
+      console.log(
+        color.yellow(color.bold('NOTHING TO CHECK')) +
+          color.dim('  no island or region changed — this run proves nothing about the project'),
+      );
+      process.exit(2);
+    }
+  }
 
   // The LAST MILE. Everything above looks at motu's own files, so all of it can be green while the
   // application composes none of it — which is exactly how a region can verify for a day without a

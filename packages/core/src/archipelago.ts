@@ -187,13 +187,21 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
   sources?: Readonly<
     Record<
       string,
-      {
-        module: string;
-        /** The EXPORT that builds it. Named here so a channel supplies data, never code: motu calls
-         *  `module[symbol](...args)` itself, and there is no factory for anything else to hide in. */
-        symbol?: string;
-        produces: readonly (keyof TRegion & string)[];
-      }
+      | {
+          /**
+           * The source itself, IMPORTED from the application beside the thing it describes.
+           *
+           * It used to be named here as a `module` + `symbol` string pair, which meant the same fact
+           * was written in two files with a check to keep them agreeing — a symptom, not a safety
+           * property. A reference cannot disagree with itself, and the module a channel installs is
+           * the module this points at, by construction rather than by inspection.
+           */
+          create(...args: never[]): unknown;
+          produces: readonly (keyof TRegion & string)[];
+        }
+      // A key no channel installs — the page fetches it itself. There is nothing to reference, so the
+      // module is still named: it is what `motu integrate check` holds the page to.
+      | { module: string; produces: readonly (keyof TRegion & string)[] }
     >
   >;
 }
@@ -333,12 +341,12 @@ type WiredEvents<I> = (I extends { writes: infer W } ? keyof W & string : never)
  * produce. Put it where the page already declares its shape (`… satisfies HostRegion<R, typeof arch>`)
  * and assigning a produced key becomes a compile error naming the file that was doing the laundering.
  *
- * A host that also wants `motu removal-check` to stay green should not import this type into page
- * code: write the split as a plain `Omit` in the APP (no motu import, erases with the framework) and
- * assert the two agree from the archipelago file, which is deleted with motu anyway. See
- * `ProducedKeysAre`.
+ * Named `…Of` because it derives the split FROM an archipelago, which is motu's own type — so this one
+ * belongs to motu's side and page code should not name it. The app-facing spelling is
+ * `HostRegion<TRegion, TProducedKeys>` in `@motu/types`: same concept, its own keys, and it survives
+ * motu's removal because that package does. The two are asserted to agree by `ProducedKeysAre`.
  */
-export type HostRegion<R, A> = Omit<R, ProducedKeys<A> & keyof R>;
+export type HostRegionOf<R, A> = Omit<R, ProducedKeys<A> & keyof R>;
 
 /**
  * Compile-time cross-check between an app-side host/produced split and what the archipelago declares.
@@ -568,7 +576,7 @@ export interface SourceLike {
   /** Called when one of them changes — with every input, keyed. */
   applyInputs?(values: Record<string, unknown>): void;
   /** Host intents this source answers: an island asks, the page acts, this is the page's half. */
-  intents?: Record<string, (source: never, detail: unknown) => void>;
+  intents?: Readonly<Record<string, (detail: unknown) => void>>;
   dispose?(): void;
 }
 
@@ -623,12 +631,6 @@ export function answerHostIntent(regionId: string, name: string, detail: unknown
   return true;
 }
 
-/** The export name one declared source is built by. */
-type SourceSymbol<A, Id extends keyof SourcesOf<A>> = SourcesOf<A>[Id] extends { symbol: infer N }
-  ? N extends string
-    ? N
-    : never
-  : never;
 
 /**
  * A CHANNEL from a declared source — and there is nowhere to put anything else.
@@ -650,17 +652,14 @@ type SourceSymbol<A, Id extends keyof SourcesOf<A>> = SourcesOf<A>[Id] extends {
 export function channelFrom<
   A extends AnyArchipelagoConfig,
   Id extends keyof SourcesOf<A> & string,
-  M extends Record<SourceSymbol<A, Id>, (...args: never[]) => SourceLike & { getState(): { [K in SourceProduces<A, Id>]: unknown } }>,
 >(spec: {
   to: A;
   id: Id;
-  /** The module NAMESPACE the source is built by — `import * as weekSource from '…'`. */
-  from: M;
-  /** The arguments it takes: data, and nothing else. */
-  args: Parameters<M[SourceSymbol<A, Id>]>;
+  /** The arguments the source takes: data, and nothing else. */
+  args: SourcesOf<A>[Id] extends { create: (...args: infer P) => unknown } ? P : never;
   channelName?: string;
 }): DeclaredChannel {
-  const declared = (spec.to.sources as Record<string, { module: string; symbol?: string; produces: readonly string[] }> | undefined)?.[
+  const declared = (spec.to.sources as Record<string, { create?: (...a: unknown[]) => SourceLike; produces: readonly string[] }> | undefined)?.[
     spec.id
   ];
   if (!declared) {
@@ -669,21 +668,17 @@ export function channelFrom<
         `it produces are named, or this channel is feeding the region from nowhere.`,
     );
   }
-  if (!declared.symbol) {
+  if (typeof declared.create !== 'function') {
     throw new Error(
-      `motu: source "${spec.id}" declares no \`symbol\` — name the export that builds it, so a channel can ` +
-        `supply data instead of code.`,
+      `motu: source "${spec.id}" is declared by module name only, so there is nothing to install — point ` +
+        `\`sources.${spec.id}\` at the source itself if a channel should build it.`,
     );
-  }
-  const build = (spec.from as Record<string, unknown>)[declared.symbol];
-  if (typeof build !== 'function') {
-    throw new Error(`motu: ${declared.module} does not export "${declared.symbol}"`);
   }
   const islandOwned = new Set<string>();
   for (const island of spec.to.islands) for (const key of writtenKeys(island)) islandOwned.add(key);
 
   const channel: Channel = ({ store }) => {
-    const source = (build as (...a: unknown[]) => SourceLike)(...(spec.args as unknown[]));
+    const source = declared.create!(...(spec.args as unknown[]));
 
     const publish = () => {
       const state = source.getState() as Record<string, unknown>;
@@ -715,8 +710,8 @@ export function channelFrom<
 
     // What this source answers when an island asks the host for something.
     const answers = new Map<string, (detail: unknown) => void>();
-    for (const [name, handler] of Object.entries((source.intents ?? {}) as IntentHandlers)) {
-      answers.set(name, (detail) => (handler as (s: SourceLike, d: unknown) => void)(source, detail));
+    for (const [name, handler] of Object.entries(source.intents ?? {})) {
+      answers.set(name, (detail) => (handler as (d: unknown) => void)(detail));
     }
     if (answers.size) intentAnswers.set(spec.to.id, answers);
 

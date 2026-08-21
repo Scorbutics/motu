@@ -81,6 +81,19 @@ function proofFingerprint(candidates, extra) {
 const MOTU_SPECIFIER = /^@motu\/|^motu-islands(\/|$)/;
 
 /**
+ * The one motu module that STAYS, and the sentence it makes true.
+ *
+ *   Deleting motu leaves no runtime trace — the application ships byte-identical output. One
+ *   TYPE-ONLY package remains, which erases at compile time.
+ *
+ * `@motu/types` has no value exports, so an app file importing it emits nothing: the guarantee this
+ * check exists to prove is about the RUNTIME, and it is unchanged. Stripping the import would only
+ * make the app fail to typecheck against types that were never going to be there — proving something
+ * weaker while looking stricter. Anything else under `@motu/` is still removed.
+ */
+const MOTU_TYPES_ONLY = /^@motu\/types(\/|$)/;
+
+/**
  * Which JSX tags in THIS file disappear with motu.
  *
  * Not a fixed list. A project legitimately has its own thin composition root — a client component that
@@ -124,7 +137,7 @@ const INFRA = /^react$|^react-dom|^next\//;
  */
 function motuOnlySet(graph, hostRoot, motuDir) {
   const insideMotu = new RegExp(`(^|/)${motuDir}/`);
-  const isMotuSpec = (spec) => MOTU_SPECIFIER.test(spec) || insideMotu.test(spec);
+  const isMotuSpec = (spec) => !MOTU_TYPES_ONLY.test(spec) && (MOTU_SPECIFIER.test(spec) || insideMotu.test(spec));
   // Resolution over the TEXT graph: the same candidates the surgery will load, without paying a TS
   // parse for every file in the app to find out which ones matter.
   const resolveFrom = (from, spec) => {

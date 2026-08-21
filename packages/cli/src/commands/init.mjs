@@ -47,6 +47,9 @@ const MOTU_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..'
 
 /** Framework entry points, mapped by module specifier — @motu/* are raw TS with no build step. */
 const MOTU_ENTRIES = {
+  // The ONE motu module application code may import — types only, so it erases at compile time and
+  // the app still ships byte-identical output without motu.
+  '@motu/types': 'packages/types/src/index.ts',
   '@motu/core': 'packages/core/src/index.ts',
   '@motu/react': 'packages/react/src/index.ts',
   '@motu/react/define': 'packages/react/src/defineReactElement.ts',

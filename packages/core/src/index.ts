@@ -31,7 +31,7 @@ export type {
   SlotsOf,
   RegionWiringOk,
   EventsOf,
-  HostRegion,
+  HostRegionOf,
   ProducedKeysAre,
   ArchipelagoOptions,
   MountedIslandInfo,

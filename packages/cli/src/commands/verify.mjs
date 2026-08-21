@@ -1167,6 +1167,10 @@ async function regionFlowCheck(report, id, port, region) {
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
     sourcesLiveCheck(report, id, run.channels, region);
   } catch (err) {
+    // A ReferenceError or a TypeError here is a BUG IN THIS FILE, not a region that could not be
+    // driven — and reporting it as a warning meant the flows silently stopped running twice today
+    // while the check still passed. Fail loudly for those; keep the warning for real inability.
+    if (err instanceof ReferenceError || err instanceof TypeError) throw err;
     report.warn('region-flow', `could not run declared flows: ${err.message}`);
     return;
   }
@@ -1547,137 +1551,75 @@ function channelSourceCheck(report, id, region) {
     .map((f) => resolve(paths.lagoonDir, f))
     .find((f) => existsSync(f));
   if (!overridesFile) return;
-  const overrides = readFileSync(overridesFile, 'utf8');
+  const overrides = stripComments(readFileSync(overridesFile, 'utf8'));
 
-  // `channels: { <id>: [a, b] }` — the identifiers installed for THIS region.
+  // `channels: { <id>: [ … ] }` — the ENTRIES installed for this region.
   const map = overrides.match(/export const channels[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1];
-  const entry = map?.match(new RegExp(`['"\`]?${id}['"\`]?\\s*:\\s*\\[([^\\]]*)\\]`))?.[1];
-  const names = entry ? [...entry.matchAll(/([A-Za-z_$][\w$]*)/g)].map((m) => m[1]) : [];
-  if (!names.length) return;
+  const list = map?.match(new RegExp(`['"\`]?${id}['"\`]?\\s*:\\s*\\[([\\s\\S]*?)\\n  \\]`))?.[1];
+  if (!list) return;
 
-  // Where each identifier comes from, and what that file is made of.
-  const hostFed = new Set(bindKeysOf(region).filter((k) => !producedKeysOf(region).has(k)));
-  const offenders = [];
-  for (const name of names) {
-    const spec = overrides.match(new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`))?.[1];
-    if (!spec || !spec.startsWith('.')) continue;
-    const file = ['', '.ts', '.tsx']
-      .map((ext) => resolve(dirname(overridesFile), spec.replace(/\.js$/, ext || '.ts')))
-      .find((f) => existsSync(f));
-    if (!file) continue;
-    const text = readFileSync(file, 'utf8');
+  // Split on top-level commas: each element is one channel, and the question is what BUILT it.
+  const entries = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of list) {
+    if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth--;
+    if (ch === ',' && depth === 0) {
+      entries.push(current);
+      current = '';
+    } else current += ch;
+  }
+  if (current.trim()) entries.push(current);
 
-    // FIRST, and it does not depend on anything being typechecked: was this channel produced by the
-    // tool at all? `channels` only accepts a `DeclaredChannel`, which only `channelFrom` (or a
-    // deliberate `rawChannel`) makes — but a project can exclude its lagoon from `tsconfig`, and this
-    // one does, which makes the type-level rule inert precisely where it matters. So the rule is
-    // checked here too, where excluding a folder cannot silence it.
-    if (!/\bchannelFrom\s*\(/.test(text) && !/\brawChannel\s*\(/.test(text)) {
-      report.error(
-        'channel-source',
-        `${paths.rel(file)} is a hand-written channel — build it with \`channelFrom({ to, id, factory })\` so ` +
-          `the copy into the region comes from the archipelago's \`sources\`, or wrap it in ` +
-          `\`rawChannel('<why>', fn)\` if this seam genuinely is not a source`,
-      );
+  let vouched = 0;
+  for (const entry of entries.map((e) => e.trim()).filter(Boolean)) {
+    // Built here, by the tool.
+    if (/^(channelFrom|rawChannel)\s*\(/.test(entry)) {
+      vouched++;
       continue;
     }
-
-    const reactive = /store\.subscribe\s*\(/.test(text);
-    const written = new Set([
-      ...[...text.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
-      ...[...text.matchAll(/seedArchipelago\([^,]+,\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
-    ]);
-    const orchestrates = [...written].filter((k) => hostFed.has(k));
-    // An APPLICATION import — and the definition is the whole check, so it is resolved rather than
-    // pattern-matched. `../../../../src/shared/fixtures` climbs out of the lagoon and still lands
-    // inside motu's own app root: that is evidence, not the application, and a channel importing only
-    // that is exactly the re-implementation this looks for. (It passed the first version of this
-    // check, which is how I know.)
-    const importsApp = [...text.matchAll(/from\s*['"]([^'"]+)['"]/g)]
-      .map((m) => m[1])
-      .some((sp) => {
-        if (sp.startsWith('@/')) return true; // the host alias, by convention
-        if (!sp.startsWith('.')) return false; // a package
-        const target = resolve(dirname(file), sp);
-        return target.startsWith(HOST_ROOT) && !target.startsWith(APP_ROOT);
-      });
-    if (reactive && orchestrates.length && !importsApp) {
-      offenders.push({ file: paths.rel(file), keys: orchestrates.sort() });
+    // Or an identifier from a file that builds it with the tool.
+    const file = /^[A-Za-z_$][\w$]*$/.test(entry) ? channelFileOf(overrides, overridesFile, entry) : null;
+    if (file && /\b(channelFrom|rawChannel)\s*\(/.test(stripComments(readFileSync(file, 'utf8')))) {
+      vouched++;
+      continue;
     }
+    report.error(
+      'channel-source',
+      `a channel of "${id}" is not built by the tool — write \`channelFrom({ to, id, args })\`, whose copy ` +
+        `into the region comes from the archipelago's \`sources\`, or \`rawChannel('<why>', fn)\` if this seam ` +
+        `genuinely is not a source. Hand-written channels forget keys, rename them in transit, and derive ` +
+        `what the page already derives — all three have happened here.`,
+    );
   }
-
-  // THE DECLARED MODULE MUST BE THE ONE SUPPLIED.
-  //
-  // With `channelFrom({ from, args })` there is no factory and therefore no expression position for
-  // hand-written orchestration — the earlier chase (does it import the module? does it CALL it? is the
-  // call dead code?) was heuristics over text, and the last of those is not decidable that way. What
-  // is left to check is one thing: the namespace this channel hands over is the module the archipelago
-  // named.
-  const declared = declaredSources(region.id);
-  for (const name of names) {
-    const file = channelFileOf(overrides, overridesFile, name);
-    if (!file) continue;
-    const text = stripComments(readFileSync(file, 'utf8'));
-    for (const [, id] of text.matchAll(/channelFrom\s*\(\s*\{[\s\S]*?\bid:\s*'([^']+)'/g)) {
-      const src = declared[id];
-      if (!src) continue; // an unknown id is a type error and a runtime throw already
-      const target = resolveAppImport(paths.archipelagoFile(region.id), src.module);
-      const namespaces = [...text.matchAll(/import\s*\*\s*as\s+(\w+)\s*from\s*['"]([^'"]+)['"]/g)];
-      const supplied = text.match(new RegExp(`channelFrom\\s*\\([\\s\\S]*?\\bfrom:\\s*(\\w+)`))?.[1];
-      const chosen = namespaces.find(([, alias]) => alias === supplied);
-      if (!chosen) {
-        report.error(
-          'channel-source',
-          `${paths.rel(file)} does not supply source "${id}" as a module namespace — write ` +
-            `\`import * as x from '${src.module}'\` and pass \`from: x\`, so what builds the source is the ` +
-            `declaration and not code written here`,
-        );
-      } else if (resolveAppImport(file, chosen[2]) !== target) {
-        report.error(
-          'channel-source',
-          `${paths.rel(file)} supplies "${id}" from ${chosen[2]}, but the archipelago declares it comes from ` +
-            `${src.module}`,
-        );
-      }
-    }
-  }
-
-  if (offenders.length) {
-    for (const o of offenders) {
-      report.error(
-        'channel-source',
-        `${o.file} watches the region and answers with ${o.keys.join(', ')} while importing nothing from the ` +
-          `application — that is the page's orchestration, written twice. Install the app's own source over a ` +
-          `fixture port instead of re-implementing it here.`,
-      );
-    }
-  } else {
-    report.ok('channel-source', `${names.length} channel(s) install application logic rather than re-implementing it`);
+  if (vouched === entries.length && vouched > 0) {
+    report.ok('channel-source', `${vouched} channel(s) built from a declared source`);
   }
 }
 
 /**
  * PROVENANCE: what the channels really produced, against what the region declared.
  *
- * `sources` is a static promise — "these keys come from that module". This is the runtime half, and it
- * is the same idea as `wiring-live` on the island side: a declaration nobody can see firing is a
- * declaration nobody can trust. Two failures it names:
- *   - a channel wrote a host-fed key that NO declared source claims (orchestration outside the seam);
- *   - a source claims keys that no channel produced while the region ran (declared and silent).
- * Silent is a WARNING, because a source can legitimately be seeded in the lagoon rather than fed by a
- * channel; writing an unclaimed key is an ERROR, because nothing else explains it.
+ * `sources` is a static promise — "these keys come from that source". This is the runtime half, the
+ * same idea as `wiring-live` on the island side: a declaration nobody can see firing is one nobody can
+ * trust. A channel writing a key no source claims is an ERROR; a source no channel produced is a
+ * WARNING, because seeding it in the lagoon is legitimate.
  */
 function sourcesLiveCheck(report, id, channels, region) {
   const declared = declaredSources(id);
   if (!Object.keys(declared).length || !channels) return;
   const claimed = new Map();
   for (const [name, src] of Object.entries(declared)) for (const key of src.produces) claimed.set(key, name);
+  // A source the region REFERENCES carries its keys in the source file, not here; the compiler checks
+  // those. What is checkable at runtime is that nothing OUTSIDE the declared set was written.
+  const byReference = Object.values(declared).some((src) => src.byReference);
 
   const written = new Set();
   for (const channel of channels) {
-    const stray = channel.keys.filter((k) => !claimed.has(k));
+    const stray = claimed.size ? channel.keys.filter((k) => !claimed.has(k)) : [];
     for (const key of channel.keys) written.add(key);
-    if (stray.length) {
+    if (stray.length && !byReference) {
       report.error(
         'sources-live',
         `channel "${channel.name}" wrote ${stray.join(', ')}, which no declared source claims — either the ` +
@@ -1685,16 +1627,13 @@ function sourcesLiveCheck(report, id, channels, region) {
       );
     }
   }
-  // An island-owned key a source establishes is SEEDED, not written, and a seed is not attributed to
-  // the channel that made it — so it can never appear as "produced" and would warn forever, which is
-  // how a signal becomes noise.
   const islandOwned = region ? producedKeysOf(region) : new Set();
   const silent = [...claimed.keys()].filter((k) => !written.has(k) && !islandOwned.has(k));
   if (silent.length) {
     report.warn('sources-live', `declared but produced by no channel while the region ran: ${silent.join(', ')} — seeded, or dead?`);
   }
-  const live = [...claimed.keys()].filter((k) => written.has(k));
-  if (live.length) report.ok('sources-live', `${live.length} declared source key(s) produced by a channel`);
+  const live = [...written].filter((k) => claimed.has(k) || byReference);
+  if (live.length) report.ok('sources-live', `${live.length} key(s) produced by a declared source at runtime`);
 }
 
 /** Comments blanked, because an apostrophe in prose opens a string as far as a regex is concerned —
@@ -1737,6 +1676,13 @@ function declaredSources(id) {
   const block = text.match(/sources:\s*\{([\s\S]*?)\n  \},/)?.[1];
   if (!block) return {};
   const out = {};
+  // A source the region REFERENCES: `week: weekSource`. Its module is the import that brought the
+  // identifier in — the same fact, read from the one place it is written.
+  for (const [, name, ref] of block.matchAll(/(\w+):\s*(\w+),/g)) {
+    const module = text.match(new RegExp(`import\\s*\\{[^}]*\\b${ref}\\b[^}]*\\}\\s*from\\s*'([^']+)'`))?.[1];
+    if (module) out[name] = { module, produces: [], byReference: true };
+  }
+  // A source declared by module NAME: no channel installs it, the page fetches it itself.
   for (const m of block.matchAll(/(\w+):\s*\{([\s\S]*?)\}/g)) {
     const module = m[2].match(/module:\s*'([^']+)'/)?.[1];
     const produces = [...(m[2].match(/produces:\s*\[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]);

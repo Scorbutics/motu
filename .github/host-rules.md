@@ -152,3 +152,19 @@ it was right: "either of these writes it" is not a producer. The writer is the C
 every member. When that happens the honest model is motu's own rule — a control that owns region
 state is an island even when others sit inside it — so the card becomes an island containing the
 widget, via nested `slots`. Until then the key is host-written, and say so.
+
+## A check that looked at nothing has not passed
+
+`report.ok(check, msg, seen)` takes what it examined, and `seen: 0` becomes a `skip` automatically —
+so a check cannot report success from an empty search whether or not its author thought about
+emptiness. Pass a count (or the array) at every `ok` where the input set can be empty, and the report
+prints it: `✓ islands-registered  all 3 island tag(s) are registered · 3 declared tag(s)`.
+
+This exists because `removal-check` printed "no motu references in the host application" over a fully
+integrated app — it scanned Next's directories, found none of the host's, and called the emptiness a
+pass. It now exits 1 with "scanned 0 files … nothing was examined, so nothing is proved".
+
+When you add an escape hatch, TEST THE HATCH. `hostSources` was added for exactly that bug, with a
+message telling users to set it, and did nothing for a day: `loadMotuConfig` returns a hand-built
+whitelist and silently drops any key not in it. Add the key there, then reproduce the original bug and
+watch the fix refuse it.

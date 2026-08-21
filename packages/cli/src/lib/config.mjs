@@ -82,6 +82,15 @@ export function loadMotuConfig() {
     tagPrefix: cfg.tagPrefix,
     isolation: cfg.isolation === 'light' ? 'light' : 'shadow',
     host: cfg.host ?? 'angularjs',
+    /**
+     * The host's own top-level source directories, when the guess is wrong.
+     *
+     * This whitelist is the config surface: a key absent from it is silently dropped, whatever the
+     * project wrote. `hostSources` was added to removal-check with a comment telling users to set it,
+     * and it did nothing at all until it appeared here — the escape hatch for a bug, itself broken in
+     * the same way the bug was.
+     */
+    hostSources: Array.isArray(cfg.hostSources) ? cfg.hostSources : undefined,
     /** Whether `legacy` fit is a required strategy + a verified runtime mount for this host. */
     legacyFit: cfg.legacyFit ?? LEGACY_FIT_HOSTS.has(cfg.host ?? 'angularjs'),
     hostRoot: resolve(root, cfg.hostRoot ?? cfg.app ?? '.'),

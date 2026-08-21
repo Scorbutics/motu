@@ -256,6 +256,30 @@ member rather than any member. The correct model is motu's own rule (a control t
 is an island even when others sit inside it): the card becomes an island CONTAINING the widget, via
 nested slots. Until that exists here, the key is declared host-written, which is what it is.
 
+## Closing the class, not the instances
+
+Nine bugs were fixed one at a time, and every one was found the same way: a check went green, a human
+opened a browser, the thing was broken. That does not scale, so two of the sub-classes are now closed
+mechanically.
+
+**An empty search is not a pass.** `report.ok` takes what was examined and converts `seen: 0` into a
+`skip`, so the invariant holds at every call site rather than where its author remembered it.
+`removal-check` — the command that started this — now exits 1 with "scanned 0 files … nothing was
+examined, so nothing is proved". Reproducing the original bug (pointing `hostSources` at Next's
+directories against a `src/`-shaped app) makes it refuse.
+
+**Every check states its N.** `✓ islands-registered  all 3 island tag(s) are registered · 3 declared
+tag(s)`. A wall of green no longer hides a check that examined nothing, for a human skimming or an
+agent parsing `--json`.
+
+Verifying that fix found one more of the same: `hostSources`, the escape hatch added FOR the scan bug,
+was silently dropped by `loadMotuConfig`'s hand-built whitelist and had never worked. The lesson is
+the discipline, not the line: reproduce the original failure against the fix, or the fix is a claim.
+
+What stays open is the tautology class — a check that cannot fail. Mutation (perturb an assertion,
+require the check to fail) is the mechanism, and `data-flow` is the precedent: it already fails a
+scenario set whose members render identically.
+
 ## What is still unproven
 
 The integration is verified at typecheck level and in the lagoon. **Twenty has never been run in a

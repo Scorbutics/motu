@@ -72,7 +72,29 @@ function makeReport() {
     findings,
     error: (check, msg, line) => findings.push({ level: 'error', check, msg, line }),
     warn: (check, msg, line) => findings.push({ level: 'warn', check, msg, line }),
-    ok: (check, msg) => findings.push({ level: 'ok', check, msg }),
+    /**
+     * A claim that HELD — and, optionally, how much was looked at to say so.
+     *
+     * `seen` is not decoration. The worst bug of the Twenty adoption was `removal-check` printing
+     * "no motu references in the host application" over a fully integrated app: it scanned the wrong
+     * directories, examined ZERO files, and reported that as success. A check that looked at nothing
+     * cannot have held, so passing `seen: 0` is converted to a `skip` here rather than trusted —
+     * every call site gets the invariant whether or not its author thought about emptiness.
+     */
+    ok: (check, msg, seen) => {
+      const n = Array.isArray(seen) ? seen.length : typeof seen === 'object' && seen ? seen.n : seen;
+      const of = typeof seen === 'object' && seen && !Array.isArray(seen) ? seen.of : undefined;
+      if (n === 0) {
+        findings.push({
+          level: 'skip',
+          check,
+          msg: `nothing to look at${of ? ` (no ${of})` : ''} — "${msg}" is not a result this run can claim`,
+          examined: 0,
+        });
+        return;
+      }
+      findings.push({ level: 'ok', check, msg, ...(n === undefined ? {} : { examined: n, examinedOf: of }) });
+    },
     /**
      * A rule that does not apply to this project's posture.
      *
@@ -1199,7 +1221,11 @@ async function catalogueCheck(report, id, region) {
   for (const t of speculative)
     report.warn('catalogue', `${t} declared but absent from the capture — no evidence has ever exercised it`);
   if (!uncovered.length && !unreachable.length)
-    report.ok('catalogue', `${covered.length}/${presentTypes} member type(s) in the capture are declared (${(coverage * 100).toFixed(0)}%)`);
+    report.ok(
+      'catalogue',
+      `${covered.length}/${presentTypes} member type(s) in the capture are declared (${(coverage * 100).toFixed(0)}%)`,
+      { n: presentTypes, of: 'member type(s) in the capture' },
+    );
 }
 
 /**
@@ -1264,7 +1290,8 @@ async function regionFlowCheck(report, id, port, region) {
     report.error('region-flow', `"${r.scenario}" step ${r.step}: ${detail}`);
   }
   const passed = results.filter((r) => r.ok).length;
-  if (passed === results.length) report.ok('region-flow', `${passed} declared flow step(s) end as declared`);
+  if (passed === results.length)
+    report.ok('region-flow', `${passed} declared flow step(s) end as declared`, { n: passed, of: 'step(s)' });
 }
 
 /**
@@ -1306,7 +1333,11 @@ async function wiringProbe(report, id, port) {
     // Deliberately precise about what this proves: the region APPLIES each declared write. Whether the
     // component ever emits it is a different question, and one only a declared interaction can ask
     // (nothing here touches the DOM, on purpose).
-    report.ok('wiring-live', `${live.length} declared write(s) reach their key: ${live.map((r) => `${r.slot} → ${r.key}`).join(', ')}`);
+    report.ok(
+      'wiring-live',
+      `${live.length} declared write(s) reach their key: ${live.map((r) => `${r.slot} → ${r.key}`).join(', ')}`,
+      { n: live.length, of: 'declared write(s)' },
+    );
   }
 }
 
@@ -1332,7 +1363,12 @@ function printReport(report, title, errors, warns) {
             ? color.dim('–')
             : color.green('✓');
     const at = f.line ? color.dim(`  (line ${f.line})`) : '';
-    console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${at}`);
+    // WHAT IT LOOKED AT, on the line itself. A reader skimming a wall of green cannot tell a check
+    // that examined forty files from one that examined none, and an agent reporting the former while
+    // doing the latter is the failure this whole report exists to catch.
+    const seen =
+      f.examined === undefined ? '' : color.dim(`  · ${f.examined} ${f.examinedOf ?? 'examined'}`);
+    console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${at}`);
   }
   console.log('');
   if (errors.length === 0) console.log(color.green(color.bold(`PASS`)) + color.dim(`  ${warns.length} warning(s)`));
@@ -1454,7 +1490,7 @@ function archipelagoConfigChecks(report, id) {
       );
     }
     if (shared.length) {
-      report.ok('coupling', `shared state: ${shared.join(', ')}`);
+      report.ok('coupling', `shared state: ${shared.join(', ')}`, { n: shared.length, of: 'shared key(s)' });
     } else if (hostShared.length) {
       // NOT independent, and saying so mattered: Twenty's two record-page widgets both bind
       // `editingWidgetId`, which the app writes, and driving the lagoon showed one flipping to
@@ -1464,11 +1500,16 @@ function archipelagoConfigChecks(report, id) {
         'coupling',
         `coupled through the host: ${hostShared.join(', ')} — read by more than one island, written by ` +
           `none of them, so the application is what couples them and the lagoon must seed it to show them apart`,
+        { n: hostShared.length, of: 'host-driven key(s)' },
       );
     } else {
       // Always say something. A check that reports nothing is indistinguishable from one that did not
       // run — and "these islands are independent" is a real, useful answer, not an absence.
-      report.ok('coupling', 'no shared state between islands — a page whose islands are independent');
+      report.ok(
+        'coupling',
+        'no shared state between islands — a page whose islands are independent',
+        { n: readCount.size, of: 'key(s) read' },
+      );
     }
 
     // --- composition: a slot filled by another island must be one this region declares -------------
@@ -1565,7 +1606,10 @@ function archipelagoConfigChecks(report, id) {
   if (used.length === 0) {
     report.warn('islands-registered', 'archipelago declares no islands');
   } else if (unknown.length === 0) {
-    report.ok('islands-registered', `all ${new Set(used).size} island tag(s) are registered`);
+    report.ok('islands-registered', `all ${new Set(used).size} island tag(s) are registered`, {
+      n: new Set(used).size,
+      of: 'declared tag(s)',
+    });
   } else {
     report.error('islands-registered', `unknown island tag(s): ${unknown.join(', ')} — not in ELEMENT_REGISTRY`);
   }
@@ -1870,7 +1914,10 @@ export async function runArchipelagoVerify(argv, id) {
             const declared = declaredRegion?.membership === 'catalogue' ? [] : (declaredRegion?.islands ?? []).map((i) => i.slot);
             const placed = new Set(r.islands.map((i) => i.slot).filter(Boolean));
             const unplaced = declared.filter((slot) => !placed.has(slot));
-            report.ok('lagoon-render', `region + all ${r.islands.length} island(s) mounted in the lagoon`);
+            report.ok('lagoon-render', `region + all ${r.islands.length} island(s) mounted in the lagoon`, {
+              n: r.islands.length,
+              of: 'mounted island(s)',
+            });
             if (unplaced.length) {
               report.warn(
                 'lagoon-render',

@@ -284,8 +284,37 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   }
 
   if (!touched.length) {
-    if (!quiet) console.log(color.green('✓ removal-check') + color.dim('  no motu references in the host application'));
-    return { pass: true, deleted: [], stripped: [], ejected: [], errors: [] };
+    // TWO DIFFERENT ANSWERS, and printing them the same way is what let this command report success
+    // over a fully integrated app: it scanned Next's directories, found none of Twenty's `src/`, and
+    // called the emptiness a clean bill of health.
+    //
+    //   scanned files, found no motu  -> genuinely nothing to remove
+    //   scanned NOTHING               -> the check did not run, and must not read as a pass
+    const scanned = graph.size;
+    if (scanned === 0) {
+      if (!quiet) {
+        console.log(
+          color.yellow('– removal-check') +
+            color.dim(`  scanned 0 files under ${paths.rel(hostRoot)} — nothing was examined, so nothing is proved. ` +
+              `Set \`hostSources\` in motu.config.json to the host's own source directories.`),
+        );
+      }
+      return {
+        pass: false,
+        scanned: 0,
+        deleted: [],
+        stripped: [],
+        ejected: [],
+        errors: [`removal-check examined no files under ${paths.rel(hostRoot)}`],
+      };
+    }
+    if (!quiet) {
+      console.log(
+        color.green('✓ removal-check') +
+          color.dim(`  no motu references in the host application  · ${scanned} host file(s) scanned`),
+      );
+    }
+    return { pass: true, scanned, deleted: [], stripped: [], ejected: [], errors: [] };
   }
 
   // --- apply, typecheck, ALWAYS restore -----------------------------------------------------------
@@ -392,6 +421,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   }
 
   const summary = {
+    scanned: graph.size,
     // A file the surgery could not rewrite is an UNANSWERED question, not a pass.
     pass: (result?.status === 0 || real.length === 0) && surgeryErrors.length === 0,
     fingerprint,
@@ -421,7 +451,8 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   if (summary.pass) {
     console.log(
       color.green(color.bold('PASS')) +
-        color.dim('  the host typechecks with motu removed') +
+        color.dim(`  the host typechecks with motu removed  · ${summary.scanned} host file(s) scanned, ` +
+          `${summary.deleted.length} deleted, ${summary.stripped.length} unwrapped`) +
         (summary.preExisting ? color.dim(` · ${summary.preExisting} pre-existing error(s) in the host, unchanged by the removal`) : ''),
     );
     if (generated.length) {

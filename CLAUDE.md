@@ -29,6 +29,11 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    another, that is the laundering the ownership rules exist to stop: declare the output instead.
  - The page reads region state with the binding's `useRegion()` and establishes it with `seed(...)`,
    both typed from the archipelago (`createRegion`). Never reach for a store directly.
+ - `motu integrate check` is the LAST MILE, and the lagoon cannot answer it: does the HOST compose the
+   region (`createRegion`), place every declared slot, read it back (`useRegion`), and — the one that
+   bites — has the page stopped keeping its own `useState` of a key an island produces? A region can
+   pass every other check while no browser has ever rendered it, because every other check looks at
+   motu's files. Run it before saying an integration is done.
  - Before saying UI work is done: `motu check` (island + archipelago verify over everything, plus
    removal-check), on top of the host's own build. It takes `--json`. Warnings are findings, not noise —
    `props-match` and `ownership` exist because each caught real coupling. It is STATIC and fast: verify
@@ -47,6 +52,20 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    something that runs — `motu archipelago verify --runtime` fails when a flow no longer ends as
    declared. A flow may only fire a declared output; if you reach for a selector, you have left the
    harness and written a browser test.
+ - EVIDENCE lives in evidence files, and the lagoon is not one. An island's scenarios go in
+   `<name>.evidence.ts`, a region's flows in `<id>.evidence.ts`, and anything BOTH need goes in one
+   module they import with a RELATIVE specifier — `@/` does not resolve in the loaders that read
+   these files, and the failure is silent (the island keeps its scenarios in one check and loses them
+   in another). Type that module against the APP's own types with `import type`: it erases at
+   runtime, so the loaders are unaffected, and a renamed field then fails the build there instead of
+   quietly previewing last month's shape. Invented data in a lagoon frame is a third copy nobody
+   diffs.
+ - The lagoon override file is a MAP, not a page. `layout` points at the APPLICATION's own layout
+   component — never a second JSX copy of the arrangement, which drifts for the same reason a second
+   copy of the region's vocabulary does. `seed` is data. Anything that REACTS — the stand-in for the
+   page's fetch, answering an island's intent — is a `channel`: it is installed in every view, so the
+   checks that drive the region see the same answers a human does, and the lens can show it fired.
+   Behaviour written inside the frame runs only in the region view, where those checks are not.
  - `motu island snapshot --all` checks the visual baselines (one per scenario × viewport, committed
    beside the evidence). A difference writes `.actual.png` and `.diff.png` next to the baseline — LOOK
    at them; re-record with `--update` only when the change is what you intended.

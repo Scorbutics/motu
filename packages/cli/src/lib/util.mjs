@@ -314,3 +314,16 @@ export const FMT = {
   indentStyle: 2, // Smart
   ensureNewLineAtEndOfFile: true,
 };
+
+/**
+ * An import specifier as an absolute path, so two spellings of one module compare equal.
+ *
+ * `@/app/x/y` and `./y` from inside `app/x` are the same file, and a check that compares the STRINGS
+ * reports a page as not importing what it plainly imports. Returns null for a package specifier.
+ */
+export function resolveAppImport(fromFile, spec) {
+  const strip = (p) => p.replace(/\.(js|ts|tsx)$/, '');
+  if (spec.startsWith('@/')) return strip(resolve(HOST_ROOT, spec.slice(2)));
+  if (spec.startsWith('.')) return strip(resolve(dirname(fromFile), spec));
+  return null;
+}

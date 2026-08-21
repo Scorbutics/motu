@@ -162,6 +162,29 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * whole region when previewing inside the legacy app. Shared so both stay in lock-step.
    */
   layout?: string;
+  /**
+   * The region's INBOUND seam, named.
+   *
+   * `writes` says which island updates a key, and everything motu can enforce about ownership follows
+   * from that declaration existing. The other direction had none: a key bound by an island and written
+   * by no island was "host-fed" — derived, anonymous, and therefore unenforceable. Nothing could say
+   * that the page and the lagoon must feed it from the SAME logic, so they drifted, and the framework
+   * had only a guideline to offer.
+   *
+   * Naming the producer closes that. Each entry points at an APPLICATION module — the page's own data
+   * source — and lists the keys it produces:
+   *
+   *   sources: {
+   *     results: { module: '@/app/dashboard/directory/directory-source',
+   *                produces: ['members', 'total', 'loading', 'loadingMore', 'facetCounts'] },
+   *   }
+   *
+   * It is a reference, not an implementation: the module belongs to the app and survives motu's
+   * removal, while this declaration goes with motu. What it buys is checkable — every host-fed key has
+   * exactly one declared producer, and both the page and the lagoon must install THAT module rather
+   * than restate what it does.
+   */
+  sources?: Readonly<Record<string, { module: string; produces: readonly (keyof TRegion & string)[] }>>;
 }
 
 /**
@@ -199,6 +222,27 @@ export type ProvidedKeys<A> = A extends { provides: readonly (infer K)[] } ? (K 
  * either has an island that writes it, or the host feeds it, and there is no third case.
  */
 export type HostFedKeys<A> = Exclude<BoundKeys<A>, ProducedKeys<A>>;
+
+/** Every key a declared source claims to produce. */
+export type SourcedKeys<A> = A extends { sources: infer S }
+  ? S[keyof S] extends { produces: readonly (infer K)[] }
+    ? K extends string
+      ? K
+      : never
+    : never
+  : never;
+
+/**
+ * Host-fed, and claimed by no declared source — the keys nobody has said who feeds.
+ *
+ * `true` while a region declares no `sources` at all (adoption is per region, like ownership was);
+ * once it declares one, every host-fed key has to be accounted for.
+ */
+export type RegionSourcesOk<A> = [SourcedKeys<A>] extends [never]
+  ? true
+  : [Exclude<HostFedKeys<A>, SourcedKeys<A>>] extends [never]
+    ? true
+    : ['host-fed but produced by no declared source:', Exclude<HostFedKeys<A>, SourcedKeys<A>>];
 
 /** Bound, but claimed by nobody. Empty by construction now that host-feeding is the default. */
 export type UnownedKeys<A> = Exclude<BoundKeys<A>, ProvidedKeys<A> | ProducedKeys<A> | HostFedKeys<A>>;

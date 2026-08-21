@@ -22,6 +22,8 @@ export type {
   UnownedKeys,
   DisputedKeys,
   RegionOwnershipOk,
+  RegionSourcesOk,
+  SourcedKeys,
   RegionBrand,
   RegionOf,
   SlotsOf,

@@ -11,6 +11,8 @@ import { verifyCommand, archipelagoVerifyCommand } from './commands/verify.mjs';
 import { checkCommand } from './commands/check.mjs';
 import { snapshotCommand } from './commands/snapshot.mjs';
 import { integrateCommand } from './commands/integrate.mjs';
+import { integrateCheckCommand } from './commands/integration.mjs';
+import { regionInitCommand } from './commands/region.mjs';
 import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
@@ -52,6 +54,8 @@ ${color.bold('Usage:')}
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
   motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
+  motu region init <id> --page <file>              scaffold everything a page needs before its 1st island
+  motu integrate check [region]                    does the HOST compose, place and read the region?
   motu archipelago create <id>                      scaffold + register a new archipelago
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
@@ -132,6 +136,24 @@ async function main() {
   if (group === 'init') {
     // Top-level verb: sub is an optional target dir positional.
     return initCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
+  }
+
+  // Everything a page needs before its FIRST island — the step that makes adoption feel expensive.
+  if (group === 'region') {
+    if (sub === 'init') return regionInitCommand(argv);
+    console.error(color.red(`unknown: motu region ${sub ?? ''}`));
+    console.log(USAGE);
+    process.exit(2);
+  }
+
+  // The last mile, and its own verb because it asks about the HOST, not about motu's files:
+  // `motu integrate check [region]`.
+  if (group === 'integrate') {
+    // `rest` is already everything after the sub-verb, so the region positional is argv._[0].
+    if (sub === 'check') return integrateCheckCommand(argv);
+    console.error(color.red(`unknown: motu integrate ${sub ?? ''}`));
+    console.log(USAGE);
+    process.exit(2);
   }
 
   if (group === 'island') {

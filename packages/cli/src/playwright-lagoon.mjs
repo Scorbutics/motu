@@ -524,7 +524,12 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     // key some island reads. Declared ownership cannot see this — the declaration is consistent, it is
     // just not honest — so it is reported as a suspicion, never as a violation.
     const suspects = await page.evaluate(() => window.__motuSuspects?.list?.() ?? []).catch(() => []);
-    return { flows: out, suspects, diagnostics };
+    // What the CHANNELS actually produced while the flows ran — the inbound seam's provenance. The
+    // declared `sources` say who feeds each host-fed key; this says who really did.
+    const channels = await page.evaluate(() =>
+      window.__motuLagoon && typeof window.__motuLagoon.channels === 'function' ? window.__motuLagoon.channels() : null,
+    );
+    return { flows: out, suspects, diagnostics, channels };
   });
 }
 

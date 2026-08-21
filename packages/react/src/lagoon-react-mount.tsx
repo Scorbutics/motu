@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import {
   applyOutput,
   getArchipelagoStore,
+  getChannels,
   getMountedIslands,
   provideToArchipelago,
   seedArchipelago,
@@ -56,6 +57,8 @@ declare global {
     /** The verify harness's handle on this mount path: the `provide` seam and a real re-mount. */
     __motuLagoon?: {
       provide: (key: string, value: unknown) => void;
+      /** Installed channels and the keys each has written (debug builds only). */
+      channels: () => { name: string; keys: string[]; fired: number }[];
       /** Establish a value (attributed as a seed, not a host write). */
       seed: (key: string, value: unknown) => void;
       remount: () => void;
@@ -142,6 +145,14 @@ export function mountReactLagoon(
     //    host reaching into island-owned state — motu's ownership guard fired on every probed key.
     //    A rollback is not the host updating the region; it is a re-seed, so say so.
     seed: (key, value) => seedArchipelago(config.id, key, value),
+    //  - channels: what each installed channel has actually WRITTEN. The registry tracks it already
+    //    (debug builds hand every channel a store proxy that tags its writes); exposing it is what
+    //    lets a check compare the region's declared `sources` against what really produced its keys.
+    //    Declared-and-silent, or writing a key no source claims, are both invisible without it.
+    channels: () =>
+      getChannels()
+        .filter((c) => c.store === getArchipelagoStore(config.id))
+        .map((c) => ({ name: c.name ?? `channel #${c.index}`, keys: [...c.keys], fired: c.fireCount })),
     //  - emit: fire an island's declared output without touching its DOM.
     //
     //    This is the only interaction primitive the harness gets, and deliberately so: it can drive

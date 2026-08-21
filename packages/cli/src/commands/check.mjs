@@ -17,6 +17,7 @@ import { listIslands } from '../lib/islands.mjs';
 import { runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
+import { integrationResults } from './integration.mjs';
 import { names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
 
 /** Is `contracts.generated.ts` what the components say it should be? */
@@ -49,15 +50,24 @@ export async function checkCommand(argv) {
   const regionResults = [];
   for (const id of regionIds) regionResults.push(await runArchipelagoVerify(sub, id));
 
+  // The LAST MILE. Everything above looks at motu's own files, so all of it can be green while the
+  // application composes none of it — which is exactly how a region can verify for a day without a
+  // browser ever rendering it. Static, cheap, and it belongs in the same verdict.
+  const integration = integrationResults();
+
   // Last, and only when the rest holds up: it rewrites the host on disk (and restores it), so running
   // it after a failure that is already fatal buys nothing and costs a typecheck of the whole app.
+  const integrationOk = integration.every((r) => r.findings.every((f) => f.level !== 'error'));
+  // Integration is deliberately NOT part of this: removal-check asks whether the app compiles WITHOUT
+  // motu, and a region the host has not adopted yet is the easiest case for that surgery, not a reason
+  // to skip it. Only broken wiring makes the rewrite pointless.
   const structureOk =
     !drift.stale &&
     islandResults.every((r) => r.errors.length === 0) &&
     regionResults.every((r) => r.errors.length === 0);
   const removal = structureOk ? await runRemovalCheck(argv, { quiet: true }) : null;
 
-  const pass = structureOk && (removal?.pass ?? false);
+  const pass = structureOk && integrationOk && (removal?.pass ?? false);
 
   if (argv.json) {
     console.log(
@@ -68,6 +78,7 @@ export async function checkCommand(argv) {
           contracts: drift,
           islands: islandResults.map(summaryOf),
           archipelagos: regionResults.map(summaryOf),
+          integration,
           removal: removal ?? { skipped: 'structure checks failed first' },
         },
         null,
@@ -86,6 +97,20 @@ export async function checkCommand(argv) {
 
   printSweep('motu check — islands', islandResults);
   printSweep('motu check — regions', regionResults);
+  console.log(color.bold('\nmotu check — integration\n'));
+  for (const r of integration) {
+    const errs = r.findings.filter((f) => f.level === 'error');
+    const warns = r.findings.filter((f) => f.level === 'warn');
+    const mark = errs.length ? color.red('✗') : warns.length ? color.yellow('!') : color.green('✓');
+    console.log(
+      `  ${mark} ${color.dim(r.id.padEnd(20))}` +
+        color.dim(errs.length ? `${errs.length} error(s)` : warns.length ? `${warns.length} warning(s)` : 'composed, mounted, placed, read'),
+    );
+    for (const f of [...errs, ...warns]) {
+      console.log(`      ${f.level === 'error' ? color.red('✗') : color.yellow('!')} ${color.dim(f.check.padEnd(12))} ${f.msg}`);
+    }
+  }
+
   console.log(color.bold('\nmotu check — removal\n'));
   if (!removal) {
     console.log(`  ${color.dim('–')} ${color.dim('skipped'.padEnd(20))} ${color.dim('structure checks failed first')}`);

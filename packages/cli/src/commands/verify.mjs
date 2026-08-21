@@ -18,7 +18,7 @@ import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { islandContract, contractsDrift } from '../lib/contracts.mjs';
-import { paths, names, color, HOST, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
+import { paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
 import {
   runLagoon,
   runArchipelagoLagoon,
@@ -1076,9 +1076,16 @@ async function islandScenarios(kebab) {
   if (!existsSync(file)) return [];
   try {
     const mod = await import(`file://${file}?t=${Date.now()}`);
-    return Array.isArray(mod.scenarios) ? mod.scenarios : [];
+    const scenarios = Array.isArray(mod.scenarios) ? mod.scenarios : [];
+    // A plain node import cannot resolve a `.js` specifier that points at a `.ts` sibling — which is
+    // the convention every file here uses. It THREW, this returned [], and the island quietly lost
+    // every scenario: `data-flow` still saw five (it loads through tsx) while `responsive` reported
+    // one. Two loaders for one file, disagreeing in silence. Cross-check against the tsx loader and
+    // take the fuller answer, so evidence can import a shared module like any other code.
+    const viaTsx = readScenarios(file);
+    return viaTsx.length > scenarios.length ? viaTsx : scenarios;
   } catch {
-    return [];
+    return readScenarios(file);
   }
 }
 
@@ -1136,8 +1143,14 @@ async function regionFlowCheck(report, id, port) {
   try {
     const mod = await import(`file://${file}?t=${Date.now()}`);
     scenarios = Array.isArray(mod.scenarios) ? mod.scenarios : [];
-  } catch (err) {
-    report.warn('region-flow', `could not read declared flows: ${err.message}`);
+  } catch {
+    // Same trap as the island evidence: a plain node import cannot resolve a `.js` specifier pointing
+    // at a `.ts` sibling, which is the convention every file here uses. Fall through to the tsx
+    // loader rather than reporting "no flows" for a file that declares several.
+    scenarios = readScenarios(file);
+  }
+  if (!scenarios.length) {
+    report.warn('region-flow', 'declared flows could not be read, or none are declared');
     return;
   }
   const steps = scenarios.reduce((n, s) => n + (s.steps?.length ?? 0), 0);
@@ -1152,6 +1165,7 @@ async function regionFlowCheck(report, id, port) {
     results = run.flows;
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
+    sourcesLiveCheck(report, id, run.channels);
   } catch (err) {
     report.warn('region-flow', `could not run declared flows: ${err.message}`);
     return;
@@ -1514,12 +1528,214 @@ function reportStoreComplaints(report, diagnostics, where) {
   }
 }
 
+/**
+ * A channel that ORCHESTRATES must install the application's own logic, not re-implement it.
+ *
+ * The inbound seam is where a lagoon quietly becomes a second application. A channel that watches the
+ * region and answers with host-fed keys is doing what the PAGE does — debounce, page, derive, reset —
+ * and a copy of that is free to drift: a different page size in the preview than in production looks
+ * like a working preview for months. Both of this project's first channels were written that way, and
+ * nothing said a word.
+ *
+ * The rule is deliberately narrow, so it accuses only what it can see:
+ *   REACTIVE (it subscribes to the store) + WRITES host-fed keys + imports NO application module.
+ * A channel that only publishes a constant is not orchestration and is not flagged; a channel that
+ * imports the app's source is doing the right thing by construction, whatever it does with it.
+ */
+function channelSourceCheck(report, id, region) {
+  const overridesFile = ['src/lagoon.tsx', 'src/lagoon.ts']
+    .map((f) => resolve(paths.lagoonDir, f))
+    .find((f) => existsSync(f));
+  if (!overridesFile) return;
+  const overrides = readFileSync(overridesFile, 'utf8');
+
+  // `channels: { <id>: [a, b] }` — the identifiers installed for THIS region.
+  const map = overrides.match(/export const channels[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1];
+  const entry = map?.match(new RegExp(`['"\`]?${id}['"\`]?\\s*:\\s*\\[([^\\]]*)\\]`))?.[1];
+  const names = entry ? [...entry.matchAll(/([A-Za-z_$][\w$]*)/g)].map((m) => m[1]) : [];
+  if (!names.length) return;
+
+  // Where each identifier comes from, and what that file is made of.
+  const hostFed = new Set(bindKeysOf(region).filter((k) => !producedKeysOf(region).has(k)));
+  const offenders = [];
+  for (const name of names) {
+    const spec = overrides.match(new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`))?.[1];
+    if (!spec || !spec.startsWith('.')) continue;
+    const file = ['', '.ts', '.tsx']
+      .map((ext) => resolve(dirname(overridesFile), spec.replace(/\.js$/, ext || '.ts')))
+      .find((f) => existsSync(f));
+    if (!file) continue;
+    const text = readFileSync(file, 'utf8');
+    const reactive = /store\.subscribe\s*\(/.test(text);
+    const written = new Set([
+      ...[...text.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+      ...[...text.matchAll(/seedArchipelago\([^,]+,\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+    ]);
+    const orchestrates = [...written].filter((k) => hostFed.has(k));
+    // An APPLICATION import — and the definition is the whole check, so it is resolved rather than
+    // pattern-matched. `../../../../src/shared/fixtures` climbs out of the lagoon and still lands
+    // inside motu's own app root: that is evidence, not the application, and a channel importing only
+    // that is exactly the re-implementation this looks for. (It passed the first version of this
+    // check, which is how I know.)
+    const importsApp = [...text.matchAll(/from\s*['"]([^'"]+)['"]/g)]
+      .map((m) => m[1])
+      .some((sp) => {
+        if (sp.startsWith('@/')) return true; // the host alias, by convention
+        if (!sp.startsWith('.')) return false; // a package
+        const target = resolve(dirname(file), sp);
+        return target.startsWith(HOST_ROOT) && !target.startsWith(APP_ROOT);
+      });
+    if (reactive && orchestrates.length && !importsApp) {
+      offenders.push({ file: paths.rel(file), keys: orchestrates.sort() });
+    }
+  }
+
+  // A DECLARED source raises the bar from "import something from the app" to "import THAT module":
+  // the whole point of naming the producer is that both consumers install the same one.
+  const declared = declaredSources(region.id);
+  for (const [name, src] of Object.entries(declared)) {
+    const feeders = names
+      .map((n) => channelFileOf(overrides, overridesFile, n))
+      .filter(Boolean)
+      .filter((f) => {
+        const t = readFileSync(f, 'utf8');
+        const written = [...t.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+        return written.some((k) => src.produces.includes(k));
+      });
+    for (const file of feeders) {
+      // Specifier EQUALITY, not a substring: `…/directory-source-COPY` contains `…/directory-source`,
+      // so a near-miss import passed the first version of this rule while importing something else.
+      const target = resolveAppImport(paths.archipelagoFile(region.id), src.module);
+      const imported = [...readFileSync(file, 'utf8').matchAll(/from\s*['"]([^'"]+)['"]/g)].map((m) =>
+        resolveAppImport(file, m[1]),
+      );
+      if (!imported.includes(target)) {
+        report.error(
+          'channel-source',
+          `${paths.rel(file)} feeds key(s) of source "${name}", which the archipelago says come from ` +
+            `${src.module} — install that module here instead of producing them another way`,
+        );
+      }
+    }
+  }
+
+  if (offenders.length) {
+    for (const o of offenders) {
+      report.error(
+        'channel-source',
+        `${o.file} watches the region and answers with ${o.keys.join(', ')} while importing nothing from the ` +
+          `application — that is the page's orchestration, written twice. Install the app's own source over a ` +
+          `fixture port instead of re-implementing it here.`,
+      );
+    }
+  } else {
+    report.ok('channel-source', `${names.length} channel(s) install application logic rather than re-implementing it`);
+  }
+}
+
+/**
+ * PROVENANCE: what the channels really produced, against what the region declared.
+ *
+ * `sources` is a static promise — "these keys come from that module". This is the runtime half, and it
+ * is the same idea as `wiring-live` on the island side: a declaration nobody can see firing is a
+ * declaration nobody can trust. Two failures it names:
+ *   - a channel wrote a host-fed key that NO declared source claims (orchestration outside the seam);
+ *   - a source claims keys that no channel produced while the region ran (declared and silent).
+ * Silent is a WARNING, because a source can legitimately be seeded in the lagoon rather than fed by a
+ * channel; writing an unclaimed key is an ERROR, because nothing else explains it.
+ */
+function sourcesLiveCheck(report, id, channels) {
+  const declared = declaredSources(id);
+  if (!Object.keys(declared).length || !channels) return;
+  const claimed = new Map();
+  for (const [name, src] of Object.entries(declared)) for (const key of src.produces) claimed.set(key, name);
+
+  const written = new Set();
+  for (const channel of channels) {
+    const stray = channel.keys.filter((k) => !claimed.has(k));
+    for (const key of channel.keys) written.add(key);
+    if (stray.length) {
+      report.error(
+        'sources-live',
+        `channel "${channel.name}" wrote ${stray.join(', ')}, which no declared source claims — either the ` +
+          `region's \`sources\` are incomplete, or this channel is orchestrating outside them`,
+      );
+    }
+  }
+  const silent = [...claimed.keys()].filter((k) => !written.has(k));
+  if (silent.length) {
+    report.warn('sources-live', `declared but produced by no channel while the region ran: ${silent.join(', ')} — seeded, or dead?`);
+  }
+  const live = [...claimed.keys()].filter((k) => written.has(k));
+  if (live.length) report.ok('sources-live', `${live.length} declared source key(s) produced by a channel`);
+}
+
+/** Comments blanked, because an apostrophe in prose opens a string as far as a regex is concerned —
+ *  "the week's missions" inside a `produces` array became a key named ` missions, so it comes...`. */
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '');
+}
+
+/** `sources` as data, straight from the archipelago file. */
+function declaredSources(id) {
+  const text = stripComments(readFileSync(paths.archipelagoFile(id), 'utf8'));
+  const block = text.match(/sources:\s*\{([\s\S]*?)\n  \},/)?.[1];
+  if (!block) return {};
+  const out = {};
+  for (const m of block.matchAll(/(\w+):\s*\{([\s\S]*?)\}/g)) {
+    const module = m[2].match(/module:\s*'([^']+)'/)?.[1];
+    const produces = [...(m[2].match(/produces:\s*\[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]);
+    if (module) out[m[1]] = { module, produces };
+  }
+  return out;
+}
+
+/** The file a channel identifier resolves to, or null. */
+function channelFileOf(overrides, overridesFile, name) {
+  const spec = overrides.match(new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`))?.[1];
+  if (!spec || !spec.startsWith('.')) return null;
+  return (
+    ['', '.ts', '.tsx']
+      .map((ext) => resolve(dirname(overridesFile), spec.replace(/\.js$/, ext || '.ts')))
+      .find((f) => existsSync(f)) ?? null
+  );
+}
+
+/** Every key the region's islands bind (the map form's targets included). */
+function bindKeysOf(region) {
+  const text = stripComments(readFileSync(paths.archipelagoFile(region.id), 'utf8'));
+  const keys = [];
+  for (const m of text.matchAll(/bind:\s*\[([\s\S]*?)\]/g)) {
+    // `^\s*` as well as a delimiter: the FIRST bare key sits right after the `[` the outer match
+    // consumed, so anchoring only on `[,{` silently dropped one key per island — `members` among them.
+    for (const [, bare] of m[1].matchAll(/(?:^\s*|[[,{]\s*)'([^']+)'/g)) keys.push(bare);
+    for (const [, target] of m[1].matchAll(/\w+:\s*'([^']+)'/g)) keys.push(target);
+  }
+  return keys;
+}
+
+/** Every key an island of the region produces. */
+function producedKeysOf(region) {
+  const keys = new Set();
+  for (const island of region.islands) {
+    for (const target of Object.values(island.writes ?? {})) {
+      if (typeof target === 'string') keys.add(target);
+      else for (const key of Object.values(target)) keys.add(key);
+    }
+  }
+  return keys;
+}
+
 /** One region's checks, as data — see `runIslandVerify`. */
 export async function runArchipelagoVerify(argv, id) {
   setVerbose(argv?.verbose);
   setProgressScope(id);
   const report = makeReport();
   const hasLayout = archipelagoConfigChecks(report, id);
+
+  // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
+  const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
+  if (region) channelSourceCheck(report, id, region);
 
   // Region styling: until islands own their CSS, the shared sheet is the region's stylesheet — lint it.
   if (existsSync(paths.sharedStyles)) {

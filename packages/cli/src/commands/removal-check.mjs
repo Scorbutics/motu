@@ -193,6 +193,8 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   const deleted = [];
   const stripped = [];
   const touched = [];
+  /** Files the surgery could not rewrite — reported, never thrown. */
+  const surgeryErrors = [];
   const ejected = [];
 
   for (const sf of project.getSourceFiles()) {
@@ -202,6 +204,9 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       deleted.push(p);
       continue;
     }
+    // Wrapped, because this rewrites real source: a shape the surgery cannot handle must come back as
+    // "the check could not answer", never as a crash that hides every other result in the run.
+    try {
     const tags = unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec);
     if (!tags.size && !sf.getImportDeclarations().some((i) => isMotuSpec(i.getModuleSpecifierValue()))) continue;
     touched.push(p);
@@ -215,8 +220,17 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       // thing that came from motu is the object it hangs off.
       const name = rootTagName(el.getOpeningElement().getTagNameNode().getText());
       if (!tags.has(name)) continue;
-      const inner = el.getJsxChildren().map((c) => c.getText()).join('').trim();
-      el.replaceWithText(inner.startsWith('<') || inner.startsWith('{') ? inner : `<>${inner}</>`);
+      // What the page KEEPS. JSX comments and whitespace are not children in any sense that matters —
+      // React never sees them — but joining them in produced `{/* … */}<Thing/>`, which is not one
+      // expression, and replacing an element inside a JSX attribute with it threw out of ts-morph and
+      // took `motu check` down with a stack trace. A comment inside an island was enough.
+      const kept = el
+        .getJsxChildren()
+        .map((c) => c.getText())
+        .filter((t) => t.trim() && !/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(t.trim()));
+      const inner = kept.join('').trim();
+      const single = kept.length === 1 && (inner.startsWith('<') || inner.startsWith('{'));
+      el.replaceWithText(inner === '' ? 'null' : single ? inner : `<>${inner}</>`);
     }
     for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)].reverse()) {
       if (tags.has(rootTagName(el.getTagNameNode().getText()))) el.replaceWithText('null');
@@ -225,6 +239,9 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       const spec = imp.getModuleSpecifierValue();
       const target = resolveSpec(sf, spec);
       if (isMotuSpec(spec) || (target && motuOnly.has(target))) imp.remove();
+    }
+    } catch (err) {
+      surgeryErrors.push(`${relative(hostRoot, p)}: ${String(err?.message || err).split('\n')[0]}`);
     }
     stripped.push(p);
   }
@@ -324,12 +341,13 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   const real = lines.filter((l) => l.trim() && !generated.includes(l));
 
   const summary = {
-    pass: result?.status === 0 || real.length === 0,
+    // A file the surgery could not rewrite is an UNANSWERED question, not a pass.
+    pass: (result?.status === 0 || real.length === 0) && surgeryErrors.length === 0,
     fingerprint,
     deleted: deleted.map((p) => relative(hostRoot, p)),
     stripped: stripped.map((p) => relative(hostRoot, p)),
     ejected: ejected.map(([p, notes]) => ({ file: relative(hostRoot, p), notes })),
-    errors: real.slice(0, 15),
+    errors: [...surgeryErrors, ...real].slice(0, 15),
   };
   // Remember it, so an unchanged repo does not pay for the same proof twice.
   try {

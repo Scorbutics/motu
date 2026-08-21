@@ -11,7 +11,7 @@
 //   angularjs  the reference ocean — legacy fit gates apply, AngularJS adapter available
 //   next       a Next.js app — the lagoon inherits the host's '@/…' alias + Tailwind, stubs next/*
 //   none       plain React — nothing host-specific
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { color } from '../lib/util.mjs';
@@ -189,10 +189,46 @@ export async function initCommand(argv) {
 
   // --- the app package: registries, barrel, the shared island sheet ---------------------------
   const motuDep = argv.motuDep ? String(argv.motuDep) : 'workspace:*';
+  // `workspace:*` IS A LIE IN A STANDALONE PROJECT, and an expensive one: the generated package.json
+  // listed three @motu packages that no workspace resolves, so `bun install` — and therefore
+  // `bun add react` — failed outright in a freshly-initialised project. A greenfield adopter could
+  // not install their first dependency.
+  //
+  // The packages do not belong there anyway. Nothing resolves @motu/* through node: the lagoon aliases
+  // them and tsconfig `paths` maps them, which is the whole "no install step" posture. So they are
+  // declared only when a workspace above the project can actually satisfy them.
+  const inWorkspace = (() => {
+    let dir = appRoot;
+    for (let up = 0; up < 6; up++) {
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+      if (existsSync(resolve(dir, 'pnpm-workspace.yaml'))) return true;
+      try {
+        const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
+        if (pkg.workspaces) return true;
+      } catch {}
+    }
+    return false;
+  })();
+  const motuDependencies =
+    inWorkspace || argv.motuDep
+      ? `  "dependencies": {\n    "@motu/core": "${motuDep}",\n    "@motu/react": "${motuDep}",` +
+        `\n    "@motu/runtime": "${motuDep}"${adapterDepFor(motuDep, host)}\n  },\n`
+      : '';
   const adapterPkg = host === 'angularjs' ? '@motu/adapter-angularjs' : host === 'next' ? '@motu/adapter-next' : '';
   const adapterDep = adapterPkg ? `,\n    "${adapterPkg}": "${motuDep}"` : '';
+  function adapterDepFor(dep, h) {
+    const pkg = h === 'angularjs' ? '@motu/adapter-angularjs' : h === 'next' ? '@motu/adapter-next' : '';
+    return pkg ? `,\n    "${pkg}": "${dep}"` : '';
+  }
 
-  writeNew(resolve(appRoot, 'package.json'), render(APP_PACKAGE_JSON, { appPackage, motuDep, adapterDep }), created, skipped);
+  writeNew(
+    resolve(appRoot, 'package.json'),
+    render(APP_PACKAGE_JSON, { appPackage, motuDep, adapterDep, motuDependencies }),
+    created,
+    skipped,
+  );
   writeNew(resolve(appRoot, 'src/islands/registry.ts'), ISLANDS_REGISTRY, created, skipped);
   writeNew(resolve(appRoot, 'src/archipelagos/registry.ts'), ARCHIPELAGOS_REGISTRY, created, skipped);
   writeNew(resolve(appRoot, 'src/index.ts'), BARREL, created, skipped);

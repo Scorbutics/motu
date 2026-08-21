@@ -60,12 +60,7 @@ export const APP_PACKAGE_JSON = `{
     ".": "./src/index.ts",
     "./styles.css": "./src/shared/styles.css"
   },
-  "dependencies": {
-    "@motu/core": "{{motuDep}}",
-    "@motu/react": "{{motuDep}}",
-    "@motu/runtime": "{{motuDep}}"{{adapterDep}}
-  },
-  "peerDependencies": {
+{{motuDependencies}}  "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
   }

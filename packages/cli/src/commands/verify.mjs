@@ -1902,7 +1902,14 @@ function archipelagoConfigChecks(report, id) {
     );
   }
   if (used.length === 0) {
-    report.warn('islands-registered', 'archipelago declares no islands');
+    // "declares no islands" is false when it declares four and nobody has built them yet — and a
+    // wrong message is how a reader learns to stop reading the report.
+    report[plannedTags.size ? 'skip' : 'warn'](
+      'islands-registered',
+      plannedTags.size
+        ? `every declared island is still \`planned\` (${plannedTags.size}) — nothing to look for yet`
+        : 'archipelago declares no islands',
+    );
   } else if (unknown.length === 0) {
     report.ok('islands-registered', `all ${new Set(used).size} island tag(s) are registered`, {
       n: new Set(used).size,

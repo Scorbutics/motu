@@ -8,6 +8,39 @@ const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
 
 export type StoreListener = () => void;
 
+// --- Dev-only: writes motu EXPECTS in a store it does not own (see foreign-store.ts) --------------
+// An application's own store cannot say who wrote a key. What motu knows is that an island just fired
+// a declared output, so the keys that output claims are about to move. A change inside that window is
+// the declaration landing; one outside it is a value moving with nothing to account for it.
+
+/** regionId -> key -> { slot, at } for the last declared output that claims the key. */
+const expectedForeign = new Map<string, Map<string, { slot: string; at: number }>>();
+
+/** Record that `slot` fired an output declaring these keys. */
+export function noteExpectedForeignWrites(regionId: string, keys: readonly string[], slot: string): void {
+  if (!DEBUG) return;
+  const forRegion = expectedForeign.get(regionId) ?? new Map();
+  const at = Date.now();
+  for (const key of keys) forRegion.set(key, { slot, at });
+  expectedForeign.set(regionId, forRegion);
+}
+
+/**
+ * The slot whose declared output can account for this key changing now, if any — and CONSUMED.
+ *
+ * One declared output explains one write. Leaving the expectation open for the rest of the window let
+ * a single legitimate emit excuse every write that followed it: in the first run of this seam against
+ * a Jotai-shaped store, one declared change absorbed the undeclared one that came a millisecond later,
+ * and the check reported nothing. An expectation is a receipt, not a permit.
+ */
+export function expectedForeignWriter(regionId: string, key: string, windowMs: number): string | null {
+  const forRegion = expectedForeign.get(regionId);
+  const hit = forRegion?.get(key);
+  if (!hit) return null;
+  forRegion!.delete(key);
+  return Date.now() - hit.at <= windowMs ? hit.slot : null;
+}
+
 // --- Dev-only key ownership (docs/plan-key-ownership.md) -----------------------------------------
 // `bind` says who READS a key; `produces` says who may write it. The store is the only place every
 // write passes through, so it is where a write from the wrong source is caught. Debug-only: in

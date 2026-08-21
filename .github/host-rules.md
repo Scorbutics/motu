@@ -28,6 +28,15 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    another, that is the laundering the ownership rules exist to stop: declare the output instead.
  - The page reads region state with the binding's `useRegion()` and establishes it with `seed(...)`,
    both typed from the archipelago (`createRegion`). Never reach for a store directly.
+ - A host that ALREADY has a state architecture (Jotai, Zustand, a Redux slice) does not have to move
+   its state into motu's store, and should not be asked to. Declare the region over the keys it
+   already has, then install a `StoreAdapter` — `get(key)` and `subscribe(keys, onChange)`, about ten
+   lines — and `observeForeignStore(archipelago, adapter)`. motu then AUDITS what it cannot enforce:
+   a key an island declares it owns, moving with no declared output to account for it, shows in the
+   lens as "wrote outside the declaration". It reports the key and the declared owner, never the
+   culprit — naming that would mean being in the write path, which is the rewrite this avoids. Know
+   the boundary: motu ENFORCES its own store and only AUDITS someone else's, and no CLI check sees a
+   foreign store at all, because every runtime check drives the lagoon.
  - `motu integrate check` is the LAST MILE, and the lagoon cannot answer it: does the HOST compose the
    region (`createRegion`), place every declared slot, read it back (`useRegion`), and — the one that
    bites — has the page stopped keeping its own `useState` of a key an island produces? A region can

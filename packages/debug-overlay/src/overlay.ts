@@ -6,6 +6,8 @@
 import {
   getMountedIslands,
   launderingSuspects,
+  unattributedWrites,
+  subscribeUnattributedWrites,
   subscribeMounts,
   getIslandDefinition,
   getChannels,
@@ -480,6 +482,11 @@ class Overlay {
       if (this.#open) this.#panelDirty = true;
     });
     subscribeChannels(() => {
+      if (this.#open) this.#panelDirty = true;
+    });
+    // A foreign store contradicting a declaration is the one finding that arrives without any motu
+    // write to observe — nothing else here would notice it.
+    subscribeUnattributedWrites(() => {
       if (this.#open) this.#panelDirty = true;
     });
     observeStoreWrites((w) => {
@@ -1445,6 +1452,28 @@ class Overlay {
         g.append(row);
         any = true;
       }
+    }
+    // A key an island DECLARES it owns, moved in a store motu does not own, with no declared output to
+    // account for it. Only ever populated when the host installs a `StoreAdapter` — an app whose state
+    // lives in Jotai/Zustand/Redux, where motu can audit the declarations but not enforce them. The
+    // culprit is deliberately absent: naming it would mean being in the write path, which is the
+    // rewrite the adapter seam exists to avoid. The key, its declared owner, and the fact that the two
+    // disagree is the finding.
+    for (const w of unattributedWrites()) {
+      const row = h('div', { class: 'cp' });
+      row.append(h('span', { class: 'k' }, w.key));
+      row.append(
+        h('span', { class: 'who' }, h('b', {}, w.declaredOwner), document.createTextNode(' declared owner')),
+      );
+      row.append(
+        h(
+          'span',
+          { class: 'flag demote', title: `this key moved in the host's own store and no declared output accounts for it` },
+          'wrote outside the declaration',
+        ),
+      );
+      g.append(row);
+      any = true;
     }
     // Provenance the declarations cannot prove: the host wrote a key an island reads, moments after
     // another island emitted. Reported here because it is a suspicion, not a violation.

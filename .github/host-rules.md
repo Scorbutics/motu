@@ -288,9 +288,21 @@ both win, and the loser's island renders someone else's data.
 
 ## Three tiers, and which one you are in
 
-    motu check              STATIC     ~1.4s    every change, in the loop
-    motu check --runtime    DOES IT WORK  ~32s   before handing work over
-    motu check --audit      IS IT USABLE  ~46s   before integrating, and in CI
+    motu check                        STATIC        1.4s    every change
+    motu check --runtime --fast       NO BROWSER   44.0s    while you work (5.9s with --changed)
+    motu check --runtime              DOES IT WORK 103.5s    before handing work over
+    motu check --audit                IS IT USABLE          before integrating, and in CI
+
+(measured on a 16-island, 2-region project)
+
+`--fast` means NO BROWSER: islands mount under happy-dom in node. It used to be an island-only flag
+whose REGIONS still booted chromium — 43s of an 87s run — because a region's flows, mutation and render
+are browser-only. They are now skipped and said (`– region-runtime`), so the loop is genuinely
+browser-free and the browser work happens once, at the end.
+
+What the browser still owns, and why it cannot move: layout (`responsive`), accessibility (`a11y`), and
+everything about a REGION — a flow only exists where islands are mounted together. Those are the last
+step before handover, not the loop.
 
 `--runtime` answers whether the region does what it declares: islands mount, scenarios differ, declared
 writes reach their key, flows end as promised, and every step could have failed. `--audit` adds

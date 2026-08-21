@@ -721,12 +721,14 @@ async function runtimeCheckFast(report, tag, fixturesPath, fit) {
   const args = ['--import', 'tsx', '--import', pathToFileURL(ALIAS_LOADER).href, HARNESS, tag, fixturesPath || '', fit];
   // Node has to be able to resolve @motu/* from the project's own files before it can load them.
   ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
-  const res = spawnSync(process.execPath, args, {
+  const res = await step('mount(fast)', async () =>
+    spawnSync(process.execPath, args, {
     encoding: 'utf8',
     cwd: CLI_PKG,
     // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
     env: { ...lagoonEnv(), ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT, MOTU_NODE_ALIASES: await nodeAliasEnv() },
-  });
+    }),
+  );
   if (res.status !== 0) {
     // The LAST stderr line is a stack frame; the useful one is what the harness said it died of.
     const lines = (res.stderr || '').trim().split('\n').filter(Boolean);
@@ -2302,7 +2304,17 @@ export async function runArchipelagoVerify(argv, id) {
   }
 
   // Same line as the islands: static by default, browser on request (see runIslandVerify).
-  if (argv.runtime === true || argv.audit === true) {
+  if ((argv.runtime === true || argv.audit === true) && argv.fast) {
+    // `--fast` means NO BROWSER, and a region's runtime checks are browser-only: flows, mutation and
+    // the region render all drive the lagoon. Running them anyway made `--fast` an island-only flag
+    // whose regions still booted chromium — 43s of an 87s run, most of what was left after the islands
+    // got cheaper. Skipped, and SAID, because a flag that quietly does half of what it claims is worse
+    // than one that costs more.
+    report.skip(
+      'region-runtime',
+      'flows, mutation and the region render need a browser — re-run without --fast before handing over',
+    );
+  } else if (argv.runtime === true || argv.audit === true) {
     if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
     // One call, both questions: do the flows hold, and could they have failed.
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);

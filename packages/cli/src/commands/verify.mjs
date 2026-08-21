@@ -18,7 +18,7 @@ import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { islandContract, contractsDrift } from '../lib/contracts.mjs';
-import { nodeAliasEnv } from '../lib/node-aliases.mjs';
+import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
 import {
   runLagoon,
@@ -725,7 +725,7 @@ async function runtimeCheckFast(report, tag, fixturesPath, fit) {
     encoding: 'utf8',
     cwd: CLI_PKG,
     // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
-    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT, MOTU_NODE_ALIASES: await nodeAliasEnv() },
+    env: { ...lagoonEnv(), ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT, MOTU_NODE_ALIASES: await nodeAliasEnv() },
   });
   if (res.status !== 0) {
     // The LAST stderr line is a stack frame; the useful one is what the harness said it died of.

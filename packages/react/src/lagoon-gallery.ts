@@ -52,6 +52,13 @@ export interface LagoonConfig {
 
 /** `lagoon.ts` — the escape hatch for what a JSON declaration cannot hold: functions and objects. */
 export interface LagoonOverrides {
+  /**
+   * Per region: the environment its islands cannot render without, installed in EVERY view.
+   *
+   * Distinct from `layout`, which is the ARRANGEMENT and only the region view renders. See
+   * `mountReactLagoon`'s `providers` for the failure that made the distinction necessary.
+   */
+  providers?: Record<string, (children: ReactNode, slot: string) => ReactNode>;
   /** Outward seam. Defaults to logging intents, which is what you want with no router present. */
   host?: HostBridge;
   /** Inbound channels per archipelago id — host signals mirrored into the store. */
@@ -236,6 +243,7 @@ export function startLagoon(opts: StartLagoonOptions): void {
         seed: overrides.seed?.[id],
         channels: overrides.channels?.[id],
         layout: overrides.layout?.[id],
+        providers: overrides.providers?.[id],
         view,
       });
       tide.setActive(current, view);

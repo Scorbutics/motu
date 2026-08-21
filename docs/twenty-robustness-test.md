@@ -213,6 +213,29 @@ coupling is real (both islands bind the key) and simply is not observable in the
 the flow now asserts what the application actually renders — a field label out of the object
 metadata, and `NoteWidget`'s own empty state. A promise about a stand-in is a promise about nothing.
 
+## No motu-only components in the app's repository
+
+The islands started as `RecordFields` / `RecordNotes` wrappers, and that was the wrong shape: they
+existed only to install providers and draw chrome, which is motu-only code living in the host repo.
+An island can BE the app's component — `component: FieldsWidget`, contract input `widget` — and both
+wrappers were deleted. What they were doing splits three ways: providers → the lagoon's `providers`
+override (every view, per island), chrome → the region frame (arrangement), the widget row → `seed`.
+
+Making that split work took four fixes, and each was a case of the same thing — the region view
+(what a human opens) and the mountpoints view (what the flow checks drive) are not the same tree:
+
+- `providers` had to be a first-class override rather than part of `layout`, or the checks render
+  islands with no environment and report "the region rendered nothing".
+- It had to apply PER ISLAND, because some of it is per-island (a widget instance id).
+- The focused mount had to forward it too — a single-slot mount needs the environment as much as the
+  region does.
+- The frame needed the providers for its OWN chrome: `WidgetCardHeader` reads a page-layout instance
+  id and throws without it.
+
+And the resulting nesting disproved a claim I had written into a comment ("free, they are context
+providers"): React Router throws on a nested `<Router>`, and both cards rendered as "Invalid
+Configuration". Providers that cannot nest must gate themselves.
+
 ## What is still unproven
 
 The integration is verified at typecheck level and in the lagoon. **Twenty has never been run in a

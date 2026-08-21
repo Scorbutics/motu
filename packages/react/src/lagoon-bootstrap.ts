@@ -50,6 +50,7 @@ export interface LagoonBootstrapOptions {
     seed?: Record<string, Record<string, unknown>>;
     channels?: Record<string, DeclaredChannel[]>;
     layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
+    providers?: Record<string, (children: ReactNode, slot: string) => ReactNode>;
   };
   /** Every archipelago, so an `island:` target can find the region that declares it. */
   archipelagos?: Record<string, { islands: { element: string; bind?: Record<string, string> }[] }>;
@@ -214,6 +215,9 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElemen
       // Only for a whole-region target: a single-island target is mounted through a synthesised
       // one-slot config, and the app's layout would place slots that mount does not have.
       layout: target.kind === 'archipelago' && regionId ? opts.overrides?.layout?.[regionId] : undefined,
+      // NOT gated on the view the way `layout` is: providers are what an island cannot render
+      // without, so a single-slot mount needs them exactly as much as the region does.
+      providers: regionId ? opts.overrides?.providers?.[regionId] : undefined,
       fit: target.kind === 'island' ? target.fit : undefined,
       // The harness drives DECLARED wires in 'mountpoints', where every slot the archipelago names is
       // framed on its own. In 'region' the app's arrangement decides what exists — an island behind a

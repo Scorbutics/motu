@@ -115,3 +115,24 @@ cannot fail unless the lagoon itself is broken. The assertion worth writing is w
 shows: Twenty's record page proves `editingWidgetId` moves exactly one of two widgets, in both
 directions, and back to neither. Negate one clause and re-run before believing a green flow — a step
 that cannot fail is not a check.
+
+## An island can BE the application's component
+
+If the host already owns the component, the island declares it directly — `component: FieldsWidget` —
+and no wrapper is written. A wrapper that only installs providers or draws chrome is motu-only code
+in the app's repository, which is what adopting motu is supposed to avoid.
+
+Where the pieces go: what an island CANNOT RENDER WITHOUT is `providers` in the lagoon overrides
+(installed in EVERY view, per island, like a channel); the ARRANGEMENT is `layout` (region view
+only); the widget row or props are `seed` DATA. Getting this wrong is invisible in the region view
+and fatal in the mountpoints view — which is the one the flow checks drive, so it reads as "the
+region rendered nothing" rather than "no providers".
+
+Providers must be IDEMPOTENT. The frame installs them for its own chrome and each island installs
+them for itself, so they nest — fine for context providers, fatal for a `<Router>` (React Router
+throws, and both cards rendered as "Invalid Configuration"). Gate the ones that cannot nest
+(`useInRouterContext()`).
+
+Evidence must not import the frame. `<id>.evidence.ts` is read by plain node where the app's `@/…`
+alias does not resolve, so keep the rows in a module with no application imports and let both sides
+import THAT. The failure is a silent "flows could not be read", not an error at the import.

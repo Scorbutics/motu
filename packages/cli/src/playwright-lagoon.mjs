@@ -480,7 +480,14 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
       // later flow reports "no island mounted under that slot", which is true and completely
       // misleading. Isolation keeps each verdict about its own flow.
       await page.evaluate(() => window.__motuLagoon?.remount?.());
-      await sleep(250);
+      // WAIT FOR THE REGION, do not sleep at it. 250ms was enough for stand-in islands and is not
+      // enough for an app's real component tree (Twenty's widgets mount a dozen providers, read a
+      // metadata store and issue queries) — the assertions then ran against a region that had not
+      // rendered yet and reported "the region rendered nothing after this step", which is a timing
+      // artefact wearing the costume of a real failure.
+      await page
+        .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
+        .catch(() => {});
       for (const [index, step] of (scenario.steps ?? []).entries()) {
         const result = await page.evaluate(
           async ({ seed, step: st }) => {
@@ -503,14 +510,43 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
             } else {
               return { error: 'a step must `emit` an island output or `provide` a host key' };
             }
-            await new Promise((r) => setTimeout(r, 120));
+            // Settle, then re-check: an assertion may become true a tick or three after the write —
+            // a store subscriber, an effect, a real component's render pass. Polling keeps the check
+            // exactly as strict (it still fails if the claim never becomes true) while removing the
+            // race that a single fixed wait bakes in.
+            const settled = async (check) => {
+              for (let i = 0; i < 40; i++) {
+                if (check()) return true;
+                await new Promise((r) => setTimeout(r, 50));
+              }
+              return check();
+            };
+            await new Promise((r) => setTimeout(r, 60));
             const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+            await settled(() =>
+              Object.entries(st.expect ?? {}).every(([key, expected]) => same(expected, lagoon.read(key))),
+            );
             const mismatches = Object.entries(st.expect ?? {})
               .map(([key, expected]) => ({ key, expected, actual: lagoon.read(key) }))
               .filter((m) => !same(m.expected, m.actual));
 
             // What the islands SHOW. Read off the mountpoints the lagoon already marks, so this needs
             // no selector from the project and cannot drift from where the region actually mounted.
+            const renderText = (slot) => {
+              const el = document.querySelector(`[data-motu-slot="${slot}"]`);
+              return el ? (el.innerText ?? el.textContent ?? '').replace(/\s+/g, ' ').trim() : null;
+            };
+            await settled(() =>
+              Object.entries(st.expectRender ?? {}).every(([slot, want]) => {
+                const text = renderText(slot);
+                if (text === null) return false;
+                const wants = typeof want === 'string' ? { text: want } : want;
+                return (
+                  (wants.text == null || text.includes(wants.text)) &&
+                  (wants.notText == null || !text.includes(wants.notText))
+                );
+              }),
+            );
             const renderMismatches = [];
             for (const [slot, want] of Object.entries(st.expectRender ?? {})) {
               const el = document.querySelector(`[data-motu-slot="${slot}"]`);

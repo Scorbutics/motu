@@ -51,6 +51,20 @@ export interface ReactLagoonOptions {
    * arrangement the host page already expresses, and it drifts. See `LagoonOverrides.layout`.
    */
   layout?: (island: (slot: string) => ReactNode) => ReactNode;
+  /**
+   * The ENVIRONMENT the islands need, installed in EVERY view.
+   *
+   * `layout` is the arrangement and only the region view renders it. That distinction did not matter
+   * while islands were self-contained, and broke the moment they were the application's own
+   * components: Twenty's widgets read a dozen contexts (Jotai, Apollo, i18n, theme, the record
+   * contexts), those providers belong to the PAGE rather than to any island, and putting them in
+   * `layout` meant the mountpoints view — the one the flow checks drive — rendered islands with no
+   * environment at all and reported "the region rendered nothing".
+   *
+   * Same rule as `channels`: anything an island cannot render without is installed everywhere, or the
+   * checks see a different application than the human does.
+   */
+  providers?: (children: ReactNode, slot: string) => ReactNode;
 }
 
 declare global {
@@ -86,6 +100,15 @@ export function mountReactLagoon(
   // on one container and the old tree keeps its store subscription alive.
   roots.get(mountEl)?.unmount();
 
+  // PER ISLAND, not once around the set: some of what an island needs is per-island (Twenty's widgets
+  // read a `WidgetComponentInstanceContext` keyed by widget id), and a wrapper around the whole
+  // region cannot supply that. Page-wide providers repeated per island are idempotent — they are
+  // context providers over module-level state — so the per-island form covers both cases.
+  const islandNode = (slot: string) => {
+    const el = <Island key={slot} slot={slot} fit={opts.fit} />;
+    return opts.providers ? opts.providers(el, slot) : el;
+  };
+
   const islands = config.islands.map((island) =>
     opts.view === 'mountpoints' ? (
       <section
@@ -97,12 +120,10 @@ export function mountReactLagoon(
         <header className="motu-frame__label">
           <span>{island.slot}</span>
         </header>
-        <div className="motu-frame__stage">
-          <Island slot={island.slot} fit={opts.fit} />
-        </div>
+        <div className="motu-frame__stage">{islandNode(island.slot)}</div>
       </section>
     ) : (
-      <Island key={island.slot} slot={island.slot} fit={opts.fit} />
+      islandNode(island.slot)
     ),
   );
 
@@ -120,9 +141,7 @@ export function mountReactLagoon(
         // Preference order, most faithful first: the APP's own layout component (one arrangement,
         // shared with the page), then the archipelago's `layout` template (an ocean, whose legacy page
         // cannot hand React anything), then declared order.
-        (opts.layout?.((slot) => <Island key={slot} slot={slot} fit={opts.fit} />) ??
-          renderArchipelagoLayout(config.layout, (slot) => <Island key={slot} slot={slot} fit={opts.fit} />) ??
-          islands)
+        (opts.layout?.(islandNode) ?? renderArchipelagoLayout(config.layout, islandNode) ?? islands)
       )}
     </ArchipelagoProvider>
   );

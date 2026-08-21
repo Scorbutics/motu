@@ -285,3 +285,19 @@ The files several agents WILL collide in: `islands/registry.ts` and `islands/con
 keep both sides), and the archipelago (one entry each, so a line-level merge is usually right). In a
 lagoon frame, prefer an append-only LOOKUP over a ternary chain: two people extending one chain cannot
 both win, and the loser's island renders someone else's data.
+
+## Three tiers, and which one you are in
+
+    motu check              STATIC     ~1.4s    every change, in the loop
+    motu check --runtime    DOES IT WORK  ~32s   before handing work over
+    motu check --audit      IS IT USABLE  ~46s   before integrating, and in CI
+
+`--runtime` answers whether the region does what it declares: islands mount, scenarios differ, declared
+writes reach their key, flows end as promised, and every step could have failed. `--audit` adds
+`responsive` and `a11y` — the two most expensive per-island checks, whose answer changes when the
+RENDERING changes, not when a key moves. Running them on every edit buys nothing and costs half the
+run; running them never is how a region ships unusable on a phone. So they are a gate, not a loop, and
+a run without them says so (`– audit  responsive + a11y not run`) rather than staying quiet.
+
+`--audit` implies `--runtime`: asking whether a UI is usable at every viewport only means something
+against something that rendered.

@@ -1038,7 +1038,7 @@ export async function runIslandVerify(argv, name) {
   // different question ("does it still behave?") and a different cost — a few seconds per island, so a
   // migrated project pays minutes for a check most edits do not need. It belongs in `--runtime`
   // (and in `motu check --runtime`), where someone asked for it.
-  if (argv.runtime === true) {
+  if (argv.runtime === true || argv.audit === true) {
     // Randomize the base port so parallel/back-to-back verifies don't collide on a strict port.
     let port = 5300 + Math.floor(Math.random() * 400);
     const fixturesPath = existsSync(paths.fixturesFile(kebab)) ? paths.fixturesFile(kebab) : '';
@@ -1059,9 +1059,16 @@ export async function runIslandVerify(argv, name) {
     // Data-flow differentiation (opt-in via declared `scenarios`).
     await runtimeDifferentiationCheck(report, resolvedTag, fixturesPath, port++, Boolean(argv.fast));
     // Every declared viewport — the phone included, which nothing checked before.
-    if (!argv.fast) await responsiveCheck(report, resolvedTag, kebab, port++);
+    // AUDIT, not dev loop. Layout at every viewport and axe over every scenario answer "is this fit
+    // for people", which changes when the RENDERING changes — not on the edit that moved a key. They
+    // are the two most expensive per-island checks and they belong where their answer is acted on:
+    // before integrating, and in CI as a non-regression gate. `--audit` asks for them.
+    if (!argv.fast && argv.audit) await responsiveCheck(report, resolvedTag, kebab, port++);
     // Accessibility, in the browser that is already open.
-    if (!argv.fast) await a11yCheck(report, resolvedTag, kebab, port++);
+    if (!argv.fast && argv.audit) await a11yCheck(report, resolvedTag, kebab, port++);
+    if (!argv.fast && !argv.audit) {
+      report.skip('audit', 'responsive + a11y not run — they are the `--audit` gate (before integrating, and in CI)');
+    }
   }
 
   return {
@@ -2271,7 +2278,7 @@ export async function runArchipelagoVerify(argv, id) {
   }
 
   // Same line as the islands: static by default, browser on request (see runIslandVerify).
-  if (argv.runtime === true) {
+  if (argv.runtime === true || argv.audit === true) {
     if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
     // One call, both questions: do the flows hold, and could they have failed.
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);

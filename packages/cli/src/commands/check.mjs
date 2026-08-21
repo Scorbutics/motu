@@ -33,7 +33,10 @@ export async function checkCommand(argv) {
   // `--runtime` opts IN, the same way it does for a single `verify` — the sub-checks read the flag
   // directly, so this only has to pass it through.
   const runtime = argv.runtime === true;
-  const sub = { ...argv, runtime, fast: argv.fast };
+  // `--audit` implies `--runtime`: asking whether the UI is usable at every viewport, for everyone,
+  // only means anything against something that rendered.
+  const audit = argv.audit === true;
+  const sub = { ...argv, runtime: runtime || audit, audit, fast: argv.fast };
 
   // The generated half, first and cheaply: every island's contract is READ from its component, so the
   // only way it can be wrong is by being stale. One comparison answers that for the whole project.

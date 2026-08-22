@@ -2027,10 +2027,11 @@ class Overlay {
     // design, not a debt — but how many of them RAN here. A source installed in the lagoon (as a
     // channel over stubbed modules) means the preview exercised the app's own derivation; a seeded one
     // means a human wrote the answer down and the derivation is untested until the ocean runs it.
-    const installed = sources.filter(([, src]) => {
-      const keys = [...(src.produces ?? [])];
-      return (src.module && called.has(src.module)) || keys.some((k) => channelKeys.has(k));
-    }).length;
+    // INSTALLED means a channel produced its keys — nothing else. Counting "an island called this
+    // module" as installed put `revenue` in the installed column while `sources-live` called it
+    // seeded, and the check was right: the island fetching from the same module is a different
+    // consumer, and it does not produce the key the page owes the region.
+    const installed = sources.filter(([, src]) => [...(src.produces ?? [])].some((k) => channelKeys.has(k))).length;
     g.append(
       this.#subLabel(
         `declared sources \u00b7 page \u2192 region (${sources.length} \u00b7 ${installed} installed, ${sources.length - installed} seeded)`,
@@ -2041,21 +2042,26 @@ class Overlay {
       const row = h('div', { class: 'ch' });
       // WHAT ESTABLISHED THESE KEYS, in the order that answers the question: fetched here beats a
       // channel beats the seed, and a key with no value at all is the finding.
-      const fetched = source.module && called.has(source.module);
       const viaChannel = keys.some((k) => channelKeys.has(k));
+      // An island calling the same module is worth SAYING and is not this source running.
+      const alsoCalled = source.module && called.has(source.module);
       const moved = keys.filter((k) => moves.has(k)).length;
       const held = keys.filter((k) => store.has(k)).length;
       // live: something ran here. orphan: the keys hold values but the declared source did not
       // produce them — in the lagoon that is the seed standing in for the page's fetch, which is the
       // normal reading. never: nothing holds a value, which is the finding.
-      const state = fetched || viaChannel ? 'live' : held ? 'orphan' : 'never';
+      const state = viaChannel ? 'live' : held ? 'orphan' : 'never';
       row.append(h('span', { class: `st ch-${state}` }));
       row.append(h('span', { class: 'ep' }, name));
       row.append(
         h(
           'span',
           { class: 'n' },
-          fetched ? 'fetched here' : viaChannel ? 'via channel' : held ? `seeded \u00b7 ${moved} moved` : 'nothing holds a value',
+          viaChannel
+            ? 'via channel'
+            : held
+              ? `seeded \u00b7 ${moved} moved${alsoCalled ? ' \u00b7 module called by an island' : ''}`
+              : 'nothing holds a value',
         ),
       );
       if (source.module) row.append(h('span', { class: 'pay', title: source.module }, sourceLabel(source.module)));

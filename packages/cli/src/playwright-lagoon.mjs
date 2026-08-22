@@ -665,7 +665,13 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     const channels = await page.evaluate(() =>
       window.__motuLagoon && typeof window.__motuLagoon.channels === 'function' ? window.__motuLagoon.channels() : null,
     );
-    return { flows: out, suspects, diagnostics, channels, provenance };
+    // Which keys the region ended up HOLDING. A declared source that was seeded instead of installed
+    // leaves its keys full, and one that nothing feeds leaves them empty — the same "no channel wrote
+    // this" reads as either, and only one of the two is a real finding.
+    const held = await page
+      .evaluate(() => (typeof window.__motuLagoon?.held === 'function' ? window.__motuLagoon.held() : []))
+      .catch(() => []);
+    return { flows: out, suspects, diagnostics, channels, provenance, held };
   });
 }
 

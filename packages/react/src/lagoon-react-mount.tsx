@@ -84,6 +84,9 @@ declare global {
       hostCalls: () => { module: string; fn: string; args: unknown[]; returned?: number; at: number }[];
       /** Read a region key, for a check that needs to know whether it moved. */
       read: (key: string) => unknown;
+      /** Which keys the region HOLDS — a declared source that was seeded rather than installed still
+       *  leaves its keys with values, and that is what separates "seeded" from "dead". */
+      held: () => string[];
       archipelago: string;
     };
   }
@@ -187,6 +190,12 @@ export function mountReactLagoon(
     //    from the archipelago (every `writes` entry can be probed) instead of hand-scripted — which is
     //    the line between a harness and a second, untyped test suite.
     read: (key) => getArchipelagoStore(config.id)?.get(key),
+    held: () => {
+      const store = getArchipelagoStore(config.id);
+      // `has`, not a truthy value: a key deliberately set to `undefined` is established, and the
+      // question here is whether anything ever fed it.
+      return store ? Object.keys(config.islands.length ? store.snapshot() : {}).filter((k) => store.has(k)) : [];
+    },
     emit: (slot, event, detail) => {
       const spec = config.islands.find((i) => i.slot === slot);
       const store = getArchipelagoStore(config.id);

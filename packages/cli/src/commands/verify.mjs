@@ -1656,7 +1656,7 @@ async function regionFlowCheck(report, id, port, region) {
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
     provenanceCheck(report, id, region, run.provenance ?? []);
-    sourcesLiveCheck(report, id, run.channels, region);
+    sourcesLiveCheck(report, id, run.channels, region, run.held ?? []);
   } catch (err) {
     // A ReferenceError or a TypeError here is a BUG IN THIS FILE, not a region that could not be
     // driven — and reporting it as a warning meant the flows silently stopped running twice today
@@ -2226,7 +2226,7 @@ function channelSourceCheck(report, id, region) {
  * trust. A channel writing a key no source claims is an ERROR; a source no channel produced is a
  * WARNING, because seeding it in the lagoon is legitimate.
  */
-function sourcesLiveCheck(report, id, channels, region) {
+function sourcesLiveCheck(report, id, channels, region, held = []) {
   const declared = declaredSources(id);
   if (!Object.keys(declared).length || !channels) return;
   const claimed = new Map();
@@ -2249,8 +2249,37 @@ function sourcesLiveCheck(report, id, channels, region) {
   }
   const islandOwned = region ? producedKeysOf(region) : new Set();
   const silent = [...claimed.keys()].filter((k) => !written.has(k) && !islandOwned.has(k));
-  if (silent.length) {
-    report.warn('sources-live', `declared but produced by no channel while the region ran: ${silent.join(', ')} — seeded, or dead?`);
+  // PER SOURCE, and split by whether the keys hold anything — "seeded, or dead?" asked the reader to
+  // go and find out, and the two answers call for opposite actions. Seeded means the lagoon writes
+  // the answer down: the region renders, every check passes, and the page's own derivation is not
+  // exercised until production. Installing the source (a channel over the same fixtures, the way
+  // `week` and `networkStats` do it) is what turns a preview into evidence about the app's code.
+  const holds = new Set(held);
+  const bySource = new Map();
+  for (const key of silent) {
+    const name = claimed.get(key);
+    const entry = bySource.get(name) ?? { keys: [], module: declared[name]?.module };
+    entry.keys.push(key);
+    bySource.set(name, entry);
+  }
+  for (const [name, entry] of bySource) {
+    const anyHeld = entry.keys.some((k) => holds.has(k));
+    const where = entry.module ? ` (${entry.module})` : '';
+    if (anyHeld) {
+      report.warn(
+        'sources-live',
+        `source "${name}"${where} is SEEDED here, not installed: ${entry.keys.join(', ')} ` +
+          `${entry.keys.length > 1 ? 'hold values' : 'holds a value'} no channel produced. The region renders and ` +
+          `the page's own derivation is never exercised — ` +
+          `install the source with \`channelFrom({ to, id: '${name}', args: [...] })\` and drop them from the seed`,
+      );
+    } else {
+      report.warn(
+        'sources-live',
+        `source "${name}"${where} produced nothing and its keys hold nothing: ${entry.keys.join(', ')} — ` +
+          `declared, and fed by neither a channel nor the seed`,
+      );
+    }
   }
   const live = [...written].filter((k) => claimed.has(k) || byReference);
   if (live.length) report.ok('sources-live', `${live.length} key(s) produced by a declared source at runtime`);

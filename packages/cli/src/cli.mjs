@@ -9,7 +9,7 @@
 import { createCommand } from './commands/create.mjs';
 import { verifyCommand, archipelagoVerifyCommand } from './commands/verify.mjs';
 import { checkCommand } from './commands/check.mjs';
-import { snapshotCommand } from './commands/snapshot.mjs';
+import { snapshotCommand, archipelagoSnapshotCommand } from './commands/snapshot.mjs';
 import { integrateCommand } from './commands/integrate.mjs';
 import { integrateCheckCommand } from './commands/integration.mjs';
 import { regionInitCommand } from './commands/region.mjs';
@@ -62,6 +62,7 @@ ${color.bold('Usage:')}
   motu integrate check [region]                    does the HOST compose, place and read the region?
   motu archipelago create <id>                      scaffold + register a new archipelago
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
+  motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
@@ -199,6 +200,8 @@ async function main() {
   }
 
   if (group === 'archipelago') {
+    // `snapshot` takes an id positional, so re-parse with `rest` shifted.
+    if (sub === 'snapshot') return archipelagoSnapshotCommand(parse(rest));
     if (sub === 'create') return archipelagoCreateCommand(argv);
     if (sub === 'verify') return archipelagoVerifyCommand(argv);
     if (sub === 'record-frame') return archipelagoRecordFrameCommand(argv);

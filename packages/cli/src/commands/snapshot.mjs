@@ -10,7 +10,8 @@ import { existsSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { color, paths, names, lagoonViewports } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
-import { captureLagoon } from '../playwright-lagoon.mjs';
+import { readRegions } from '../lib/eject.mjs';
+import { captureLagoon, captureRegionLagoon } from '../playwright-lagoon.mjs';
 import { resolveBaselineHost, putShot, fetchShot, acceptShots, writeRemoteArtifacts } from '../lib/baselines.mjs';
 import {
   compareBuffers,
@@ -190,6 +191,190 @@ export async function snapshotCommand(argv) {
           `  ${failed.length} island(s) changed — look at the .diff.png, then ` +
             (host ? '`motu island snapshot --accept <island>` if intended' : '`--update` if intended'),
         ),
+  );
+  process.exit(failed.length === 0 ? 0 : 1);
+}
+
+
+/**
+ * The states a region can be pictured in — its flows' seeds.
+ *
+ * A region declares no `scenarios`; it declares FLOWS, and each one opens by seeding the state it
+ * needs. That seed list is the honest answer to "which shapes does this page take", and it is the
+ * answer to the case a single picture misses: an actions page with an empty week is a different PAGE,
+ * not a different value. A shape no flow seeds is an evidence gap — the same finding `render-coverage`
+ * makes — and closing it with a flow is worth doing for its own sake.
+ */
+async function regionStates(id) {
+  const file = paths.archipelagoEvidence(id);
+  if (!existsSync(file)) return [];
+  try {
+    const mod = await import(`file://${file}?t=${Date.now()}`);
+    const flows = Array.isArray(mod.scenarios) ? mod.scenarios : [];
+    const seen = new Set();
+    const out = [];
+    for (const f of flows) {
+      const name = f.name ?? 'flow';
+      // Two flows that start from the same state are one picture, not two.
+      const key = JSON.stringify(f.seed ?? {});
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name, seed: f.seed ?? {} });
+    }
+    return out;
+  } catch {
+    // Evidence is TypeScript in most projects; node cannot load it. One picture of the default state
+    // is still worth having — it just cannot be named after the flow that would have seeded it.
+    return [];
+  }
+}
+
+async function snapshotRegion(argv, id, host) {
+  const viewports = lagoonViewports();
+  const states = await regionStates(id);
+  const port = 5300 + Math.floor(Math.random() * 400);
+  const dir = snapshotDir(paths.archipelagosDir, id);
+
+  let shots;
+  try {
+    shots = await captureRegionLagoon({ id, port, states, viewports });
+  } catch (err) {
+    return { kebab: id, error: err.message, results: [] };
+  }
+
+  const results = [];
+  for (const shot of shots) {
+    const file = snapshotName(shot.scenario, shot.viewport);
+    if (host) {
+      let sent;
+      try {
+        sent = await putShot(host, `region-${id}`, file, shot.png);
+      } catch (err) {
+        return { kebab: id, error: err.message, results: [] };
+      }
+      if (sent.status !== 'changed') {
+        results.push({ file, status: sent.status === 'match' ? 'match' : 'new' });
+        continue;
+      }
+      const acceptedPng = await fetchShot(host, sent.accepted);
+      const cmp = acceptedPng ? await compareBuffers(acceptedPng, shot.png) : { status: 'changed', diffPixels: 0, ratio: 1 };
+      const artifact = writeRemoteArtifacts(`region-${id}`, file, shot.png, cmp.diff);
+      results.push({ file, ...cmp, status: cmp.status === 'new' ? 'changed' : cmp.status, artifact });
+      continue;
+    }
+    const baseline = resolve(dir, file);
+    if (argv.update) {
+      writeBaseline(dir, file, shot.png);
+      results.push({ file, status: existsSync(baseline) ? 'updated' : 'recorded' });
+      continue;
+    }
+    const cmp = await compareSnapshot(baseline, shot.png);
+    if (cmp.status === 'changed' || cmp.status === 'resized') writeFailureArtifacts(dir, file, shot.png, cmp.diff);
+    else if (cmp.status === 'new') writeBaseline(dir, file, shot.png);
+    results.push({ file, ...cmp });
+  }
+  return { kebab: id, dir, results, orphans: [], members: readRegions(paths.archipelagosDir).find((r) => r.id === id)?.islands ?? [] };
+}
+
+
+/**
+ * `motu archipelago snapshot <id|--all>` — picture the composed page.
+ *
+ * ATTRIBUTION IS THE POINT, and it is what makes a page-level diff usable rather than noise. Any island
+ * edit changes the region picture, so on its own this signal churns and people stop accepting it. But
+ * the islands are separately baselined here, so a region diff can be explained: when a member island
+ * changed too, the region changed BECAUSE of it. A region diff with NO member changed is an
+ * ARRANGEMENT regression — the class no island shot can see, and the one that shipped once already.
+ */
+export async function archipelagoSnapshotCommand(argv) {
+  const name = argv._[0];
+  const wantsHost = argv.remote !== undefined || argv.accept !== undefined;
+  const host = wantsHost ? resolveBaselineHost(argv) : null;
+  if (wantsHost && !host) {
+    console.error(color.red('✗ no lagoon host — pass --remote <url>, set MOTU_HOST_URL, or write ~/.config/motu/host.json'));
+    process.exit(1);
+  }
+  if (argv.accept !== undefined) {
+    const island = typeof argv.accept === 'string' ? `region-${argv.accept}` : name ? `region-${name}` : null;
+    const out = await acceptShots(host, island).catch((err) => {
+      console.error(color.red(`✗ ${err.message}`));
+      process.exit(1);
+    });
+    console.log(out.count ? `${color.green('✓')} accepted ${out.count} shot(s)` : color.dim('nothing to accept'));
+    process.exit(0);
+  }
+  if (!name && !argv.all) {
+    console.error('usage: motu archipelago snapshot <id|--all> [--update|--remote] [--accept] [--json]');
+    process.exit(2);
+  }
+  const targets = argv.all ? readRegions(paths.archipelagosDir).map((r) => r.id) : [name];
+
+  const all = [];
+  for (const id of targets) all.push(await snapshotRegion(argv, id, host));
+
+  // Which member islands ALSO differ, so a region diff can be explained instead of just reported.
+  let changedIslands = new Set();
+  let comparedIslands = new Set();
+  if (host) {
+    try {
+      const res = await fetch(`${host.base}/api/baselines?repo=${encodeURIComponent(host.id.repo)}`);
+      const body = await res.json();
+      changedIslands = new Set(body.shots.filter((x) => x.status === 'changed').map((x) => x.island));
+      // An island with NO accepted baseline can never report `changed`, so "no member changed" would
+      // be true of an island nobody has ever compared. Claiming ARRANGEMENT on that is the check
+      // reporting a conclusion it did not examine.
+      comparedIslands = new Set(body.shots.filter((x) => x.accepted).map((x) => x.island));
+    } catch {
+      /* attribution is a nicety; its absence must not fail the run */
+    }
+  }
+
+  const failed = all.filter((r) => r.error || r.results.some((x) => x.status === 'changed' || x.status === 'resized'));
+  if (argv.json) {
+    console.log(JSON.stringify({ pass: failed.length === 0, regions: all }, null, 2));
+    process.exit(failed.length === 0 ? 0 : 1);
+  }
+
+  console.log(color.bold(`\nmotu archipelago snapshot — ${targets.length} region(s)${host ? color.dim(`  against ${host.base}`) : ''}\n`));
+  for (const region of all) {
+    if (region.error) {
+      console.log(`  ${color.red('✗')} ${color.dim(region.kebab.padEnd(20))} ${color.red(region.error)}`);
+      continue;
+    }
+    const changed = region.results.filter((r) => r.status === 'changed' || r.status === 'resized');
+    const fresh = region.results.filter((r) => r.status === 'new' || r.status === 'recorded');
+    const mark = changed.length ? color.red('✗') : fresh.length ? color.yellow('+') : color.green('✓');
+    console.log(
+      `  ${mark} ${color.dim(region.kebab.padEnd(20))} ` +
+        (changed.length ? color.red(`${changed.length} changed`) : color.dim(`${region.results.length} shot(s)${fresh.length ? `, ${fresh.length} new` : ''}`)),
+    );
+    for (const r of changed) {
+      const detail = r.status === 'resized' ? `size ${r.from?.join('×')} → ${r.to?.join('×')}` : `${r.diffPixels} px (${(r.ratio * 100).toFixed(2)}%)`;
+      console.log(`      ${color.red('✗')} ${color.dim(r.file.padEnd(28))} ${detail}`);
+      if (r.artifact) console.log(`        ${color.dim(relative(process.cwd(), r.artifact))}`);
+    }
+    if (changed.length) {
+      const members = (region.members ?? []).map((m) => m.element?.replace(/^x-/, '') ?? '').filter(Boolean);
+      const guilty = members.filter((k) => changedIslands.has(k));
+      const uncompared = members.filter((k) => !comparedIslands.has(k));
+      console.log(
+        guilty.length
+          ? color.dim(`        members that also changed: ${guilty.join(', ')} — the region changed because they did`)
+          : uncompared.length
+            ? color.dim(
+                `        cannot attribute: ${uncompared.length}/${members.length} member(s) have no accepted baseline ` +
+                  `(${uncompared.slice(0, 4).join(', ')}${uncompared.length > 4 ? '…' : ''}) — accept them and re-run to tell ` +
+                  `an arrangement change from an island one`,
+              )
+            : color.yellow('        no member island changed — this is the ARRANGEMENT, which nothing else checks'),
+      );
+    }
+  }
+  console.log('');
+  console.log(
+    failed.length === 0
+      ? color.green(color.bold('PASS'))
+      : color.red(color.bold('FAIL')) + color.dim(`  ${failed.length} region(s) changed`),
   );
   process.exit(failed.length === 0 ? 0 : 1);
 }

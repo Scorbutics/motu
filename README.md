@@ -826,6 +826,35 @@ beside the host costs nothing.
 The one honest risk: the store is one directory (`~/.local/share/motu-host`). Back it up, or a disk
 failure takes the baselines with it.
 
+### Picturing the composed page
+
+`motu archipelago snapshot <id|--all> --remote` photographs the REGION VIEW — every island in its
+arrangement, at each declared viewport.
+
+This is the one thing an island shot cannot do, and the gap is not hypothetical. Two agents each
+extended the lagoon frame's slot lookup; the naive merge made one agent's widget render as the other's,
+and `archipelago verify --runtime` was BYTE-IDENTICAL between the correct and broken resolutions,
+because the frame is arrangement — not declared, therefore not checked. Every island rendered
+correctly in isolation. Only the composition was wrong.
+
+States come from the region's FLOWS: each one opens by seeding the state it needs, so the flow list is
+the honest answer to "which shapes does this page take". That matters because a page can change SHAPE,
+not just values — an actions page with an empty week is a different page. A shape no flow seeds is an
+evidence gap, and the fix is a flow, which is worth having anyway.
+
+**Attribution is what makes a page-level diff usable.** Any island edit changes the region picture, so
+on its own the signal churns and people stop accepting it. But the islands are separately baselined, so
+the report says which members also changed:
+
+```
+✗ actions   3 changed
+    members that also changed: week-actions — the region changed because they did
+```
+
+and when none did, the diff is an ARRANGEMENT regression — the class nothing else sees. It will not
+make that claim about members it has not compared: an island with no accepted baseline can never report
+`changed`, so the report says it cannot attribute rather than blaming the frame.
+
 ### What the host is not
 
 - **It runs no browser.** Playwright stays on the publishing machine, where it already is. Snapshot

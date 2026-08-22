@@ -874,6 +874,66 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
 }
 
 /**
+ * Picture the REGION — the composed page, not its parts.
+ *
+ * WHAT THIS CATCHES THAT AN ISLAND SHOT CANNOT: arrangement. The frame is not declared and therefore
+ * not checked, and this project has already shipped the consequence — two agents each extended the
+ * frame's slot lookup, the naive merge made one agent's widget render as the other's, and
+ * `archipelago verify --runtime` was BYTE-IDENTICAL between the correct and broken resolutions. Every
+ * island rendered correctly in isolation. Only the composition was wrong.
+ *
+ * THE REGION VIEW, deliberately, not the mountpoints view: the question is what a person sees, and the
+ * mountpoints view is a diagnostic layout that exists for probing wires.
+ *
+ * STATES COME FROM THE FLOWS. A region has no `scenarios` of its own, and one picture of one state
+ * would miss the case where the screen changes SHAPE — an actions page with an empty week is a
+ * different page, not a different value. Each flow's first step establishes a state someone thought
+ * worth driving, so that is the state list. A region whose flows do not seed a shape worth seeing has
+ * an evidence gap, and the fix is a flow, which is worth having anyway.
+ */
+export async function captureRegionLagoon({ id, port = 5199, states = [], viewports = [] }) {
+  const { chromium } = await import('playwright');
+  return onLagoonPage(
+    { target: `archipelago:${id}`, port, viewport: { width: viewports[0]?.width ?? 1280, height: 900 }, view: 'region' },
+    async (page) => {
+      await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
+      // Wait for the region, do not sleep at it — an app's real component tree takes far longer than a
+      // stand-in, and a picture of a half-mounted page is a baseline that flaps forever.
+      await page
+        .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 15000 })
+        .catch(() => {});
+
+      // Motion makes a baseline flap. Freeze it rather than sampling and hoping.
+      await page.addStyleTag({
+        content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}',
+      });
+
+      const shots = [];
+      const list = states.length ? states : [{ name: 'default', seed: {} }];
+      for (const state of list) {
+        // A fresh mount per state, for the reason the flow runner remounts: one seed can leave the
+        // region unrenderable, and every later picture would then be of the wreckage.
+        await page.evaluate(() => window.__motuLagoon?.remount?.()).catch(() => {});
+        await page
+          .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
+          .catch(() => {});
+        await page.evaluate((seed) => {
+          const l = window.__motuLagoon;
+          if (l) for (const [k, v] of Object.entries(seed || {})) l.seed(k, v);
+        }, state.seed ?? {});
+        for (const vp of viewports) {
+          await page.setViewportSize({ width: vp.width, height: 900 });
+          await sleep(300);
+          const png = await page.screenshot({ animations: 'disabled', fullPage: true }).catch(() => null);
+          if (png) shots.push({ scenario: state.name ?? 'default', viewport: vp.name, width: vp.width, png });
+        }
+      }
+      return shots;
+    },
+  );
+}
+
+/**
  * Render one island at each declared viewport and report what does not fit.
  *
  * The check nobody was running: motu knew `native | legacy` (footprint and skin) and nothing about

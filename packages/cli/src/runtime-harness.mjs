@@ -142,6 +142,11 @@ async function main() {
       }
       // All rendered something AND not every output is identical.
       result.differentiates = outputs.every((o) => o.trim().length > 0) && new Set(outputs).size > 1;
+      // WHICH scenarios collide, not just whether any two do. `size > 1` passes a set where two of
+      // three render identically, while the report says "distinct inputs produce distinct output" —
+      // claiming more than it tested, and leaving one scenario that is fake evidence by the project's
+      // own definition. Named here so the caller can say so.
+      result.distinctOutputs = new Set(outputs).size;
     }
     console.error = realConsoleError;
     process.stdout.write(JSON.stringify(result) + '\n');

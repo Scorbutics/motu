@@ -501,6 +501,37 @@ export function getArchipelagoStore(id: string): Store | undefined {
   return stores.get(id);
 }
 
+/**
+ * A value a SCENARIO seeded, for a lagoon stub to answer with.
+ *
+ * The gap this closes: an island that fetches its own data through one of the app's service modules
+ * has no props, so a scenario's `seed` reaches nothing. The lagoon replaces that module with a stub,
+ * and a stub returning a constant makes every scenario render identically — `data-flow` then either
+ * fails honestly or is skipped, and `responsive`, `a11y` and the snapshots all run against ONE state.
+ * Three of the four islands on peps' club page were in exactly that position.
+ *
+ * A stub calls this instead of returning a constant, and the scenario becomes the input again:
+ *
+ *     export async function fetchClubFeed(limit = 10) {
+ *       return (seededValue<ClubFeedEvent[]>('clubFeedEvents') ?? DEFAULT).slice(0, limit);
+ *     }
+ *
+ * It searches every mounted store rather than taking an id, because the caller cannot know one: a
+ * single-island verify mounts a synthesised archipelago called `lagoon`, while the region view uses
+ * the real id. Asking the stub to guess would make it work in one view and silently not the other.
+ */
+export function seededValue<T>(key: string): T | undefined {
+  for (const store of stores.values()) {
+    const value = store.get(key);
+    if (value !== undefined) return value as T;
+  }
+  for (const entry of slots.values()) {
+    const value = entry.store?.get(key);
+    if (value !== undefined) return value as T;
+  }
+  return undefined;
+}
+
 /** The store backing a slot — the inbound seam a standalone <motu-island>.provide() writes to. */
 export function getSlotStore(slot: string): Store | undefined {
   return slots.get(slot)?.store;

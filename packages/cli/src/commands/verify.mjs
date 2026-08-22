@@ -714,6 +714,30 @@ function reportRuntimeDiagnostics(report, r, label) {
   // remountIdentical == null → the island never rendered; the mount error already covers it.
 }
 
+
+/**
+ * Every harness call, spawned the same way.
+ *
+ * The mount path got the alias loader, the project root and the lagoon env; the differentiation and
+ * scenario-reading calls did not, so on any project whose islands import through an alias they failed
+ * — and `runtimeDifferentiationCheck` returned SILENTLY on a non-zero exit, so `data-flow` simply
+ * never appeared in the report. A check that vanishes when it breaks is worse than one that fails.
+ */
+async function spawnHarness(args) {
+  ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
+  const ALIAS_REGISTER = resolve(dirname(fileURLToPath(import.meta.url)), '../alias-register.mjs');
+  return spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(ALIAS_REGISTER).href, ...args], {
+    encoding: 'utf8',
+    cwd: CLI_PKG,
+    env: {
+      ...lagoonEnv(),
+      ...process.env,
+      MOTU_PROJECT_ROOT: REPO_ROOT,
+      MOTU_NODE_ALIASES: await nodeAliasEnv(),
+    },
+  });
+}
+
 /** Fast in-process lagoon mount under happy-dom for one fit (used with --fast). */
 async function runtimeCheckFast(report, tag, fixturesPath, fit) {
   // The alias hook goes AFTER tsx so tsx compiles what it resolves.
@@ -800,16 +824,12 @@ async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast
 
   if (fast) {
     // In-process happy-dom: mount once per seed and diff (works when the registry has no vite-only imports).
-    const args = ['--import', 'tsx', HARNESS, tag, fixturesPath, 'native', 'differentiate'];
-    // Node has to be able to resolve @motu/* from the project's own files before it can load them.
-  ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
-  const res = spawnSync(process.execPath, args, {
-    encoding: 'utf8',
-    cwd: CLI_PKG,
-    // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
-    env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT },
-  });
-    if (res.status !== 0) return;
+    const res = await spawnHarness([HARNESS, tag, fixturesPath, 'native', 'differentiate']);
+    if (res.status !== 0) {
+      const why = (res.stderr || '').trim().split('\n').find((l) => /harness-fatal|Error/.test(l)) ?? 'no output';
+      report.inconclusive('data-flow', `could not compare scenarios: ${why.trim()}`);
+      return;
+    }
     const jsonLine = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
     let parsed;
     try {
@@ -835,7 +855,20 @@ async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast
 function reportDifferentiation(report, r) {
   if (!r || r.differentiates == null) return;
   if (r.differentiates) {
-    report.ok('data-flow', `distinct inputs produce distinct output (${r.scenarioCount} scenarios) — data flows past the seam`);
+    // Duplicates are not a failure — two seeds may legitimately normalise to one output — but they are
+    // not evidence either, and the ok line used to cover for them.
+    if (r.distinctOutputs != null && r.distinctOutputs < r.scenarioCount) {
+      report.warn(
+        'data-flow',
+        `${r.scenarioCount} scenarios produced only ${r.distinctOutputs} distinct render(s) — ` +
+          `${r.scenarioCount - r.distinctOutputs} of them show nothing the others do not`,
+      );
+    }
+    report.ok(
+      'data-flow',
+      `distinct inputs produce distinct output (${r.scenarioCount} scenarios) — data flows past the seam`,
+      { n: r.distinctOutputs ?? r.scenarioCount, of: 'distinct render(s)' },
+    );
   } else {
     report.error(
       'data-flow',

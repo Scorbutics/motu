@@ -776,6 +776,25 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
               ? (k, v) => window.__motuLagoon.provide(k, v)
               : null;
         if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
+        // KNOWN DIVERGENCE, not yet closed. Providing into a live island drives anything BOUND to a
+        // prop and drives nothing in an island that fetches its own data — its effect already ran. The
+        // happy-dom path mounts once per scenario, so the same evidence passes there and fails here.
+        // Re-creating the element below does NOT fix it: the seeds cross (`seed-transport` passes) and
+        // the render is still identical, and why is undiagnosed. Left in place because a fresh mount is
+        // the right shape for a check whose name says "distinct INPUTS", not because it works yet.
+        if (typeof window.__motuLagoon?.remount === 'function') {
+          window.__motuLagoon.remount();
+        } else {
+          // The single-island target mounts through the CUSTOM ELEMENT path, which has no remount
+          // seam — so re-create the element: disconnect disposes it, re-appending mounts it fresh and
+          // its effects run again against the seed just provided.
+          for (const el of document.querySelectorAll('motu-island')) {
+            const parent = el.parentNode;
+            const next = el.nextSibling;
+            parent?.removeChild(el);
+            parent?.insertBefore(el, next);
+          }
+        }
       }, scenario.seed ?? {});
       await sleep(250);
       const violations = await page.evaluate(async (t) => {

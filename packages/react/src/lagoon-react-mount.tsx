@@ -17,6 +17,7 @@ import {
   getMountedIslands,
   provideToArchipelago,
   seedArchipelago,
+  hostCalls,
   runWithWriteSource,
   type ArchipelagoConfig,
   type Channel,
@@ -79,6 +80,8 @@ declare global {
       remount: () => void;
       /** Fire one of an island's DECLARED outputs, as if the component had. */
       emit: (slot: string, event: string, detail: unknown) => boolean;
+      /** Host modules the islands actually called, for provenance (see `traced`). */
+      hostCalls: () => { module: string; fn: string; args: unknown[]; returned?: number }[];
       /** Read a region key, for a check that needs to know whether it moved. */
       read: (key: string) => unknown;
       archipelago: string;
@@ -165,6 +168,10 @@ export function mountReactLagoon(
     //    host reaching into island-owned state — motu's ownership guard fired on every probed key.
     //    A rollback is not the host updating the region; it is a re-seed, so say so.
     seed: (key, value) => seedArchipelago(config.id, key, value),
+    //  - hostCalls: WHERE THE INPUT CAME FROM. A stub that wraps its exports in `traced` records the
+    //    calls the islands actually made, which is the one thing the lagoon otherwise hides: it
+    //    replaces the host module so completely that nothing shows a fetch happened at all.
+    hostCalls: () => hostCalls().map((c) => ({ ...c })) as ReturnType<NonNullable<Window["__motuLagoon"]>["hostCalls"]>,
     //  - channels: what each installed channel has actually WRITTEN. The registry tracks it already
     //    (debug builds hand every channel a store proxy that tags its writes); exposing it is what
     //    lets a check compare the region's declared `sources` against what really produced its keys.

@@ -658,10 +658,14 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     const suspects = await page.evaluate(() => window.__motuSuspects?.list?.() ?? []).catch(() => []);
     // What the CHANNELS actually produced while the flows ran — the inbound seam's provenance. The
     // declared `sources` say who feeds each host-fed key; this says who really did.
+    // WHERE THE INPUT CAME FROM, read after the flows have run.
+    const provenance = await page
+      .evaluate(() => (typeof window.__motuLagoon?.hostCalls === 'function' ? window.__motuLagoon.hostCalls() : []))
+      .catch(() => []);
     const channels = await page.evaluate(() =>
       window.__motuLagoon && typeof window.__motuLagoon.channels === 'function' ? window.__motuLagoon.channels() : null,
     );
-    return { flows: out, suspects, diagnostics, channels };
+    return { flows: out, suspects, diagnostics, channels, provenance };
   });
 }
 

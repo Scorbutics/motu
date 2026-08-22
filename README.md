@@ -449,7 +449,7 @@ The generated `vite.config.ts` turns that into `resolve.alias` entries. Conseque
   `tailwindcss`/`autoprefixer` for a Next host).
 
 The gallery — the **tide line** (archipelago switcher, Region/Mountpoints view, the adopted transport
-and fit chips, a Cmd/Ctrl+K palette), the **seam lens** moored to the buoy in its bay, and the injection
+and fit chips, a Cmd/Ctrl+K palette), the **seam lens** opened from the tab on its own panel, and the injection
 of recorded callsite frames — is framework behaviour and lives in `@motu/react` (`startLagoon`). It is
 not scaffolded, so improvements to it arrive with a `git pull` rather than by regenerating a file. Both
 surfaces stay submerged until you reach for them, so the archipelago owns the first screenful. The

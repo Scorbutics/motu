@@ -115,7 +115,7 @@ export interface StartLagoonOptions {
    * visitor happened to select.
    */
   target?: string;
-  /** False strips the lens and its buoy. */
+  /** False strips the lens and its tab. */
   debug?: boolean;
   /**
    * How islands attach — must match the host application, and the focused lagoon. 'react' renders
@@ -260,9 +260,9 @@ export function startLagoon(opts: StartLagoonOptions): void {
     tide.setActive(current, view);
   }
 
-  // The lens mounts BEFORE the chrome, which reads its restored state to draw the buoy — so the lens
-  // remembers being on across a reload. No chip of its own: the tide bay owns the trigger, or a
-  // page-wide lens would be summoned from inside a popup that closes behind it.
+  // The lens mounts BEFORE the chrome — it restores its own open state, so it remembers being on
+  // across a reload. No chip in the toolbar: the lens draws its own tab on the edge of its panel, so
+  // opening and closing happen in one place instead of from inside a popup that closes behind it.
   const lens = opts.debug === false ? undefined : opts.lens;
   lens?.mount({ chip: false });
 

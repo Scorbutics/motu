@@ -327,3 +327,22 @@ The lagoon renders every declared slot unconditionally, so it cannot catch this 
 of them: the lagoon proves the island works, `integrate check` proves the page names it, and NOTHING
 proves the page reaches it. That gap is the honest boundary of static integration checking — closing it
 needs the page rendered, which is the host's own test runner, not motu's.
+
+## Where an island's input came from
+
+The lagoon replaces a host module so completely that nothing shows a fetch happened: no request, no
+network row, and the lens shows the KEYS that resulted, never the question that produced them. Looking
+at a region and seeing no HTTP at all is accurate and tells you nothing.
+
+Wrap a stub's exports in `traced(module, fn, impl)` and the region reports what the islands actually
+asked for:
+
+    ✓ provenance  islands fetched: fetchClubCounters() ×4, fetchClubFeed(11) ×4  · 8 host call(s)
+
+`ambient` says which host modules an island IMPORTS; this says which it CALLED, with what arguments,
+and how often. Two things become visible that nothing else catches: an island that renders content
+while calling NOTHING (its data came from somewhere it never declared), and a module it imports but
+never reaches (a stale `ambient`, or a stub standing in for something unused).
+
+It is also the integration list. The calls recorded here are exactly what the real page has to answer,
+which is the closest thing motu has to confronting the lagoon with the page it targets.

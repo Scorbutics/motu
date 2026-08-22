@@ -27,6 +27,8 @@ export {
   resetTransport,
 } from './foreign-transport.js';
 export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport.js';
+export { traced, hostCalls, calledModules, resetHostCalls } from './provenance.js';
+export type { HostCall } from './provenance.js';
 export { checkCatalogue } from './catalogue.js';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue.js';
 export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';

@@ -37,11 +37,22 @@ export interface DebugOverlayOptions {
   shortcutCode?: string;
   /**
    * Mount the built-in toggle chip into the shared toolbar (default true). Pass FALSE when the host
-   * root has chrome of its own and wants to own the trigger — the lagoon puts it on its corner bay,
-   * so that the page-wide lens is not summoned from inside a popup that then closes. Drive it with
-   * `toggleDebugOverlay()` and mirror its state with `subscribeDebugOverlay()`.
+   * root has chrome of its own and wants to own the trigger. Drive it with `toggleDebugOverlay()` and
+   * mirror its state with `subscribeDebugOverlay()`.
    */
   chip?: boolean;
+  /**
+   * The lens' own trigger: a tab on the edge of its panel (default: on whenever `chip` is false, so a
+   * root that took the chip away is never left without a way in).
+   *
+   * It replaces the buoy the lagoon used to moor in its bay. A page-wide lens summoned from someone
+   * else's chrome put its trigger a layer away from the thing it opens; a tab rides ON the panel, so
+   * opening and closing happen in the same place — and when the panel is closed the tab is still
+   * there, at the screen edge, which is the only part of the lens that has to be discoverable.
+   *
+   * Pass FALSE if the host renders a trigger of its own and does not want a second one.
+   */
+  tab?: boolean;
 }
 
 const OPEN_KEY = 'motu:debug';
@@ -198,6 +209,37 @@ function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/** The lens' mark: a crosshair, which is what every inspector in every browser uses for "look here". */
+function crosshair(): SVGSVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.6');
+  svg.setAttribute('stroke-linecap', 'round');
+  const ring = document.createElementNS(NS, 'circle');
+  ring.setAttribute('cx', '8');
+  ring.setAttribute('cy', '8');
+  ring.setAttribute('r', '3.4');
+  svg.appendChild(ring);
+  for (const [x1, y1, x2, y2] of [
+    [8, 0.8, 8, 3],
+    [8, 13, 8, 15.2],
+    [0.8, 8, 3, 8],
+    [13, 8, 15.2, 8],
+  ]) {
+    const tick = document.createElementNS(NS, 'line');
+    tick.setAttribute('x1', String(x1));
+    tick.setAttribute('y1', String(y1));
+    tick.setAttribute('x2', String(x2));
+    tick.setAttribute('y2', String(y2));
+    svg.appendChild(tick);
+  }
+  return svg;
+}
+
 /**
  * The overlay wears the SAME visual language as the rest of the motu chrome (the lagoon's corner bay
  * and control panel): frosted light glass, teal water accents, Inter for prose and labels, 14px radii,
@@ -297,6 +339,37 @@ const STYLES = `
   box-shadow: 0 14px 40px rgba(11, 111, 104, .18);
   font-size: 12px;
 }
+/* The lens' trigger, as a TAB. Closed, it is the only part of the lens on screen: a small pull at the
+   edge the panel opens from. Open, it rides on the panel's inner edge, so what you click to close is
+   where what you clicked to open was. It cannot live INSIDE .panel (overflow:hidden would clip it),
+   so it is a sibling and the open loop keeps it glued to the panel — including through a drag. */
+.tab {
+  position: fixed;
+  top: var(--motu-debug-top, 56px);
+  z-index: 2147483000;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 26px; height: 54px;
+  padding: 0;
+  border: 1px solid var(--hair);
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  color: var(--ink-soft);
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(11, 111, 104, .16);
+  transition: background 180ms, color 180ms, border-color 180ms;
+}
+/* Rounded on the side that faces the page, square on the side that is flush — the shape of a pull. */
+.tab[data-side="right"] { right: 0; border-radius: 10px 0 0 10px; border-right: 0; }
+.tab[data-side="left"] { left: 0; border-radius: 0 10px 10px 0; border-left: 0; }
+.tab:hover { color: var(--ink); background: color-mix(in srgb, var(--_p) 12%, #fff); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* ON is unmistakable from across the screen: an open lens changes what the whole page renders, so
+   "is it live?" has to be answerable at a glance. */
+.tab[aria-pressed="true"] { background: var(--accent); color: var(--motu-on-primary, #fff); border-color: transparent; }
+.tab svg { width: 14px; height: 14px; display: block; }
 .panel__head {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 13px; border-bottom: 1px solid var(--hair);
@@ -436,6 +509,8 @@ class Overlay {
   #panel: HTMLElement | null = null;
   /** Null when the host root owns the trigger (`chip: false`). */
   #chip: HTMLButtonElement | null = null;
+  /** The lens' own trigger — a tab at the panel's edge. Null when the host asked for none. */
+  #tab: HTMLButtonElement | null = null;
   #boxes = new Map<MountedIslandInfo, { box: HTMLElement; tag: HTMLElement }>();
   #wires: SVGSVGElement;
   #open = false;
@@ -552,6 +627,27 @@ class Overlay {
       this.#chip = chip;
     }
 
+    // The lens' own trigger. Default: on whenever the toolbar chip is off, so a root that took the
+    // chip away (the lagoon does) is never left without a way in.
+    if (opts.tab ?? opts.chip === false) {
+      const tab = document.createElement('button');
+      tab.className = 'tab';
+      tab.type = 'button';
+      tab.title = 'motu seam lens (Cmd/Ctrl+Shift+G)';
+      tab.setAttribute('aria-label', 'Toggle the motu seam lens');
+      tab.setAttribute('aria-pressed', 'false');
+      tab.append(crosshair());
+      tab.addEventListener('click', () => this.toggle());
+      this.#root.append(tab);
+      this.#tab = tab;
+      // The host can move the panel's side under us (the lagoon does, whenever its bay is dragged to
+      // another corner) — and it says so by rewriting --motu-debug-left/right on <html>. Follow it,
+      // or a closed tab ends up at the edge the panel no longer opens from.
+      new MutationObserver(() => this.#syncTab()).observe(document.documentElement, {
+        attributeFilter: ['style'],
+      });
+    }
+
     // A window pinned to a corner will eventually be in the way of the thing it is describing, so it
     // is draggable — and a dragged window must survive the viewport shrinking under it. Bound once
     // per overlay, not per panel: the panel is destroyed and rebuilt on every open.
@@ -563,6 +659,47 @@ class Overlay {
 
   isOpen(): boolean {
     return this.#open;
+  }
+
+  /**
+   * Which screen edge the tab hugs while the lens is closed: the same one the panel opens from. The
+   * host says where that is with --motu-debug-left/right (the lagoon flips them when its bay moves),
+   * and the CSS default is the right, so an unset var means right.
+   */
+  #panelSide(): 'left' | 'right' {
+    const left = getComputedStyle(document.documentElement).getPropertyValue('--motu-debug-left').trim();
+    return left && left !== 'auto' ? 'left' : 'right';
+  }
+
+  #syncTab() {
+    const tab = this.#tab;
+    if (!tab) return;
+    tab.setAttribute('aria-pressed', String(this.#open));
+    tab.dataset.side = this.#panelSide();
+    // Closed: back to the edge, under the CSS defaults. Whatever the loop pinned is released here, so
+    // a panel that was dragged somewhere odd does not strand its tab there.
+    if (!this.#open) {
+      tab.style.removeProperty('left');
+      tab.style.removeProperty('top');
+      tab.style.removeProperty('right');
+    }
+  }
+
+  /**
+   * Glue the tab to the panel's INNER edge while the lens is open, from the panel's own rect. Done in
+   * the open loop rather than in CSS because the panel is draggable, minimizable and clamped on
+   * resize: reading the rect covers all three without a second copy of any of that bookkeeping.
+   */
+  #placeTab() {
+    const tab = this.#tab;
+    const panel = this.#panel;
+    if (!tab || !panel) return;
+    const r = panel.getBoundingClientRect();
+    const w = tab.offsetWidth || 26;
+    // Overlap by a pixel so it reads as attached to the panel rather than parked beside it.
+    tab.style.left = `${Math.round(this.#panelSide() === 'right' ? r.left - w + 1 : r.right - 1)}px`;
+    tab.style.right = 'auto';
+    tab.style.top = `${Math.round(r.top + 18)}px`;
   }
 
   #renderChip() {
@@ -579,6 +716,7 @@ class Overlay {
 
   #sync() {
     this.#renderChip();
+    this.#syncTab();
     this.#layer.style.display = this.#open ? '' : 'none';
     if (this.#open) {
       this.#rebuildBoxes();
@@ -644,6 +782,7 @@ class Overlay {
     if (!this.#open) return;
     this.#positionBoxes();
     this.#drawWires();
+    this.#placeTab();
     if (this.#panelDirty) {
       this.#panelDirty = false;
       this.#renderPanel();

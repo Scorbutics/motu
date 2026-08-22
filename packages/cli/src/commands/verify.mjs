@@ -1307,6 +1307,36 @@ async function responsiveCheck(report, tag, kebab, port) {
 
 
 /**
+ * WHERE THE REGION'S INPUT CAME FROM.
+ *
+ * The lagoon replaces host modules so completely that nothing shows a fetch happened — no request, no
+ * network row, and the lens shows only the keys that resulted. Looking at a region and seeing no HTTP
+ * at all is accurate and tells you nothing about whether an island asked for anything.
+ *
+ * A stub opts in by wrapping its exports in `traced`, and then this says what was called. Two things
+ * become visible that nothing else here can see: an island that renders content while calling NOTHING
+ * (its data came from somewhere it did not declare), and a module the island imports but never reaches
+ * (the `ambient` declaration is stale, or the stub stands in for something unused).
+ */
+function provenanceCheck(report, id, region, calls) {
+  if (!calls.length) {
+    report.skip(
+      'provenance',
+      'no traced host calls — wrap a stub export in `traced(module, fn, impl)` to see what the islands ' +
+        'actually fetched; without it the lagoon shows the result and never the question',
+    );
+    return;
+  }
+  const byFn = new Map();
+  for (const c of calls) {
+    const key = `${c.fn}(${(c.args ?? []).join(', ')})`;
+    byFn.set(key, (byFn.get(key) ?? 0) + 1);
+  }
+  const shown = [...byFn].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k));
+  report.ok('provenance', `islands fetched: ${shown.join(', ')}`, { n: calls.length, of: 'host call(s)' });
+}
+
+/**
  * A CATALOGUE region's declared members are the members the data actually produces.
  *
  * Static by design and it needs no browser: the two inputs are the app's captured payloads and the
@@ -1625,6 +1655,7 @@ async function regionFlowCheck(report, id, port, region) {
     reportMutants(report, run.flows ?? [], mutation);
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
+    provenanceCheck(report, id, region, run.provenance ?? []);
     sourcesLiveCheck(report, id, run.channels, region);
   } catch (err) {
     // A ReferenceError or a TypeError here is a BUG IN THIS FILE, not a region that could not be

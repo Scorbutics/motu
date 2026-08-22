@@ -15,14 +15,23 @@
 //
 // The water is not decoration — it IS the readout: MOCK is calm deep-teal lagoon, HTTP is the same
 // water lit brighter and flowing ~2x faster (live backend), and the whole bay floods amber while the
-// region wears the LEGACY fit.
+// region wears the LEGACY fit. The bay says it in words too, on the pill: `<region> · <state>`.
+//
+// The bay is a CAPSULE, and the water is its fill. It used to be the other way round — the wave crest
+// was the top edge, the inner end dissolved into a mask fade, one corner of four was rounded, and a
+// 26x3 white bar sat on it. Three edge treatments, no closed outline, and the loudest mark on it was
+// the shape of a slider thumb promising a slide that does not exist. Same water, inside a pill with a
+// definite edge; the chrome is one flex row on it; and the eight docks are untouched, because a pill
+// is symmetric and the rotation table still serves all of them.
 //
 // Implementation notes:
 //   * The bay hosts the shared @motu/core toolbar (setMotuToolbarHost) rather than duplicating the
 //     transport/fit controls — so those packages stay unchanged and keep owning their state.
-//   * The debug lens is the exception: its trigger is a BUOY moored in the bay, not a chip in the
-//     panel, because a page-wide lens should not be summoned from a popup that then closes. The lens
-//     itself is INJECTED (`opts.lens`), so this module never imports the dev-only overlay package.
+//   * The debug lens is the exception, and it now draws its OWN trigger: a tab on the edge of its
+//     panel, in @motu/debug-overlay. It was a buoy moored here, which put the trigger for a page-wide
+//     lens a layer away from the thing it opens (and 17px of it, on moving water). The lens is still
+//     INJECTED (`opts.lens`) so this module never imports the dev-only package — what the injection
+//     buys now is the palette entry.
 //   * The command palette builds its transport/fit/debug entries by READING those hosted chips and
 //     clicking them. Any control a future package mounts into the toolbar becomes searchable for
 //     free, with no registry to keep in sync.
@@ -53,8 +62,8 @@ export interface TideStation {
 /**
  * The debug seam lens, handed in rather than imported. @motu/debug-overlay is a dev-only package that
  * a production root must be able to shake out entirely, so the chrome takes the three calls it needs
- * and stays ignorant of what is behind them. A root that has no lens simply omits this, and the bay
- * shows no buoy.
+ * and stays ignorant of what is behind them. The lens draws its OWN trigger (a tab on its panel); what
+ * this buys the bay is the palette entry — the keyboard way in. Omit it and that entry is absent.
  */
 export interface TideLens {
   toggle(): void;
@@ -70,7 +79,7 @@ export interface TideLineOptions {
   about: string;
   onStation(id: string): void;
   onView(view: TideView): void;
-  /** Wire the bay's buoy to a debug lens. Omit it and no buoy is moored. */
+  /** Wire the palette's lens entry to a debug lens. Omit it and the palette has no lens command. */
   lens?: TideLens;
 }
 
@@ -380,103 +389,12 @@ const CSS = `
 #tide .filter:focus { border-color: var(--tide-accent); }
 #tide .empty { color: #a39a8a; font-size: 11.5px; padding: 6px 4px; }
 
-/* The debug lens' trigger: a buoy moored in the bay. It is a PEER of the water, not a control inside
-   the panel — a page-wide lens summoned from a popup that then closes is a strange loop, and it left
-   the seam lens one layer deeper than the thing it inspects.
-
-   A bare ring said nothing, so it carries a crosshair (the universal "inspect this" mark), it names
-   itself in a tooltip the moment you reach for it, and its ON state is unmistakable from across the
-   screen — filled, plus a slow sonar ping. That last part matters more than it looks: an active lens
-   changes what the whole page renders, so "is it on?" must be answerable at a glance. */
-#tide .buoy {
-  position: absolute;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, .7);
-  background: rgba(255, 255, 255, .14);
-  color: #fff;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: background 200ms, border-color 200ms, box-shadow 240ms, transform 200ms, color 200ms;
-}
-#tide .buoy svg { width: 11px; height: 11px; display: block; }
-#tide .patch:hover ~ .buoy,
-#tide .buoy:hover { border-color: #fff; background: rgba(255, 255, 255, .28); }
-#tide .buoy[aria-pressed="true"] {
-  background: #fff;
-  border-color: #fff;
-  color: var(--tide-accent);
-  box-shadow: 0 0 14px rgba(255, 255, 255, .85);
-}
-/* Sonar ping while the lens is live — the page is being watched. */
-#tide .buoy[aria-pressed="true"]::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, .8);
-  animation: buoy-ping 1900ms cubic-bezier(.2,.6,.35,1) infinite;
-}
-@keyframes buoy-ping {
-  0% { transform: scale(1); opacity: .85; }
-  70%, 100% { transform: scale(2.1); opacity: 0; }
-}
-/* Moored on the solid part of the bay, clear of the grip, and it turns with the water. */
-#tide[data-axis="h"] .buoy { left: 52%; transform: translateX(-50%); top: 50%; margin-top: -8px; }
-#tide[data-axis="h"][data-corner="tr"] .buoy,
-#tide[data-axis="h"][data-corner="br"] .buoy { left: 48%; }
-#tide[data-axis="v"] .buoy { top: 52%; transform: translateY(-50%); left: 50%; margin-left: -8px; }
-#tide[data-axis="v"][data-corner="bl"] .buoy,
-#tide[data-axis="v"][data-corner="br"] .buoy { top: 48%; }
-#tide[data-axis="h"] .patch:hover ~ .buoy,
-#tide[data-axis="h"] .buoy:hover { transform: translateX(-50%) scale(1.12); }
-#tide[data-axis="v"] .patch:hover ~ .buoy,
-#tide[data-axis="v"] .buoy:hover { transform: translateY(-50%) scale(1.12); }
-
-/* Names the buoy on approach. It lives OUTSIDE .patch (which clips its contents to the water) and is
-   anchored like the panel, so it stays on-screen in all eight docks. */
-#tide .tip {
-  position: absolute;
-  white-space: nowrap;
-  padding: 6px 10px;
-  border-radius: 9px;
-  background: rgba(250, 253, 252, .97);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: var(--tide-ink, #22302c);
-  box-shadow: 0 8px 22px rgba(11, 111, 104, .20);
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0;
-  transform: scale(.96);
-  pointer-events: none;
-  transition: opacity 150ms ease, transform 180ms cubic-bezier(.22,1.2,.36,1);
-}
-#tide .tip b { color: var(--tide-accent); font-weight: 700; }
-#tide .tip .key {
-  margin-left: 6px;
-  padding: 2px 5px;
-  border-radius: 5px;
-  background: rgba(11, 111, 104, .10);
-  color: #5c6b63;
-  font-size: 10px;
-  font-weight: 700;
-}
-#tide[data-tip="true"] .tip { opacity: 1; transform: none; }
-#tide[data-axis="h"][data-corner="tl"] .tip { top: calc(${PATCH_SHORT}px + 6px); left: 10px; }
-#tide[data-axis="h"][data-corner="tr"] .tip { top: calc(${PATCH_SHORT}px + 6px); right: 10px; }
-#tide[data-axis="h"][data-corner="bl"] .tip { bottom: calc(${PATCH_SHORT}px + 6px); left: 10px; }
-#tide[data-axis="h"][data-corner="br"] .tip { bottom: calc(${PATCH_SHORT}px + 6px); right: 10px; }
-#tide[data-axis="v"][data-corner="tl"] .tip { top: 10px; left: calc(${PATCH_SHORT}px + 6px); }
-#tide[data-axis="v"][data-corner="tr"] .tip { top: 10px; right: calc(${PATCH_SHORT}px + 6px); }
-#tide[data-axis="v"][data-corner="bl"] .tip { bottom: 10px; left: calc(${PATCH_SHORT}px + 6px); }
-#tide[data-axis="v"][data-corner="br"] .tip { bottom: 10px; right: calc(${PATCH_SHORT}px + 6px); }
+/* The debug lens' trigger is NOT here any more. It used to be a buoy moored in the bay: a 17px ring
+   floating on the water, under every touch-target minimum, competing with the foam stroke behind it,
+   and belonging to no row. It now lives on the lens itself, as a tab on the edge of its own panel
+   (@motu/debug-overlay) — so opening and closing happen in the same place, and the lens stops being
+   summoned from another element's body. What stays here is the palette command, which is the
+   keyboard way in. */
 
 /* A sheen sweeping the bay: what the water does when something actually changed. */
 #tide .sheen {
@@ -649,8 +567,7 @@ const CSS = `
 
 @media (prefers-reduced-motion: reduce) {
   /* The wave itself is a WAAPI animation and is skipped in JS (a CSS rule cannot reach it). */
-  #tide .bar, #tide .thumb, #tide .patch, #tide .rail, #tide .opt, #tide .buoy, #tide .tip { transition: none; }
-  #tide .buoy[aria-pressed="true"]::after { animation: none; }
+  #tide .bar, #tide .thumb, #tide .patch, #tide .rail, #tide .opt { transition: none; }
   #tide[data-open="true"] .opt { animation: none; }
   #tide-palette .box, #tide-palette li { animation: none; }
 }
@@ -918,7 +835,9 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   const dragHint = isTouch
     ? 'Drag the wave to any edge'
     : 'Drag the wave to any edge — it lies along the one you push it against';
-  bar.appendChild(el('span', { class: 'hint' }, opts.lens ? `${dragHint}. The ⌖ buoy toggles the seam lens.` : `${dragHint}.`));
+  bar.appendChild(
+    el('span', { class: 'hint' }, opts.lens ? `${dragHint}. The ⌖ tab on the right opens the seam lens.` : `${dragHint}.`),
+  );
 
   // ── the bay ────────────────────────────────────────────────────────────────────────────────
   const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -976,44 +895,11 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     svg.appendChild(path);
   }
 
-  const grip = el('span', { class: 'grip' });
+  // Six dots, not a bar. See the CSS: a bar here reads as a slider thumb and promises a slide.
+  const grip = el('span', { class: 'grip' }, ...Array.from({ length: 6 }, () => el('i')));
   const sheen = el('span', { class: 'sheen' });
-  // A crosshair, not a bare dot: it has to say "inspect" before anyone clicks it.
-  const crosshair = document.createElementNS(SVG_NS, 'svg');
-  crosshair.setAttribute('viewBox', '0 0 16 16');
-  crosshair.setAttribute('aria-hidden', 'true');
-  crosshair.setAttribute('fill', 'none');
-  crosshair.setAttribute('stroke', 'currentColor');
-  crosshair.setAttribute('stroke-width', '1.6');
-  crosshair.setAttribute('stroke-linecap', 'round');
-  const ring = document.createElementNS(SVG_NS, 'circle');
-  ring.setAttribute('cx', '8');
-  ring.setAttribute('cy', '8');
-  ring.setAttribute('r', '3.4');
-  crosshair.appendChild(ring);
-  for (const [x1, y1, x2, y2] of [
-    [8, 0.8, 8, 3],
-    [8, 13, 8, 15.2],
-    [0.8, 8, 3, 8],
-    [13, 8, 15.2, 8],
-  ]) {
-    const tick = document.createElementNS(SVG_NS, 'line');
-    tick.setAttribute('x1', String(x1));
-    tick.setAttribute('y1', String(y1));
-    tick.setAttribute('x2', String(x2));
-    tick.setAttribute('y2', String(y2));
-    crosshair.appendChild(tick);
-  }
-  const buoy = el(
-    'button',
-    {
-      class: 'buoy',
-      type: 'button',
-      'aria-label': 'Toggle the debug seam lens',
-      'aria-pressed': 'false',
-    },
-    crosshair,
-  ) as HTMLButtonElement;
+  // What the bay is reporting, in words rather than in hue alone. Kept in sync by renderLabel().
+  const label = el('span', { class: 'label' });
   const lens = opts.lens;
   const patch = el(
     'div',
@@ -1021,17 +907,14 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     svg,
     sheen,
     grip,
+    label,
   );
-  // Outside .patch, which clips to the water — a tooltip inside it would be cut off.
-  const tipKey = el('span', { class: 'key' }, isMac ? '⇧⌘G' : 'Ctrl ⇧ G');
-  const tip = el('span', { class: 'tip', role: 'tooltip' }, el('b', {}, 'Seam lens'), tipKey);
 
   const tide = el(
     'div',
     { id: 'tide', 'data-open': 'false', 'data-transport': opts.transport },
     bar,
     patch,
-    ...(lens ? [buoy, tip] : []),
   );
   tide.dataset.corner = readCorner();
   tide.dataset.axis = readAxis();
@@ -1044,32 +927,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   document.body.appendChild(targets);
 
   // The chips (transport / fit) come to the panel instead of floating over the content. Debug is not
-  // among them any more — it is the buoy, see below.
+  // among them: the lens carries its own tab on the edge of its panel.
   setMotuToolbarHost(slot);
-
-  // The buoy owns the debug lens. stopPropagation keeps the bay's own press/drag handling out of it,
-  // so a click here toggles the lens instead of opening the panel or starting a drag.
-  if (lens) {
-    buoy.addEventListener('pointerdown', (e) => e.stopPropagation());
-  // Reaching for the buoy is not reaching for the panel: cancel the bay's hover-dwell so toggling the
-  // lens doesn't also throw the control panel open over the page you are about to inspect.
-    buoy.addEventListener('pointerenter', () => {
-      window.clearTimeout(dwellTimer);
-      tide.dataset.tip = 'true';
-    });
-    buoy.addEventListener('pointerleave', () => delete tide.dataset.tip);
-    buoy.addEventListener('focus', () => (tide.dataset.tip = 'true'));
-    buoy.addEventListener('blur', () => delete tide.dataset.tip);
-    buoy.addEventListener('click', (e) => {
-      e.stopPropagation();
-      splash(e.clientX, e.clientY, accent());
-      lens.toggle();
-    });
-    // Mirror whatever flipped it — the buoy, the keyboard shortcut, or the lens' own close button.
-    const renderBuoy = (on: boolean) => buoy.setAttribute('aria-pressed', String(on));
-    renderBuoy(lens.isOpen());
-    lens.subscribe(renderBuoy);
-  }
 
   // Keep the lens' panel on the far side from the bay, so the two never sit on top of each other.
   // Custom properties cross the shadow boundary, which is how the overlay reads these.
@@ -1081,11 +940,21 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   };
   placeDebugPanel();
 
+  // The pill's readout. The water's tint has always carried this, but a hue has to be learned and a
+  // word does not — and with the mask gone there is a row to put it in. LEGACY wins over the
+  // transport because it is the louder fact about what you are looking at.
+  let stationLabel = '';
+  const renderLabel = () => {
+    const state = tide.dataset.fit === 'legacy' ? 'legacy' : opts.transport;
+    label.textContent = stationLabel ? `${stationLabel} · ${state}` : state;
+  };
+
   // Fit is flipped live by the toolbar chip, which only ever sets the attribute on the regions —
   // so read it from there rather than mirroring the toggle's state.
   const readFit = () => {
     const legacy = !!document.querySelector('motu-archipelago[fit="legacy"]');
     tide.dataset.fit = legacy ? 'legacy' : 'native';
+    renderLabel();
   };
   new MutationObserver(readFit).observe(document.body, { subtree: true, childList: true, attributeFilter: ['fit'] });
   readFit();
@@ -1124,11 +993,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     if (tide.dataset.open === 'true') open();
   });
   tide.addEventListener('pointerleave', () => close());
-  // Focus opens the panel for a keyboard user — except on the buoy, which is a self-contained toggle
-  // and has no business dragging the panel open with it.
-  tide.addEventListener('focusin', (e) => {
-    if (e.target !== buoy) open();
-  });
+  // Focus opens the panel for a keyboard user.
+  tide.addEventListener('focusin', () => open());
   tide.addEventListener('focusout', () => close(120));
   patch.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -1363,6 +1229,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
 
   let lastStation = '';
   function setActive(stationId: string, view: TideView): void {
+    stationLabel = rows.find((r) => r.station.id === stationId)?.station.label ?? '';
+    renderLabel();
     for (const { station, btn } of rows) {
       btn.setAttribute('aria-current', String(station.id === stationId));
     }

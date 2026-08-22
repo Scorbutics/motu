@@ -2023,7 +2023,19 @@ class Overlay {
     const moves = this.#moves.get(store) ?? new Map();
     const channelKeys = new Set(getChannels().filter((c) => c.store === store).flatMap((c) => [...c.keys]));
     const called = new Set(hostCalls().map((c) => c.module));
-    g.append(this.#subLabel(`declared sources \u00b7 page \u2192 region (${sources.length})`));
+    // THE NUMBER WORTH WATCHING is not how many sources a region has — the page owning its data is the
+    // design, not a debt — but how many of them RAN here. A source installed in the lagoon (as a
+    // channel over stubbed modules) means the preview exercised the app's own derivation; a seeded one
+    // means a human wrote the answer down and the derivation is untested until the ocean runs it.
+    const installed = sources.filter(([, src]) => {
+      const keys = [...(src.produces ?? [])];
+      return (src.module && called.has(src.module)) || keys.some((k) => channelKeys.has(k));
+    }).length;
+    g.append(
+      this.#subLabel(
+        `declared sources \u00b7 page \u2192 region (${sources.length} \u00b7 ${installed} installed, ${sources.length - installed} seeded)`,
+      ),
+    );
     for (const [name, source] of sources) {
       const keys = [...(source.produces ?? [])];
       const row = h('div', { class: 'ch' });

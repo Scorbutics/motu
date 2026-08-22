@@ -12,9 +12,12 @@ Read ONE page and decide what motu should be told about it. This is the reading 
 
 ## Workflow (in order)
 
-0. **Learn the project's shape** — `motu.config.json`: paths, `tagPrefix`, and above all `isolation`
-   (`light` = an island wraps the app's OWN component; never propose lifting it into `ui/`). Read the
-   existing archipelagos and `islands/` — a candidate may already exist, or belong to a region already.
+0. **Learn the project's shape** — `motu.config.json`: paths, `tagPrefix`, and above all `host`, which
+   answers whether a React component already exists. `next`/`vite`/`none` → the island WRAPS the app's
+   own component; never propose lifting it into `ui/`, a copy forks it. `angularjs` → there is nothing
+   to wrap, so one is authored under `ui/`. (`isolation` is NOT this discriminator — it is shadow vs
+   light DOM, and every reference project is `light`, the AngularJS one included.) Read the existing
+   archipelagos and `islands/` — a candidate may already exist, or belong to a region already.
 1. **Enumerate what the page RENDERS** top-down: every panel, banner, card, navigator, control row,
    empty and error state — with its file and its props. Follow every prop to its source.
 2. **Classify each region.** SHOWS content or ACTS ON the region → island (even if other islands sit

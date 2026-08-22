@@ -189,10 +189,20 @@ export async function createCommand(argv) {
     console.error(color.red(`✗ ${componentPath} already exists (use --force to overwrite)`));
     process.exit(1);
   }
-  if (from && !resolveModuleSpecifier(from, paths.islandDir(kebab))) {
+  // RESOLVE FROM WHERE THE ISLAND FILE WILL ACTUALLY SIT.
+  //
+  // This resolved against `islandDir(kebab)` — the FOLDER layout, `src/islands/<kebab>/` — while
+  // create always writes the FLAT one, `src/islands/<kebab>.island.ts`, one level up. So a relative
+  // `--from` was broken in both directions: the specifier that is correct for the emitted file
+  // (`../ui/x`) was rejected, and the one that satisfied this check (`../../ui/x`) was written
+  // verbatim into a file where it resolves one level too high — a broken import that passed the
+  // CLI's own validation. Only the alias form worked, because aliases resolve from the host root,
+  // which is why the React hosts never hit it.
+  const islandDir = paths.islandsDir;
+  if (from && !resolveModuleSpecifier(from, islandDir)) {
     console.error(
-      color.red(`✗ --from '${from}' does not resolve to a file from ${paths.rel(paths.islandDir(kebab))}`) +
-        color.dim('\n  Use the specifier the app itself uses (e.g. an alias like @/components/foo), or a relative path.'),
+      color.red(`✗ --from '${from}' does not resolve to a file from ${paths.rel(islandDir)}`) +
+        color.dim('\n  Use the specifier the app itself uses (e.g. an alias like @/components/foo), or a path relative to that directory.'),
     );
     process.exit(1);
   }
@@ -204,7 +214,7 @@ export async function createCommand(argv) {
   if (!from) writeFileSync(componentPath, componentSource(pascal, kebab));
   const islandFile = resolve(paths.islandsDir, `${kebab}.island.ts`);
   // The component's own source answers most of the contract; read it rather than asking for it again.
-  const contract = from ? readComponentContract(resolveModuleSpecifier(from, paths.islandDir(kebab)), exportName ?? pascal) : null;
+  const contract = from ? readComponentContract(resolveModuleSpecifier(from, islandDir), exportName ?? pascal) : null;
   writeFileSync(islandFile, elementSource(pascal, camel, tag, kebab, from, exportName, contract));
 
   // The registry is GENERATED from what is on disk, not edited: adding an island is a file operation,

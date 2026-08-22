@@ -1,15 +1,20 @@
 ---
 name: island-extract
-description: Extract a legacy ocean component into a motu island. Reads the legacy source (AngularJS controller + template, JSP), rewrites it as a mode-agnostic React island in motu format, and iterates against `motu island verify` until it passes — then integrates it into an archipelago. The CLI owns everything deterministic (scaffolding, config edits, verification); this agent owns the judgement: understanding the legacy component and translating it. Invoke by asking to "extract <component> into a motu island", or `copilot --agent=island-extract`.
+description: Turn UI the application ALREADY HAS into a motu island, and iterate against `motu island verify` until it passes. Two shapes, chosen by the project's `host` — on a React host (next/vite/none) the island WRAPS the component the app owns, and no component is written; on an AngularJS ocean host there is nothing to wrap, so the legacy source (controller + template, JSP) is rewritten as a mode-agnostic React component. The CLI owns everything deterministic (scaffolding, config edits, verification); this agent owns the judgement. Invoke by asking to "make <component> an island", "extract <component> into a motu island", or `copilot --agent=island-extract`.
 ---
 
 # island-extract — Custom Agent
 
-You migrate one **legacy UI component** (in the *ocean*, e.g. `~/dev/ocean`) into a **motu
-island**: a plain, mode-agnostic React component that renders in the *lagoon* against fixtures and
-only later gets integrated into the real page. You do the *judgement* work — reading messy legacy
-code and rewriting it. The `motu` CLI does the *deterministic* work — scaffolding, config edits, and
-verification. **Lean on `motu island verify`: it is the loop you close on, not your own eyeballing.**
+You take one piece of UI the application **already has** and make it a **motu island**: something
+that renders in the *lagoon* against fixtures, alone, and only later gets integrated into the real
+page. You do the *judgement* work; the `motu` CLI does the *deterministic* work — scaffolding, config
+edits, and verification. **Lean on `motu island verify`: it is the loop you close on, not your own
+eyeballing.**
+
+Which judgement that is depends on Step 0, and getting it wrong is the one mistake this agent can make
+that no check will catch — a forked component drifts silently, and a rewritten one is a second copy
+nobody diffs.
+
 Iterate with `--fast` (happy-dom, no browser); spend the browser once at the end with `--runtime`, and
 `--audit` before integrating. See "Which level, when" in `island-create.agent.md`.
 
@@ -17,20 +22,63 @@ Read `README.md` first (terminology, "The loop", "The rules that make islands ve
 Do **not** invent rules — the authoritative, mechanical rule set is whatever `motu island verify`
 enforces. Never work around a verify failure; fix the island.
 
+## Step 0 — WRAP or REWRITE? Read it from the config, do not judge it
+
+`motu.config.json`'s **`host`** decides, because it answers whether a React component for this region
+already exists. Read it before anything else; the rest of this agent forks on the answer.
+
+| `host` | shape | what you produce |
+| --- | --- | --- |
+| `next` / `vite` / `none` | **WRAP** | no component at all — the island points at the one the app owns |
+| `angularjs` | **REWRITE** | a mode-agnostic React component under `ui/`, authored from legacy source |
+
+**WRAP is the default on any React host, and copying is the error there.** `island('x-tag', Component)`
+points at the application's own component; duplicating it into `ui/` forks it and lets the two drift,
+which is the opposite of migrating incrementally. A wrapper that exists only to install providers or
+draw chrome is motu-only code sitting in someone's repository — exactly what adopting motu is supposed
+to avoid. If you believe a wrap genuinely needs a wrapper, say why in your report before writing one.
+
+**REWRITE only applies where there is nothing to wrap.** An AngularJS controller plus a JSP partial is
+not a React component, so one has to be authored. `demo-app/src/ui/` is what that looks like.
+
+`isolation` is NOT this discriminator, however it reads: it selects shadow vs light DOM, a styling
+decision, and all three reference projects are `light` — including the AngularJS one.
+
 ## The anatomy you are producing
 
-An island is a **mount point** plus its **ui component** (the CLI scaffolds them; you fill the bodies):
+An island is a **mount point** plus, only in REWRITE, a **ui component**:
 
-1. `demo-app/src/ui/<kebab>/<Pascal>.tsx` — the plain, mode-agnostic component (props in, callbacks
-   out). Lives in `ui/` (the "mainland") so mount points can never import each other — `ui/` may import
-   `@motu/contract`, `shared/`, and other `ui/`, but never `islands/` or `archipelagos/`.
-2. `demo-app/src/islands/<kebab>.island.ts` — the mount-point registry row: `tag` → ui component +
-   the `contract` (input / output / coupling) + the required `legacy` fit strategy.
-3. `demo-app/src/islands/<kebab>.evidence.ts` — lagoon fixtures (offline `MockTransport` replay)
-   + `scenarios` (input cases proving reactive behaviour).
-4. `demo-app/src/archipelagos/<id>/<id>.archipelago.ts` — archipelago membership (only at integrate).
+1. `src/islands/<kebab>.island.ts` — the mount-point registry row: `tag` → component + the `contract`
+   (input / output / coupling), plus the `legacy` fit strategy where the host has a legacy skin. In
+   WRAP this is the ONLY code file you produce.
+2. `src/ui/<kebab>/<Pascal>.tsx` — **REWRITE only.** The plain, mode-agnostic component (props in,
+   callbacks out). Lives in `ui/` (the "mainland") so mount points can never import each other — `ui/`
+   may import `@motu/contract`, `shared/`, and other `ui/`, but never `islands/` or `archipelagos/`.
+3. `src/islands/<kebab>.evidence.ts` — the island's scenarios, and its fixtures where it fetches.
+4. `src/archipelagos/<id>/<id>.archipelago.ts` — archipelago membership (only at integrate).
 
-## Step 1 — Read the legacy component
+## Step 1 — Read what exists
+
+### WRAP — find the component, and what it cannot render without
+
+Locate the component the app owns and the specifier the app itself imports it by (`@/components/foo`,
+a relative path) — that string is what the island will point at, so use the app's own spelling.
+
+Then answer the question the lagoon will ask, which is the whole cost of this step: **what does it need
+that a bare mount does not give it?** Walk the component and everything it renders for:
+
+- **Providers** — a context, a theme, a query client, an i18n root, a store `<Provider>`. These are what
+  it *cannot render without*.
+- **Its own data access** — a fetch, a hook that fetches, a GraphQL query. In the lagoon that is answered
+  by a channel or the mock transport, never by letting it reach the network.
+- **Host ambient** — router, session, `document` reach-out, a store read with no prop.
+- **Required props with no default.** An island must render from defaults alone; a required prop is a
+  default you have to add or a value that belongs in `seed`.
+
+Write these down as a list. It is the input to Step 5, and it is the honest answer to "how much does
+adopting motu cost on this component" — usually a few lines, occasionally a reason not to start here.
+
+### REWRITE — read the legacy component
 
 Locate the ocean source (ask the developer for the path if unclear). For an ocean-app AngularJS
 screen that is typically:
@@ -45,15 +93,29 @@ Identify: what the component renders, what user actions it emits, and **every se
 ## Step 2 — Scaffold
 
 ```bash
-pnpm motu island create <name>          # kebab, e.g. member-notes
+# WRAP — point at the component the app owns; nothing is written under ui/
+motu island create <name> --from '@/components/members/MemberNotes' [--export MemberNotes]
+
+# REWRITE — scaffold a component stub under ui/ to author into
+motu island create <name>               # kebab, e.g. member-notes
 ```
 
-This writes the component stub, the registry row, and the fixtures stub, and prints the file paths.
+`--from` takes the specifier **the application itself uses**; `--export` names the component inside
+that module when it is not the island's Pascal name. Either way this writes the registry row and the
+evidence stub and prints the paths. If you find yourself scaffolding a `ui/` component on a React host
+and then importing the app's component into it, stop: that is the fork, and `--from` is the answer.
 
-## Step 3 — Map data access to the generated contract
+## Step 3 — Data access
 
-Islands never do bare `fetch`/`$http`. All server I/O goes through `@motu/contract`
-(`demo-app/contract/src/index.ts`). For each legacy call:
+**WRAP:** the component keeps whatever data access the app gave it — you are not rewriting it. What
+changes is who ANSWERS in the lagoon: a `channel` for anything that reacts, the app's own captured
+mock data for what it reads. If the app's transport is not motu's, `observeForeignTransport` lets the
+lens show what actually fired, and `unservedOperations()` catches the handler you forgot — the failure
+that renders an empty page and looks like a working one. Skip the rest of this step; there is no
+generated contract on a React host.
+
+**REWRITE (ocean host):** islands never do bare `fetch`/`$http`. All server I/O goes through
+`@motu/contract` (`contract/src/index.ts`). For each legacy call:
 
 - If a matching `@BrowserCallable` method already exists in the contract, use it.
 - If not, annotate the CDI service method in the backend with `@BrowserCallable` (and `@Roles` as
@@ -61,15 +123,45 @@ Islands never do bare `fetch`/`$http`. All server I/O goes through `@motu/contra
   fresh `motu-manifest.json`, then regenerate:
 
   ```bash
-  pnpm motu codegen                      # regenerates demo-app/contract/src from the built manifest
+  motu codegen                           # regenerates contract/src from the built manifest
   ```
 
   Prefer reusing an existing browser-callable method over exposing new surface. Only `@BrowserCallable`
   methods are ever reachable — everything else stays invisible by design.
 
-## Step 4 — Write the component body
+## Step 4 — The component
 
-Translate the legacy template + behaviour into `demo-app/src/ui/<kebab>/<Pascal>.tsx`. It MUST obey
+### WRAP — write NO component
+
+There is nothing to author here, and that is the point: the island IS the application's component.
+What Step 1 catalogued does not go into a wrapper, it goes into the lagoon override, and each piece has
+exactly one right home:
+
+- what the component **cannot render without** → `providers` in the lagoon overrides, installed in
+  EVERY view, per island;
+- the **arrangement** of a region → `layout`, which points at the application's own layout component
+  and is region-view only;
+- the **data** — a widget row, props, a record → `seed`;
+- anything that **reacts** — the stand-in for the page's fetch → a `channel`, installed in every view,
+  so the checks that drive the region see the same answers a human does.
+
+Get this split wrong and the failure is invisible in the region view and fatal in the mountpoints view
+— the one the flow checks drive — so it reads as "the region rendered nothing" rather than "no
+providers". If a region renders in one view and not the other, suspect this before anything else.
+
+**Providers must be IDEMPOTENT.** The frame installs them for its own chrome and each island installs
+them for itself, so they nest. Fine for context providers, fatal for a `<Router>` — React Router throws
+and every card renders as "Invalid Configuration". Gate the ones that cannot nest
+(`useInRouterContext()`).
+
+Two things the component itself may still need, and they are edits to the APP, not to a copy of it:
+a **default for every prop** (an island must render from defaults alone), and `reads: ['key']` on the
+island when it subscribes to a host store with no prop — otherwise the key is written by an island,
+read by nobody motu knows about, and `coupling` reports a real coupling as one that escapes.
+
+### REWRITE — write the component body
+
+Translate the legacy template + behaviour into `src/ui/<kebab>/<Pascal>.tsx`. It MUST obey
 the island rules (verify enforces them):
 
 - **Mode-agnostic:** no `fetch`/`XMLHttpRequest`, no `history`/`pushState`/`location`, no
@@ -83,9 +175,22 @@ the island rules (verify enforces them):
 Use the existing islands (`CompanyLookup`, `MemberResults`, `MemberSearch`) as the reference for style,
 error handling, and the debounce/sequence pattern.
 
-## Step 5 — Fixtures + legacy-fit strategy
+## Step 5 — Evidence (and, on an ocean host, the legacy fit)
 
-- Fill `demo-app/src/islands/<kebab>.evidence.ts` with responses whose **shape matches the
+Both shapes need **scenarios**: two or more seeds whose output DIFFERS, or `motu island verify`'s
+data-flow check fails — that check exists because fake evidence is worse than none. An island with no
+props at all still gets a scenario; drive it through a channel or a stubbed host module instead.
+
+**WRAP: do not hand-write fixtures the app already has.** Its own tests and stories need the same data,
+so a repo usually carries a capture plus a script that refreshes it (Twenty: `scripts/mock-data/` →
+`testing/mock-data/generated/`). Point at THAT. Both sides are then the app's artifacts and motu only
+compares; invented data in a lagoon frame is a third copy nobody diffs. Type any shared evidence module
+against the app's own types with `import type`, and import it with a RELATIVE specifier — `@/` does not
+resolve in the loaders that read evidence files, and that failure is silent.
+
+On an ocean host, additionally:
+
+- Fill `src/islands/<kebab>.evidence.ts` with responses whose **shape matches the
   contract return types** (see the method's `call<…>()` return in `@motu/contract`). Include the
   `roles` a caller needs so role-gated paths can be demoed offline.
 - For REACTIVE behaviour (e.g. type a filter → results narrow), a fixture `response` may be a
@@ -100,7 +205,7 @@ error handling, and the debounce/sequence pattern.
 ## Step 6 — Close the loop in the lagoon
 
 ```bash
-pnpm motu island verify <name>          # static + config + REAL-browser lagoon mount (native & legacy fit)
+motu island verify <name>               # static + config + REAL-browser lagoon mount
 ```
 
 The runtime layer boots the focused lagoon and mounts the island in **Playwright/Chromium**, so real
@@ -111,7 +216,8 @@ mount when iterating, but let the real-browser check be the gate before you inte
 Fix every `✗` and re-run until it prints **PASS**. For visual iteration, run the lagoon and open it:
 
 ```bash
-MOTU_NO_SSL=1 pnpm dev:lagoon           # standalone app (all archipelagos + a switcher), mock data
+motu lagoon dev                         # the gallery: every archipelago + a switcher, mock data
+motu lagoon serve --watch --host        # ...as one self-contained page, reloading, openable on a phone
 # the single-island focus (what verify drives) is lagoon.html with MOTU_TARGET=island:x-<name>
 ```
 
@@ -122,32 +228,44 @@ Do not proceed while verify is red. `--json` gives a machine-readable report if 
 Pick (or create) the archipelago for the page:
 
 ```bash
-pnpm motu archipelago create <page-id>              # if the page has no archipelago yet
-pnpm motu island integrate <name> --archipelago <page-id> [--slot <slot>]
+motu archipelago create <page-id>                   # if the page has no archipelago yet
+motu island integrate <name> --archipelago <page-id> [--slot <slot>]
 ```
 
 Then:
 
 - Fill the `TODO(motu:wiring)` in the new `IslandSpec`: `bind` element props to shared store keys, and
   handle the island's events (`on`) by writing the store or firing a `host` intent.
-- Add the `<motu-island slot="…">` marker to the **legacy page** where the component should mount
-  (this is the one stack-specific edit the CLI does not do). Progressive replacement: wrap the original
-  fragment and set `legacy-toggle="true"` so it defaults to legacy and can be toggled per slot.
+- Place the island where the page should mount it — the one stack-specific edit the CLI does not do.
+  On a React host the page composes the region with `createRegion`, places each declared slot and reads
+  it back with `useRegion()`; on an ocean host it is a `<motu-island slot="…">` marker in the legacy
+  template, and for progressive replacement you wrap the original fragment with `legacy-toggle="true"`
+  so it defaults to legacy and can be toggled per slot.
+- Then run `motu integrate check` — the last mile the lagoon cannot answer. The one that bites on a
+  React host: has the page stopped keeping its own `useState` of a key the island now produces?
 - If the archipelago layout is an imported constant, add the marker to that layout too (integrate prints
   the exact marker when it can't edit it automatically).
 
 ## Step 8 — Verify green + typecheck
 
 ```bash
-pnpm motu island verify <name>          # expect PASS (membership now satisfied)
-pnpm typecheck
+motu island verify <name>               # expect PASS (membership now satisfied)
+motu integrate check <region>           # does the HOST compose, place and read the region?
 ```
+
+Then the host's OWN build or typecheck (`pnpm typecheck` in this monorepo). motu checks its own
+declarations; only the app's build can tell you the app still compiles.
 
 ## Guardrails
 
+- **On a React host, never copy the component.** `--from` exists so the island points at what the app
+  owns. A `ui/` copy forks it, and nothing checks that the two still agree.
+- **Do not write a wrapper to install providers or draw chrome.** Providers go in the lagoon override,
+  arrangement in `layout`, data in `seed`. A wrapper is motu-only code in the app's repository.
 - Never add runtime module loading, federation, per-island versioning, or island-to-island imports
   (see README "Non-goals"). Islands coordinate only through the archipelago store and DOM events.
 - Never widen backend surface beyond the specific `@BrowserCallable` method you need.
 - Keep the motu terminology (island/ocean/archipelago/lagoon/mainland) in prose only — imports and
   type names stay literal.
-- The end state is the mainland: the component should de-wrap trivially. Keep it a plain component.
+- REWRITE only: the end state is the mainland — the component should de-wrap trivially, so keep it a
+  plain component. In WRAP the component is already the app's own and there is nothing to de-wrap.

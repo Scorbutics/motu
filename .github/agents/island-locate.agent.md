@@ -22,11 +22,17 @@ the host's `CLAUDE.md` motu rules block. Do not invent rules: the mechanical rul
 
 - `islands` / `ui` / `archipelagos` / `shared` / `contract` — the paths you will name in the report.
 - `tagPrefix` — the tag namespace (`x-` → `x-week-actions`).
-- `isolation` — **this changes the recommendation you make.** `light` means an island file wraps the
-  application's OWN component (`island('x-week-actions', WeekActionsView)`) and the component stays
-  where it lives; anything else means a mode-agnostic component under `ui/`. Never propose lifting a
-  component into `ui/` in a `light` project — the point there is that the island cannot drift from
-  what the app already ships.
+- `host` — **this changes the recommendation you make**, because it answers whether a React component
+  for this region ALREADY EXISTS:
+  - `next` / `vite` / `none` → the app owns its components. The island WRAPS one
+    (`island('x-week-actions', WeekActionsView)`) and it stays where it lives. Never propose lifting it
+    into `ui/`: a copy forks it, and the two drift — which is the opposite of migrating incrementally.
+  - `angularjs` → there is no React component to wrap, so one has to be authored under `ui/` (the
+    mainland). That is the reference ocean's shape, and `demo-app/src/ui/` is what it looks like.
+- `isolation` is NOT this discriminator, however it reads. It selects shadow vs light DOM — a styling
+  decision — and all three reference projects are `light`, including the AngularJS one. Branching on
+  it told an agent surveying `demo-app` never to lift a component into `ui/`, in the project whose
+  every island is exactly that.
 - `hostRoot` — the app the page belongs to.
 
 Then read what already exists: the archipelago registry, the sibling regions (they are the style guide
@@ -122,7 +128,7 @@ The deliverable. Keep it in this order; keep the evidence attached.
 ```
 ## Page: <route> (<file>)
 Archipelago: <id> — NEW | EXISTS | none needed (+ one sentence: genuinely coupled, or a mix?)
-Isolation: light (wrap the app's own components) | ui/ components
+Host: next|vite|none (wrap the app's own components) | angularjs (author them under ui/)
 
 ### Region keys
 | key | owner (island `writes` / host-fed) | readers | seeded by the page? | evidence |
@@ -154,7 +160,8 @@ candidates and does not say where to start has not finished the job.
   naming the event that fires it. An undeclared coupling is a bug; an invented one is worse.
 - Do not propose islands for arrangement to inflate the count. A page whose honest answer is "one
   island and a layout" gets that answer.
-- Respect `isolation`: in a `light` project the recommendation is to WRAP, not to copy.
+- Respect `host`: on a React host (`next`/`vite`/`none`) the recommendation is to WRAP the component
+  the app owns, not to copy it into `ui/`. Only `angularjs` has nothing to wrap.
 - Never widen backend surface, add island-to-island imports, or invent rules `motu check` does not
   enforce (README "Non-goals").
 - The report is a proposal. A human picks the order and the scope; hand it to them, and only then to

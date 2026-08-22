@@ -49,6 +49,7 @@ const USAGE = `${color.bold('motu')} — island / archipelago CLI
 ${color.bold('Usage:')}
   motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
+  motu island create <name> --from <specifier>      ...over a component the app ALREADY owns (React hosts)
   motu check                                        every island + every region + removal, one verdict
   motu island verify <name|--all>                   the island rules (static; --runtime adds the browser)
   motu island snapshot <name|--all> [--update]      visual baselines, per scenario × viewport
@@ -117,6 +118,13 @@ ${color.bold('lagoon publish flags:')}
   --token <secret>     the host's upload token (or $MOTU_HOST_TOKEN)
   --json          machine-readable report
   ${color.dim('no target => every archipelago, with the switcher. Always mock-backed: an artifact has no backend.')}
+
+${color.bold('island create flags:')}
+  --from <specifier>   wrap a component the application already owns instead of scaffolding one under
+                       ui/ — the React-host case, where copying it would fork it. Use the specifier
+                       the app itself uses (an alias like @/components/foo, or a relative path).
+  --export <name>      the component's name INSIDE that module, when it is not the island's Pascal name
+  --force              overwrite an existing scaffolded component
 
 ${color.bold('lagoon group flags:')}
   --all                compose EVERY repository the host knows, at its switcher entry

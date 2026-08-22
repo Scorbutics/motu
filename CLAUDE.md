@@ -85,13 +85,14 @@ UI work goes through motu (islands, archipelagos, the lagoon):
  - `docs/plan-key-ownership.md` in the motu repo is the design record for ownership, eject and the
    verify checks; read it before changing how a region declares anything.
  - SHOW YOUR WORK on the shared lagoon host, don't stand up another server. `motu lagoon publish
-   --remote` (no argument — the URL and token are in `~/.config/motu/host.json`) uploads the
+   --remote` (no argument — the URL and token live in `~/.config/motu/host.json`) uploads the
    self-contained page and prints two URLs: `latest`, which follows every publish, and an immutable
    one keyed by the commit. That is how a human looks at what you built without your process staying
-   alive. The rule is ONE long-running host plus occasional spawns: `motu lagoon dev` / `lagoon serve
-   --watch` while you iterate, killed when you stop. A second permanent preview server is the thing
-   the host replaces. Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted —
-   the publish output warns about them, and the warning is a finding.
+   alive. `motu lagoon group <name> --all` composes every published project into one gallery. The rule
+   is ONE long-running host plus occasional spawns: `motu lagoon dev` / `lagoon serve --watch` while
+   you iterate, killed when you stop. A second permanent preview server is what the host replaces.
+   Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted — the publish output
+   warns about them, and the warning is a finding.
 
 ## A UI that lives in the database, not the repository
 
@@ -322,4 +323,37 @@ a run without them says so (`– audit  responsive + a11y not run`) rather than 
 
 `--audit` implies `--runtime`: asking whether a UI is usable at every viewport only means something
 against something that rendered.
+
+## Placed is not the same as rendered
+
+`integrate check` reads the host's SOURCE: it can see `<X.Island slot="y">` and cannot see whether the
+branch containing it ever runs. A slot inside `{isOpen && …}`, a ternary or a `.map()` callback now
+reports as conditionally placed — a WARNING, because a drawer or a permission gate is often exactly
+right, and what is not right is not knowing. peps' actions page places eight islands inside
+`{weeksLoaded ? (availableWeeks.length > 0 …)}`, which is the same branch that hid a crash on the empty
+list for months.
+
+The lagoon renders every declared slot unconditionally, so it cannot catch this either. Between the two
+of them: the lagoon proves the island works, `integrate check` proves the page names it, and NOTHING
+proves the page reaches it. That gap is the honest boundary of static integration checking — closing it
+needs the page rendered, which is the host's own test runner, not motu's.
+
+## Where an island's input came from
+
+The lagoon replaces a host module so completely that nothing shows a fetch happened: no request, no
+network row, and the lens shows the KEYS that resulted, never the question that produced them. Looking
+at a region and seeing no HTTP at all is accurate and tells you nothing.
+
+Wrap a stub's exports in `traced(module, fn, impl)` and the region reports what the islands actually
+asked for:
+
+    ✓ provenance  islands fetched: fetchClubCounters() ×4, fetchClubFeed(11) ×4  · 8 host call(s)
+
+`ambient` says which host modules an island IMPORTS; this says which it CALLED, with what arguments,
+and how often. Two things become visible that nothing else catches: an island that renders content
+while calling NOTHING (its data came from somewhere it never declared), and a module it imports but
+never reaches (a stale `ambient`, or a stub standing in for something unused).
+
+It is also the integration list. The calls recorded here are exactly what the real page has to answer,
+which is the closest thing motu has to confronting the lagoon with the page it targets.
 <!-- /motu:rules -->

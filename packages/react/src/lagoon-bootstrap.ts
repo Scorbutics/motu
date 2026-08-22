@@ -131,7 +131,9 @@ function regionIdFor(target: LagoonTarget, opts: LagoonBootstrapOptions): string
   const owners = Object.entries(opts.archipelagos ?? {}).filter(([, cfg]) =>
     cfg.islands?.some((i) => i.element === target.tag),
   );
-  return owners.length === 1 ? owners[0][0] : undefined;
+  // Guarded by the length check above; `noUncheckedIndexedAccess` cannot see that, and adopting
+  // projects type-check this source.
+  return owners.length === 1 ? owners[0]![0] : undefined;
 }
 
 /**

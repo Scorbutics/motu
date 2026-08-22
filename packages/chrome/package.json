@@ -5,9 +5,13 @@
   "type": "module",
   "main": "src/index.mjs",
   "exports": {
-    ".": "./src/index.mjs",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    },
     "./tokens": "./src/tokens.mjs",
     "./css": "./src/css.mjs",
     "./html": "./src/html.mjs"
-  }
+  },
+  "types": "src/index.d.ts"
 }

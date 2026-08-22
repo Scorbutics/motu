@@ -1285,11 +1285,11 @@ function inputCoverageCheck(report, scenarios) {
   const gaps = [];
   for (const [prop, values] of seen) {
     if (values.every((v) => Array.isArray(v)) && !values.some((v) => v.length === 0)) {
-      gaps.push(`${prop} is never empty`);
+      gaps.push(`${prop} is never seeded empty`);
       continue;
     }
     if (values.every((v) => typeof v === 'boolean') && new Set(values).size === 1) {
-      gaps.push(`${prop} is always ${values[0]}`);
+      gaps.push(`${prop} is only ever seeded ${values[0]}`);
     }
   }
   if (!gaps.length) {
@@ -1301,7 +1301,7 @@ function inputCoverageCheck(report, scenarios) {
   }
   report.warn(
     'input-coverage',
-    `${gaps.length}/${seen.size} seeded input(s) are only ever shown one way: ${gaps.join(', ')} — the state ` +
+    `${gaps.length}/${seen.size} seeded input(s) are only ever seeded one way: ${gaps.join(', ')} — the state ` +
       `nothing renders is the one that breaks. Add a scenario for it, and cross it with the other inputs ` +
       `rather than varying one at a time`,
   );

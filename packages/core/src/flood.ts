@@ -107,5 +107,8 @@ export function floodFrames(f: Flood, dir: 'in' | 'out'): Keyframe[] {
     { maskPosition: empty, WebkitMaskPosition: empty },
     { maskPosition: full, WebkitMaskPosition: full },
   ];
-  return dir === 'in' ? frames : [frames[1], frames[0]];
+  // Indexed by construction — the array is built two lines up — but `noUncheckedIndexedAccess` cannot
+  // see that, and it is the flag `strict-boundaries` asks every adopting project to turn on. The
+  // framework failing its own recommendation was found by a greenfield project that took the advice.
+  return dir === 'in' ? frames : [frames[1]!, frames[0]!];
 }

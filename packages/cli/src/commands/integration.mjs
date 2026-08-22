@@ -13,6 +13,7 @@
 // a separate lane.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
+import { sep } from 'node:path';
 import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
@@ -33,6 +34,8 @@ function archConst(id) {
  */
 function hostSources() {
   const files = new Map();
+  // The directories motu writes into. Everything else under the host root is the application's.
+  const motuOwned = [paths.islandsDir, paths.archipelagosDir, paths.uiRoot, paths.lagoonDir].filter(Boolean);
   const walk = (dir) => {
     let entries;
     try {
@@ -42,7 +45,12 @@ function hostSources() {
     }
     for (const e of entries) {
       const full = resolve(dir, e.name);
-      if (full.startsWith(APP_ROOT)) continue;
+      // EXCLUDE MOTU'S OWN FILES, not the whole app. `APP_ROOT` is the motu app root, and when motu
+      // owns the repository (`"app": "."`, the natural greenfield shape) it EQUALS the host root — so
+      // this skipped every file, scanned nothing, and reported "no createRegion in the host" about a
+      // host it had never opened. Excluding the directories motu actually owns keeps the check
+      // meaningful in both layouts.
+      if (motuOwned.some((d) => full === d || full.startsWith(d + sep))) continue;
       if (e.isDirectory()) {
         if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
         walk(full);
@@ -402,6 +410,18 @@ export function integrationResults(only) {
   const regions = readRegions(paths.archipelagosDir).filter((r) => !only || r.id === only);
   if (!regions.length) return [];
   const sources = hostSources();
+  // A CHECK THAT LOOKED AT NOTHING HAS NOT PASSED — and, worse here, has not FAILED either. With no
+  // host files in view every region reports "the application never composes it", which reads as a
+  // finding about the app rather than about the scan. Say which it is.
+  if (sources.size === 0) {
+    console.log(color.bold('\nmotu integrate check\n'));
+    console.log(
+      `  ${color.yellow('!')} ${color.dim('host-sources'.padEnd(12))} scanned 0 files under ${paths.rel(HOST_ROOT)} ` +
+        `(app, components, lib, src, pages) — nothing was examined, so nothing is proved about the host. ` +
+        `Set \`hostSources\` in motu.config.json if the application lives elsewhere.`,
+    );
+    process.exit(2);
+  }
   return regions.map((r) => checkRegion(r, sources));
 }
 

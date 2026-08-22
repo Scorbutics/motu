@@ -690,8 +690,9 @@ function fuzzy(text: string, q: string): number[] | null {
 /** Score a match: earlier + tighter wins, so "mem" puts Members above "Org Lookup · Mountpoints". */
 function score(hits: number[]): number {
   if (!hits.length) return 0;
-  const spread = hits[hits.length - 1] - hits[0];
-  return -(hits[0] * 3 + spread);
+  // Non-empty: the guard above returns for an empty list.
+  const spread = hits[hits.length - 1]! - hits[0]!;
+  return -(hits[0]! * 3 + spread);
 }
 
 /**
@@ -871,7 +872,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     ['0', 'var(--w-deep)'],
     ['0.6', 'var(--w-mid)'],
     ['1', 'var(--w-shallow)'],
-  ]) {
+  ] as const) {
     const stop = document.createElementNS(SVG_NS, 'stop');
     stop.setAttribute('offset', offset);
     stop.setAttribute('stop-color', color);

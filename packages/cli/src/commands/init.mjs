@@ -111,7 +111,11 @@ function hostGlobalCssImport(lagoonDir, hostRoot) {
   return '';
 }
 
-const HOSTS = new Set(['angularjs', 'next', 'none']);
+// 'vite' was supported everywhere EXCEPT here: the adapter exists (packages/adapters/vite/vite.mjs),
+// `hostContribution` resolves it, `loadMotuConfig` accepts it, and Twenty runs on it — but the one
+// command that starts a project rejected it, so the only way onto a vite host was to hand-write
+// motu.config.json. Found on the first greenfield init after adoption stopped needing a checkout path.
+const HOSTS = new Set(['angularjs', 'next', 'none', 'vite']);
 
 /** Hosts with a legacy skin an island must be proven to survive (mirrors lib/config.mjs). */
 const LEGACY_FIT_HOSTS = new Set(['angularjs']);
@@ -220,6 +224,8 @@ export async function initCommand(argv) {
       ? `  "dependencies": {\n    "@motu/core": "${motuDep}",\n    "@motu/react": "${motuDep}",` +
         `\n    "@motu/runtime": "${motuDep}"${adapterDepFor(motuDep, host)}\n  },\n`
       : '';
+  // 'vite' contributes at BUILD time (packages/adapters/vite/vite.mjs), not as a runtime package,
+  // so it needs no adapter dependency — the same as 'none'.
   const adapterPkg = host === 'angularjs' ? '@motu/adapter-angularjs' : host === 'next' ? '@motu/adapter-next' : '';
   const adapterDep = adapterPkg ? `,\n    "${adapterPkg}": "${motuDep}"` : '';
   function adapterDepFor(dep, h) {

@@ -202,10 +202,16 @@ export function startLagoon(opts: StartLagoonOptions): void {
       elements: opts.elements,
       css: opts.css,
       defaultTheme: config.defaultTheme ?? 'motu',
-      archipelagos: stations.map(({ id }) => ({
-        config: opts.archipelagos[id],
-        options: { host, seed: overrides.seed?.[id], channels: overrides.channels?.[id] },
-      })),
+      // `stations` is derived from `opts.archipelagos`, so every id resolves — but
+      // `noUncheckedIndexedAccess` cannot see that, and adopting projects type-check this source.
+      // Filtered rather than asserted: an id that somehow had no config would render an empty
+      // station, and dropping it is the honest answer.
+      archipelagos: stations.flatMap(({ id }) => {
+        const config = opts.archipelagos[id];
+        return config
+          ? [{ config, options: { host, seed: overrides.seed?.[id], channels: overrides.channels?.[id] } }]
+          : [];
+      }),
     });
   }
 
@@ -237,7 +243,7 @@ export function startLagoon(opts: StartLagoonOptions): void {
     if (react) {
       // Same path the host application and `motu island verify` use, so the surface a human judges
       // here is the one that ships and the one that was verified.
-      mountReactLagoon(root, opts.archipelagos[id], {
+      mountReactLagoon(root, opts.archipelagos[id]!, {
         elements: opts.elements,
         host,
         seed: overrides.seed?.[id],

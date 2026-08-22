@@ -190,6 +190,8 @@ function lagoonUrl(server, target, view) {
   if (view) q.set('view', view);
   if (server.fit) q.set('fit', server.fit);
   if (server.forceError) q.set('forceError', String(server.forceError));
+  // Verify mounts an island on its OWN defaults; the region's seed is for a human looking at the page.
+  if (String(target ?? '').startsWith('island:')) q.set('seed', 'off');
   return `http://localhost:${server.port}/lagoon.html?${q}`;
 }
 

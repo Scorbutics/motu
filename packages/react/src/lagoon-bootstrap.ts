@@ -197,8 +197,21 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElemen
   // An explicit `seed` still wins; otherwise take the region's own, so the focused entry and the
   // gallery are fed from one source.
   const regionId = regionIdFor(target, opts);
+  // AN ISLAND CHECK MUST NOT BORROW THE REGION'S SEED.
+  //
+  // A single-island mount was given `overrides.seed[regionId]` so it would "render meaningfully" in
+  // the lagoon — reasonable for a human looking at it, and fatal for `default-props`, whose whole
+  // claim is that the island renders from DEFAULTS alone. peps' week navigator crashed on an empty
+  // week list and the browser reported nothing, because the region seed handed it a populated one;
+  // the same island under happy-dom, which seeds nothing, threw immediately. The check was passing on
+  // data it invented for the preview.
+  //
+  // `?seed=off` is set by `motu island verify`. A human opening the lagoon still gets the seeded view.
+  const seedOff =
+    typeof location !== 'undefined' && new URLSearchParams(location.search).get('seed') === 'off';
+  const regionSeed = seedOff && target.kind === 'island' ? undefined : regionId ? opts.overrides?.seed?.[regionId] : undefined;
   const seed = translateRegionSeed(
-    opts.seed ?? (regionId ? opts.overrides?.seed?.[regionId] : undefined),
+    opts.seed ?? regionSeed,
     target,
     regionId,
     opts,

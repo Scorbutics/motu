@@ -139,6 +139,9 @@ export function noInstallAliases(paths) {
   const motu = (p) => resolve(paths.motuRoot, p);
   const pkg = paths.appPackage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return [
+    // Plain ESM, no TypeScript: @motu/core imports the palette from here, and so does the lagoon
+    // HOST, which runs under bare node. One package both can read is the point of it.
+    { find: /^@motu\/chrome$/, replacement: motu('packages/chrome/src/index.mjs') },
     { find: /^@motu\/core$/, replacement: motu('packages/core/src/index.ts') },
     { find: /^@motu\/react$/, replacement: motu('packages/react/src/index.ts') },
     { find: /^@motu\/react\/define$/, replacement: motu('packages/react/src/defineReactElement.ts') },

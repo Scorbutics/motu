@@ -161,6 +161,8 @@ importers:
         specifier: '>=18'
         version: 18.3.1
 
+  packages/chrome: {}
+
   packages/cli:
     dependencies:
       '@motu/adapter-angularjs':
@@ -212,7 +214,11 @@ importers:
 
   packages/codegen: {}
 
-  packages/core: {}
+  packages/core:
+    dependencies:
+      '@motu/chrome':
+        specifier: workspace:*
+        version: link:../chrome
 
   packages/debug-overlay:
     dependencies:
@@ -222,6 +228,12 @@ importers:
       '@motu/runtime':
         specifier: workspace:*
         version: link:../runtime
+
+  packages/host:
+    dependencies:
+      '@motu/chrome':
+        specifier: workspace:*
+        version: link:../chrome
 
   packages/react:
     dependencies:

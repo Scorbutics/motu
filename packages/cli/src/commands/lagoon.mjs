@@ -22,6 +22,7 @@ import { networkInterfaces } from 'node:os';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
+import { gitIdentity, uploadLagoon, loadHostConfig } from '../lib/remote.mjs';
 
 /** The framework's own lagoon build runner — replaces the vite.config.ts each project used to carry. */
 const LAGOON_BUILD = fileURLToPath(new URL('../lagoon-build.mjs', import.meta.url));
@@ -143,7 +144,7 @@ function publishFile(slug) {
   return resolve(REPO_ROOT, '.motu/publish', `lagoon-${slug}.html`);
 }
 
-export function lagoonPublishCommand(argv) {
+export async function lagoonPublishCommand(argv) {
   const json = !!argv.json;
   let resolved;
   try {
@@ -152,7 +153,10 @@ export function lagoonPublishCommand(argv) {
     console.error(color.red(`✗ ${err.message}`));
     process.exit(1);
   }
-  const { entry, target, slug, title } = resolved;
+  const { entry, target, slug } = resolved;
+  // The derived title says WHAT was built ('Motu Lagoon'); in a composed view listing several repos'
+  // switcher entries it says nothing, so a project can name its own.
+  const title = typeof argv.title === 'string' ? argv.title.slice(0, 200) : resolved.title;
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
 
   if (!json) console.log(color.dim(`building ${target || 'all archipelagos'} (mock fixtures, one chunk)…`));
@@ -164,16 +168,79 @@ export function lagoonPublishCommand(argv) {
   writeFileSync(out, page, 'utf8');
 
   const bytes = statSync(out).size;
+
+  // BEFORE the --json early return, not after: `--json --remote` is the agent's spelling of this
+  // command, and returning the local report there would print `ok: true` for an upload that never
+  // happened. uploadPublished owns the json shape for its own leg.
+  const hostCfg = loadHostConfig();
+  const remote = argv.remote === true ? process.env.MOTU_HOST_URL || hostCfg.url : argv.remote;
+  if (remote) return uploadPublished({ remote, token: typeof argv.token === 'string' ? argv.token : null, page, slug, title, out, bytes, json });
+
   if (json) {
     console.log(JSON.stringify({ ok: true, file: out, title, target: target || null, fit: fit || null, bytes }, null, 2));
     return 0;
   }
+
   console.log('');
   console.log(`${color.green('✓')} ${color.bold(title)} — ${(bytes / 1024).toFixed(0)} kB, self-contained`);
   console.log('  ' + color.dim(paths.rel(out)));
   console.log('');
   console.log('  Publish it with the Artifact tool, same file path every time to keep one URL:');
   console.log('  ' + color.dim(`Artifact({ file_path: "${out}", favicon: "🏝️", description: "…" })`));
+  if (!process.env.MOTU_HOST_URL)
+    console.log('  ' + color.dim('Or host it yourself: motu lagoon publish --remote <url>  (see motu-host)'));
+  return 0;
+}
+
+/**
+ * Send the file that was just written to a lagoon host.
+ *
+ * Deliberately AFTER the local write, never instead of it: `--remote` adds a destination, it does not
+ * replace the artifact. If the host is down, or the token is wrong, the page is still on disk and
+ * still publishable as an Artifact — a network failure must not cost you the build.
+ */
+async function uploadPublished({ remote, token: flagToken, page, slug, title, out, bytes, json }) {
+  const url = remote === true ? null : String(remote);
+  if (!url || !/^https?:\/\//.test(url)) {
+    console.error(color.red('✗ --remote needs a host URL — pass one, set MOTU_HOST_URL, or put {"url","token"} in ~/.config/motu/host.json'));
+    process.exit(1);
+  }
+  const id = gitIdentity(REPO_ROOT);
+  if (!id.repo) {
+    console.error(color.red('✗ could not derive a repo name from the git remote or the directory name'));
+    process.exit(1);
+  }
+  const token = flagToken || process.env.MOTU_HOST_TOKEN || loadHostConfig().token || null;
+
+  let res;
+  try {
+    res = await uploadLagoon({ url, token, repo: id.repo, slug, title, sha: id.sha, branch: id.branch, body: page, });
+  } catch (err) {
+    if (json) {
+      console.log(JSON.stringify({ ok: false, file: out, bytes, error: err.message }, null, 2));
+      return 1;
+    }
+    console.error(color.red(`✗ ${err.message}`));
+    console.error(color.dim(`  the page is still on disk: ${paths.rel(out)}`));
+    return 1;
+  }
+
+  const latest = `${res.base}${res.urls.latest}`;
+  const immutable = `${res.base}${res.urls.immutable}`;
+  if (json) {
+    console.log(JSON.stringify({ ok: true, file: out, bytes, repo: id.repo, slug, deduped: !!res.deduped, urls: { latest, immutable, ...(res.urls.branch ? { branch: `${res.base}${res.urls.branch}` } : {}) } }, null, 2));
+    return 0;
+  }
+  console.log('');
+  console.log(`${color.green('✓')} ${color.bold(title)} — ${(bytes / 1024).toFixed(0)} kB` +
+    color.dim(` (${(res.sentBytes / 1024).toFixed(0)} kB gzipped)${res.deduped ? ' · unchanged, deduped' : ''}`));
+  console.log(`  ${latest}   ${color.dim('(the bookmark — always current)')}`);
+  console.log(`  ${immutable}   ${color.dim('(this build, forever)')}`);
+  if (id.dirty) console.log(color.yellow('  working tree is dirty — the immutable URL is keyed by content, not by HEAD'));
+  // The host sees what only a host can: paths that resolve against the ORIGIN. They work in
+  // `lagoon dev` (vite serves them) and 404 once published, so this is the first place they surface.
+  for (const w of res.warnings ?? []) console.log(color.yellow(`  ${w}`));
+  console.log('  ' + color.dim(paths.rel(out)));
   return 0;
 }
 

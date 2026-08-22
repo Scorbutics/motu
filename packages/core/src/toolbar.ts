@@ -12,6 +12,8 @@
 // no corner collision to dodge, and the controls live with the rest of the root's controls. Chips
 // already mounted are moved, so the call is order-independent w.r.t. the mount* functions.
 
+import { MOTU_CHROME as CHROME } from '@motu/chrome';
+
 const TOOLBAR_ID = 'motu-toolbar';
 const STYLE_ID = 'motu-toolbar-css';
 
@@ -96,32 +98,19 @@ export function motuToolbar(): HTMLElement {
   return bar;
 }
 
-/** Base styling shared by the toolbar's compact chip controls (rounded pill, dark). */
 /**
- * motu's chrome palette — one place, so the tooling cannot drift into a second brand colour.
+ * motu's chrome palette — now defined in `@motu/chrome`, and re-exported here so every existing
+ * `import { MOTU_CHROME } from '@motu/core'` keeps working.
+ *
+ * It moved because "one place, so the tooling cannot drift into a second brand colour" was only true
+ * for what a bundler compiles. The lagoon HOST renders pages from bare node, could not import this
+ * file, and grew its own dark-slate palette — the second brand this comment forbids. `@motu/chrome`
+ * is plain ESM with no dependencies, so Vite and node can both read it.
  *
  * The primary IS the lagoon's own water (see the tide line): motu's UI and the lagoon it frames are
- * the same surface, and a chip in a different hue reads as belonging to something else. The transport
- * chip used to be indigo for exactly that reason — a colour picked to distinguish two states, which
- * ended up competing with the water behind it.
- *
- * The other two are semantic, not decorative. `caution` is the "you are not in the calm default" state
- * — a live backend answering with your real session, or an island wearing the legacy fit. `idle` is an
- * inert chip. Colours that carry MEANING inside the seam lens (external origin, broken binding) are
- * the overlay's own and deliberately not here.
+ * the same surface, and a chip in a different hue reads as belonging to something else.
  */
-export const MOTU_CHROME = {
-  /** Every "on" and calm-default state. */
-  primary: 'var(--motu-primary, #0f766e)',
-  /** The primary, deeper — text on a tinted primary ground. */
-  primaryDeep: 'var(--motu-primary-deep, #0b5b55)',
-  /** Text ON a primary ground. A bright host primary needs dark text, not white. */
-  onPrimary: 'var(--motu-on-primary, #fff)',
-  /** Proceed with care: real backend, or the legacy footprint. Not an error. */
-  caution: 'var(--motu-caution, #b45309)',
-  /** Off. */
-  idle: 'var(--motu-idle, #1e293b)',
-} as const;
+export { MOTU_CHROME } from '@motu/chrome';
 
 export interface MotuChromeTheme {
   /** Any CSS colour, including a reference to the host's own token: `hsl(var(--primary))`. */
@@ -166,7 +155,7 @@ export const MOTU_TOOLBAR_CHIP_CSS = [
   'border:0',
   'border-radius:9999px',
   'cursor:pointer',
-  'color:' + MOTU_CHROME.onPrimary,
+  'color:' + CHROME.onPrimary,
   'font:inherit',
   'box-shadow:0 4px 14px rgba(15,23,42,.28)',
 ].join(';');

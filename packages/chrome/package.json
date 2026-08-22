@@ -1,0 +1,13 @@
+{
+  "name": "@motu/chrome",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./tokens": "./src/tokens.mjs",
+    "./css": "./src/css.mjs",
+    "./html": "./src/html.mjs"
+  }
+}

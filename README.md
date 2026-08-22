@@ -175,6 +175,16 @@ an island's siblings read and write — is the most likely place for coupling to
 
 ## The chrome palette
 
+> Where it lives: `packages/chrome` (`@motu/chrome`) — tokens, the stylesheet built from them, and the
+> few server-rendered shapes. It was carved out of `@motu/core/toolbar.ts`, whose own comment claimed
+> the palette was in "one place, so the tooling cannot drift into a second brand colour". That was
+> true for everything a bundler compiles and false for everything else: the lagoon host renders pages
+> from bare node, could not import a single token, and grew its own dark-slate palette — the second
+> brand the comment forbids. Plain ESM with no dependencies is the only form Vite and node both read,
+> so the tokens moved down to where both can reach them. `@motu/core` re-exports `MOTU_CHROME`, so
+> every existing import is unchanged.
+
+
 motu's tooling is themed by CSS tokens (`MOTU_CHROME` in `@motu/core`), and the teal default is only a
 default. Inside a lagoon it is usually the wrong colour: the page below belongs to a real application
 with its own primary, and tooling in an unrelated hue reads as something that wandered in. So a project
@@ -238,6 +248,12 @@ packages/                 # the framework (published @motu/* packages)
   codegen/       manifest.json -> TypeScript contract CLI.
   cli/           `motu` CLI: island create / verify (the loop) / integrate, archipelago create/verify,
                  fixtures record, codegen.
+  chrome/        motu's OWN design language — tokens, the stylesheet built from them, and the few
+                 server-rendered shapes. Plain ESM, no dependencies, so Vite (which compiles core)
+                 and bare node (which serves the host) can both read it. Anything painting motu's
+                 chrome reads from here; a second palette anywhere is the bug it prevents.
+  host/          `motu-host`: the lagoon host. Content-addressed store, two-axis URLs, retention,
+                 and the composed multi-repo view. No browser, no bundler.
   debug-overlay/ dev-only seam lens (outlines, input/output/coupling panel, record button).
 demo-app/               # the app (proven against a real ocean app) — copy-pasteable into the ocean repo
   src/ui/<kebab>/         Mode-agnostic components (the "mainland"). May import contract/shared/other ui.
@@ -662,6 +678,133 @@ There is no `defineNextElement` and no bridge root, by design.
 - **Turbopack** — see above; the Next host builds with `--webpack` only.
 - The lagoon cannot reproduce host CSS collisions or auth expiry; an integration test alongside it
   is still necessary.
+
+## Hosting lagoons (`motu-host`)
+
+`motu lagoon publish` writes one self-contained page; `motu lagoon serve` puts it on a port, and an
+ssh tunnel puts that port on the internet for as long as your laptop is awake. A **lagoon host** is
+that URL, without the laptop:
+
+```bash
+motu-host --token $(openssl rand -hex 24)          # serve on 127.0.0.1:8818
+motu lagoon publish --archipelago members \
+  --remote http://localhost:8818 --token …          # build, write the file, AND upload it
+```
+
+```
+✓ Members Lagoon — 490 kB (164 kB gzipped)
+  http://…/acme/web/latest/archipelago-members       (the bookmark — always current)
+  http://…/acme/web/65d1ee2a9f3f/archipelago-members (this build, forever)
+```
+
+`--remote` **adds a destination**; it does not replace the artifact. The same bytes are written to
+`.motu/publish/` first, so a host that is down or a token that is wrong costs you nothing — the page
+is still on disk and still publishable as an Artifact. There is one build, so local and hosted cannot
+drift.
+
+### Two axes, because a link has two jobs
+
+| URL | Meaning | Cached |
+| --- | --- | --- |
+| `/<repo>/latest/<slug>` | the bookmark — follows every publish | `no-store` |
+| `/<repo>/<branch>/<slug>` | the PR link | `no-store` |
+| `/<repo>/<commit>/<slug>` | this build, immutable | one year |
+
+Objects are content-addressed, so republishing an unchanged lagoon stores nothing new (`deduped`).
+A commit URL from a **dirty tree** would be a lie — it would name a commit that does not contain what
+you are looking at — so the CLI withholds the sha and the host falls back to the content hash, which
+is always true.
+
+### One host, and every agent already knows where it is
+
+The point of a long-running host is that nobody has to be told where it is. Put the URL and token in
+`~/.config/motu/host.json` (0600) and `--remote` needs no argument at all:
+
+```jsonc
+{ "url": "http://127.0.0.1:8818", "token": "…" }
+```
+
+```bash
+motu lagoon publish --remote          # any project, any agent, same host
+```
+
+Precedence is flag → `$MOTU_HOST_URL` / `$MOTU_HOST_TOKEN` → that file. So a fleet of agents working
+across several repositories all publish into one place without being configured, and a one-off
+publish elsewhere is still a flag away.
+
+That is the shape to keep: **one long-running host, plus occasional spawns.** `motu lagoon dev` and
+`motu lagoon serve --watch` are the spawns — a dev loop with HMR, alive for as long as you are looking
+at it. A second *permanent* preview server is what the host replaces.
+
+### Retention that cannot break a link
+
+Two caps, whichever binds first: `--max-records` publish records **per repository** (default 1000)
+and `--max-bytes` per repository (default 4 GB). The second exists because records are not a proxy
+for size — a typical lagoon is ~430 kB, but Twenty's record page inlines its whole front-end and
+publishes at **19.2 MB**, so a thousand of those is 19 GB from a cap that reads as conservative.
+
+Eviction never touches a record a mutable alias points at, or one a composed manifest names, and it
+orders by **last access** rather than publish date: a six-week-old lagoon somebody bookmarked
+outranks ten builds from this morning. Blobs are collected only once nothing references them, and
+two records sharing content are charged once.
+
+### A lagoon across several repositories
+
+Declare a group; the host resolves each member's `latest` **at view time** and snapshots the resolved
+hashes into an immutable manifest, so `/g/<name>` always means today while the manifest it redirects
+to keeps rendering what today looked like. Identical resolution yields an identical manifest id, so
+viewing a stable group repeatedly adds nothing to the store.
+
+```bash
+motu lagoon group product --all              # every repo the host knows, at its switcher entry
+motu lagoon group product --add acme/admin:archipelago-billing --remove old/thing
+motu lagoon groups                           # what galleries exist, and their URLs
+# /g/product  →  302  /m/<manifest>/
+```
+
+`--all` is the one that answers "put every project in the gallery": the host already knows which
+repositories have published, so the composition does not have to be maintained by hand. `--add` and
+`--remove` EDIT an existing group rather than redefining it; the slug defaults to `all` (the switcher
+entry, which is the whole project), and a bare `--remove acme/web` drops every slug of that repo.
+Members are comma-separated in one flag, not a repeated flag — the CLI's argv parser overwrites
+repeats, so `--add a --add b` would silently keep only `b`.
+
+A member that has published nothing is stored but reported: the group counts the lagoons the view
+actually has, and names the ones missing from it.
+
+**Each member renders in its own iframe**, and that is a decision rather than a shortcut. Merging
+pre-built archipelagos from different repositories into one document would put two Reacts in one page
+(the lagoon dedupes onto the host app's copy precisely because that breaks hooks), collide two
+light-DOM Tailwind layers *silently and visually*, and reintroduce the version skew that
+[one artifact, one deploy, one version](#one-artifact-one-deploy-one-version) refuses. A frame gives
+each archipelago its own React, stylesheet and document for free — and the intermediate representation
+it needs is the page `publish` already emits, so there is no second build stage and no packager that
+has to understand anyone's bundle. Frames are created on first selection and then kept, so a composed
+lagoon does not load N × 430 kB up front and does not throw away the state you drove a region into.
+
+The line this must not cross: **the composed lagoon is a viewing surface.** It is never a deploy
+target and never what `motu island verify` drives — verify keeps driving `lagoon.html` directly, one
+document, no frames.
+
+### What the host is not
+
+- **It runs no browser.** Playwright stays on the publishing machine, where it already is. Snapshot
+  diffs and `--runtime` findings are produced locally; the host stores pages.
+- **Uploads are authenticated, reads are not.** A URL is *unlisted*, not access-controlled. The lagoon
+  has no backend and no session — but its fixtures were recorded from somewhere, so this posture is
+  right for one person and wrong for a team. Accounts are what gate opening it to external teams.
+- **It has no live reload.** `serve --watch` injects a reload client; `publish` deliberately does not,
+  because a published artifact that dials home is a lie about what the artifact is.
+
+### What it can tell you that nothing else can
+
+An upload is REFUSED when the fragment still references `/assets/` — that build's inlining did not
+happen, and the page would render blank here exactly as under an artifact CSP. Anything else absolute
+is a **warning**, printed by the CLI and returned in the JSON: Twenty's lagoon references
+`/images/placeholders/*.png`, decorative art the bundler never inlines because it is an `<img src>`
+rather than a CSS asset. Those resolve against the origin — they work under `lagoon dev`, because Vite
+serves them, and 404 the moment the page is hosted. Hosting is the first place that difference is
+visible, so the host says it rather than letting the page quietly lose its art.
 
 ## Install (one command)
 

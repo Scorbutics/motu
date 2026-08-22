@@ -21,6 +21,7 @@ import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mj
 import { removalCheckCommand } from './commands/removal-check.mjs';
 import { contractCheckCommand } from './commands/contract.mjs';
 import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand } from './commands/lagoon.mjs';
+import { lagoonGroupCommand, lagoonGroupsCommand } from './commands/lagoon-group.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
 import { color } from './lib/util.mjs';
@@ -63,8 +64,11 @@ ${color.bold('Usage:')}
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
   motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
+  motu lagoon publish --remote <url>                ...and upload it to a lagoon host (see motu-host)
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
   motu lagoon serve --watch --host                  ...and keep it current: rebuild on save, reload viewers
+  motu lagoon group <name> --all                    compose every published project into one gallery
+  motu lagoon groups                                the galleries this host serves
   motu contract check [--update]                    the app's boundary + coupling graph, as one artifact
   motu removal-check [--force]                      prove motu is removable from the host app (C2)
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
@@ -108,8 +112,18 @@ ${color.bold('lagoon publish flags:')}
   --archipelago <id>   publish one archipelago instead of an island
   --fit <native|legacy>  legacy-fit strategy for a single-island target
   --out <path>         write somewhere other than .motu/publish/ (keep it stable to keep one URL)
+  --title <text>       name this lagoon in the host's listing (default: derived from the target)
+  --remote [url]       also upload it to a lagoon host (or $MOTU_HOST_URL) and print the URLs
+  --token <secret>     the host's upload token (or $MOTU_HOST_TOKEN)
   --json          machine-readable report
   ${color.dim('no target => every archipelago, with the switcher. Always mock-backed: an artifact has no backend.')}
+
+${color.bold('lagoon group flags:')}
+  --all                compose EVERY repository the host knows, at its switcher entry
+  --add <repo>[:<slug>][,…]     add members (slug defaults to 'all', the switcher)
+  --remove <repo>[:<slug>][,…]  remove members (no slug removes every slug of that repo)
+  --remote <url>       the host (default: $MOTU_HOST_URL, then ~/.config/motu/host.json)
+  --json          machine-readable report
 
 ${color.bold('integrate flags:')}
   --archipelago <id>   (required) target archipelago id
@@ -194,6 +208,9 @@ async function main() {
   }
 
   if (group === 'lagoon') {
+    // `group` takes a NAME positional, so re-parse with `rest` shifted (same shape as skills install).
+    if (sub === 'group') return lagoonGroupCommand(parse(rest));
+    if (sub === 'groups') return lagoonGroupsCommand(argv);
     if (sub === 'dev') return lagoonDevCommand(argv);
     if (sub === 'eject') return lagoonEjectCommand(argv);
     if (sub === 'publish') return lagoonPublishCommand(argv);

@@ -7,7 +7,8 @@
 #   ./install.sh --no-path       # skills only (don't touch the shell rc)
 #
 # What it does:
-#   1. links <motu>/packages/cli/src/cli.mjs into a bin dir (default ~/.local/bin) as `motu`,
+#   1. links <motu>/packages/cli/src/cli.mjs into a bin dir (default ~/.local/bin) as `motu`
+#      (and packages/host/src/cli.mjs as `motu-host`, the lagoon host),
 #   2. makes sure that bin dir is on PATH by adding ONE guarded block to your shell rc
 #      (~/.zshrc, ~/.bashrc, fish config, or ~/.profile — detected from $SHELL),
 #   3. runs `motu skills install <target>` so the island-create / island-extract skills land in the
@@ -55,6 +56,13 @@ mkdir -p "$BIN_DIR"
 chmod +x "$MOTU_ROOT/packages/cli/src/cli.mjs"
 ln -sf "$MOTU_ROOT/packages/cli/src/cli.mjs" "$BIN_DIR/motu"
 echo "✓ motu -> $BIN_DIR/motu"
+# The lagoon host is its own binary on purpose: every `motu` subcommand resolves ONE project's
+# motu.config.json at import time, and the host serves many repositories and belongs to none.
+if [ -f "$MOTU_ROOT/packages/host/src/cli.mjs" ]; then
+  chmod +x "$MOTU_ROOT/packages/host/src/cli.mjs"
+  ln -sf "$MOTU_ROOT/packages/host/src/cli.mjs" "$BIN_DIR/motu-host"
+  echo "✓ motu-host -> $BIN_DIR/motu-host"
+fi
 
 # --- 3. put the bin dir on PATH, once ---------------------------------------------------------
 if [ "$DO_PATH" -eq 1 ]; then

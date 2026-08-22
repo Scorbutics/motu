@@ -111,6 +111,11 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     if (path === '/api/health') return json(res, 200, { ok: true, ...store.stats() });
     // The two read APIs the CLI needs to build a gallery without scraping the HTML index.
     if (path === '/api/repos') return json(res, 200, { repos: store.listRepos() });
+    if (path === '/api/baselines') {
+      const repo = normalizeRepo(url.searchParams.get('repo'));
+      if (!repo) return json(res, 400, { error: 'repo is required' });
+      return json(res, 200, { repo, shots: store.listShots(repo, url.searchParams.get('island') || null) });
+    }
     if (path === '/api/groups') return json(res, 200, { groups: store.listGroups() });
 
     if (req.method === 'POST') {
@@ -119,6 +124,8 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (!tokenMatches(auth, token)) return json(res, 401, { error: 'bad or missing token' });
       if (path === '/api/publish') return void (await publish(req, res, url));
       if (path === '/api/group') return void (await group(req, res, url));
+      if (path === '/api/baseline') return void (await baseline(req, res, url));
+      if (path === '/api/baseline/accept') return void (await acceptBaseline(req, res, url));
       return json(res, 404, { error: `no route for POST ${path}` });
     }
 
@@ -130,6 +137,13 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     }
 
     const segments = path.split('/').filter(Boolean).map(decodeURIComponent);
+
+    // The bytes of one shot, by content hash — immutable, so cache it for a year.
+    if (segments[0] === 'shot' && segments[1]) {
+      const bytes = store.readHash(segments[1]);
+      if (!bytes) return html(res, 404, errorPage(404, 'no such shot'), NO_STORE);
+      return send(res, 200, 'image/png', bytes, IMMUTABLE);
+    }
 
     // --- composed views ---------------------------------------------------------------------
     if (segments[0] === 'g') {
@@ -244,6 +258,54 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         ...(branch ? { branch: `/${repo}/${branch}/${slug}` } : {}),
       },
     });
+  }
+
+  /**
+   * Record one rendered shot. Does NOT move the baseline — storing and accepting are separate acts,
+   * which is the whole point: `--update` overwriting everything is why a stale baseline and a real
+   * regression look identical today.
+   */
+  async function baseline(req, res, url) {
+    const repo = normalizeRepo(url.searchParams.get('repo'));
+    const island = normalizeSegment(url.searchParams.get('island'));
+    // `<scenario>@<viewport>` — one extra character over a plain segment, and it keeps the shot's
+    // identity readable in every listing and URL.
+    const shot = url.searchParams.get('shot');
+    if (!repo || !island) return json(res, 400, { error: 'repo and island are required' });
+    if (!shot || !/^[A-Za-z0-9][A-Za-z0-9._@-]{0,128}$/.test(shot))
+      return json(res, 400, { error: 'shot must look like <scenario>@<viewport>' });
+
+    let body;
+    try {
+      body = await readBody(req, 8 * 1024 * 1024, 16 * 1024 * 1024);
+    } catch (e) {
+      return json(res, e.status ?? 400, { error: e.message });
+    }
+    // A PNG or nothing: this endpoint stores images, and a helpful error beats a stored HTML page.
+    if (body.length < 8 || body.readUInt32BE(0) !== 0x89504e47)
+      return json(res, 415, { error: 'body must be a PNG' });
+
+    const out = store.putShot(repo, island, shot, body, {
+      sha: normalizeSegment(url.searchParams.get('sha') || '') || null,
+      branch: normalizeSegment(url.searchParams.get('branch') || '') || null,
+    });
+    return json(res, 200, { ok: true, repo, island, shot, ...out, url: `/shot/${out.hash}` });
+  }
+
+  /** Move the accepted pointer — the deliberate act that makes a later diff mean something. */
+  async function acceptBaseline(req, res, url) {
+    const repo = normalizeRepo(url.searchParams.get('repo'));
+    const island = normalizeSegment(url.searchParams.get('island'));
+    if (!repo) return json(res, 400, { error: 'repo is required' });
+    const shots = store.listShots(repo, island);
+    const wanted = url.searchParams.get('shot');
+    const targets = shots.filter((s) => (!wanted || s.shot === wanted) && s.status !== 'match' && s.last);
+    const accepted = [];
+    for (const t of targets) {
+      const r = store.acceptShot(repo, t.island, t.shot);
+      if (r) accepted.push(`${t.island}/${t.shot}`);
+    }
+    return json(res, 200, { ok: true, repo, accepted, count: accepted.length });
   }
 
   async function group(req, res, url) {

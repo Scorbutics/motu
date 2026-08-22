@@ -794,6 +794,38 @@ The line this must not cross: **the composed lagoon is a viewing surface.** It i
 target and never what `motu island verify` drives — verify keeps driving `lagoon.html` directly, one
 document, no frames.
 
+### Visual baselines, off the repository
+
+`motu island snapshot` compares against PNGs committed beside the evidence. That is what makes a
+visual tier unmaintainable at size: re-recording is a binary diff nobody reviews, so baselines drift,
+the check goes permanently red, and people stop generating them — measured on peps, which has
+baselines for 2 of 20 islands and stale ones on the island that has them.
+
+The host stores them instead:
+
+```bash
+motu island snapshot --all --remote      # render locally, compare against the ACCEPTED baseline
+motu island snapshot --accept <island>   # move the accepted pointer, deliberately
+```
+
+Three properties, and each one is the answer to a specific failure:
+
+- **Content-addressed.** A shot that does not change costs zero new bytes, forever. Storage grows with
+  CHANGE, not with island count — a thousand runs over a hundred unchanged islands add nothing. That
+  removes the reason not to baseline every island.
+- **Accepting is a decision, not a file write.** `--update` overwriting everything is why "the baseline
+  is stale" and "you broke something" are the same red today. An accepted pointer somebody moved
+  separates them: a later diff means *changed since a human looked*.
+- **Nothing in git.** No PNG churn, no binary review, and `*.snapshots` can be ignored.
+
+**No CI is required.** Rendering already happens on the machine running `motu island snapshot`; the
+host is a user service on that same machine. CI would only add automatic runs on push, and this is a
+punctual gate an agent runs before handing work over. If you want it unattended, a systemd user timer
+beside the host costs nothing.
+
+The one honest risk: the store is one directory (`~/.local/share/motu-host`). Back it up, or a disk
+failure takes the baselines with it.
+
 ### What the host is not
 
 - **It runs no browser.** Playwright stays on the publishing machine, where it already is. Snapshot

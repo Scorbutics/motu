@@ -45,7 +45,7 @@ const INDEX_VERSION = 1;
  * writer; a few MB of JSON at a thousand records per repo is nothing.
  */
 function emptyIndex() {
-  return { version: INDEX_VERSION, blobs: {}, repos: {}, groups: {}, manifests: {} };
+  return { version: INDEX_VERSION, blobs: {}, repos: {}, groups: {}, manifests: {}, baselines: {} };
 }
 
 /** A path segment that is safe to join: no separators, no dots-only, no surprises. */
@@ -249,6 +249,16 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   function gcBlobs() {
     const live = manifestPinned();
     for (const entry of Object.values(index.repos)) for (const r of entry.history) live.add(r.hash);
+    // A baseline is only meaningful while its bytes exist. ACCEPTED is pinned forever; the recent
+    // history is pinned so "what did it look like before" survives long enough to be looked at.
+    for (const islands of Object.values(index.baselines)) {
+      for (const shots of Object.values(islands)) {
+        for (const shot of Object.values(shots)) {
+          if (shot.accepted) live.add(shot.accepted);
+          for (const h of shot.history ?? []) live.add(h);
+        }
+      }
+    }
     let removed = 0;
     for (const hash of Object.keys(index.blobs)) {
       if (live.has(hash)) continue;
@@ -261,6 +271,86 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
       removed++;
     }
     return removed;
+  }
+
+  // --- visual baselines ---------------------------------------------------------------------
+  //
+  // WHY THE HOST AND NOT THE REPOSITORY. Committed PNGs are what makes a visual tier unmaintainable:
+  // re-recording is a binary diff nobody reviews, so baselines drift, the check goes permanently red,
+  // and people stop looking — which is exactly the state peps was in, with one island baselined and
+  // its baselines stale. Every hosted tool in this space (Chromatic, Percy) keeps them server-side for
+  // the same reason.
+  //
+  // Content addressing is what makes it affordable: a shot that does not change costs zero new bytes,
+  // forever. Storage grows with CHANGE, not with island count, so a thousand snapshot runs over a
+  // hundred unchanged islands add nothing.
+  //
+  // ACCEPTED IS A DECISION, not a file write. `--update` overwriting everything is why "the baseline is
+  // stale" and "you broke something" are the same red today; an accepted pointer that someone moved
+  // deliberately separates them.
+
+  /** `<island>/<scenario>@<viewport>` — one shot's identity within a repo. */
+  function shotEntry(repo, island, shot) {
+    const byRepo = (index.baselines[repo] ??= {});
+    const byIsland = (byRepo[island] ??= {});
+    return (byIsland[shot] ??= { accepted: null, acceptedAt: null, history: [], lastSeen: null });
+  }
+
+  /**
+   * Record what a run rendered. This does NOT move the baseline — it stores the bytes and reports how
+   * they compare, leaving the decision to a human or to an explicit accept.
+   */
+  function putShot(repo, island, shot, bytes, { sha = null, branch = null } = {}) {
+    const hash = hashBytes(bytes);
+    const file = blobPath(hash);
+    const deduped = existsSync(file);
+    if (!deduped) {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, bytes);
+    }
+    index.blobs[hash] = { bytes: bytes.length, createdAt: index.blobs[hash]?.createdAt ?? nowIso() };
+
+    const entry = shotEntry(repo, island, shot);
+    entry.lastSeen = { hash, at: nowIso(), sha, branch };
+    if (!entry.history.includes(hash)) entry.history.unshift(hash);
+    // Bounded: enough to look back at what it used to be, not a full archive.
+    entry.history = entry.history.slice(0, 10);
+
+    const status = !entry.accepted ? 'new' : entry.accepted === hash ? 'match' : 'changed';
+    save();
+    return { hash, bytes: bytes.length, deduped, status, accepted: entry.accepted };
+  }
+
+  /** Move the accepted pointer to what was last seen (or to an explicit hash). */
+  function acceptShot(repo, island, shot, hash = null) {
+    const entry = index.baselines[repo]?.[island]?.[shot];
+    if (!entry) return null;
+    const target = hash ?? entry.lastSeen?.hash;
+    if (!target || !index.blobs[target]) return null;
+    entry.accepted = target;
+    entry.acceptedAt = nowIso();
+    save();
+    return { island, shot, accepted: target };
+  }
+
+  /** Every shot of a repo, with its status — what a review page and the CLI both read. */
+  function listShots(repo, island = null) {
+    const byIsland = index.baselines[repo] ?? {};
+    const out = [];
+    for (const [isl, shots] of Object.entries(byIsland)) {
+      if (island && isl !== island) continue;
+      for (const [shot, e] of Object.entries(shots)) {
+        out.push({
+          island: isl,
+          shot,
+          accepted: e.accepted,
+          acceptedAt: e.acceptedAt,
+          last: e.lastSeen,
+          status: !e.accepted ? 'new' : e.lastSeen?.hash === e.accepted ? 'match' : 'changed',
+        });
+      }
+    }
+    return out.sort((a, b) => a.island.localeCompare(b.island) || a.shot.localeCompare(b.shot));
   }
 
   // --- composition ------------------------------------------------------------------------------
@@ -354,6 +444,9 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     resolveRef,
     read,
     readHash,
+    putShot,
+    acceptShot,
+    listShots,
     putGroup,
     getGroup,
     snapshot,

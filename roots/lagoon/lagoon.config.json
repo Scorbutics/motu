@@ -1,0 +1,7 @@
+{
+  "about": "The review-islands lagoon: this project's islands rendered against fixtures, with no backend, no session and no host application around them.",
+  "transport": "mock",
+  "defaultTheme": "motu",
+  "mount": "react",
+  "stations": {}
+}

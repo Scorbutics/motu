@@ -13,8 +13,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
-import { paths, names, color, FMT, resolveModuleSpecifier, LEGACY_FIT } from '../lib/util.mjs';
+import { paths, names, color, FMT, resolveModuleSpecifier, LEGACY_FIT, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
 import { syncRegistry } from '../lib/islands.mjs';
+import { syncContracts } from '../lib/contracts.mjs';
 import { readComponentContract } from '../lib/component-props.mjs';
 
 function componentSource(pascal, kebab) {
@@ -220,6 +221,12 @@ export async function createCommand(argv) {
   // The registry is GENERATED from what is on disk, not edited: adding an island is a file operation,
   // and reconciling is what keeps a deleted or renamed one from lingering in it.
   syncRegistry(paths.islandsDir);
+  // AND THE CONTRACTS, in the same breath. Creating an island left `contracts.generated.ts` missing,
+  // so the very first `motu check` a new project runs — straight after the next-step this command
+  // prints — opened with `✗ generated  contracts.generated.ts is missing`. The scaffolder failing its
+  // own check is the first thing a stranger sees, and the fix was a command they had not been told
+  // about yet.
+  syncContracts(paths.islandsDir, { islandComponentPath, islandComponentExport, names });
   console.log(color.green(`✓ created island ${color.bold(kebab)}  (component ${pascal}, tag ${tag})`));
   if (contract) {
     console.log(

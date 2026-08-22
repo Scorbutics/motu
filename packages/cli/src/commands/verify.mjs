@@ -1938,6 +1938,16 @@ function archipelagoConfigChecks(report, id) {
     const param = text.match(/(?:ArchipelagoConfig|\barchipelago)<\s*([A-Za-z_$][\w$]*)\s*[,>]/);
     if (param) {
       report.ok('region-type', `bind keys are checked against \`${param[1]}\``);
+    } else if (!(region?.islands ?? []).length) {
+      // A REGION WITH NO ISLANDS HAS NO BIND KEYS TO CHECK. `archipelago create` scaffolds exactly
+      // that, so a new project's first `motu check` — run straight after the next-step the scaffolder
+      // prints — opened on an ERROR about the thing it had just been given. The demand is right the
+      // moment the region has a member; before that it is the tool failing its own output.
+      report.warn(
+        'region-type',
+        'no region type yet — declare it as `archipelago<TRegion, keyof ElementTypes>()({…})` with a ' +
+          'type EXTRACTED FROM THE APP before adding the first island, so bind keys cannot drift from it',
+      );
     } else {
       report.error(
         'region-type',

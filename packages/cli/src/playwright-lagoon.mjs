@@ -486,12 +486,17 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
     await sleep(400);
 
-    // WHAT THE REGION PRODUCED BY MERELY RENDERING — captured before the first `emit`.
+    // WHAT MOVED WHILE THE REGION MERELY RENDERED — captured HERE, before the first `emit`.
     //
     // Every later read is contaminated for this purpose: a flow's emit goes through the same seam a
-    // component's own output does, so afterwards "it fired" is true whether the component produced it
-    // or the harness did.
+    // component's own output does and writes with the same source, so afterwards "the key moved" is
+    // true whether the component produced it or the harness did. Before any emit, the only thing that
+    // can have moved a key is the region rendering itself.
     //
+    // WAIT FOR THE REGION, do not sleep at it — the same rule the scenario loop below learned. Reading
+    // after `sleep(400)` alone reported every effect-driven output as never fired on a region where
+    // they all fire: the slots had not mounted yet, so the honest answer was "nothing has rendered",
+    // and it came out as "your components stopped emitting".
     // RESET, REMOUNT, READ. The lane opens one page for the whole run, so the wiring probe has already
     // fired every declared write on it — a tally read without clearing says everything emitted,
     // including outputs a component only fires from a click. Remounting re-runs the effects, so what
@@ -855,7 +860,16 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
     const shots = [];
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
     for (const scenario of list) {
-      await provideScenario(page, scenario.seed, { tag });
+      await page.evaluate((seed) => {
+        const arch = document.querySelector('motu-archipelago');
+        const provide =
+          arch && typeof arch.provide === 'function'
+            ? (k, v) => arch.provide(k, v)
+            : window.__motuLagoon
+              ? (k, v) => window.__motuLagoon.provide(k, v)
+              : null;
+        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
+      }, scenario.seed ?? {});
       for (const vp of viewports) {
         await page.setViewportSize({ width: vp.width, height: 900 });
         await sleep(250);
@@ -1057,7 +1071,16 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
     // rendering nothing — a false alarm that teaches people to ignore the check.
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
     for (const scenario of list) {
-    await provideScenario(page, scenario.seed, { tag });
+    await page.evaluate((seed) => {
+      const arch = document.querySelector('motu-archipelago');
+      const provide =
+        arch && typeof arch.provide === 'function'
+          ? (k, v) => arch.provide(k, v)
+          : window.__motuLagoon
+            ? (k, v) => window.__motuLagoon.provide(k, v)
+            : null;
+      if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
+    }, scenario.seed ?? {});
     for (const vp of viewports) {
       await page.setViewportSize({ width: vp.width, height: 900 });
       // Two beats: one for the resize to land, one for anything that re-measures on it.
@@ -1171,6 +1194,13 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
  *
  * NOT for region flows: a flow's steps ACCUMULATE by design, and re-mounting between them would throw
  * away the state the next step builds on.
+ *
+ * NOT for the lanes that MEASURE either. `captureLagoon` and `responsiveLagoon` keep their own inline
+ * provide and are deliberately NOT routed through here: re-mounting made `snapshot --all` fail with
+ * "Execution context was destroyed" (that lane re-aims ONE shared page per island, and the teardown
+ * races the re-aim) and perturbed which element the screenshot found. Whether those two have their own
+ * frozen-state problem is open — it needs the page-pool interaction understood first, and a snapshot
+ * lane that dies is worse than one that might be stale.
  */
 async function provideScenario(page, seed, { settleMs = 150, tag } = {}) {
   await page.evaluate((s) => {

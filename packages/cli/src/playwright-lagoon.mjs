@@ -777,36 +777,7 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
     const findings = [];
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
     for (const scenario of list) {
-      await page.evaluate((seed) => {
-        const arch = document.querySelector('motu-archipelago');
-        const provide =
-          arch && typeof arch.provide === 'function'
-            ? (k, v) => arch.provide(k, v)
-            : window.__motuLagoon
-              ? (k, v) => window.__motuLagoon.provide(k, v)
-              : null;
-        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
-        // KNOWN DIVERGENCE, not yet closed. Providing into a live island drives anything BOUND to a
-        // prop and drives nothing in an island that fetches its own data — its effect already ran. The
-        // happy-dom path mounts once per scenario, so the same evidence passes there and fails here.
-        // Re-creating the element below does NOT fix it: the seeds cross (`seed-transport` passes) and
-        // the render is still identical, and why is undiagnosed. Left in place because a fresh mount is
-        // the right shape for a check whose name says "distinct INPUTS", not because it works yet.
-        if (typeof window.__motuLagoon?.remount === 'function') {
-          window.__motuLagoon.remount();
-        } else {
-          // The single-island target mounts through the CUSTOM ELEMENT path, which has no remount
-          // seam — so re-create the element: disconnect disposes it, re-appending mounts it fresh and
-          // its effects run again against the seed just provided.
-          for (const el of document.querySelectorAll('motu-island')) {
-            const parent = el.parentNode;
-            const next = el.nextSibling;
-            parent?.removeChild(el);
-            parent?.insertBefore(el, next);
-          }
-        }
-      }, scenario.seed ?? {});
-      await sleep(250);
+      await provideScenario(page, scenario.seed, { tag });
       const violations = await page.evaluate(async (t) => {
         const el = window.__motuFindIsland(t);
         if (!el) return [];
@@ -864,16 +835,7 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
     const shots = [];
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
     for (const scenario of list) {
-      await page.evaluate((seed) => {
-        const arch = document.querySelector('motu-archipelago');
-        const provide =
-          arch && typeof arch.provide === 'function'
-            ? (k, v) => arch.provide(k, v)
-            : window.__motuLagoon
-              ? (k, v) => window.__motuLagoon.provide(k, v)
-              : null;
-        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
-      }, scenario.seed ?? {});
+      await provideScenario(page, scenario.seed, { tag });
       for (const vp of viewports) {
         await page.setViewportSize({ width: vp.width, height: 900 });
         await sleep(250);
@@ -926,16 +888,7 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
     // rendering nothing — a false alarm that teaches people to ignore the check.
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
     for (const scenario of list) {
-    await page.evaluate((seed) => {
-      const arch = document.querySelector('motu-archipelago');
-      const provide =
-        arch && typeof arch.provide === 'function'
-          ? (k, v) => arch.provide(k, v)
-          : window.__motuLagoon
-            ? (k, v) => window.__motuLagoon.provide(k, v)
-            : null;
-      if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
-    }, scenario.seed ?? {});
+    await provideScenario(page, scenario.seed, { tag });
     for (const vp of viewports) {
       await page.setViewportSize({ width: vp.width, height: 900 });
       // Two beats: one for the resize to land, one for anything that re-measures on it.
@@ -1033,6 +986,58 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
 }
 
 /**
+ * Establish ONE scenario's seed in the running lagoon, then RE-MOUNT the island so that seed is an
+ * input rather than a late update.
+ *
+ * The re-mount is not optional, and this is the bug it closes. `provide()` writes the store, which
+ * drives anything BOUND to a prop and drives NOTHING in an island that fetches its own data through a
+ * stubbed host module — that island's effect already ran, against whatever the previous scenario left
+ * behind. The happy-dom lane mounts once per scenario, so the two runtimes disagreed on the same
+ * evidence: peps' club-feed passed `data-flow` under `--fast` with three distinct renders and failed
+ * in the browser with "3 scenarios rendered identically". A stub answering with `seededValue()` only
+ * becomes a per-scenario input if something makes the effect run again.
+ *
+ * The store survives the re-mount (it is module state, not tree state), so the fresh island reads the
+ * seed just provided.
+ *
+ * NOT for region flows: a flow's steps ACCUMULATE by design, and re-mounting between them would throw
+ * away the state the next step builds on.
+ */
+async function provideScenario(page, seed, { settleMs = 150, tag } = {}) {
+  await page.evaluate((s) => {
+    const arch = document.querySelector('motu-archipelago');
+    // Either mount path exposes the same `provide` seam: the element on the custom-element path,
+    // window.__motuLagoon on the React one.
+    const provide =
+      arch && typeof arch.provide === 'function'
+        ? (k, v) => arch.provide(k, v)
+        : window.__motuLagoon
+          ? (k, v) => window.__motuLagoon.provide(k, v)
+          : null;
+    if (provide) for (const [k, v] of Object.entries(s || {})) provide(k, v);
+
+    // The React path exposes a real teardown. The custom-element path has none, so re-insert the
+    // marker: disconnectedCallback disposes the child, connectedCallback mounts a fresh one.
+    if (typeof window.__motuLagoon?.remount === 'function') {
+      window.__motuLagoon.remount();
+    } else {
+      for (const el of document.querySelectorAll('motu-island')) {
+        const parent = el.parentNode;
+        const next = el.nextSibling;
+        parent?.removeChild(el);
+        parent?.insertBefore(el, next);
+      }
+    }
+  }, seed ?? {});
+  // A re-mount re-runs the island's fetch, so a lane that MEASURES (screenshot, viewport fit, axe)
+  // would otherwise sample a tree that is still filling in — a fixed sleep was enough when `provide`
+  // only updated props. Wait for the render to go quiet instead, and keep the fixed settle for callers
+  // that wait for stability themselves.
+  if (tag) await waitForStableRender(page, tag, { timeoutMs: 8000 });
+  else await sleep(settleMs);
+}
+
+/**
  * Data-flow differentiation in the real-browser lagoon. Mounts the island once, then drives each
  * declared scenario's seed into the store via the archipelago's `provide()` seam (the same inbound
  * boundary the ocean uses) and captures the rendered output after each. Distinct inputs producing
@@ -1067,21 +1072,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     // Drive each scenario's seed through the archipelago boundary and capture rendered output.
     const outputs = [];
     for (const scenario of scenarios) {
-      await page.evaluate((seed) => {
-        const arch = document.querySelector('motu-archipelago');
-        // Either mount path exposes the same `provide` seam: the element on the custom-element path,
-        // window.__motuLagoon on the React one.
-        const provide =
-          arch && typeof arch.provide === 'function'
-            ? (k, v) => arch.provide(k, v)
-            : window.__motuLagoon
-              ? (k, v) => window.__motuLagoon.provide(k, v)
-              : null;
-        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
-      }, scenario.seed ?? {});
-      // Let the store write and bound props flow, then wait for the render to settle rather than
-      // guessing at a fixed delay — a contract re-fetch can easily outlast one.
-      await sleep(150);
+      await provideScenario(page, scenario.seed);
       outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
     }
 

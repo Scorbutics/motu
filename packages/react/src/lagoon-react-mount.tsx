@@ -19,6 +19,7 @@ import {
   seedArchipelago,
   hostCalls,
   runWithWriteSource,
+  ensureMountpointStyle,
   type ArchipelagoConfig,
   type Channel,
   type HostBridge,
@@ -114,6 +115,12 @@ export function mountReactLagoon(
     const el = <Island key={slot} slot={slot} fit={opts.fit} />;
     return opts.providers ? opts.providers(el, slot) : el;
   };
+
+  // The cell chrome for this view lives in @motu/core, and nothing else on this path would install
+  // it: the element route folds it into the region's own sheet, which a React mount never builds. Get
+  // it wrong and the markup below still renders — a slot name as body text, no frame, no padding —
+  // which is what a host mounting through React used to see.
+  if (opts.view === 'mountpoints') ensureMountpointStyle();
 
   const islands = config.islands.map((island) =>
     opts.view === 'mountpoints' ? (

@@ -18,6 +18,8 @@ import type { MotuFit } from './theme.js';
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
 
+import { MOUNTPOINT_CSS } from './mountpoints.js';
+
 const STYLE_ID = 'motu-arch-style';
 const LIGHT_STYLE_ID = 'motu-arch-light-style';
 
@@ -30,16 +32,9 @@ const ARCH_LAYOUT_CSS = `
 .gm-arch__toolbar > motu-island { display: block; }
 .gm-arch__grow { flex: 1 1 200px; min-width: 0; }
 motu-island { display: block; }
-/* Gallery view: each mountpoint (slot) framed on its own, standing in for its distinct ocean
-   callsite. This is the NEUTRAL cell chrome; per-slot geometry is supplied by the composition root
-   (an authored/recorded frame keyed by [data-motu-arch][data-motu-slot]). */
-.motu-gallery { max-width: 1440px; margin: 22px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 18px; }
-.motu-frame { position: relative; border: 1px dashed color-mix(in srgb, currentColor 22%, transparent); border-radius: 10px; }
-/* Cells never clip (a popover/modal island must be able to escape its frame). An interacted cell
-   raises above later siblings so the escaped content paints on top instead of under the next cell. */
-.motu-frame:hover, .motu-frame:focus-within { z-index: 2; }
-.motu-frame__label { display: flex; gap: 8px; align-items: center; border-radius: 10px 10px 0 0; font: 500 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; padding: 6px 10px; color: color-mix(in srgb, currentColor 55%, transparent); background: color-mix(in srgb, currentColor 5%, transparent); }
-.motu-frame__stage { padding: 16px; }`;
+/* The mountpoints view's cell chrome comes from ./mountpoints.ts, which is also what the React mount
+   path installs — the two paths emit identical markup, so they must not describe it twice. */
+${MOUNTPOINT_CSS}`;
 
 function ensureStyle(): void {
   if (document.getElementById(STYLE_ID)) return;

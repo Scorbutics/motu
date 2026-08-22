@@ -34,6 +34,10 @@ import {
   tracedExports,
   subscribeHostCalls,
   type HostCall,
+  flood,
+  applyFlood,
+  clearFlood,
+  floodFrames,
 } from '@motu/core';
 import { observeCalls, startRecording, stopRecording, type CallEvent, type RecordedCall } from '@motu/runtime';
 
@@ -214,6 +218,15 @@ function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/** The lens' own reduced-motion answer. Every animation below asks first. */
+const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** The tab's resting height. Shared with the CSS below so the two cannot drift. */
+const TAB_H = 54;
+
+const FLOOD_MS = 460;
+const RECEDE_MS = 300;
+
 /** The lens' mark: a crosshair, which is what every inspector in every browser uses for "look here". */
 function crosshair(): SVGSVGElement {
   const NS = 'http://www.w3.org/2000/svg';
@@ -351,11 +364,14 @@ const STYLES = `
 .tab {
   position: fixed;
   top: var(--motu-debug-top, 56px);
-  z-index: 2147483000;
+  /* ONE above the panel. They overlap while the panel is docked at the same edge, and equal z-index
+     hands it to whichever is later in the DOM — the panel, which then swallowed clicks on the tab. A
+     trigger is never behind the thing it triggers. */
+  z-index: 2147483001;
   pointer-events: auto;
   display: grid;
   place-items: center;
-  width: 26px; height: 54px;
+  width: 26px; height: ${TAB_H}px;
   padding: 0;
   border: 1px solid var(--hair);
   background: var(--glass);
@@ -516,6 +532,8 @@ class Overlay {
   #chip: HTMLButtonElement | null = null;
   /** The lens' own trigger — a tab at the panel's edge. Null when the host asked for none. */
   #tab: HTMLButtonElement | null = null;
+  /** The panel's in-flight flood, so a reversal can take the element over cleanly. */
+  #panelAnim: Animation | null = null;
   #boxes = new Map<MountedIslandInfo, { box: HTMLElement; tag: HTMLElement }>();
   #wires: SVGSVGElement;
   #open = false;
@@ -647,7 +665,10 @@ class Overlay {
       tab.setAttribute('aria-label', 'Toggle the motu seam lens');
       tab.setAttribute('aria-pressed', 'false');
       tab.append(crosshair());
-      tab.addEventListener('click', () => this.toggle());
+      tab.addEventListener('click', () => {
+        this.#tabRipple();
+        this.toggle();
+      });
       this.#root.append(tab);
       this.#tab = tab;
       // The host can move the panel's side under us (the lagoon does, whenever its bay is dragged to
@@ -692,6 +713,7 @@ class Overlay {
       tab.style.removeProperty('left');
       tab.style.removeProperty('top');
       tab.style.removeProperty('right');
+      tab.style.removeProperty('height');
     }
   }
 
@@ -706,10 +728,20 @@ class Overlay {
     if (!tab || !panel) return;
     const r = panel.getBoundingClientRect();
     const w = tab.offsetWidth || 26;
-    // Overlap by a pixel so it reads as attached to the panel rather than parked beside it.
-    tab.style.left = `${Math.round(this.#panelSide() === 'right' ? r.left - w + 1 : r.right - 1)}px`;
+    // Overlap by a pixel so it reads as attached to the panel rather than parked beside it — and
+    // clamp, because on a narrow viewport the panel spans nearly the whole width and the tab would
+    // hang off the edge it is meant to be grabbed from.
+    const x = this.#panelSide() === 'right' ? r.left - w + 1 : r.right - 1;
+    tab.style.left = `${Math.round(Math.min(Math.max(x, 0), Math.max(0, window.innerWidth - w)))}px`;
     tab.style.right = 'auto';
-    tab.style.top = `${Math.round(r.top + 18)}px`;
+    // The tab is a pull ON the panel, so it can never be taller than what it is attached to. Minimized,
+    // the panel IS its title bar (~36px) and a fixed 54px tab hung off both ends of it, reading as a
+    // bigger thing with a small panel stuck to its side. Short panel: shrink and centre on it. Full
+    // panel: the fixed height, near the top, where the title bar is.
+    const full = r.height >= 96;
+    const h = full ? TAB_H : Math.max(24, Math.round(r.height) - 8);
+    tab.style.height = `${h}px`;
+    tab.style.top = `${Math.round(full ? r.top + 18 : r.top + (r.height - h) / 2)}px`;
   }
 
   #renderChip() {
@@ -726,6 +758,11 @@ class Overlay {
 
   #sync() {
     this.#renderChip();
+    // The tab goes home the moment the lens is closed, even though the panel is still draining. It
+    // was pinned to the receding panel at first, and that left the screen edge dead for the length of
+    // the drain — a click where the trigger lives did nothing. A trigger is never allowed to be
+    // somewhere unexpected to serve an animation, and the water receding TOWARD the edge the tab just
+    // returned to is the more honest reading anyway.
     this.#syncTab();
     this.#layer.style.display = this.#open ? '' : 'none';
     if (this.#open) {
@@ -738,8 +775,19 @@ class Overlay {
       this.#clearBoxes();
       this.#wires.replaceChildren();
       this.#hovered = null;
-      this.#panel?.remove();
+      const draining = this.#panel;
       this.#panel = null;
+      if (!draining) return;
+      // Let the water go back out the way it came, THEN destroy it. #panel is already null, so a
+      // reopen mid-drain builds a fresh panel and this one is only cleaning itself up.
+      // A panel on its way out is scenery: it must not intercept a click meant for what is behind it
+      // (the tab is right there, and re-opening during the drain is a normal thing to do).
+      draining.style.pointerEvents = 'none';
+      const anim = this.#flood(draining, 'out');
+      if (!anim) return void draining.remove();
+      anim.finished
+        .then(() => draining.remove())
+        .catch(() => draining.remove());
     }
   }
 
@@ -1103,6 +1151,81 @@ class Overlay {
     this.#root.append(this.#panel);
     this.#renderPanel();
     this.#restorePosition();
+    this.#flood(this.#panel, 'in');
+  }
+
+  /**
+   * Pour the panel in from the tab's side, or drain it back out the same way. Returns the animation
+   * so the close path can wait for it — the panel is destroyed on close, and destroying it mid-drain
+   * is what would make the water vanish instead of receding.
+   *
+   * The mask is dropped on finish: a live mask on a scrolling, live-updating panel is compositing
+   * work for a shape nobody can see once it has fully arrived.
+   */
+  #flood(panel: HTMLElement, dir: 'in' | 'out'): Animation | null {
+    if (REDUCED()) return null;
+    // Water always moves through the side the TAB is on, so the motion points at the trigger in both
+    // directions. Open: the tab is on the panel's inner edge, so the water comes in from there.
+    // Close: the tab has already gone home to the screen edge, so the water leaves that way — draining
+    // back out the inner edge would send it to a place the tab has just left.
+    const tabSide = this.#panelSide() === 'right' ? 'left' : 'right';
+    const from = dir === 'in' ? tabSide : tabSide === 'left' ? 'right' : 'left';
+    const f = flood(from);
+    applyFlood(panel, f);
+    // The swell carries the panel a little with it, so the water is moving the surface rather than
+    // being painted over a surface that is already there.
+    const away = from === 'left' ? -14 : 14;
+    const [a, b] = floodFrames(f, dir);
+    const arrived = { opacity: 1, transform: 'none' };
+    const offshore = { opacity: 0, transform: `translateX(${away}px)` };
+    const frames = dir === 'in' ? [{ ...a, ...offshore }, { ...b, ...arrived }] : [{ ...a, ...arrived }, { ...b, ...offshore }];
+    // One flood at a time per panel: a close arriving mid-open would otherwise leave the first
+    // animation to finish and strip the mask out from under the second.
+    this.#panelAnim?.cancel();
+    const anim = panel.animate(frames, {
+      duration: dir === 'in' ? FLOOD_MS : RECEDE_MS,
+      easing: dir === 'in' ? 'cubic-bezier(.22,.9,.3,1)' : 'cubic-bezier(.5,0,.75,.4)',
+      fill: 'both',
+    });
+    this.#panelAnim = anim;
+    if (dir === 'in') {
+      anim.finished
+        .then(() => {
+          clearFlood(panel);
+          anim.cancel();
+        })
+        .catch(() => {
+          /* cancelled by a close that arrived mid-flood — that animation owns the element now */
+        });
+    }
+    return anim;
+  }
+
+  /**
+   * A drop hitting the water where you clicked. Two rings, staggered, spreading from the tab — the
+   * acknowledgement that the click landed, and the visual link between the tab and the panel now
+   * pouring out of it.
+   */
+  #tabRipple() {
+    const tab = this.#tab;
+    if (!tab || REDUCED()) return;
+    const r = tab.getBoundingClientRect();
+    for (const delay of [0, 130]) {
+      const ring = h('div');
+      ring.style.cssText =
+        `position:fixed;left:${r.left + r.width / 2}px;top:${r.top + r.height / 2}px;width:14px;height:14px;` +
+        `margin:-7px 0 0 -7px;border-radius:50%;border:2px solid var(--accent);pointer-events:none;` +
+        `z-index:2147483000`;
+      this.#root.append(ring);
+      const anim = ring.animate(
+        [
+          { transform: 'scale(1)', opacity: 0.55 },
+          { transform: 'scale(6.5)', opacity: 0 },
+        ],
+        { duration: 720, delay, easing: 'cubic-bezier(.2,.6,.35,1)', fill: 'both' },
+      );
+      anim.finished.then(() => ring.remove()).catch(() => ring.remove());
+    }
   }
 
   /** Move the panel to (x, y), clamped so it can never be dragged off where it can't be grabbed back. */

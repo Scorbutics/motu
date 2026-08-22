@@ -6,6 +6,9 @@ export type { StoreWrite } from './store.js';
 export { startSeedRecording, stopSeedRecording } from './store.js';
 export type { RecordedSeed } from './store.js';
 export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, applyMotuChrome } from './toolbar.js';
+export { flood, applyFlood, clearFlood, floodFrames } from './flood.js';
+export { MOUNTPOINT_CSS, ensureMountpointStyle } from './mountpoints.js';
+export type { Flood, FloodFrom } from './flood.js';
 export type { MotuChromeTheme } from './toolbar.js';
 export {
   observeForeignStore,

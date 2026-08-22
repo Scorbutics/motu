@@ -39,7 +39,7 @@
 //     panel grows) is driven by one `data-corner` attribute in CSS, so moving the bay is one
 //     assignment and there is no second source of truth to drift.
 
-import { setMotuToolbarHost } from '@motu/core';
+import { setMotuToolbarHost, flood, applyFlood, clearFlood, floodFrames, type FloodFrom } from '@motu/core';
 
 export type TideView = 'region' | 'mountpoints';
 /** top-left, top-right, bottom-left, bottom-right. */
@@ -146,8 +146,8 @@ const CSS = `
    mirror factors (which end is deep, which side the mass is on). Keeping them as CSS custom
    properties means the eight docks are a table, not eight code paths. */
 /* The capsule FLOATS in its corner rather than sitting flush in it, so its outline is closed on all
-   four sides. Padding on the container, not a margin on the pill: the panel and the tooltip are
-   positioned against this same padding box, so all three keep their inset with one number. */
+   four sides. Padding on the container, not a margin on the pill: the panel is positioned against
+   this same padding box, so both keep their inset from one number. */
 #tide { --rot: 0deg; --mx: 1; --my: 1; padding: 12px; }
 #tide[data-corner="tl"] { top: 0; left: 0; }
 #tide[data-corner="tr"] { top: 0; right: 0; }
@@ -313,6 +313,11 @@ const CSS = `
   width: 100%;
   max-height: 172px;
   overflow-y: auto;
+  /* Explicit, and not redundant: setting ONE axis to auto makes the other compute to auto too, so the
+     2px hover nudge below pushed a row past the edge and CSS answered with a horizontal scrollbar —
+     a grey bar across the bottom of the list that appeared on hover and vanished off it. A vertical
+     list has nothing to scroll sideways to; say so. */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   /* Fade the ends so a scrollable list looks scrollable without a scrollbar shouting about it. */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
@@ -320,7 +325,9 @@ const CSS = `
 }
 #tide .list::-webkit-scrollbar { width: 6px; }
 #tide .list::-webkit-scrollbar-thumb { background: rgba(15, 118, 110, .22); border-radius: 999px; }
-#tide .list__inner { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 6px 0; }
+/* The 3px of side padding is the room the hover nudge moves into. Without it the nudge is clipped by
+   the overflow rule above instead of overflowing it — same bug, quieter. */
+#tide .list__inner { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 6px 3px; }
 /* The rail is the vertical cousin of the segmented thumb: it SLIDES to the selected row rather than
    blinking on, so a switch has a direction you can follow. It lives inside the scrolled content, so
    it tracks the row it marks without any scroll bookkeeping. */
@@ -597,13 +604,18 @@ interface WaveLayer {
 }
 
 /** Back to front. The last filled one is the opaque body; the others peek out beyond its crest. */
+//
+// The crest sits LOW — a shoreline along the docked edge rather than a waterline across the middle.
+// It used to sit at half the bay's depth, which was right when the water was the whole element; in a
+// capsule the row runs through that same middle, and the foam stroke cut across the label. Lowering
+// it leaves the readout on the pill's solid body and keeps the swell where it belongs.
 const WAVE_LAYERS: WaveLayer[] = [
-  { baseline: 23, amplitude: 5, periodFactor: 1.6, speed: 15, fill: 'var(--w-shallow)', opacity: 0.34 },
-  { baseline: 19, amplitude: 4.5, periodFactor: 1.15, speed: 19, inverted: true, reverse: true, fill: 'var(--w-mid)', opacity: 0.5 },
-  { baseline: 15, amplitude: 4, periodFactor: 0.85, speed: 17, fill: 'url(#tide-body)', opacity: 1 },
+  { baseline: 14, amplitude: 3.6, periodFactor: 1.6, speed: 15, fill: 'var(--w-shallow)', opacity: 0.34 },
+  { baseline: 11, amplitude: 3.2, periodFactor: 1.15, speed: 19, inverted: true, reverse: true, fill: 'var(--w-mid)', opacity: 0.5 },
+  { baseline: 8, amplitude: 2.8, periodFactor: 0.85, speed: 17, fill: 'url(#tide-body)', opacity: 1 },
   // Foam: rides exactly the body's crest (same geometry + speed), so it reads as light catching the
   // edge of the water rather than as a fourth wave.
-  { baseline: 15, amplitude: 4, periodFactor: 0.85, speed: 17, fill: 'none', stroke: 'rgba(255,255,255,.5)', opacity: 0.9 },
+  { baseline: 8, amplitude: 2.8, periodFactor: 0.85, speed: 17, fill: 'none', stroke: 'rgba(255,255,255,.5)', opacity: 0.9 },
 ];
 
 function layerPeriod(layer: WaveLayer): number {
@@ -943,29 +955,84 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   // The pill's readout. The water's tint has always carried this, but a hue has to be learned and a
   // word does not — and with the mask gone there is a row to put it in. LEGACY wins over the
   // transport because it is the louder fact about what you are looking at.
+  //
+  // IDEMPOTENT, and that is load-bearing rather than tidy. readFit below is a MutationObserver
+  // callback watching document.body with subtree+childList — and this label lives inside body. An
+  // unconditional textContent write replaces a text node, which IS a childList mutation, which
+  // re-fires the observer, which writes again: the page pins a core and never finishes loading. Write
+  // only on a real change and the cycle cannot start. Anything else this observer ever drives has to
+  // hold the same rule.
   let stationLabel = '';
   const renderLabel = () => {
     const state = tide.dataset.fit === 'legacy' ? 'legacy' : opts.transport;
-    label.textContent = stationLabel ? `${stationLabel} · ${state}` : state;
+    const next = stationLabel ? `${stationLabel} · ${state}` : state;
+    if (label.textContent !== next) label.textContent = next;
   };
 
   // Fit is flipped live by the toolbar chip, which only ever sets the attribute on the regions —
   // so read it from there rather than mirroring the toggle's state.
   const readFit = () => {
     const legacy = !!document.querySelector('motu-archipelago[fit="legacy"]');
-    tide.dataset.fit = legacy ? 'legacy' : 'native';
+    const fit = legacy ? 'legacy' : 'native';
+    if (tide.dataset.fit !== fit) tide.dataset.fit = fit;
     renderLabel();
   };
   new MutationObserver(readFit).observe(document.body, { subtree: true, childList: true, attributeFilter: ['fit'] });
   readFit();
 
   // ── open / close ───────────────────────────────────────────────────────────────────────────
+  /**
+   * The panel arrives as WATER COMING IN FROM THE BAY — the same reveal the seam lens uses for its own
+   * panel, out of @motu/core so there is one wave in the chrome rather than two that drift.
+   *
+   * The direction is the dock's: a bay lying along the bottom edge fills its panel from below, like a
+   * tide coming in; one standing against the left edge fills it from the left. That is the whole point
+   * of doing it this way instead of a fade — the panel is visibly poured out of the thing you touched,
+   * so which corner element owns it never has to be guessed.
+   */
+  let barAnim: Animation | null = null;
+  const floodBar = (dir: 'in' | 'out') => {
+    if (REDUCED()) return;
+    const corner = tide.dataset.corner ?? DEFAULT_CORNER;
+    const from: FloodFrom =
+      tide.dataset.axis === 'v'
+        ? corner === 'tl' || corner === 'bl'
+          ? 'left'
+          : 'right'
+        : corner === 'tl' || corner === 'tr'
+          ? 'top'
+          : 'bottom';
+    const f = flood(from);
+    applyFlood(bar, f);
+    // One at a time: a close arriving mid-open would otherwise leave the first animation to finish and
+    // strip the mask out from under the second, snapping the panel fully visible.
+    barAnim?.cancel();
+    const anim = bar.animate(floodFrames(f, dir), {
+      duration: dir === 'in' ? 380 : 190,
+      easing: dir === 'in' ? 'cubic-bezier(.22,.9,.3,1)' : 'cubic-bezier(.5,0,.75,.4)',
+      fill: 'both',
+    });
+    barAnim = anim;
+    anim.finished
+      .then(() => {
+        clearFlood(bar);
+        anim.cancel();
+      })
+      .catch(() => {
+        /* superseded by a flood in the other direction, which owns the mask now */
+      });
+  };
+
   let closeTimer = 0;
   let dwellTimer = 0;
   const open = () => {
     window.clearTimeout(closeTimer);
     window.clearTimeout(dwellTimer);
+    // Only on a real change: hovering an already-open bay calls this on every pointerenter, and
+    // replaying the flood there would make the panel flicker under the cursor.
+    if (tide.dataset.open === 'true') return;
     tide.dataset.open = 'true';
+    floodBar('in');
   };
   const close = (delay = 240) => {
     window.clearTimeout(closeTimer);
@@ -973,7 +1040,9 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     closeTimer = window.setTimeout(() => {
       // Never close out from under a keyboard user or an open palette.
       if (tide.contains(document.activeElement) || !palette.hidden) return;
+      if (tide.dataset.open !== 'true') return;
       tide.dataset.open = 'false';
+      floodBar('out');
     }, delay);
   };
 

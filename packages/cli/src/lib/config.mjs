@@ -8,6 +8,7 @@
 // in a package.json); that file's directory is the PROJECT ROOT. All paths default to the reference
 // layout, so a project matching it needs no config at all.
 import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
 // Paths are relative to the APP root (root/<app>), except `manifest` which is relative to the project
@@ -34,6 +35,26 @@ const DEFAULTS = {
   // host's own path aliases, Tailwind config and component library from. Defaults to the app root.
   hostRoot: '.',
 };
+
+/**
+ * WHERE THE FRAMEWORK IS, derived from the binary that is running.
+ *
+ * `packages/cli/src/lib` → the checkout root. This is not a guess: the CLI file being executed lives
+ * inside the checkout, so the answer is always available, and `lagoon-vite.mjs` has always computed it
+ * this way to resolve vite and the build plugins.
+ *
+ * Which made `motuRoot` in every adopting project's config a bug rather than a configuration: two
+ * modules of the same package disagreed about a knowable fact, and the one that asked put a
+ * machine-specific path (`"../../motu"`, `"../../../../motu"`) into a committed file — the single line
+ * that made a clone fail on someone else's machine.
+ *
+ * Kept as an override, because it is genuinely needed for a differently-placed checkout or a CI image;
+ * it is just no longer required. Verified rather than assumed: if that directory holds no motu
+ * checkout, fall back to the previous behaviour instead of resolving every @motu/* to nothing.
+ */
+const CLI_DIR = dirname(fileURLToPath(import.meta.url));
+const OWN_CHECKOUT = resolve(CLI_DIR, '../../../..');
+const FRAMEWORK_ROOT = existsSync(resolve(OWN_CHECKOUT, 'packages/core/src/index.ts')) ? OWN_CHECKOUT : null;
 
 /** Hosts that have a legacy skin an island must be proven to survive. */
 const LEGACY_FIT_HOSTS = new Set(['angularjs']);
@@ -106,10 +127,15 @@ export function loadMotuConfig() {
     /**
      * Where the motu framework checkout lives. @motu/* are unpublished packages whose entry point is
      * raw TypeScript, so a project resolves them BY PATH rather than through node_modules — which is
-     * what lets a project adopt motu with no install step. MOTU_ROOT overrides for CI or a
-     * differently-placed checkout; `motuRoot` in motu.config.json is the committed default.
+     * what lets a project adopt motu with no install step. Derived from the running CLI by default
+     * (see FRAMEWORK_ROOT); `$MOTU_ROOT` then `motuRoot` in motu.config.json override it, in that
+     * order, for a differently-placed checkout or a CI image.
      */
-    motuRoot: process.env.MOTU_ROOT ? resolve(process.env.MOTU_ROOT) : resolve(root, cfg.motuRoot ?? '.'),
+    motuRoot: process.env.MOTU_ROOT
+      ? resolve(process.env.MOTU_ROOT)
+      : cfg.motuRoot
+        ? resolve(root, cfg.motuRoot)
+        : (FRAMEWORK_ROOT ?? root),
     /** Generated, never-committed build inputs (see `.gitignore`: `.motu/`). */
     cacheDir: resolve(root, '.motu/cache'),
     /** The raw config object, for keys the CLI does not model. */

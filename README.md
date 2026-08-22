@@ -413,8 +413,12 @@ have, and nothing outside that folder changes until you choose to mount an archi
 ```bash
 cd ~/dev/my-app
 motu init motu --host next --hostRoot .. --appPackage my-islands
-cd motu/roots/lagoon && npm install     # the lagoon's own build deps (vite + plugin-react)
 ```
+
+No install step: the framework owns the lagoon's build deps (vite, the React plugin, Tailwind) and
+resolves them from its own checkout, so the scaffolded project has no `package.json` of its own to
+install. A greenfield `motu init` → `archipelago create` → `island create` → `island verify --runtime`
+passes in a real browser with nothing installed at all.
 
 That produces a project where the loop already closes:
 
@@ -445,19 +449,23 @@ the `legacy` strategy gate and the second runtime mount. `--host next` also defa
 ### No install of the framework itself
 
 `@motu/*` are unpublished workspace packages whose entry point is raw TypeScript, so an existing app
-cannot simply depend on them. The lagoon is a Vite app and transpiles TS anyway, so `motu init`
-points it straight at the checkout's sources instead:
+cannot simply depend on them. The lagoon is a Vite app and transpiles TS anyway, so motu points it
+straight at the checkout's sources instead — and **works out where that checkout is by itself**, from
+the binary you just ran. There is no machine-specific path to commit:
 
 ```jsonc
-// motu.config.json
-"motuRoot": "../../motu"   // the one machine-specific path; override per-machine with MOTU_ROOT
+// motu.config.json — no motuRoot. $MOTU_ROOT, then a `motuRoot` key, override it if you need to.
 ```
 
-The generated `vite.config.ts` turns that into `resolve.alias` entries. Consequences worth knowing:
+It used to be written into every project as "the only machine-specific path", which is the one line
+that breaks on a second machine and in CI. It was always derivable: `lagoon-vite.mjs` had computed the
+same value from its own location all along, to find vite. Consequences worth knowing:
 
 - The lagoon installs **no React**. It resolves the host application's copy and pins it with
   `resolve.dedupe`, because two Reacts break hooks the moment an island renders a component from the
-  host's own library.
+  host's own library. A project that has no React at all — a freshly `motu init`-ed one, before any
+  install — falls back to the framework's copy, so the lagoon renders from the first minute. The
+  fallback is inert wherever a host copy exists.
 - Aliases are anchored regexes, not the object form: Vite's alias matcher is exact-or-prefix-with-a-
   slash, which never matches `pkg/styles.css?inline` and lets `@motu/runtime` swallow
   `@motu/runtime/mock`.

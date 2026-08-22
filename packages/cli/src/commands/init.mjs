@@ -179,10 +179,14 @@ export async function initCommand(argv) {
     appPackage,
     tagPrefix: 'x-',
     isolation,
-    // Where the framework checkout lives, relative to this file. The lagoon resolves @motu/* from
-    // here (they are unpublished, raw-TS packages), so this one line is the only machine-specific
-    // path in the project — override it per-machine with the MOTU_ROOT env var.
-    motuRoot: relPosix(root, MOTU_ROOT),
+    // NO `motuRoot` BY DEFAULT. It used to be written here as "the only machine-specific path in the
+    // project" — a committed relative path to somebody's checkout, which is exactly what breaks on the
+    // second machine and in CI. The CLI derives it from the binary that is running (see
+    // FRAMEWORK_ROOT in lib/config.mjs), so the correct value is never worth committing.
+    //
+    // It is still written when $MOTU_ROOT was set for this init: that says the user has a deliberately
+    // non-default arrangement, and forgetting it silently would be worse than recording it.
+    ...(process.env.MOTU_ROOT ? { motuRoot: relPosix(root, MOTU_ROOT) } : {}),
   };
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   created.push(configPath);

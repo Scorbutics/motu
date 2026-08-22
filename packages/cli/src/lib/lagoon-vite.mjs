@@ -61,6 +61,59 @@ async function importFrom(name, roots) {
   return null;
 }
 
+/** The directory a package resolves to from `root`, or null. Aliases need a path, not a namespace. */
+function packageDir(root, name) {
+  try {
+    return dirname(createRequire(resolve(root, 'package.json')).resolve(`${name}/package.json`));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * REACT, when the project has none.
+ *
+ * The lagoon deliberately installs no React and dedupes onto the host application's copy — two Reacts
+ * break hooks the moment an island renders a component from the host's own library. That is right
+ * whenever there IS a host copy, and fatal when there is not: a freshly `motu init`-ed project has no
+ * node_modules at all, so every `@motu/react` module failed to resolve `react`, and the lagoon served
+ * 500s. `island verify` reported it as "island tag did not upgrade" — the true cause named nowhere.
+ *
+ * So: the host's copy wins wherever it exists, and the framework's own is the fallback that makes a
+ * project with nothing installed still able to render. Same reasoning that already lets the framework
+ * own vite and the build plugins, applied to the one dependency the lagoon genuinely shares with the
+ * app it frames.
+ *
+ * Returns aliases only in the fallback case — adding them when the host HAS React would defeat the
+ * dedupe this exists alongside.
+ */
+function reactFallbackAliases(paths) {
+  const projectRoots = [paths.hostRoot, paths.root, paths.lagoonDir].filter(Boolean);
+  if (projectRoots.some((r) => packageDir(r, 'react'))) return [];
+  // NOT the checkout root: in a pnpm workspace React is a devDependency of `packages/cli`, and the
+  // root resolves nothing. Ask from a package that actually declares it — which is also where a
+  // published install would find it.
+  const frameworkRoots = [resolve(FRAMEWORK_ROOT, 'packages/react'), resolve(FRAMEWORK_ROOT, 'packages/cli'), FRAMEWORK_ROOT];
+  const fromFramework = (name) => {
+    for (const r of frameworkRoots) {
+      const dir = packageDir(r, name);
+      if (dir) return dir;
+    }
+    return null;
+  };
+  const out = [];
+  for (const name of ['react-dom', 'react']) {
+    const dir = fromFramework(name);
+    // Anchored, and the SUBPATH form first: `react-dom/client` must not be swallowed by `react-dom`,
+    // and `react` must not swallow `react-dom` — the exact alias-ordering trap noInstallAliases documents.
+    if (dir) {
+      out.push({ find: new RegExp(`^${name}/(.*)$`), replacement: `${dir}/$1` });
+      out.push({ find: new RegExp(`^${name}$`), replacement: dir });
+    }
+  }
+  return out;
+}
+
 /**
  * Vite's own API (named exports: `build`, `createServer`, `preview`).
  *
@@ -230,7 +283,7 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // empty alias list and died on `@motu/react could not be resolved` — the very error the guard
       // above warns about, from a different cause. A project's lagoon must not depend on motu having
       // written an adapter for its framework.
-      alias: [...noInstallAliases(paths), ...(host.alias ?? [])],
+      alias: [...noInstallAliases(paths), ...(host.alias ?? []), ...reactFallbackAliases(paths)],
       // e.g. `tsconfigPaths: true` — often the ONLY thing mapping a Vite app's `@/…` imports.
       ...(host.resolveExtra ?? {}),
     },

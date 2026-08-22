@@ -155,5 +155,5 @@ export class SessionExpiredError extends MotuError {
   }
 }
 
-export { HttpTransport } from './http-transport.js';
-export { DirectTransport } from './direct-transport.js';
+export { HttpTransport } from './http-transport';
+export { DirectTransport } from './direct-transport';

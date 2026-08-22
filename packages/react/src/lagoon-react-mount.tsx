@@ -28,9 +28,9 @@ import {
   type MotuFit,
 } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
-import { ArchipelagoProvider, Island } from './react-island.js';
-import { renderArchipelagoLayout } from './archipelago-layout.js';
-import type { ElementSpec } from './bootstrap.js';
+import { ArchipelagoProvider, Island } from './react-island';
+import { renderArchipelagoLayout } from './archipelago-layout';
+import type { ElementSpec } from './bootstrap';
 
 /** One React root per container, so a re-mount replaces rather than stacks. */
 const roots = new Map<HTMLElement, ReturnType<typeof createRoot>>();

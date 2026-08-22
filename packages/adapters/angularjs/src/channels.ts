@@ -2,7 +2,7 @@
 // form-widget library or UI toolkit — so any AngularJS host can use them.
 
 import type { Store, Channel } from '@motu/core';
-import { motuAngularInjector } from './host.js';
+import { motuAngularInjector } from './host';
 
 type Matcher = RegExp | ((url: string, method: string) => boolean);
 

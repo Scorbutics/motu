@@ -2,9 +2,9 @@
 // Store, and a HostBridge for outward intents (navigation/actions). The page only drops thin
 // <motu-island slot="…"> markers; all composition lives here, shipped in the composition root.
 
-import { Store, declareProducers, declareReaders, noteIslandOutput } from './store.js';
-import { installChannels, type Channel } from './channel.js';
-import { runWithWriteSource, currentWriteSource } from './store.js';
+import { Store, declareProducers, declareReaders, noteIslandOutput } from './store';
+import { installChannels, type Channel } from './channel';
+import { runWithWriteSource, currentWriteSource } from './store';
 
 // Stripped in production (see the debug overlay). The mount registry below only tracks when this
 // build-time constant is true; the typeof guard keeps it safe under bare Node/tsc.

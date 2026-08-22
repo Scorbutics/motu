@@ -1,4 +1,4 @@
-import { MotuError, type Transport } from './index.js';
+import { MotuError, type Transport } from './index';
 
 /** A response computed from the call's arguments — a client-side STUB (not backend fidelity) that lets
  *  the lagoon FILTER/derive per request, so reactive behaviour (e.g. search -> filtered results) works

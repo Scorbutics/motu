@@ -7,7 +7,7 @@
 // request-scoped Supabase client, so the app's row-level security decides what this user may read.
 // motu never sees a credential, never issues one, and cannot widen access. An `authorize` hook is
 // offered for coarse gating (is anyone logged in at all), not as the security boundary.
-import type { MotuServiceMap } from './services.js';
+import type { MotuServiceMap } from './services';
 
 export interface MotuRouteOptions {
   /**

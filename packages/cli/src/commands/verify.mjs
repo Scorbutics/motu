@@ -356,8 +356,14 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
 
   // Confirm it's wired into the assembled ELEMENT_REGISTRY.
   const registryText = existsSync(paths.islandsRegistry) ? readFileSync(paths.islandsRegistry, 'utf8') : '';
-  // Either layout's specifier: flat `./<kebab>.island.js` or the original `./<kebab>/element.js`.
-  if (registryText.includes(`./${kebab}.island.js`) || registryText.includes(`./${kebab}/element.js`)) {
+  // Either layout's specifier, with or without the '.js'. motu now writes them extensionless (the
+  // host's bundler has to resolve them and not every one can map '.js' -> '.ts'), but a project
+  // generated before that still has the old form and is not broken.
+  const registered = [`./${kebab}.island`, `./${kebab}/element`].some(
+    (s) => registryText.includes(`${s}'`) || registryText.includes(`${s}.js'`) ||
+           registryText.includes(`${s}"`) || registryText.includes(`${s}.js"`),
+  );
+  if (registered) {
     report.ok('registered', 'registered in ELEMENT_REGISTRY');
   } else {
     report.error('registered', `not wired into ${paths.rel(paths.islandsRegistry)}`);
@@ -2161,7 +2167,11 @@ function archipelagoConfigChecks(report, id) {
   }
 
   const registryText = existsSync(paths.archipelagosRegistry) ? readFileSync(paths.archipelagosRegistry, 'utf8') : '';
-  if (registryText.includes(`./${id}/${id}.archipelago.js`)) {
+  const archRegistered = [`./${id}/${id}.archipelago`].some(
+    (s) => registryText.includes(`${s}'`) || registryText.includes(`${s}.js'`) ||
+           registryText.includes(`${s}"`) || registryText.includes(`${s}.js"`),
+  );
+  if (archRegistered) {
     report.ok('registered', 'registered in ARCHIPELAGOS');
   } else {
     report.error('registered', `not wired into ${paths.rel(paths.archipelagosRegistry)}`);

@@ -8,17 +8,17 @@
 // boundary an island must stay inside.
 //
 // The server dispatcher lives behind ./server so a client bundle can never pull it in by accident.
-export { nextHostBridge, collectingHostBridge } from './host-bridge.js';
-export type { NextRouterLike, NextHostBridgeOptions } from './host-bridge.js';
-export { Archipelago } from './archipelago.js';
+export { nextHostBridge, collectingHostBridge } from './host-bridge';
+export type { NextRouterLike, NextHostBridgeOptions } from './host-bridge';
+export { Archipelago } from './archipelago';
 // Re-exported so a Next host has one import site for the region surface.
 export { createRegion } from '@motu/react';
 export type { CreateRegionOptions, RegionBinding } from '@motu/react';
-export type { ArchipelagoProps } from './archipelago.js';
+export type { ArchipelagoProps } from './archipelago';
 // Re-exported so a page places islands without also importing @motu/react directly.
 export { Island, useMotuStore } from '@motu/react';
 export type { IslandProps } from '@motu/react';
-export { defineServices } from './services.js';
-export type { MotuServiceMap, MotuMethod } from './services.js';
-export { createContract } from './contract.js';
-export type { Contract } from './contract.js';
+export { defineServices } from './services';
+export type { MotuServiceMap, MotuMethod } from './services';
+export { createContract } from './contract';
+export type { Contract } from './contract';

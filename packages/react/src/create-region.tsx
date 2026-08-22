@@ -23,8 +23,8 @@ import {
   type RegionOf,
   type SlotsOf,
 } from '@motu/core';
-import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot } from './react-island.js';
-import type { ElementSpec } from './bootstrap.js';
+import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot } from './react-island';
+import type { ElementSpec } from './bootstrap';
 
 export interface CreateRegionOptions {
   /** The project's element registry — the same one the lagoon uses. */

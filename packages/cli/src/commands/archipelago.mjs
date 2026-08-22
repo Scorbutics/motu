@@ -64,7 +64,7 @@ export async function archipelagoCreateCommand(argv) {
 
   // 1) registry.ts — value import + ARCHIPELAGOS registry entry.
   const registrySf = project.addSourceFileAtPath(paths.archipelagosRegistry);
-  const spec = `./${id}/${id}.archipelago.js`;
+  const spec = `./${id}/${id}.archipelago`;
   if (!registrySf.getImportDeclarations().some((d) => d.getModuleSpecifierValue() === spec)) {
     registrySf.addImportDeclaration({ moduleSpecifier: spec, namedImports: [constName] });
   }
@@ -74,7 +74,7 @@ export async function archipelagoCreateCommand(argv) {
   }
 
   // 2) barrel (src/index.ts) — re-export the config const (barrel is one level above archipelagos/).
-  const barrelSpec = `./archipelagos/${id}/${id}.archipelago.js`;
+  const barrelSpec = `./archipelagos/${id}/${id}.archipelago`;
   const barrelSf = project.addSourceFileAtPath(paths.barrel);
   if (!barrelSf.getExportDeclarations().some((d) => d.getModuleSpecifierValue() === barrelSpec)) {
     barrelSf.addExportDeclaration({ moduleSpecifier: barrelSpec, namedExports: [constName] });

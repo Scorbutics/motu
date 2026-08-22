@@ -52,7 +52,7 @@ import {
   openIslandWindow,
   closeIslandWindow,
 } from '@motu/core';
-import type { ElementSpec, ReactElementSpec } from './bootstrap.js';
+import type { ElementSpec, ReactElementSpec } from './bootstrap';
 
 interface ArchipelagoValue {
   config: AnyArchipelagoConfig;

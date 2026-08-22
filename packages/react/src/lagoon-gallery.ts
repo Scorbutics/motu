@@ -17,11 +17,11 @@ import { setDefaultIsolation, applyMotuChrome } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
-import { defineMotuApp, type ElementSpec } from './bootstrap.js';
-import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle.js';
-import { mountFitToggle } from './fit-toggle.js';
-import { mountTideLine, type TideLens, type TideView } from './tideline.js';
-import { mountReactLagoon } from './lagoon-react-mount.js';
+import { defineMotuApp, type ElementSpec } from './bootstrap';
+import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle';
+import { mountFitToggle } from './fit-toggle';
+import { mountTideLine, type TideLens, type TideView } from './tideline';
+import { mountReactLagoon } from './lagoon-react-mount';
 
 /** `lagoon.config.json` — everything about a project's lagoon that a declaration can carry. */
 export interface LagoonConfig {

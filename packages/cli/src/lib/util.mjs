@@ -397,7 +397,12 @@ export function blankComments(text) {
  */
 export function ensureNoInstallLinks(root, motuRoot) {
   const dir = resolve(root, 'node_modules', '@motu');
-  const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay'];
+  // `chrome` belongs here even though a host never imports it by name: `@motu/core`'s toolbar does
+  // (`import { MOTU_CHROME } from '@motu/chrome'`). Leaving it out worked only as long as every host
+  // resolved motu's files by their real path and so fell through to motu's own workspace copy. A host
+  // that aliases `@motu/*` to source instead — the arrangement Next and Angular both want — resolves
+  // from its own tree and gets an unresolved import from inside a package it never named.
+  const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay', 'chrome'];
   let made = 0;
   for (const name of wanted) {
     const target = resolve(motuRoot, 'packages', name);

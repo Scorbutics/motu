@@ -13,7 +13,7 @@ import {
   type Channel,
   type HostBridge,
 } from '@motu/core';
-import { defineReactElement, type DefineOptions } from './defineReactElement.js';
+import { defineReactElement, type DefineOptions } from './defineReactElement';
 
 /** A React-backed registry row: a tag bound to a React component + its options. */
 export interface ReactElementSpec<P extends object = any> {

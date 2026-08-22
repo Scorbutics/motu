@@ -1,5 +1,5 @@
-import type { Transport } from './index.js';
-import { MotuError } from './index.js';
+import type { Transport } from './index';
+import { MotuError } from './index';
 
 /**
  * A Transport that dispatches to functions in this process instead of over the wire.

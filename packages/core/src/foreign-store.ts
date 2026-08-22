@@ -21,9 +21,9 @@
 // declaration that is documentation and one that can be contradicted by the running app. The mirror
 // image of the laundering smell, which watches for a HOST write suspiciously soon after an island
 // emitted; this watches for a write with no emit at all.
-import { noteExpectedForeignWrites, expectedForeignWriter, runWithWriteSource, currentWriteSource } from './store.js';
-import { writtenKeys } from './archipelago.js';
-import type { AnyArchipelagoConfig } from './archipelago.js';
+import { noteExpectedForeignWrites, expectedForeignWriter, runWithWriteSource, currentWriteSource } from './store';
+import { writtenKeys } from './archipelago';
+import type { AnyArchipelagoConfig } from './archipelago';
 
 /** Stripped in production, like every other diagnostic here. */
 declare const __MOTU_DEBUG__: boolean;

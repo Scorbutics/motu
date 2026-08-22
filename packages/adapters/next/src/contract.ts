@@ -9,7 +9,7 @@
 // lagoon configures MockTransport instead of HttpTransport and the same component replays fixtures
 // with no backend at all.
 import { call } from '@motu/runtime';
-import type { MotuServiceMap } from './services.js';
+import type { MotuServiceMap } from './services';
 
 /** The client's shape: the server's service map, with every method reachable as-is. */
 export type Contract<S extends MotuServiceMap> = {

@@ -41,7 +41,11 @@ export function elementExportName(file) {
 export function renderRegistry(islands, islandsDir) {
   const rows = islands.map((i) => {
     const name = elementExportName(i.element);
-    const spec = i.layout === 'flat' ? `./${i.kebab}.island.js` : `./${i.kebab}/element.js`;
+    // Extensionless. motu's packages declare `moduleResolution: "Bundler"`, and the registry this
+    // writes is compiled by the HOST's bundler — where a '.js' specifier pointing at a '.ts' file is
+    // a mapping each one has to be told about. webpack has `extensionAlias`; Turbopack has nothing,
+    // and an Angular build resolves it only from inside node_modules. Extensionless needs no mapping.
+    const spec = i.layout === 'flat' ? `./${i.kebab}.island` : `./${i.kebab}/element`;
     // Local alias when the export name would collide across islands (folder form names them uniquely).
     const local = name === 'element' ? `${i.kebab.replace(/-(\w)/g, (_, c) => c.toUpperCase())}Element` : name;
     const text = readFileSync(i.element, 'utf8');

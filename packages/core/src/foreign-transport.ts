@@ -27,7 +27,7 @@
 //   3. the member list of a catalogue region is IN the data, so membership stops being unanswerable
 //      (see `catalogue.ts`) — the thing that made metadata-driven UIs look hostile is the thing that
 //      makes them checkable.
-import type { CatalogueMember } from './catalogue.js';
+import type { CatalogueMember } from './catalogue';
 
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;

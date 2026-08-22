@@ -9,8 +9,8 @@ import { applyMotuChrome, bindEntries } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
-import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap.js';
-import { mountReactLagoon } from './lagoon-react-mount.js';
+import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
+import { mountReactLagoon } from './lagoon-react-mount';
 
 export interface LagoonBootstrapOptions {
   /** The project's element registry (same one the real composition roots use). */

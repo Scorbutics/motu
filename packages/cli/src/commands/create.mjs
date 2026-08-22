@@ -104,7 +104,7 @@ ${lines.join('\n')}
 }
 
 function indexSource(camel) {
-  return `export { ${camel}Element } from './element.js';\n`;
+  return `export { ${camel}Element } from './element';\n`;
 }
 
 function fixturesSource(kebab, contractHint) {
@@ -155,7 +155,7 @@ function readContractHint() {
 /** Add the import + ELEMENT_REGISTRY entry to the islands registry via AST. */
 function addRegistryEntry(project, camel, kebab) {
   const sf = project.addSourceFileAtPath(paths.islandsRegistry);
-  const spec = `./${kebab}/element.js`;
+  const spec = `./${kebab}/element`;
   const constName = `${camel}Element`;
 
   if (!sf.getImportDeclarations().some((d) => d.getModuleSpecifierValue() === spec)) {

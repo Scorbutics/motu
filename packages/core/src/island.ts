@@ -5,7 +5,7 @@
 // lets an island be authored in any framework, including the legacy host's own, behind one stable
 // custom-element boundary.
 
-import type { MotuTheme, MotuFit, LegacyStrategy } from './theme.js';
+import type { MotuTheme, MotuFit, LegacyStrategy } from './theme';
 
 // Stripped in production (see the debug overlay). The definition registry below only populates when
 // this build-time constant is true; the typeof guard keeps it safe under bare Node/tsc.

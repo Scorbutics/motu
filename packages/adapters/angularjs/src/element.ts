@@ -7,7 +7,7 @@
 // legacy global CSS the component expects.
 
 import { defineIsland, type IslandElementOptions, type IslandInstance } from '@motu/core';
-import { motuAngularInjector } from './host.js';
+import { motuAngularInjector } from './host';
 
 function angular(): any {
   return (window as unknown as { angular?: any }).angular;

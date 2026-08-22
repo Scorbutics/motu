@@ -1,15 +1,15 @@
-export { Store } from './store.js';
-export type { StoreListener } from './store.js';
-export { islandOutputs, resetIslandOutputs, observeStoreWrites, runWithWriteSource, producerOf, producersOf, launderingSuspects, resetLaunderingSuspects } from './store.js';
-export type { LaunderingSuspect } from './store.js';
-export type { StoreWrite } from './store.js';
-export { startSeedRecording, stopSeedRecording } from './store.js';
-export type { RecordedSeed } from './store.js';
-export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, applyMotuChrome } from './toolbar.js';
-export { flood, applyFlood, clearFlood, floodFrames } from './flood.js';
-export { MOUNTPOINT_CSS, ensureMountpointStyle } from './mountpoints.js';
-export type { Flood, FloodFrom } from './flood.js';
-export type { MotuChromeTheme } from './toolbar.js';
+export { Store } from './store';
+export type { StoreListener } from './store';
+export { islandOutputs, resetIslandOutputs, observeStoreWrites, runWithWriteSource, producerOf, producersOf, launderingSuspects, resetLaunderingSuspects } from './store';
+export type { LaunderingSuspect } from './store';
+export type { StoreWrite } from './store';
+export { startSeedRecording, stopSeedRecording } from './store';
+export type { RecordedSeed } from './store';
+export { motuToolbar, setMotuToolbarHost, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME, applyMotuChrome } from './toolbar';
+export { flood, applyFlood, clearFlood, floodFrames } from './flood';
+export { MOUNTPOINT_CSS, ensureMountpointStyle } from './mountpoints';
+export type { Flood, FloodFrom } from './flood';
+export type { MotuChromeTheme } from './toolbar';
 export {
   observeForeignStore,
   ownedWrite,
@@ -19,8 +19,8 @@ export {
   foreignObservations,
   subscribeUnattributedWrites,
   resetUnattributedWrites,
-} from './foreign-store.js';
-export type { StoreAdapter, UnattributedWrite, WriteSite, ForeignObservation } from './foreign-store.js';
+} from './foreign-store';
+export type { StoreAdapter, UnattributedWrite, WriteSite, ForeignObservation } from './foreign-store';
 export {
   observeForeignTransport,
   transportCalls,
@@ -28,13 +28,13 @@ export {
   unservedOperations,
   transportObservations,
   resetTransport,
-} from './foreign-transport.js';
-export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport.js';
-export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls, runWithIsland, ambientIsland, openIslandWindow, closeIslandWindow } from './provenance.js';
-export type { HostCall } from './provenance.js';
-export { checkCatalogue } from './catalogue.js';
-export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue.js';
-export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
+} from './foreign-transport';
+export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport';
+export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls, runWithIsland, ambientIsland, openIslandWindow, closeIslandWindow } from './provenance';
+export type { HostCall } from './provenance';
+export { checkCatalogue } from './catalogue';
+export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue';
+export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago';
 export type {
   HostBridge,
   IslandContext,
@@ -63,19 +63,19 @@ export type {
   ArchipelagoOptions,
   MountedIslandInfo,
   HostIntent,
-} from './archipelago.js';
-export { defineIslandElement } from './island-element.js';
-export { defineArchipelagoElement } from './archipelago-element.js';
-export { setPreview, isPreviewOn } from './preview.js';
-export { absorbHostTheme } from './host-theme.js';
-export type { HostThemeSource } from './host-theme.js';
-export { installChannels } from './channel.js';
-export { getChannels, subscribeChannels } from './channel.js';
-export type { Channel, ChannelContext, ChannelInfo } from './channel.js';
-export type { MotuTheme, MotuFit, LegacyStrategy } from './theme.js';
-export { defineIsland } from './island.js';
-export { getIslandDefinition, getIslandDefinitions, registerIslandDefinition } from './island.js';
-export { setDefaultIsolation, getDefaultIsolation } from './island.js';
+} from './archipelago';
+export { defineIslandElement } from './island-element';
+export { defineArchipelagoElement } from './archipelago-element';
+export { setPreview, isPreviewOn } from './preview';
+export { absorbHostTheme } from './host-theme';
+export type { HostThemeSource } from './host-theme';
+export { installChannels } from './channel';
+export { getChannels, subscribeChannels } from './channel';
+export type { Channel, ChannelContext, ChannelInfo } from './channel';
+export type { MotuTheme, MotuFit, LegacyStrategy } from './theme';
+export { defineIsland } from './island';
+export { getIslandDefinition, getIslandDefinitions, registerIslandDefinition } from './island';
+export { setDefaultIsolation, getDefaultIsolation } from './island';
 export type {
   AttrType,
   IslandIsolation,
@@ -87,4 +87,4 @@ export type {
   IslandMountContext,
   IslandRenderer,
   IslandDefinition,
-} from './island.js';
+} from './island';

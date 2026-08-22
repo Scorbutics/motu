@@ -4,8 +4,8 @@
 // the legacy host and the motu islands, in Feathers' sense: a place to inject behaviour without
 // editing the host in place.
 
-import type { Store } from './store.js';
-import { recordSeedWrite } from './store.js';
+import type { Store } from './store';
+import { recordSeedWrite } from './store';
 
 // Stripped in production (see the debug overlay). Only in debug builds is each channel handed an
 // instrumented store, so its writes are tracked; the typeof guard keeps it safe under bare Node/tsc.

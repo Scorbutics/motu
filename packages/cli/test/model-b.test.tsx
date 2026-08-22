@@ -16,10 +16,10 @@ import { createRoot } from 'react-dom/client';
 // effect below has not run by the time the assertions read the store, and the test passes or fails
 // on timing rather than on behaviour.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-import { ArchipelagoProvider, Island } from '../../react/src/react-island.js';
+import { ArchipelagoProvider, Island } from '../../react/src/react-island';
 import { getArchipelagoStore } from '@motu/core';
 import type { ArchipelagoConfig } from '@motu/core';
-import type { ElementSpec } from '../../react/src/bootstrap.js';
+import type { ElementSpec } from '../../react/src/bootstrap';
 
 let failures = 0;
 function check(name: string, cond: boolean, detail = '') {

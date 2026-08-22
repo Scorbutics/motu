@@ -4,5 +4,5 @@
 // The whole tree is gated by the __MOTU_DEBUG__ build constant at each composition root, so it
 // dead-code-eliminates out of a production bundle.
 
-export { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from './overlay.js';
-export type { DebugOverlayOptions } from './overlay.js';
+export { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from './overlay';
+export type { DebugOverlayOptions } from './overlay';

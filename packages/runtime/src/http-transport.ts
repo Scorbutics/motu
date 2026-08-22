@@ -1,4 +1,4 @@
-import { MotuError, SessionExpiredError, type Transport } from './index.js';
+import { MotuError, SessionExpiredError, type Transport } from './index';
 
 function readCookie(name: string): string | undefined {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));

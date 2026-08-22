@@ -9,9 +9,9 @@
 // element and an on/off switch appears; toggling swaps the wrapped legacy fragment for the motu
 // island. Defaults OFF (prod shows legacy) and the choice persists in localStorage per slot.
 
-import { mountIsland, getSlotStore } from './archipelago.js';
-import { isPreviewOn, subscribePreview } from './preview.js';
-import { runWithWriteSource } from './store.js';
+import { mountIsland, getSlotStore } from './archipelago';
+import { isPreviewOn, subscribePreview } from './preview';
+import { runWithWriteSource } from './store';
 
 // Stripped in production: host-origin write tagging for the debug overlay.
 declare const __MOTU_DEBUG__: boolean;

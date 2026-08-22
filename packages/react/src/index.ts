@@ -1,26 +1,26 @@
-export { renderArchipelagoLayout } from './archipelago-layout.js';
-export { defineReactElement } from './defineReactElement.js';
-export type { DefineOptions } from './defineReactElement.js';
-export { registerElements, defineMotuApp, defineLagoon, islandElement } from './bootstrap.js';
-export { resolveTransportMode, mountTransportToggle } from './transport-toggle.js';
-export type { TransportMode } from './transport-toggle.js';
-export { resolveFitMode, mountFitToggle } from './fit-toggle.js';
-export { mountTideLine } from './tideline.js';
-export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCorner, TideLens } from './tideline.js';
-export { bootstrapLagoon } from './lagoon-bootstrap.js';
-export { ArchipelagoProvider, Island, useMotuStore, useRegionValue, useRegion } from './react-island.js';
-export { createRegion } from './create-region.js';
-export type { CreateRegionOptions, RegionBinding } from './create-region.js';
-export { mountReactLagoon } from './lagoon-react-mount.js';
-export type { ArchipelagoProviderProps, IslandProps } from './react-island.js';
-export { startLagoon } from './lagoon-gallery.js';
+export { renderArchipelagoLayout } from './archipelago-layout';
+export { defineReactElement } from './defineReactElement';
+export type { DefineOptions } from './defineReactElement';
+export { registerElements, defineMotuApp, defineLagoon, islandElement } from './bootstrap';
+export { resolveTransportMode, mountTransportToggle } from './transport-toggle';
+export type { TransportMode } from './transport-toggle';
+export { resolveFitMode, mountFitToggle } from './fit-toggle';
+export { mountTideLine } from './tideline';
+export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCorner, TideLens } from './tideline';
+export { bootstrapLagoon } from './lagoon-bootstrap';
+export { ArchipelagoProvider, Island, useMotuStore, useRegionValue, useRegion } from './react-island';
+export { createRegion } from './create-region';
+export type { CreateRegionOptions, RegionBinding } from './create-region';
+export { mountReactLagoon } from './lagoon-react-mount';
+export type { ArchipelagoProviderProps, IslandProps } from './react-island';
+export { startLagoon } from './lagoon-gallery';
 export type {
   LagoonConfig,
   LagoonOverrides,
   LagoonLens,
   StartLagoonOptions,
-} from './lagoon-gallery.js';
-export type { LagoonBootstrapOptions } from './lagoon-bootstrap.js';
+} from './lagoon-gallery';
+export type { LagoonBootstrapOptions } from './lagoon-bootstrap';
 export type {
   ElementSpec,
   ReactElementSpec,
@@ -30,4 +30,4 @@ export type {
   MotuAppConfig,
   LagoonTarget,
   DefineLagoonOptions,
-} from './bootstrap.js';
+} from './bootstrap';

@@ -8,17 +8,17 @@
 //    the standalone archipelago instead of flipping islands one by one. Toggle it off to return to
 //    the legacy screen, where the individual <motu-island> markers remain manually toggleable.
 
-import { getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore } from './archipelago.js';
-import { ensureBadge, isPreviewOn, registerPreviewRegion, unregisterPreviewRegion } from './preview.js';
-import { runWithWriteSource } from './store.js';
-import { getDefaultIsolation, type IslandIsolation } from './island.js';
-import type { MotuFit } from './theme.js';
+import { getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore } from './archipelago';
+import { ensureBadge, isPreviewOn, registerPreviewRegion, unregisterPreviewRegion } from './preview';
+import { runWithWriteSource } from './store';
+import { getDefaultIsolation, type IslandIsolation } from './island';
+import type { MotuFit } from './theme';
 
 // Stripped in production: host-origin write tagging for the debug overlay.
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
 
-import { MOUNTPOINT_CSS } from './mountpoints.js';
+import { MOUNTPOINT_CSS } from './mountpoints';
 
 const STYLE_ID = 'motu-arch-style';
 const LIGHT_STYLE_ID = 'motu-arch-light-style';

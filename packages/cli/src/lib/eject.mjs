@@ -87,7 +87,26 @@ function readIslands(text) {
     const readsBlock = block.body.match(/\breads:\s*\[([^\]]*)\]/)?.[1] ?? '';
     const reads = [...readsBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
     const planned = /\bplanned:\s*true/.test(block.body);
-    islands.push({ slot: block.name, element, writes, member, reads, planned });
+    // WHICH PROP CARRIES WHICH KEY. Both `bind` forms: the rename map `{ prop: 'key' }` and the short
+    // array `['key']`, where the prop and the key are the same word. Needed by `integrate check` to ask
+    // whether the PAGE actually passes what the island says it binds — a slot can be placed, composed
+    // and read while the island quietly runs on its defaults.
+    const bind = {};
+    const bindMap = block.body.match(/\bbind:\s*\{([^}]*)\}/)?.[1];
+    if (bindMap) {
+      for (const [, prop, key] of bindMap.matchAll(/(\w+)\s*:\s*'([^']+)'/g)) bind[prop] = key;
+    } else {
+      const bindArr = block.body.match(/\bbind:\s*\[([^\]]*)\]/)?.[1];
+      if (bindArr) {
+        // RENAMES FIRST, then the bare entries with the objects removed. Reading every quoted string
+        // as a bare entry turned `[{ value: 'filters' }]` into a binding on a prop called `filters`,
+        // which the component does not have — and the check then reported the page as not passing a
+        // prop nobody ever declared.
+        for (const [, prop, key] of bindArr.matchAll(/(\w+)\s*:\s*'([^']+)'/g)) bind[prop] = key;
+        for (const [, key] of bindArr.replace(/\{[^}]*\}/g, '').matchAll(/'([^']+)'/g)) bind[key] = key;
+      }
+    }
+    islands.push({ slot: block.name, element, writes, member, reads, planned, bind });
   }
   return islands;
 }

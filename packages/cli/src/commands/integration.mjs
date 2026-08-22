@@ -173,6 +173,61 @@ function checkRegion(region, sources) {
     );
   }
 
+  // 2b — DOES THE PAGE FILL WHAT THE ISLAND BINDS?
+  //
+  // `<X.Island slot="s"><Card/></X.Island>` publishes the CHILD's props into the region under the
+  // island's `bind` keys. A prop the page does not pass is a key nothing feeds, and the island runs on
+  // its default — placed, composed, read, and quietly empty. The lagoon cannot see this: it seeds the
+  // key itself, which is the whole point of a preview and the reason it cannot answer this question.
+  const passed = passedProps(sources, binding, code);
+  for (const island of liveIslands) {
+    const bound = Object.entries(island.bind ?? {});
+    if (!bound.length) continue;
+    const props = passed.get(island.slot);
+    if (!props) continue; // not placed with children — the registry form takes its props from the store
+    const unfed = bound.filter(([prop]) => !props.has(prop));
+    if (unfed.length) {
+      add(
+        'warn',
+        'placed',
+        `${island.slot} binds ${unfed.map(([p, k]) => `${p} → ${k}`).join(', ')}, and the page's own element ` +
+          `passes ${unfed.length > 1 ? 'none of those props' : 'no such prop'} — the island renders its default ` +
+          `and the region key stays empty`,
+      );
+    }
+  }
+
+  // 2c — IS EVERY HOST-FED KEY ACTUALLY ESTABLISHED?
+  //
+  // Host-fed is DERIVED, exactly as the rules say it is: every bound key that no island `writes`. The
+  // page owes each of them a value, by one of the two acts that exist — `seed(...)`, or passing the
+  // bound prop on a placed island's own element. A key that gets neither is read as `undefined` by
+  // whoever reads it, and no other check can see it: the archipelago declares the key, the island
+  // binds it, the lagoon SEEDS it (that is what a preview does), and the host quietly feeds nothing.
+  const produced = new Set(liveIslands.flatMap((i) => Object.values(i.writes ?? {}).map((t) => (typeof t === 'string' ? t : Object.values(t)).toString())).flat());
+  const seeded = seededKeys(sources, binding, code);
+  const fedBy = new Map(); // host-fed key -> the slots whose bind could feed it
+  for (const island of liveIslands) {
+    for (const [prop, key] of Object.entries(island.bind ?? {})) {
+      if (produced.has(key)) continue;
+      const entry = fedBy.get(key) ?? { slots: [], passed: false };
+      entry.slots.push(island.slot);
+      if (passed.get(island.slot)?.has(prop)) entry.passed = true;
+      fedBy.set(key, entry);
+    }
+  }
+  const starved = [...fedBy].filter(([key, e]) => !e.passed && !seeded.has(key));
+  for (const [key, e] of starved) {
+    add(
+      'warn',
+      'fed',
+      `host-fed key ${key} is never established: the host neither seeds it nor passes it on ` +
+        `${e.slots.join(', ')} — every reader sees undefined, and the lagoon cannot tell you because it ` +
+        `seeds the key itself`,
+    );
+  }
+  if (fedBy.size && !starved.length) add('ok', 'fed', `all ${fedBy.size} host-fed key(s) seeded or passed`);
+
   const declared = placedIslands.map((i) => i.slot);
   const missing = declared.filter((s) => !placed.has(s));
   // UNKNOWN means the archipelago declares no such slot — measured against EVERY live island, not
@@ -255,6 +310,52 @@ function checkRegion(region, sources) {
  * nobody runs, and this is the one question the rest of `check` cannot ask.
  */
 /**
+ * slot -> the props the page passes to the island's child element.
+ *
+ * Only the WRAP form has an answer: `<X.Island slot="s"><Card a={1}/></X.Island>` publishes `a`. A
+ * self-closing `<X.Island slot="s"/>` renders from the registry and takes its props from the store, so
+ * there is nothing here to compare and the slot is absent from the map rather than empty in it —
+ * "passes nothing" and "there is nothing to pass" are different answers.
+ */
+function passedProps(sources, binding, code) {
+  const out = new Map();
+  for (const [file] of sources) {
+    let sf;
+    try {
+      sf = sourceFileAt(file, { allowJs: true, jsx: 4 });
+    } catch {
+      continue;
+    }
+    for (const el of sf.getDescendantsOfKind(SyntaxKind.JsxElement)) {
+      const open = el.getOpeningElement?.();
+      if (open?.getTagNameNode?.().getText() !== `${binding}.Island`) continue;
+      const slot = open
+        .getAttributes?.()
+        ?.find((a) => (a.getNameNode?.().getText?.() ?? a.getName?.()) === 'slot')
+        ?.getInitializer?.()
+        ?.getText?.()
+        ?.replace(/['"`{}]/g, '');
+      if (!slot) continue;
+      const props = new Set();
+      for (const child of el.getJsxChildren?.() ?? []) {
+        const childOpen =
+          child.getKind?.() === SyntaxKind.JsxElement
+            ? child.getOpeningElement?.()
+            : child.getKind?.() === SyntaxKind.JsxSelfClosingElement
+              ? child
+              : null;
+        for (const a of childOpen?.getAttributes?.() ?? []) {
+          const name = a.getNameNode?.().getText?.() ?? a.getName?.();
+          if (name) props.add(name);
+        }
+      }
+      out.set(slot, props);
+    }
+  }
+  return out;
+}
+
+/**
  * Slots whose `<X.Island>` sits under something that may not run: a logical `&&`, a ternary, or a
  * callback (`.map`, `.filter`). Uses the AST rather than the text, because "is this line inside a
  * conditional" is exactly the question a regex cannot answer.
@@ -336,4 +437,60 @@ export async function integrateCheckCommand(argv) {
   if (errors) console.log(color.red(color.bold('FAIL')) + `  ${errors} error(s), ${warns} warning(s)`);
   else console.log(color.green(color.bold('PASS')) + color.dim(`  ${results.length} region(s) integrated · ${warns} warning(s)`));
   process.exit(errors ? 1 : 0);
+}
+
+/**
+ * The region keys the host establishes by hand, by either act: `X.seed(...)` / `seedArchipelago(...)`.
+ *
+ * Both the positional form (`seed('k', v)`) and the object form (`seed({ k: v })`), because both are
+ * written in this codebase and a check that knew only one would report the other as missing.
+ */
+function seededKeys(sources, binding, code) {
+  const keys = new Set();
+  const idents = (text) =>
+    splitTop(text)
+      .map((entry) => entry.split(':')[0].trim())
+      .filter((k) => /^[A-Za-z_$][\w$]*$/.test(k));
+  for (const [, text] of sources) {
+    const src = code(text);
+    for (const m of src.matchAll(new RegExp(`(?:${binding}\\.seed|seedArchipelago)\\s*\\(`, 'g'))) {
+      let depth = 0;
+      let i = m.index + m[0].length - 1;
+      const start = i + 1;
+      for (; i < src.length; i++) {
+        if (src[i] === '(') depth++;
+        else if (src[i] === ')' && --depth === 0) break;
+      }
+      const args = splitTop(src.slice(start, i));
+      for (const arg of args) {
+        const a = arg.trim();
+        // `seed('key', value)` / `seedArchipelago(id, 'key', value)` — a quoted argument is a key name.
+        const quoted = a.match(/^['"`]([A-Za-z_$][\w$]*)['"`]$/);
+        if (quoted) keys.add(quoted[1]);
+        // `seed({ recentMembers })` — the SHORTHAND is the form this codebase actually writes, and a
+        // `key:` regex reads right past it. That is how the object form went undetected while the
+        // positional one passed: the check was half-blind and both halves looked identical from here.
+        else if (a.startsWith('{')) for (const k of idents(a.slice(1, -1))) keys.add(k);
+      }
+    }
+  }
+  return keys;
+}
+
+/** Split on commas at depth 0 — nested objects, arrays, calls and generics stay whole. */
+function splitTop(text) {
+  const out = [];
+  let depth = 0;
+  let last = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(text.slice(last, i));
+      last = i + 1;
+    }
+  }
+  out.push(text.slice(last));
+  return out.filter((s) => s.trim());
 }

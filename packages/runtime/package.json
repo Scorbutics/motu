@@ -7,5 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./mock": "./src/mock.ts"
+  },
+  "dependencies": {
+    "@motu/core": "workspace:*"
   }
 }

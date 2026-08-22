@@ -1,6 +1,8 @@
 // Stripped in production: the debug overlay's instrumentation is gated on this build-time constant,
 // so the whole block below dead-code-eliminates when it is false (and is safely `undefined` under
 // bare Node/tsc, where the typeof guard evaluates to false rather than throwing).
+import { runWithIsland as coreRunWithIsland, ambientIsland } from '@motu/core';
+
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
 
@@ -42,7 +44,10 @@ export interface CallEvent {
 type CallObserver = (e: CallEvent) => void;
 const callObservers = new Set<CallObserver>();
 let callSeq = 0;
-let currentIsland: string | null = null;
+// The window itself lives in @motu/core, so a traced host-module call and a contract call are
+// attributed by the SAME open window. Two copies meant `runWithIsland` from here left `traced` blind:
+// the react adapter opens one window, and only the transport's calls carried a tag.
+const currentIsland = (): string | null => ambientIsland();
 
 /** Subscribe to every contract call's lifecycle (dev overlay). Returns an unsubscribe. */
 export function observeCalls(observer: CallObserver): () => void {
@@ -56,13 +61,7 @@ export function observeCalls(observer: CallObserver): () => void {
  * touch it (zero per-island cost).
  */
 export function runWithIsland<T>(id: string | null, fn: () => T): T {
-  const prev = currentIsland;
-  currentIsland = id;
-  try {
-    return fn();
-  } finally {
-    currentIsland = prev;
-  }
+  return coreRunWithIsland(id, fn);
 }
 
 function emitCall(e: CallEvent): void {
@@ -105,7 +104,7 @@ export function call<T>(service: string, method: string, args: unknown[]): Promi
   if (!DEBUG) return current.call<T>(service, method, args);
 
   const id = ++callSeq;
-  const island = currentIsland;
+  const island = currentIsland();
   const t0 = performance.now();
   emitCall({ id, service, method, args, island, phase: 'start' });
   return current.call<T>(service, method, args).then(

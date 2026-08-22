@@ -49,6 +49,8 @@ import {
   type Store,
   bindEntries,
   hostFedKeys,
+  openIslandWindow,
+  closeIslandWindow,
 } from '@motu/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap.js';
 
@@ -242,6 +244,10 @@ export interface IslandProps {
  * defaults, then the archipelago's static `props`, then reactive `bind` values — so an island cannot
  * behave differently depending on which path mounted it.
  */
+/** Stripped in production, like every other diagnostic here. */
+declare const __MOTU_DEBUG__: boolean;
+const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
+
 export function Island({ slot, fit, props: extra, className, children }: IslandProps) {
   const ctx = useContext(ArchipelagoContext);
   if (!ctx) throw new Error(`motu: <Island slot="${slot}"> must be used inside <ArchipelagoProvider>`);
@@ -408,6 +414,28 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
       'data-motu-slot': slot,
       style: className ? undefined : { display: 'contents' },
     },
+    // The island's own effects run BETWEEN these two, because React runs passive effects in tree
+    // order. That is what ties a self-fetch to the island that fired it — see `openIslandWindow`.
+    // Debug builds only: two fibers and two effects per island per commit is a real cost, and what
+    // they buy is a row in the lens.
+    DEBUG ? createElement(IslandWindow, { key: 'motu-window-open', tag: spec.element }) : null,
     hosted ? cloneElement(hosted, resolved) : createElement(Component as never, resolved),
+    DEBUG ? createElement(IslandWindow, { key: 'motu-window-close' }) : null,
   );
+}
+
+/**
+ * Opens (with a tag) or closes (without) the island attribution window, from the commit phase.
+ *
+ * Renders nothing, and deliberately declares no dependency array: it must run on EVERY commit, since
+ * the commit where an island re-fetches is exactly the one where its own effect re-runs. Cleanups are
+ * not used — React runs every cleanup before every effect in a commit, so a cleanup-based close would
+ * fire before the island it was meant to close around.
+ */
+function IslandWindow({ tag }: { tag?: string }) {
+  useEffect(() => {
+    if (tag) openIslandWindow(tag);
+    else closeIslandWindow();
+  });
+  return null;
 }

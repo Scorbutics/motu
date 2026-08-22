@@ -838,7 +838,10 @@ class Overlay {
   // store key, so the graph is a hub per key with a spoke to each island that touches it.
   #drawWires() {
     this.#wires.replaceChildren();
-    if (this.#showCoupling) this.#drawCoupling();
+    if (this.#showCoupling) {
+      this.#drawCoupling();
+      this.#drawRequests();
+    }
   }
 
   // Islands don't talk directly — they couple THROUGH a shared store key. So the coupling graph is a
@@ -884,6 +887,64 @@ class Overlay {
     }
   }
 
+  /**
+   * The OTHER coupling — two islands asking the same source.
+   *
+   * The store graph draws what islands share through the region. It cannot see the sharing that
+   * happens outside it: peps' counters banner and its feed both call `@/lib/services/club-feed`, and
+   * on the store graph they are two unrelated islands. They are not. They fetch from one place, they
+   * go stale together, and the page that replaces that module has to satisfy both — which is exactly
+   * the kind of fact this graph exists to make visible without reading four files.
+   *
+   * Same shape as a key hub, in the requests colour: a node per SOURCE (a host module, or a contract
+   * service), a spoke to every island that called it, and the call count on the label. A source only
+   * one island calls is still drawn — thin, because "this island fetches for itself" is worth seeing
+   * next to a shared one, and it is the difference between an island that owns its data and one that
+   * borrows it.
+   */
+  #drawRequests() {
+    const byTag = new Map(getMountedIslands().map((i) => [i.element, i]));
+    // source -> island -> calls. Both routes land in the same map: from the graph's point of view a
+    // transport call and a stubbed host module are the same act.
+    const sources = new Map<string, Map<MountedIslandInfo, number>>();
+    const touch = (source: string, tag: string | null | undefined) => {
+      const info = tag ? byTag.get(tag) : undefined;
+      if (!info) return; // a call from outside any island has no box to draw a spoke to
+      let m = sources.get(source);
+      if (!m) sources.set(source, (m = new Map()));
+      m.set(info, (m.get(info) ?? 0) + 1);
+    };
+    for (const c of hostCalls()) touch(shortModule(c.module), c.island);
+    for (const c of this.#calls) touch(c.service, c.island);
+
+    for (const [source, callers] of sources) {
+      const anchors: Point[] = [];
+      for (const info of callers.keys()) {
+        const a = islandAnchor(info.el);
+        if (a) anchors.push(a);
+      }
+      if (!anchors.length) continue;
+      const shared = callers.size >= 2;
+      // BELOW the islands, where a key hub sits above them: the two graphs overlay the same page and
+      // a shared midpoint would stack a source node on top of a key node.
+      const hub = shared
+        ? { x: avg(anchors.map((a) => a.x)), y: avg(anchors.map((a) => a.y)) }
+        : { x: anchors[0].x, y: anchors[0].y + 52 };
+      const color = '#0369a1';
+      for (const a of anchors) {
+        const spoke = wire(hub.x, hub.y, a.x, a.y, color);
+        if (!shared) spoke.setAttribute('stroke-opacity', '.45');
+        this.#wires.append(spoke);
+      }
+      const dot = svgDot(hub.x, hub.y, color, shared ? 5 : 3.5);
+      dot.setAttribute('stroke', '#fffefb');
+      dot.setAttribute('stroke-width', '2');
+      this.#wires.append(dot);
+      const n = [...callers.values()].reduce((a, b) => a + b, 0);
+      this.#wires.append(svgLabel(hub.x, hub.y + 16, `${source} \u00b7 ${n}\u00d7`, color));
+    }
+  }
+
   // store -> (store key -> islands that read or write it). Reads come from spec.bind (declarative),
   // writes from the attributed write-log; together they are the keys' "touchers".
   #couplingByStore(): Map<Store, Map<string, Set<MountedIslandInfo>>> {
@@ -919,6 +980,16 @@ class Overlay {
   // Islands participating in any shared-key coupling (their outlines light up while the graph is on).
   #coupledIslands(): Set<MountedIslandInfo> {
     const out = new Set<MountedIslandInfo>();
+    // An island the requests graph wires up needs its outline too, or the spoke ends in blank page.
+    const byTag = new Map(getMountedIslands().map((i) => [i.element, i]));
+    for (const c of hostCalls()) {
+      const info = c.island ? byTag.get(c.island) : undefined;
+      if (info) out.add(info);
+    }
+    for (const c of this.#calls) {
+      const info = c.island ? byTag.get(c.island) : undefined;
+      if (info) out.add(info);
+    }
     for (const [, byKey] of this.#couplingByStore()) {
       for (const islands of byKey.values()) {
         if (islands.size >= 2) for (const i of islands) out.add(i);
@@ -1212,8 +1283,9 @@ class Overlay {
       body.append(back);
       body.append(this.#detail(this.#selected));
     } else {
-      // Archipelago scope: the same three axes for the whole region — input (host channels), output
-      // (contract calls), coupling (shared store keys). Pick an island on the page to narrow to it.
+      // Archipelago scope, for the whole region: input (host channels), requests (what it ASKS the
+      // outside for), output (what it pushes out), coupling (shared store keys). Pick an island on the
+      // page to narrow to it.
       body.append(
         h(
           'div',
@@ -1223,6 +1295,7 @@ class Overlay {
       );
       body.append(this.#regionSheet());
       body.append(this.#archInput());
+      body.append(this.#archRequests());
       body.append(this.#archOutput());
       body.append(this.#archCoupling());
     }
@@ -1313,8 +1386,8 @@ class Overlay {
     }
     wrap.append(input);
 
-    // OUTPUT — events it emits, store keys it has written (observed), host intents it pushed OUT to
-    // the ocean, and contract calls it made to the backend (both cross the motu boundary).
+    // OUTPUT — events it emits, store keys it has written (observed), and host intents it pushed OUT
+    // to the ocean. What it ASKED for is a request, not an output, and sits in its own group below.
     const output = this.#group('output', '#b45309');
     const emits = Object.entries(info.spec.on ?? {}).filter(([, h]) => h).map(([e]) => e);
     if (emits.length) {
@@ -1335,11 +1408,18 @@ class Overlay {
       output.append(this.#subLabel('host intents \u00b7 \u2192 ocean'));
       for (const i of intents.slice(0, 6)) output.append(this.#intentRow(i));
     }
-    const calls = this.#islandCalls(info);
-    output.append(this.#subLabel(`contract calls \u00b7 \u2192 backend (${calls.length})`));
-    if (!calls.length) output.append(h('div', { class: 'empty' }, 'None observed.'));
-    for (const c of calls.slice(0, 8)) output.append(this.#callRow(c, false));
     wrap.append(output);
+
+    // REQUESTS — what this island asked for, by either route. Same split as the region's panel.
+    const requests = this.#group('requests', '#0369a1');
+    const calls = this.#islandCalls(info);
+    requests.append(this.#subLabel(`contract calls \u00b7 \u2192 backend (${calls.length})`));
+    if (!calls.length) requests.append(h('div', { class: 'empty' }, 'None observed.'));
+    for (const c of calls.slice(0, 8)) requests.append(this.#callRow(c, false));
+    // The question "what feeds THIS island" is the one asked while inspecting one, and answering it
+    // only at region level makes the reader guess which of four islands fetched what.
+    this.#hostCallRows(requests, info.element);
+    wrap.append(requests);
 
     // COUPLING — sibling islands sharing a store key: depends-on (their writes feed my reads), feeds
     // (my writes feed their reads), and co-reads (a shared input source), all store-mediated.
@@ -1500,11 +1580,6 @@ class Overlay {
       const ordered = [...channels].sort((a, b) => a.fireCount - b.fireCount);
       for (const c of ordered) g.append(this.#channelRow(c));
     }
-    // NOT after the channels' early return, which is where this first went: a region with no channels
-    // is exactly the one whose islands fetch for themselves, so the provenance rows were hidden in the
-    // only case that needed them — peps' club region has four islands, zero channels, and its INPUT
-    // section read "No channels installed" full stop.
-    this.#hostCallRows(g);
     return g;
   }
 
@@ -1524,33 +1599,45 @@ class Overlay {
    * exports with no calls IS a finding: these islands rendered without asking anyone for data, which
    * is what a hard-coded fixture inside a component looks like from here.
    */
-  #hostCallRows(g: HTMLElement): void {
-    const calls = hostCalls();
+  #hostCallRows(g: HTMLElement, tag?: string): void {
+    const all = hostCalls();
+    const calls = tag ? all.filter((c) => c.island === tag) : all;
     const wrapped = tracedExports();
-    if (!wrapped && !calls.length) {
-      g.append(this.#subLabel('host modules \u00b7 stub \u2192 island'));
+    const scope = tag ? 'this island' : 'stub \u2192 island';
+    if (!wrapped) {
+      // Only worth saying at region level: a per-island panel that repeats "nobody instruments this"
+      // for every island is noise, and the region panel already said it once.
+      if (!tag) {
+        g.append(this.#subLabel('host modules'));
+        g.append(
+          h(
+            'div',
+            { class: 'empty', title: "wrap a stub's exports in traced('<module>', '<fn>', impl) to record them" },
+            'No stub records its calls.',
+          ),
+        );
+      }
+      return;
+    }
+    g.append(this.#subLabel(`host modules \u00b7 ${scope} (${calls.length})`));
+    if (!calls.length) {
       g.append(
         h(
           'div',
-          { class: 'empty', title: "wrap a stub's exports in traced('<module>', '<fn>', impl) to record them" },
-          'No stub records its calls.',
+          { class: tag ? 'empty' : 'risk' },
+          tag
+            ? 'None \u2014 this island was handed its data.'
+            : `\u26a0 ${wrapped} traced export(s), none called \u2014 these islands fetched nothing`,
         ),
-      );
-      return;
-    }
-    g.append(this.#subLabel(`host modules \u00b7 stub \u2192 island (${calls.length})`));
-    if (!calls.length) {
-      g.append(
-        h('div', { class: 'risk' }, `\u26a0 ${wrapped} traced export(s), none called \u2014 these islands fetched nothing`),
       );
       return;
     }
     // One row per module+fn+args, not per call: a feed that paged three times is one row that says
     // ×3, and a duplicate fetch of the SAME arguments is the thing worth seeing rather than scrolling
-    // past. That is the same reading the output section gives contract calls.
+    // past. That is the same reading this group gives contract calls.
     const groups = new Map<string, { call: HostCall; n: number; last: number }>();
     for (const c of calls) {
-      const key = `${c.module}\u0000${c.fn}\u0000${JSON.stringify(c.args)}`;
+      const key = `${c.island ?? ''}\u0000${c.module}\u0000${c.fn}\u0000${JSON.stringify(c.args)}`;
       const g0 = groups.get(key);
       if (g0) {
         g0.n++;
@@ -1561,7 +1648,11 @@ class Overlay {
       const row = h('div', { class: 'call' });
       row.append(h('span', { class: 'st ext' }));
       row.append(h('span', { class: 'ep' }, `${call.fn}(${call.args.map((a) => preview(a)).join(', ')})`));
-      row.append(h('span', { class: 'isl', title: call.module }, shortModule(call.module)));
+      // WHO ASKED, when the attribution window was open — the same tag the contract calls carry. A
+      // call with no island is not an error: a stub called from a channel or from the frame itself
+      // has no island to attribute to, and saying "host" is the honest answer.
+      const who = tag ? shortModule(call.module) : (call.island ?? 'host');
+      row.append(h('span', { class: 'isl', title: `${call.module}${call.island ? ` \u00b7 called by ${call.island}` : ''}` }, who));
       const bits: string[] = [];
       if (call.returned != null) bits.push(`\u2192 ${call.returned}`);
       if (n > 1) bits.push(`\u00d7${n} \u00b7 dup`);
@@ -1793,33 +1884,59 @@ class Overlay {
     return g;
   }
 
-  // Archipelago OUTPUT: host intents pushed OUT to the ocean, and every contract call the region made
-  // to the backend (with duplicate detection — the same endpoint+args fetched twice).
+  // Archipelago OUTPUT: what the region PUSHES to the ocean — host intents (navigate, open, toast).
+  //
+  // The calls used to live here too, under "→ backend", and they do not belong: a request is not an
+  // output. It is the region ASKING for something, and what comes back is its input — which is why
+  // looking for "the requests feeding this archipelago" under OUTPUT finds nothing and reads as if
+  // nothing fetched. They have their own group now.
   #archOutput(): HTMLElement {
     const g = this.#group('output', '#b45309');
-    // Scope to the region on screen: intents from its mounted islands, calls attributed to its tags.
     const slots = new Set(getMountedIslands().map((i) => i.slot));
-    const tags = this.#activeIslandTags();
     const intents = this.#intents.filter((i) => i.source != null && slots.has(i.source));
+    g.append(this.#subLabel(`host intents \u00b7 \u2192 ocean (${intents.length})`));
+    if (!intents.length) g.append(h('div', { class: 'empty' }, 'No intents pushed.'));
+    for (const i of intents.slice(0, 8)) g.append(this.#intentRow(i));
+    return g;
+  }
+
+  // Archipelago REQUESTS: everything the region asked the outside for, by either route.
+  //
+  // Two routes, one question. A contract call goes through the transport, which is the seam the
+  // lagoon swaps for fixtures; a host-module call is an island importing `@/lib/services/…` directly
+  // and the lagoon standing that module down. Both are "this screen needs data it does not have", and
+  // splitting them across two groups made the second invisible to anyone looking for the first.
+  #archRequests(): HTMLElement {
+    const g = this.#group('requests', '#0369a1');
+    const tags = this.#activeIslandTags();
     const calls = this.#calls.filter((c) => c.island != null && tags.has(c.island));
-    if (intents.length) {
-      g.append(this.#subLabel(`host intents \u00b7 \u2192 ocean (${intents.length})`));
-      for (const i of intents.slice(0, 8)) g.append(this.#intentRow(i));
-    }
+    const traces = hostCalls();
     g.append(this.#subLabel(`contract calls \u00b7 \u2192 backend (${calls.length})`));
     if (!calls.length) {
-      g.append(h('div', { class: 'empty' }, 'No calls yet.'));
-      return g;
+      // WHY it is empty matters, and "No calls yet." answers the wrong question. A region whose
+      // islands import host modules directly never touches the transport, so this list is empty by
+      // construction rather than because nothing has happened yet. peps is entirely this shape: every
+      // island imports `@/lib/services/…`, and its `contract.ts` — whose own comment says islands
+      // import it and never a repository — has no callers at all.
+      g.append(
+        h(
+          'div',
+          { class: 'empty' },
+          traces.length ? 'None \u2014 these islands reach host modules directly (below).' : 'No calls yet.',
+        ),
+      );
+    } else {
+      const counts = new Map<string, number>();
+      for (const c of calls) {
+        const key = `${c.service}/${c.method}/${c.argsKey}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      for (const c of calls.slice(0, 16)) {
+        const dupKey = `${c.service}/${c.method}/${c.argsKey}`;
+        g.append(this.#callRow(c, (counts.get(dupKey) ?? 0) > 1));
+      }
     }
-    const counts = new Map<string, number>();
-    for (const c of calls) {
-      const key = `${c.service}/${c.method}/${c.argsKey}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    for (const c of calls.slice(0, 16)) {
-      const dupKey = `${c.service}/${c.method}/${c.argsKey}`;
-      g.append(this.#callRow(c, (counts.get(dupKey) ?? 0) > 1));
-    }
+    this.#hostCallRows(g);
     return g;
   }
 

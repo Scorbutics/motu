@@ -29,7 +29,46 @@ export interface HostCall {
   returned?: number;
   /** When it RESOLVED — the lens reads it as an age, like it does a channel's last fire. */
   at: number;
+  /** The island's tag, when the call was made inside one's attribution window. */
+  island?: string | null;
 }
+
+// WHICH ISLAND ASKED. The attribution window is opened around an island's render — and, because that
+// render is flushed synchronously in debug builds, around the effects that fire its self-fetch. It
+// lives here rather than in @motu/runtime (which owns the same window for contract calls) because
+// `traced` is a core concern and core must not depend on the transport; runtime delegates to this.
+let currentIsland: string | null = null;
+
+/** Run `fn` with `id` as the ambient island, so anything traced inside is attributed to it. */
+export function runWithIsland<T>(id: string | null, fn: () => T): T {
+  const prev = currentIsland;
+  currentIsland = id;
+  try {
+    return fn();
+  } finally {
+    currentIsland = prev;
+  }
+}
+
+/** The island whose window is open, if any. */
+export const ambientIsland = (): string | null => currentIsland;
+
+/**
+ * The same window, opened and closed imperatively — for React's COMMIT phase, which no single
+ * function call brackets.
+ *
+ * The element path can wrap its whole render in `runWithIsland` because each island element owns a
+ * React root and flushes synchronously. A region mounted through React shares one root: every
+ * island's effects run in one commit, so the fetch an island fires in `useEffect` lands outside any
+ * scope a caller could open. Two null-rendering sentinels either side of the island (see `Island`)
+ * open and close this instead, since React runs passive effects in tree order.
+ *
+ * Best-effort by construction: it attributes what happens SYNCHRONOUSLY inside the island's effects,
+ * which is where a self-fetch starts. A continuation that runs later sees whatever window is open
+ * then — usually none, which reads as `host` rather than as the wrong island.
+ */
+export const openIslandWindow = (id: string): void => void (currentIsland = id);
+export const closeIslandWindow = (): void => void (currentIsland = null);
 
 const calls: HostCall[] = [];
 const listeners = new Set<() => void>();
@@ -52,6 +91,10 @@ export function traced<F extends (...args: never[]) => unknown>(module: string, 
   if (!DEBUG) return impl;
   wrapped++;
   return ((...args: Parameters<F>) => {
+    // AT CALL TIME, not at resolution: a fetch starts inside the island's window and comes back long
+    // after it has closed, so reading the ambient island in the `.then` attributes every async call
+    // to nobody.
+    const island = currentIsland;
     const result = impl(...args);
     const record = (value: unknown) => {
       calls.push({
@@ -60,6 +103,7 @@ export function traced<F extends (...args: never[]) => unknown>(module: string, 
         args: args.map((a) => (typeof a === 'object' && a !== null ? '…' : a)),
         returned: Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : undefined,
         at: Date.now(),
+        island,
       });
       for (const l of listeners) l();
       return value;

@@ -11,7 +11,9 @@ import { relative, resolve } from 'node:path';
 import { color, paths, names, lagoonViewports } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { captureLagoon } from '../playwright-lagoon.mjs';
+import { resolveBaselineHost, putShot, fetchShot, acceptShots, writeRemoteArtifacts } from '../lib/baselines.mjs';
 import {
+  compareBuffers,
   compareSnapshot,
   orphanBaselines,
   snapshotDir,
@@ -34,7 +36,7 @@ async function scenariosFor(kebab) {
   }
 }
 
-async function snapshotIsland(argv, kebab) {
+async function snapshotIsland(argv, kebab, host) {
   const { tag } = names(kebab);
   const viewports = lagoonViewports();
   const scenarios = await scenariosFor(kebab);
@@ -52,6 +54,28 @@ async function snapshotIsland(argv, kebab) {
   for (const shot of shots) {
     const file = snapshotName(shot.scenario, shot.viewport);
     const baseline = resolve(dir, file);
+
+    // THE HOST DECIDES. It knows what was accepted; this run only knows what it rendered. `new` is not
+    // a failure — it is the first sight of a shot, waiting for someone to accept it.
+    if (host) {
+      let sent;
+      try {
+        sent = await putShot(host, kebab, file, shot.png);
+      } catch (err) {
+        return { kebab, error: err.message, results: [] };
+      }
+      if (sent.status !== 'changed') {
+        results.push({ file, status: sent.status === 'match' ? 'match' : 'new', hash: sent.hash });
+        continue;
+      }
+      // Differed: fetch the accepted bytes and show it, rather than report a percentage.
+      const acceptedPng = await fetchShot(host, sent.accepted);
+      const cmp = acceptedPng ? await compareBuffers(acceptedPng, shot.png) : { status: 'changed', diffPixels: 0, ratio: 1 };
+      const artifact = writeRemoteArtifacts(kebab, file, shot.png, cmp.diff);
+      results.push({ file, ...cmp, status: cmp.status === 'new' ? 'changed' : cmp.status, artifact });
+      continue;
+    }
+
     if (argv.update) {
       writeBaseline(dir, file, shot.png);
       results.push({ file, status: existsSync(baseline) ? 'updated' : 'recorded' });
@@ -65,20 +89,56 @@ async function snapshotIsland(argv, kebab) {
     }
     results.push({ file, ...cmp });
   }
-  const orphans = orphanBaselines(dir, shots.map((s) => snapshotName(s.scenario, s.viewport)));
+  // Orphans are a question about FILES: with the host owning baselines there is nothing to be orphaned.
+  const orphans = host ? [] : orphanBaselines(dir, shots.map((s) => snapshotName(s.scenario, s.viewport)));
   return { kebab, dir, results, orphans };
 }
 
 export async function snapshotCommand(argv) {
   const name = argv._[0];
+  const wantsHost = argv.remote !== undefined || argv.accept !== undefined;
+  const host = wantsHost ? resolveBaselineHost(argv) : null;
+  if (wantsHost && !host) {
+    console.error(color.red('✗ no lagoon host — pass --remote <url>, set MOTU_HOST_URL, or write ~/.config/motu/host.json'));
+    process.exit(1);
+  }
+
+  // ACCEPT IS ITS OWN ACT. Not a flag on a checking run: "the UI should look like this now" is a
+  // decision, and running it as a side effect of a check is exactly what `--update` got wrong.
+  if (argv.accept !== undefined) {
+    const island = typeof argv.accept === 'string' ? names(argv.accept).kebab : name ? names(name).kebab : null;
+    let out;
+    try {
+      out = await acceptShots(host, island);
+    } catch (err) {
+      console.error(color.red(`✗ ${err.message}`));
+      process.exit(1);
+    }
+    if (argv.json) {
+      console.log(JSON.stringify({ ok: true, ...out }, null, 2));
+      process.exit(0);
+    }
+    console.log('');
+    console.log(
+      out.count
+        ? `${color.green('✓')} accepted ${out.count} shot(s)\n${out.accepted.map((a) => color.dim(`  ${a}`)).join('\n')}`
+        : color.dim('nothing to accept — every shot already matches what was accepted'),
+    );
+    process.exit(0);
+  }
+
   if (!name && !argv.all) {
-    console.error('usage: motu island snapshot <name|--all> [--update] [--json]');
+    console.error('usage: motu island snapshot <name|--all> [--update|--remote] [--accept] [--json]');
+    process.exit(2);
+  }
+  if (host && argv.update) {
+    console.error(color.red('✗ --update writes files; --remote stores on the host. Use --remote then --accept.'));
     process.exit(2);
   }
   const targets = argv.all ? listIslands(paths.islandsDir).map((i) => i.kebab) : [names(name).kebab];
 
   const all = [];
-  for (const kebab of targets) all.push(await snapshotIsland(argv, kebab));
+  for (const kebab of targets) all.push(await snapshotIsland(argv, kebab, host));
 
   const failed = all.filter((r) => r.error || r.results.some((x) => x.status === 'changed' || x.status === 'resized'));
 
@@ -87,7 +147,13 @@ export async function snapshotCommand(argv) {
     process.exit(failed.length === 0 ? 0 : 1);
   }
 
-  console.log(color.bold(`\nmotu island snapshot — ${argv.update ? 'recording' : 'checking'} ${targets.length} island(s)\n`));
+  console.log(
+    color.bold(
+      `\nmotu island snapshot — ${argv.update ? 'recording' : 'checking'} ${targets.length} island(s)` +
+        (host ? color.dim(`  against ${host.base} · ${host.id.repo}`) : '') +
+        '\n',
+    ),
+  );
   for (const island of all) {
     if (island.error) {
       console.log(`  ${color.red('✗')} ${color.dim(island.kebab.padEnd(20))} ${color.red(island.error)}`);
@@ -106,7 +172,10 @@ export async function snapshotCommand(argv) {
           ? `size ${r.from?.join('×')} → ${r.to?.join('×')}`
           : `${r.diffPixels} px (${(r.ratio * 100).toFixed(2)}%)`;
       console.log(`      ${color.red('✗')} ${color.dim(r.file.padEnd(28))} ${detail}`);
-      console.log(`        ${color.dim(relative(process.cwd(), resolve(island.dir, r.file.replace(/\.png$/, '.diff.png'))))}`);
+      // `--remote` writes its artifacts under `.motu/`, not beside the evidence — print where they
+      // ACTUALLY are, or the one instruction this output gives points at a file that does not exist.
+      const artifact = r.artifact ?? resolve(island.dir, r.file.replace(/\.png$/, '.diff.png'));
+      console.log(`        ${color.dim(relative(process.cwd(), artifact))}`);
     }
     for (const f of island.orphans ?? []) {
       console.log(`      ${color.yellow('!')} ${color.dim(f.padEnd(28))} baseline with no scenario behind it`);
@@ -116,7 +185,11 @@ export async function snapshotCommand(argv) {
   console.log(
     failed.length === 0
       ? color.green(color.bold('PASS')) + color.dim(argv.update ? '  baselines written' : '  every baseline matches')
-      : color.red(color.bold('FAIL')) + color.dim(`  ${failed.length} island(s) changed — look at the .diff.png, then --update if intended`),
+      : color.red(color.bold('FAIL')) +
+        color.dim(
+          `  ${failed.length} island(s) changed — look at the .diff.png, then ` +
+            (host ? '`motu island snapshot --accept <island>` if intended' : '`--update` if intended'),
+        ),
   );
   process.exit(failed.length === 0 ? 0 : 1);
 }

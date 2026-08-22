@@ -35,9 +35,17 @@ export function snapshotName(scenario, viewport) {
  */
 export async function compareSnapshot(baselinePath, actual) {
   if (!existsSync(baselinePath)) return { status: 'new', diffPixels: 0, ratio: 0 };
+  return compareBuffers(readFileSync(baselinePath), actual);
+}
+
+/**
+ * The same comparison against BYTES rather than a path — what `--remote` needs, where the accepted
+ * baseline arrives over http and never touches the repository.
+ */
+export async function compareBuffers(baselineBytes, actual) {
   const { PNG } = await import('pngjs');
   const { default: pixelmatch } = await import('pixelmatch');
-  const before = PNG.sync.read(readFileSync(baselinePath));
+  const before = PNG.sync.read(baselineBytes);
   const after = PNG.sync.read(actual);
   if (before.width !== after.width || before.height !== after.height) {
     return { status: 'resized', diffPixels: 0, ratio: 1, from: [before.width, before.height], to: [after.width, after.height] };

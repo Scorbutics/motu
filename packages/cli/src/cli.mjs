@@ -53,6 +53,8 @@ ${color.bold('Usage:')}
   motu check                                        every island + every region + removal, one verdict
   motu island verify <name|--all>                   the island rules (static; --runtime adds the browser)
   motu island snapshot <name|--all> [--update]      visual baselines, per scenario × viewport
+  motu island snapshot --all --remote               ...stored on the lagoon host instead of in git
+  motu island snapshot --accept <name>              move the accepted baseline — a decision, not a write
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
   motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
@@ -125,6 +127,12 @@ ${color.bold('island create flags:')}
                        the app itself uses (an alias like @/components/foo, or a relative path).
   --export <name>      the component's name INSIDE that module, when it is not the island's Pascal name
   --force              overwrite an existing scaffolded component
+
+${color.bold('island snapshot flags:')}
+  --update             record baselines as FILES beside the evidence (the in-repo model)
+  --remote [url]       compare against the host's ACCEPTED baseline; nothing is written to git
+  --accept [name]      move the accepted pointer to what was last rendered
+  --json          machine-readable report
 
 ${color.bold('lagoon group flags:')}
   --all                compose EVERY repository the host knows, at its switcher entry

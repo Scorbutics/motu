@@ -1,6 +1,6 @@
 export { Store } from './store.js';
 export type { StoreListener } from './store.js';
-export { observeStoreWrites, runWithWriteSource, producerOf, producersOf, launderingSuspects, resetLaunderingSuspects } from './store.js';
+export { islandOutputs, resetIslandOutputs, observeStoreWrites, runWithWriteSource, producerOf, producersOf, launderingSuspects, resetLaunderingSuspects } from './store.js';
 export type { LaunderingSuspect } from './store.js';
 export type { StoreWrite } from './store.js';
 export { startSeedRecording, stopSeedRecording } from './store.js';

@@ -68,9 +68,41 @@ export interface LaunderingSuspect {
   gapMs: number;
 }
 
+/**
+ * Every declared output that has FIRED, and how often — the tally behind `emitted-live`.
+ *
+ * Deliberately not derived from store writes. `set` early-returns when the value is unchanged, so an
+ * output whose payload agrees with the seed moves nothing and would read as "never emitted" — which is
+ * the common case in a lagoon, where the seed is written to be consistent. Emission is a fact about
+ * the OUTPUT, so it is recorded where the output happens.
+ */
+const outputTally = new Map<string, { slot: string; event: string; n: number }>();
+
 /** Called by the mount paths when an island's declared output fires. */
 export function noteIslandOutput(slot: string, event: string): void {
-  if (DEBUG) lastOutput = { slot, event, at: Date.now() };
+  if (!DEBUG) return;
+  lastOutput = { slot, event, at: Date.now() };
+  const id = `${slot}\u0000${event}`;
+  const prev = outputTally.get(id);
+  if (prev) prev.n += 1;
+  else outputTally.set(id, { slot, event, n: 1 });
+}
+
+/** What has fired so far (debug only; empty in production). */
+export function islandOutputs(): { slot: string; event: string; n: number }[] {
+  return [...outputTally.values()].map((o) => ({ ...o }));
+}
+
+/**
+ * Forget what has fired.
+ *
+ * The verify lane opens ONE page for the whole run and re-aims it, so by the time the flows run, the
+ * wiring probe has already fired EVERY declared write on that page. A tally read afterwards says
+ * everything emitted — including outputs a component only ever fires from a click. Reset, remount, and
+ * read: then what is in the tally is what rendering alone produced.
+ */
+export function resetIslandOutputs(): void {
+  outputTally.clear();
 }
 
 /** Suspects seen so far (debug only; empty in production). */
@@ -88,6 +120,8 @@ export function launderingSuspects(): LaunderingSuspect[] {
 export function resetLaunderingSuspects(): void {
   suspects.length = 0;
   lastOutput = null;
+  // NOT the output tally: `emitted-live` asks whether the component ever produced its output, and the
+  // harness resets after seeding — which is exactly when a mount-effect output has already fired.
   // An explicit reset IS the statement that setup is over — the harness calls it after seeding a
   // scenario, which can happen well inside the store's own settling window.
   forceSettled = true;

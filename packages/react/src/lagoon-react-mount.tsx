@@ -18,6 +18,8 @@ import {
   provideToArchipelago,
   seedArchipelago,
   hostCalls,
+  islandOutputs,
+  resetIslandOutputs,
   runWithWriteSource,
   ensureMountpointStyle,
   type ArchipelagoConfig,
@@ -88,6 +90,16 @@ declare global {
       /** Which keys the region HOLDS — a declared source that was seeded rather than installed still
        *  leaves its keys with values, and that is what separates "seeded" from "dead". */
       held: () => string[];
+      /** Every declared output that has FIRED, with a count.
+       *
+       *  `emit` and a flow's own `emit` both go through the emit seam, so a check built on them proves
+       *  the region APPLIES a write — never that the component still produces it. This is the other
+       *  half. Read from the OUTPUT rather than from store writes on purpose: `set` early-returns on an
+       *  unchanged value, so an output whose payload agrees with the seed moves nothing and would read
+       *  as never emitted. */
+      outputs: () => { slot: string; event: string; n: number }[];
+      /** Clear the tally — the caller then remounts and reads what RENDERING alone produced. */
+      resetOutputs: () => void;
       archipelago: string;
     };
   }
@@ -182,6 +194,8 @@ export function mountReactLagoon(
     //    calls the islands actually made, which is the one thing the lagoon otherwise hides: it
     //    replaces the host module so completely that nothing shows a fetch happened at all.
     hostCalls: () => hostCalls().map((c) => ({ ...c })) as ReturnType<NonNullable<Window["__motuLagoon"]>["hostCalls"]>,
+    outputs: () => islandOutputs(),
+    resetOutputs: () => resetIslandOutputs(),
     //  - channels: what each installed channel has actually WRITTEN. The registry tracks it already
     //    (debug builds hand every channel a store proxy that tags its writes); exposing it is what
     //    lets a check compare the region's declared `sources` against what really produced its keys.

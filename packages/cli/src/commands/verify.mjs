@@ -17,7 +17,8 @@ import { sourceFileAt } from '../lib/ts-project.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
-import { islandContract, contractsDrift } from '../lib/contracts.mjs';
+import { islandContract, contractsDrift, readGeneratedContracts } from '../lib/contracts.mjs';
+import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
 import {
@@ -1099,6 +1100,9 @@ export async function runIslandVerify(argv, name) {
     // Randomize the base port so parallel/back-to-back verifies don't collide on a strict port.
     let port = 5300 + Math.floor(Math.random() * 400);
     const fixturesPath = existsSync(paths.fixturesFile(kebab)) ? paths.fixturesFile(kebab) : '';
+    // Reading the evidence costs a tsx spawn, so this rides with the tiers that already load it rather
+    // than slowing the static sweep. It needs no browser and runs under `--fast` too.
+    if (fixturesPath) inputCoverageCheck(report, readScenarios(fixturesPath));
     // 'legacy' fit re-mounts the island under the host's legacy skin. Skip it where there is no
     // legacy skin — it would verify the same thing twice and double the wall clock.
     for (const fit of LEGACY_FIT ? ['native', 'legacy'] : ['native']) {
@@ -1246,6 +1250,61 @@ async function seedTransportCheck(report, kebab) {
   } else {
     report.ok('seed-transport', `${scenarios.length} scenario seed(s) cross into the browser intact`);
   }
+}
+
+/**
+ * The values an island's scenarios never show it.
+ *
+ * `data-flow` proves the scenarios DIFFER; nothing asks whether they differ in the ways that matter.
+ * Two classes, both read from the VALUES the scenarios supply rather than from types, so this needs no
+ * type-checker and says nothing about a prop no scenario sets:
+ *   - a prop always given a non-empty array — the empty case is the one components forget;
+ *   - a boolean prop that only ever takes one value — the other branch is never rendered.
+ *
+ * WHAT IT DOES NOT CATCH, stated because the case that prompted it is exactly this. An unguarded array
+ * access reachable only with `compactMode: true` AND an empty list survived this check, and rightly:
+ * each prop is well covered on its own — the region has an empty-list scenario and both values of the
+ * boolean — and the hole is the CROSSING nothing renders. Per-prop coverage cannot see a per-pair gap,
+ * and checking every pair over eight inputs would report more combinations than anyone would read.
+ * The message says "cross it with the other inputs" because that is the part a human still owns.
+ *
+ * Deliberately not general property testing. These two are cheap, common and specific; everything
+ * beyond them is a research project that would drown the report.
+ */
+function inputCoverageCheck(report, scenarios) {
+  if (!Array.isArray(scenarios) || scenarios.length === 0) return;
+  const seen = new Map();
+  for (const sc of scenarios) {
+    for (const [prop, value] of Object.entries(sc?.seed ?? sc?.props ?? {})) {
+      if (!seen.has(prop)) seen.set(prop, []);
+      seen.get(prop).push(value);
+    }
+  }
+  if (!seen.size) return;
+
+  const gaps = [];
+  for (const [prop, values] of seen) {
+    if (values.every((v) => Array.isArray(v)) && !values.some((v) => v.length === 0)) {
+      gaps.push(`${prop} is never empty`);
+      continue;
+    }
+    if (values.every((v) => typeof v === 'boolean') && new Set(values).size === 1) {
+      gaps.push(`${prop} is always ${values[0]}`);
+    }
+  }
+  if (!gaps.length) {
+    report.ok('input-coverage', 'every seeded input is shown in more than one shape', {
+      n: seen.size,
+      of: 'seeded input(s)',
+    });
+    return;
+  }
+  report.warn(
+    'input-coverage',
+    `${gaps.length}/${seen.size} seeded input(s) are only ever shown one way: ${gaps.join(', ')} — the state ` +
+      `nothing renders is the one that breaks. Add a scenario for it, and cross it with the other inputs ` +
+      `rather than varying one at a time`,
+  );
 }
 
 /** An island's declared scenarios, loaded from its evidence file (node strips the types). */
@@ -1448,6 +1507,62 @@ function renderCoverageCheck(report, id) {
     `${uncovered.length}/${slots.length} slot(s) no flow asserts: ${uncovered.join(', ')} — nothing distinguishes ` +
       `"this slot renders its own island" from "it renders someone else's data". Add a step with ` +
       `\`expectRender: { '<slot>': '<text the island itself produces>' }\``,
+  );
+}
+
+/**
+ * Every key a region declares an island WRITES should be moved by some flow.
+ *
+ * `wiring-live` is precise about what it proves: the region APPLIES a declared write when the event is
+ * fired. It fires that event ITSELF, and so does a flow's `emit` — both go through the lagoon's emit
+ * seam, not through the component. So neither can tell you the component still produces the event.
+ *
+ * Measured, and it corrected the guess that prompted this check: silencing a component's `onProgress`
+ * in a real region changed nothing at any tier, EVEN THOUGH a flow drove `week-progress`. Driving a
+ * coupling is not exercising the thing that emits it. That miss belongs to the runtime `emitted-live`,
+ * which observes what actually fired; this check cannot catch it and does not claim to.
+ *
+ * What this one answers is narrower and still worth having: is this coupling exercised AT ALL? A
+ * declared write no flow ever drives has never been shown to reach its key in a running region — the
+ * declaration is unproven rather than merely unobserved. Static, because it is a question about the
+ * evidence files, so it belongs in the fast loop.
+ *
+ * A WARNING, for the same reason `render-coverage` is one: the rule is new, and every region written
+ * before it would go red wholesale, which teaches people to ignore the report rather than fix it.
+ */
+function writesCoveredCheck(report, id) {
+  const islands = declaredWrites(id);
+  // Slot → the events that slot declares it writes on. A slot with no `writes` is not a finding.
+  const declared = [];
+  for (const island of islands) {
+    for (const event of Object.keys(island.writes ?? {})) {
+      const target = island.writes[event];
+      const key = typeof target === 'string' ? target : (target?.key ?? Object.keys(target ?? {})[0] ?? '?');
+      declared.push({ slot: island.slot, event, key });
+    }
+  }
+  if (!declared.length) return;
+
+  const driven = new Set();
+  for (const scenario of readScenariosFor(id)) {
+    for (const st of scenario.steps ?? []) {
+      if (st.emit?.slot && st.emit?.event) driven.add(`${st.emit.slot}\u0000${st.emit.event}`);
+    }
+  }
+  const undriven = declared.filter((d) => !driven.has(`${d.slot}\u0000${d.event}`));
+  if (!undriven.length) {
+    report.ok('writes-covered', 'every declared write is driven by a flow', {
+      n: declared.length,
+      of: 'declared write(s)',
+    });
+    return;
+  }
+  report.warn(
+    'writes-covered',
+    `${undriven.length}/${declared.length} declared write(s) no flow drives: ` +
+      `${undriven.map((d) => `${d.slot} → ${d.key} (on "${d.event}")`).join(', ')} — the coupling is declared and ` +
+      `never exercised, so the component could stop emitting it and nothing here would change. Add a step with ` +
+      `\`emit: { slot: '<slot>', event: '<event>' }\` and an \`expect\` on what ANOTHER island then shows`,
   );
 }
 
@@ -1657,6 +1772,7 @@ async function regionFlowCheck(report, id, port, region) {
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
     provenanceCheck(report, id, region, run.provenance ?? []);
     sourcesLiveCheck(report, id, run.channels, region, run.held ?? []);
+    emittedLiveCheck(report, id, run.renderOutputs);
   } catch (err) {
     // A ReferenceError or a TypeError here is a BUG IN THIS FILE, not a region that could not be
     // driven — and reporting it as a warning meant the flows silently stopped running twice today
@@ -2219,6 +2335,72 @@ function channelSourceCheck(report, id, region) {
 }
 
 /**
+ * DID THE COMPONENT ACTUALLY EMIT? The half no CLI check could reach until now.
+ *
+ * `wiring-live` fires each declared output itself, and a flow's `emit` goes through the same seam, so
+ * both prove the region APPLIES a write and neither can see a component that stopped producing it.
+ * Measured on a real region: silencing a component's `onProgress` changed no check at any tier, even
+ * though a flow drove that very event. The seam lens shows it — its region sheet has always had a
+ * "never moved" column — and the lens is a panel a human opens. Agents read the CLI, so the one signal
+ * that catches this was human-only.
+ *
+ * WHY IT IS NARROW, and must be. Only outputs the component invokes from an EFFECT are checked: those
+ * must fire when the island simply renders, so their absence is a fact. An output fired from a click
+ * handler legitimately never fires in a render-only pass, and demanding it would flag every
+ * well-behaved island in the project. `calledFromEffect` answers "provably effect-driven" and reports
+ * anything it cannot prove as not — costing a missed finding rather than a false one.
+ *
+ * RUNTIME, and the LAST mile: it needs a browser, a mounted region and its effects to have run, so it
+ * belongs with the punctual gate that runs when a region is done — never in the fast loop, which has
+ * no browser to observe.
+ *
+ * A WARNING, like every check that arrives after the regions it judges.
+ */
+function emittedLiveCheck(report, id, renderOutputs) {
+  const islands = declaredWrites(id);
+  if (!islands.length || !Array.isArray(renderOutputs)) return;
+
+  const generated = readGeneratedContracts(paths.islandsDir);
+  const fired = new Set(renderOutputs.map((o) => `${o.slot}\u0000${o.event}`));
+
+  const dead = [];
+  let checked = 0;
+  for (const island of islands) {
+    const tag = island.element;
+    const contract = generated[tag];
+    if (!contract) continue;
+    const { kebab, pascal } = names(String(tag).replace(new RegExp(`^${paths.tagPrefix ?? 'x-'}`), ''));
+    const componentFile = islandComponentPath(kebab, pascal);
+    const comp = componentFile ? readComponentContract(componentFile, islandComponentExport(kebab, pascal)) : null;
+    if (!comp?.output) continue;
+    // prop -> event, from the generated contract; prop -> effect-driven, from the component itself.
+    const effectProps = new Set(comp.output.filter((o) => o.effectDriven).map((o) => o.prop));
+    for (const [prop, event] of Object.entries(contract.output ?? {})) {
+      if (!effectProps.has(prop)) continue;
+      if (!island.writes?.[event]) continue;
+      checked++;
+      if (!fired.has(`${island.slot}\u0000${event}`)) dead.push({ slot: island.slot, prop, event });
+    }
+  }
+
+  if (!checked) return;
+  if (!dead.length) {
+    report.ok('emitted-live', `${checked} effect-driven output(s) fired while the region rendered`, {
+      n: checked,
+      of: 'effect-driven output(s)',
+    });
+    return;
+  }
+  report.warn(
+    'emitted-live',
+    `${dead.length}/${checked} declared output(s) never fired while the region rendered: ` +
+      `${dead.map((d) => `${d.slot}.${d.prop} (on "${d.event}")`).join(', ')} — the component calls it from an effect, so ` +
+      `rendering should produce it. A flow that emits the same event proves only that the region APPLIES the write; ` +
+      `this says nothing produced it.`,
+  );
+}
+
+/**
  * PROVENANCE: what the channels really produced, against what the region declared.
  *
  * `sources` is a static promise — "these keys come from that source". This is the runtime half, the
@@ -2387,6 +2569,7 @@ export async function runArchipelagoVerify(argv, id) {
 
   // Static, so an uncovered slot shows up in the fast loop rather than behind a browser.
   renderCoverageCheck(report, id);
+  writesCoveredCheck(report, id);
 
   // Membership as data: static, so it runs whether or not a browser was asked for.
   if (region?.membership === 'catalogue') await catalogueCheck(report, id, region);

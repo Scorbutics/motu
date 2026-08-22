@@ -30,6 +30,42 @@ export function eventNameFor(prop) {
  */
 const contractCache = new Map();
 
+/**
+ * Does the component invoke this callback from an EFFECT — i.e. from rendering itself, rather than
+ * from something a user does?
+ *
+ * The distinction decides what a runtime check may expect. An output fired inside `useEffect` MUST
+ * fire when the island simply renders, so a region that renders and never sees it has a component
+ * that stopped emitting. An output fired from a click handler need not fire at all during a
+ * render-only pass, and demanding it would flag every well-behaved island in the project.
+ *
+ * CONSERVATIVE BY DESIGN: it answers "provably effect-driven", and anything it cannot prove is
+ * reported as not effect-driven, so the runtime check stays silent rather than guessing. An indirect
+ * call — the callback handed to a helper that invokes it later — reads as handler-driven here, which
+ * costs a missed finding and never a false one.
+ */
+function calledFromEffect(fn, prop) {
+  const EFFECT_HOOKS = new Set(['useEffect', 'useLayoutEffect', 'useInsertionEffect']);
+  let found = false;
+  fn.forEachDescendant((node) => {
+    if (found) return;
+    if (node.getKindName?.() !== 'CallExpression') return;
+    const expr = node.getExpression?.();
+    // `onProgress(...)` or `props.onProgress(...)` — the two spellings a destructured or bagged prop takes.
+    const callee = expr?.getText?.() ?? '';
+    if (callee !== prop && !callee.endsWith(`.${prop}`)) return;
+    for (let a = node.getParent?.(); a; a = a.getParent?.()) {
+      if (a.getKindName?.() !== 'CallExpression') continue;
+      const hook = a.getExpression?.()?.getText?.() ?? '';
+      if (EFFECT_HOOKS.has(hook.split('.').pop() ?? '')) {
+        found = true;
+        return;
+      }
+    }
+  });
+  return found;
+}
+
 export function readComponentContract(file, exportName) {
   if (!existsSync(file)) return null;
   // Reading a component means parsing it and resolving its props type, which is the expensive part of
@@ -78,7 +114,9 @@ function readComponentContractUncached(file, exportName) {
     component: fn.getName?.() ?? exportName ?? null,
     // `fit` is motu's own injected prop, never part of an island's declared boundary.
     input: names.filter((n) => !n.startsWith('on') && n !== 'fit'),
-    output: names.filter((n) => /^on[A-Z]/.test(n)).map((n) => ({ prop: n, event: eventNameFor(n) })),
+    output: names
+      .filter((n) => /^on[A-Z]/.test(n))
+      .map((n) => ({ prop: n, event: eventNameFor(n), effectDriven: calledFromEffect(fn, n) })),
     ambient,
   };
 }

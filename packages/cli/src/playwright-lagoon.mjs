@@ -486,6 +486,26 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
     await sleep(400);
 
+    // WHAT THE REGION PRODUCED BY MERELY RENDERING — captured before the first `emit`.
+    //
+    // Every later read is contaminated for this purpose: a flow's emit goes through the same seam a
+    // component's own output does, so afterwards "it fired" is true whether the component produced it
+    // or the harness did.
+    //
+    // RESET, REMOUNT, READ. The lane opens one page for the whole run, so the wiring probe has already
+    // fired every declared write on it — a tally read without clearing says everything emitted,
+    // including outputs a component only fires from a click. Remounting re-runs the effects, so what
+    // lands in the cleared tally is what RENDERING alone produced.
+    await page.evaluate(() => window.__motuLagoon?.resetOutputs?.()).catch(() => {});
+    await page.evaluate(() => window.__motuLagoon?.remount?.()).catch(() => {});
+    await page
+      .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
+      .catch(() => {});
+    await sleep(600);
+    const renderOutputs = await page
+      .evaluate(() => (typeof window.__motuLagoon?.outputs === 'function' ? window.__motuLagoon.outputs() : []))
+      .catch(() => []);
+
     const out = [];
     for (const scenario of scenarios) {
       // A fresh mount per scenario. One flow CAN leave the region unrenderable — seed an index past the
@@ -671,7 +691,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     const held = await page
       .evaluate(() => (typeof window.__motuLagoon?.held === 'function' ? window.__motuLagoon.held() : []))
       .catch(() => []);
-    return { flows: out, suspects, diagnostics, channels, provenance, held };
+    return { flows: out, suspects, diagnostics, channels, provenance, held, renderOutputs };
   });
 }
 

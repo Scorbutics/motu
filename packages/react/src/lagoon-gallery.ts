@@ -194,6 +194,24 @@ export function startLagoon(opts: StartLagoonOptions): void {
   const stations = resolveStations(opts.archipelagos, config);
 
   const react = opts.mount === 'react';
+  // THE ISLAND STYLESHEET, on the React path too.
+  //
+  // Only the element path passed `css` to `defineMotuApp`, so a project mounting with React bundled
+  // its `shared/styles.css` and never inserted it — the sheet `motu init` scaffolds, and that
+  // `css-tokens` checks, was dead on arrival. The Next hosts never noticed: their styling arrives
+  // through the app's own globals.css, not through this. A greenfield vite project styled nothing at
+  // all until it was published and looked at.
+  //
+  // Light DOM, so one <style> in the head; the element path adopts the same text per shadow root.
+  if (react && opts.css && typeof document !== 'undefined') {
+    const ID = 'motu-island-styles';
+    if (!document.getElementById(ID)) {
+      const style = document.createElement('style');
+      style.id = ID;
+      style.textContent = opts.css;
+      document.head.appendChild(style);
+    }
+  }
   // The element path has to define the custom elements up front. The React path must NOT: defining
   // them would register the islands' archipelagos a second time and hand the elements a different
   // store than the one <ArchipelagoProvider> resolves.

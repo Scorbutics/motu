@@ -48,7 +48,16 @@ export async function contribute({ paths, lagoonJson }) {
 
   // The host's aliases, ABSOLUTE against the host root. A config that wrote them relative meant them
   // relative to itself, and the lagoon's root is elsewhere.
-  const alias = (loaded.config.resolve?.alias ?? []).map((a) =>
+  //
+  // BOTH SHAPES. Vite accepts `resolve.alias` as an array of {find, replacement} OR as a plain object
+  // of find -> replacement, and this assumed the array — so a host using the object form (the shape
+  // Vite's own docs lead with) died on `.map is not a function` before the lagoon could build. Found
+  // by the first greenfield project on a vite host, whose config was written the documented way.
+  const declared = loaded.config.resolve?.alias ?? [];
+  const entries = Array.isArray(declared)
+    ? declared
+    : Object.entries(declared).map(([find, replacement]) => ({ find, replacement }));
+  const alias = entries.map((a) =>
     typeof a?.replacement === 'string' && !a.replacement.startsWith('/') && /^[./]/.test(a.replacement)
       ? { ...a, replacement: resolve(paths.hostRoot, a.replacement) }
       : a,

@@ -232,9 +232,25 @@ export async function snapshotCommand(argv) {
     }
   }
   console.log('');
+  // NEW SHOTS ARE NOT A PASS — they are a screen nobody has looked at.
+  //
+  // Every "LOOK at it" in the rules is conditioned on a DIFFERENCE, and a first baseline has none by
+  // construction: the run goes green and says nothing. That is the one moment looking matters most,
+  // and it is the moment nothing asked for it. Twice in two days a brand-new region shipped a defect
+  // no check could see — a fixture inventing a vocabulary the app does not use, and an island
+  // stylesheet that was bundled and never applied — and both times a human had to prompt the look.
+  //
+  // `accepted` is already the record that somebody looked. So the pending count is the number of
+  // states nobody has, and this says so rather than printing "every baseline matches" over 83 of them.
+  const fresh = all.reduce((n, i) => n + i.results.filter((r) => r.status === 'new').length, 0);
   console.log(
     failed.length === 0
-      ? color.green(color.bold('PASS')) + color.dim(argv.update ? '  baselines written' : '  every baseline matches')
+      ? (fresh
+          ? color.yellow(color.bold('LOOK')) +
+            color.dim(
+              `  ${fresh} shot(s) nobody has looked at${host ? ` — open the lagoon, then accept: motu island snapshot --accept <name>` : ''}`,
+            )
+          : color.green(color.bold('PASS')) + color.dim(argv.update ? '  baselines written' : '  every baseline matches'))
       : color.red(color.bold('FAIL')) +
         color.dim(
           `  ${failed.length} island(s) changed — look at the .diff.png, then ` +
@@ -428,9 +444,13 @@ export async function archipelagoSnapshotCommand(argv) {
     }
   }
   console.log('');
+  const freshRegions = all.reduce((n, r) => n + r.results.filter((x) => x.status === 'new').length, 0);
   console.log(
     failed.length === 0
-      ? color.green(color.bold('PASS'))
+      ? (freshRegions
+          ? color.yellow(color.bold('LOOK')) +
+            color.dim(`  ${freshRegions} shot(s) nobody has looked at — open the region view before accepting`)
+          : color.green(color.bold('PASS')))
       : color.red(color.bold('FAIL')) + color.dim(`  ${failed.length} region(s) changed`),
   );
   process.exit(failed.length === 0 ? 0 : 1);

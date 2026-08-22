@@ -11,6 +11,13 @@ UI work goes through motu (islands, archipelagos, the lagoon):
  - NEW UI content starts as an island with at least one scenario in its `*.evidence.ts`, and is looked
    at in the lagoon (`motu lagoon serve --watch`, or `motu island verify <name>`) BEFORE it is placed
    on a page. An island must render from defaults alone — every input optional, with a default.
+ - AND LOOK AT IT AGAIN AT THE END, whether or not anything failed. Every other instruction to look is
+   conditioned on a DIFFERENCE, and new work has none by construction: the snapshot run reports every
+   shot as `new`, goes green, and asks for nothing. That is the one moment looking matters most. A
+   run with `new` shots says `LOOK` instead of `PASS` for this reason — open the region view, read
+   the screen, and only then accept. Twice this has caught what no check could: a fixture inventing a
+   vocabulary the application does not use, and an island stylesheet that was bundled and never
+   applied. Both passed every check; both were found by opening the page.
  - CHANGED UI starts with the scenario that shows the state you are about to change. Then change it,
    look at it, and keep the scenario as the regression. A scenario set whose members render identically
    fails `data-flow` — that check exists because fake evidence is worse than none.

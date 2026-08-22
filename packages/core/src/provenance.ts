@@ -27,9 +27,18 @@ export interface HostCall {
   args: unknown[];
   /** How many rows/keys came back, when the answer is countable. Not the answer itself. */
   returned?: number;
+  /** When it RESOLVED — the lens reads it as an age, like it does a channel's last fire. */
+  at: number;
 }
 
 const calls: HostCall[] = [];
+const listeners = new Set<() => void>();
+
+// How many exports were WRAPPED, which is not the same question as how many were called and must not
+// be answered with the same silence. A region whose stubs never opted in records nothing, and so does
+// a region whose islands asked for nothing — the first is a gap in the instrumentation and the second
+// is a finding about the islands. The lens says which.
+let wrapped = 0;
 
 /**
  * Wrap one stubbed export so the lagoon can say it was called.
@@ -41,6 +50,7 @@ const calls: HostCall[] = [];
  */
 export function traced<F extends (...args: never[]) => unknown>(module: string, fn: string, impl: F): F {
   if (!DEBUG) return impl;
+  wrapped++;
   return ((...args: Parameters<F>) => {
     const result = impl(...args);
     const record = (value: unknown) => {
@@ -49,11 +59,22 @@ export function traced<F extends (...args: never[]) => unknown>(module: string, 
         fn,
         args: args.map((a) => (typeof a === 'object' && a !== null ? '…' : a)),
         returned: Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : undefined,
+        at: Date.now(),
       });
+      for (const l of listeners) l();
       return value;
     };
     return result instanceof Promise ? result.then(record) : record(result);
   }) as F;
+}
+
+/** How many exports opted in. Zero means the lagoon is not instrumented, not that nothing fetched. */
+export const tracedExports = (): number => wrapped;
+
+/** Re-render on the next recorded call — the lens mounts before the first fetch resolves. */
+export function subscribeHostCalls(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => void listeners.delete(fn);
 }
 
 /** Every host call this run observed, in order. */

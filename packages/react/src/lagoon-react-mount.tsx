@@ -81,7 +81,7 @@ declare global {
       /** Fire one of an island's DECLARED outputs, as if the component had. */
       emit: (slot: string, event: string, detail: unknown) => boolean;
       /** Host modules the islands actually called, for provenance (see `traced`). */
-      hostCalls: () => { module: string; fn: string; args: unknown[]; returned?: number }[];
+      hostCalls: () => { module: string; fn: string; args: unknown[]; returned?: number; at: number }[];
       /** Read a region key, for a check that needs to know whether it moved. */
       read: (key: string) => unknown;
       archipelago: string;

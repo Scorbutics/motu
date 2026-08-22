@@ -27,7 +27,7 @@ export {
   resetTransport,
 } from './foreign-transport.js';
 export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport.js';
-export { traced, hostCalls, calledModules, resetHostCalls } from './provenance.js';
+export { traced, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls } from './provenance.js';
 export type { HostCall } from './provenance.js';
 export { checkCatalogue } from './catalogue.js';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue.js';

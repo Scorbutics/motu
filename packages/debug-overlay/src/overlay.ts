@@ -29,6 +29,10 @@ import {
   type Store,
   bindEntries,
   writtenKeys,
+  hostCalls,
+  tracedExports,
+  subscribeHostCalls,
+  type HostCall,
 } from '@motu/core';
 import { observeCalls, startRecording, stopRecording, type CallEvent, type RecordedCall } from '@motu/runtime';
 
@@ -558,6 +562,11 @@ class Overlay {
       if (this.#open) this.#panelDirty = true;
     });
     subscribeChannels(() => {
+      if (this.#open) this.#panelDirty = true;
+    });
+    // A stub's fetch resolves AFTER the lens has drawn — an island's data arrives a tick or two into
+    // the mount — so without this the provenance rows are empty until something else redraws them.
+    subscribeHostCalls(() => {
       if (this.#open) this.#panelDirty = true;
     });
     // A foreign store contradicting a declaration is the one finding that arrives without any motu
@@ -1485,14 +1494,82 @@ class Overlay {
     const dead = channels.filter((c) => c.fireCount === 0).length;
     if (dead) g.append(h('div', { class: 'risk' }, `\u26a0 ${dead} channel${dead > 1 ? 's' : ''} never fired \u2014 verify embedded`));
     g.append(this.#subLabel(`channels \u00b7 host \u2192 store (${channels.length})`));
-    if (!channels.length) {
-      g.append(h('div', { class: 'empty' }, 'No channels installed.'));
-      return g;
+    if (!channels.length) g.append(h('div', { class: 'empty' }, 'No channels installed.'));
+    else {
+      // Never-fired first — that is the signal worth surfacing loudest.
+      const ordered = [...channels].sort((a, b) => a.fireCount - b.fireCount);
+      for (const c of ordered) g.append(this.#channelRow(c));
     }
-    // Never-fired first — that is the signal worth surfacing loudest.
-    const ordered = [...channels].sort((a, b) => a.fireCount - b.fireCount);
-    for (const c of ordered) g.append(this.#channelRow(c));
+    // NOT after the channels' early return, which is where this first went: a region with no channels
+    // is exactly the one whose islands fetch for themselves, so the provenance rows were hidden in the
+    // only case that needed them — peps' club region has four islands, zero channels, and its INPUT
+    // section read "No channels installed" full stop.
+    this.#hostCallRows(g);
     return g;
+  }
+
+  /**
+   * WHERE THE DATA CAME FROM — the host modules the islands actually called.
+   *
+   * This is the lagoon's blind spot, and the reason it is worth a section of its own: a stub replaces
+   * the host module so completely that no request leaves the page, the network panel stays empty, and
+   * a region can show twenty-four feed rows with nothing anywhere saying that anything fetched them.
+   * The reasonable reaction to that screen is "I see no HTTP feeding these islands", and until now the
+   * lens had no answer. These rows are the answer, and they are also the closest thing the preview has
+   * to an integration statement: what is listed here is precisely what the real page will have to
+   * serve.
+   *
+   * Silence is AMBIGUOUS here in a way it is not for channels, so it is never rendered as one thing.
+   * No traced export means nobody opted in — a gap in the stubs, not a finding about the islands. Traced
+   * exports with no calls IS a finding: these islands rendered without asking anyone for data, which
+   * is what a hard-coded fixture inside a component looks like from here.
+   */
+  #hostCallRows(g: HTMLElement): void {
+    const calls = hostCalls();
+    const wrapped = tracedExports();
+    if (!wrapped && !calls.length) {
+      g.append(this.#subLabel('host modules \u00b7 stub \u2192 island'));
+      g.append(
+        h(
+          'div',
+          { class: 'empty', title: "wrap a stub's exports in traced('<module>', '<fn>', impl) to record them" },
+          'No stub records its calls.',
+        ),
+      );
+      return;
+    }
+    g.append(this.#subLabel(`host modules \u00b7 stub \u2192 island (${calls.length})`));
+    if (!calls.length) {
+      g.append(
+        h('div', { class: 'risk' }, `\u26a0 ${wrapped} traced export(s), none called \u2014 these islands fetched nothing`),
+      );
+      return;
+    }
+    // One row per module+fn+args, not per call: a feed that paged three times is one row that says
+    // ×3, and a duplicate fetch of the SAME arguments is the thing worth seeing rather than scrolling
+    // past. That is the same reading the output section gives contract calls.
+    const groups = new Map<string, { call: HostCall; n: number; last: number }>();
+    for (const c of calls) {
+      const key = `${c.module}\u0000${c.fn}\u0000${JSON.stringify(c.args)}`;
+      const g0 = groups.get(key);
+      if (g0) {
+        g0.n++;
+        g0.last = c.at;
+      } else groups.set(key, { call: c, n: 1, last: c.at });
+    }
+    for (const { call, n, last } of [...groups.values()].sort((a, b) => b.last - a.last).slice(0, 12)) {
+      const row = h('div', { class: 'call' });
+      row.append(h('span', { class: 'st ext' }));
+      row.append(h('span', { class: 'ep' }, `${call.fn}(${call.args.map((a) => preview(a)).join(', ')})`));
+      row.append(h('span', { class: 'isl', title: call.module }, shortModule(call.module)));
+      const bits: string[] = [];
+      if (call.returned != null) bits.push(`\u2192 ${call.returned}`);
+      if (n > 1) bits.push(`\u00d7${n} \u00b7 dup`);
+      bits.push(ago(last));
+      row.append(h('span', { class: 'n' }, bits.join(' \u00b7 ')));
+      row.title = `${call.module}.${call.fn}(${call.args.map((a) => preview(a)).join(', ')})`;
+      g.append(row);
+    }
   }
 
   #channelRow(c: ChannelInfo): HTMLElement {
@@ -1884,4 +1961,9 @@ function writeFlag(key: string, on: boolean): void {
 
 function writeOpen(on: boolean): void {
   writeFlag(OPEN_KEY, on);
+}
+
+/** `@/lib/services/club-feed` -> `club-feed`. The full specifier stays on the row's title. */
+function shortModule(module: string): string {
+  return module.split('/').pop() || module;
 }

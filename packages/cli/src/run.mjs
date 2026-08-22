@@ -24,7 +24,7 @@ import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEject
 import { lagoonGroupCommand, lagoonGroupsCommand } from './commands/lagoon-group.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
-import { color } from './lib/util.mjs';
+import { color, ensureNoInstallLinks, REPO_ROOT, MOTU_CHECKOUT } from './lib/util.mjs';
 
 /** Minimal argv parser: positionals in `_`, `--flag`/`--no-flag`/`--key value` in the rest. */
 function parse(args) {
@@ -159,6 +159,19 @@ ${color.bold('create flags:')}
 `;
 
 async function main() {
+  // RESTORE THE NO-INSTALL LINKS FIRST, on every run.
+  //
+  // `motu init` symlinks node_modules/@motu/* into the checkout, which is what lets a project depend
+  // on nothing. `npm install` then deletes them as extraneous — measured on an Angular app, where the
+  // next build failed with `Cannot find module '@motu/react'`, an error pointing nowhere near the
+  // cause. (bun and pnpm left them alone, so this is invisible on the machines motu grew up on.)
+  // Re-linking is a handful of existsSync calls and makes the mechanism survive the host's package
+  // manager instead of losing to it.
+  try {
+    ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
+  } catch {
+    // Not a motu project, or a read-only checkout — the commands that need the links say so themselves.
+  }
   const [, , group, sub, ...rest] = process.argv;
   const argv = parse(rest);
 

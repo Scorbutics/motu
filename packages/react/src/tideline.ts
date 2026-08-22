@@ -136,7 +136,10 @@ const CSS = `
    identical in all eight; only three numbers change — a rotation (which edge the mass hugs) and two
    mirror factors (which end is deep, which side the mass is on). Keeping them as CSS custom
    properties means the eight docks are a table, not eight code paths. */
-#tide { --rot: 0deg; --mx: 1; --my: 1; }
+/* The capsule FLOATS in its corner rather than sitting flush in it, so its outline is closed on all
+   four sides. Padding on the container, not a margin on the pill: the panel and the tooltip are
+   positioned against this same padding box, so all three keep their inset with one number. */
+#tide { --rot: 0deg; --mx: 1; --my: 1; padding: 12px; }
 #tide[data-corner="tl"] { top: 0; left: 0; }
 #tide[data-corner="tr"] { top: 0; right: 0; }
 #tide[data-corner="bl"] { bottom: 0; left: 0; }
@@ -156,24 +159,44 @@ const CSS = `
 #tide[data-axis="v"][data-corner="br"] { --rot: 90deg; --mx: -1; --my: 1; }
 
 /* ── the bay ─────────────────────────────────────────────────────────────────────────────── */
+/* A CAPSULE, and the water is its FILL rather than its outline.
+ *
+ * It used to be the other way round: the wave crest WAS the top edge, the inner end dissolved into a
+ * mask fade, and one corner of four was rounded — three unrelated edge treatments and no closed
+ * outline, so the eye could not decide where the object ended. Worse, the handle was a 26x3 white
+ * capsule centred on a horizontal band, which is the universal mark for a slider THUMB: the loudest
+ * signal on the bay pointed at a behaviour (drag me along this track) that does not exist here.
+ *
+ * So the water moved INSIDE a pill with a definite edge and a shadow, and the chrome became one flex
+ * row on a shared baseline — grab dots, then what the bay is reporting. Nothing borrows the shape of
+ * a control that does not exist, and the eight docks are untouched: a pill is symmetric, so the same
+ * table of rotations and mirrors still serves all of them. */
 #tide .patch {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   width: ${PATCH_LONG}px;
   height: ${PATCH_SHORT}px;
+  padding: 0 12px;
+  border-radius: 999px;
   overflow: hidden;
+  /* The wave only covers what is above its crest; the pill's own body is what makes it a solid
+     object. Same token, so transport and fit recolour the whole capsule, not just the swell. */
+  background: var(--w-deep);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
   pointer-events: auto;
   cursor: grab;
   -webkit-tap-highlight-color: transparent;
   transition: transform 300ms cubic-bezier(.3,1.3,.4,1), filter 200ms;
 }
+/* The row rides ABOVE the water; only the wave and the sheen are allowed underneath it. */
+#tide .patch > *:not(svg):not(.sheen) { position: relative; z-index: 1; min-width: 0; }
+#tide .sheen { z-index: 2; }
 #tide .patch:hover { filter: brightness(1.06); }
-#tide[data-axis="v"] .patch { width: ${PATCH_SHORT}px; height: ${PATCH_LONG}px; }
+/* Stood on its side: same pill, same row, turned a quarter turn with the water. */
+#tide[data-axis="v"] .patch { width: ${PATCH_SHORT}px; height: ${PATCH_LONG}px; flex-direction: column; padding: 12px 0; }
 #tide[data-dragging="true"] .patch { cursor: grabbing; transition: none; }
-/* Round only the INNER corner, so the bay sits flush in the screen corner like water in a basin. */
-#tide[data-corner="tl"] .patch { border-bottom-right-radius: 16px; }
-#tide[data-corner="tr"] .patch { border-bottom-left-radius: 16px; }
-#tide[data-corner="bl"] .patch { border-top-right-radius: 16px; }
-#tide[data-corner="br"] .patch { border-top-left-radius: 16px; }
 /* Orient the water: it pools against the edge it is docked to, and the DEEP end of the gradient
    faces the outer corner. The transition makes a re-dock read as the water turning to lie along its
    new edge rather than as a redraw. */
@@ -190,46 +213,38 @@ const CSS = `
   transform: translate(-50%, -50%) rotate(var(--rot)) scale(var(--mx), var(--my));
   transition: transform 420ms cubic-bezier(.3,1.25,.4,1);
 }
-/* Soften the INNER edge. Clipping the water at a straight vertical line made it read as a sticker cut
-   out of the page; fading it out lets it dissolve into the ground the way the far side of a real
-   shallow would. The outer edges need nothing — they are flush against the viewport. */
-#tide .patch {
-  -webkit-mask-image: var(--patch-mask);
-  mask-image: var(--patch-mask);
-}
-/* The fade always runs along the DOCKED edge, away from the corner — so the water thins out into the
-   page at its far end whichever way the bay is lying. */
-#tide[data-axis="h"][data-corner="tl"] .patch,
-#tide[data-axis="h"][data-corner="bl"] .patch { --patch-mask: linear-gradient(to right, #000 0 56%, transparent 100%); }
-#tide[data-axis="h"][data-corner="tr"] .patch,
-#tide[data-axis="h"][data-corner="br"] .patch { --patch-mask: linear-gradient(to left, #000 0 56%, transparent 100%); }
-#tide[data-axis="v"][data-corner="tl"] .patch,
-#tide[data-axis="v"][data-corner="tr"] .patch { --patch-mask: linear-gradient(to bottom, #000 0 56%, transparent 100%); }
-#tide[data-axis="v"][data-corner="bl"] .patch,
-#tide[data-axis="v"][data-corner="br"] .patch { --patch-mask: linear-gradient(to top, #000 0 56%, transparent 100%); }
-/* The handle: says "grab me", and is the tap target on a touch screen. */
-/* Sits on the SOLID part of the bay (the outer ~56%), never out in the fade where it would look like
-   it was floating on nothing — and turns with the water. */
+/* The handle: says "grab me", and is the tap target on a touch screen.
+   DOTS, not a bar. A bar on a band is a slider thumb — the one thing this must not promise, because
+   dragging the bay re-docks it rather than sliding anything along it. A dot field is the drag
+   vocabulary that carries no direction at all, and it sits IN the row instead of being placed at a
+   percentage across moving art. */
 #tide .grip {
-  position: absolute;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .8);
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  gap: 3px;
+  flex: 0 0 auto;
   pointer-events: none;
 }
-#tide[data-axis="h"] .grip { width: 26px; height: 3px; left: 28%; transform: translateX(-50%); }
-#tide[data-axis="h"][data-corner="tr"] .grip,
-#tide[data-axis="h"][data-corner="br"] .grip { left: 72%; }
-#tide[data-axis="h"][data-corner="tl"] .grip,
-#tide[data-axis="h"][data-corner="tr"] .grip { top: 8px; }
-#tide[data-axis="h"][data-corner="bl"] .grip,
-#tide[data-axis="h"][data-corner="br"] .grip { bottom: 8px; }
-#tide[data-axis="v"] .grip { width: 3px; height: 26px; top: 28%; transform: translateY(-50%); }
-#tide[data-axis="v"][data-corner="bl"] .grip,
-#tide[data-axis="v"][data-corner="br"] .grip { top: 72%; }
-#tide[data-axis="v"][data-corner="tl"] .grip,
-#tide[data-axis="v"][data-corner="bl"] .grip { left: 8px; }
-#tide[data-axis="v"][data-corner="tr"] .grip,
-#tide[data-axis="v"][data-corner="br"] .grip { right: 8px; }
+/* Turned with the water: the same six dots, three across instead of two. */
+#tide[data-axis="v"] .grip { grid-template-columns: repeat(3, 3px); }
+#tide .grip i { width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 255, 255, .72); }
+
+/* What the bay is REPORTING, in words. The water's tint has always carried the transport and the fit,
+   but a hue alone has to be learned; with the mask gone there is room to simply say it. */
+#tide .label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .04em;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  pointer-events: none;
+}
+/* A vertical pill is 34px across: no room for words, and sideways text is not a readout. The tint
+   still carries the state, and the panel spells it out. */
+#tide[data-axis="v"] .label { display: none; }
 
 /* ── the panel ───────────────────────────────────────────────────────────────────────────── */
 /* Absolutely positioned, so a closed panel adds nothing to the container's footprint — the bay is

@@ -313,3 +313,17 @@ a run without them says so (`– audit  responsive + a11y not run`) rather than 
 
 `--audit` implies `--runtime`: asking whether a UI is usable at every viewport only means something
 against something that rendered.
+
+## Placed is not the same as rendered
+
+`integrate check` reads the host's SOURCE: it can see `<X.Island slot="y">` and cannot see whether the
+branch containing it ever runs. A slot inside `{isOpen && …}`, a ternary or a `.map()` callback now
+reports as conditionally placed — a WARNING, because a drawer or a permission gate is often exactly
+right, and what is not right is not knowing. peps' actions page places eight islands inside
+`{weeksLoaded ? (availableWeeks.length > 0 …)}`, which is the same branch that hid a crash on the empty
+list for months.
+
+The lagoon renders every declared slot unconditionally, so it cannot catch this either. Between the two
+of them: the lagoon proves the island works, `integrate check` proves the page names it, and NOTHING
+proves the page reaches it. That gap is the honest boundary of static integration checking — closing it
+needs the page rendered, which is the host's own test runner, not motu's.

@@ -15,6 +15,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
+import { SyntaxKind } from 'ts-morph';
+import { sourceFileAt } from '../lib/ts-project.mjs';
 
 /** `client-portfolio` -> `clientPortfolioArchipelago`, the const an archipelago file exports. */
 function archConst(id) {
@@ -152,9 +154,33 @@ function checkRegion(region, sources) {
       placed.set(slot, [...(placed.get(slot) ?? []), file]);
     }
   }
+  // PLACED IS NOT THE SAME AS RENDERED, and the regex above cannot tell them apart. A slot written
+  // inside `{isOpen && …}`, a ternary, or a `.map()` callback reads as placed and may never appear —
+  // this region once carried an island that was declared for months and rendered by nothing, while
+  // every check stayed green. The lagoon renders every declared slot unconditionally, so it cannot
+  // catch it either; only the host's own source says so.
+  //
+  // A WARNING, not an error: conditional placement is often correct (a drawer, a tab, a permission).
+  // What is not correct is not knowing.
+  const conditional = conditionallyPlaced(sources, binding, code);
+  for (const [slot, why] of conditional) {
+    if (!placedIslands.some((i) => i.slot === slot)) continue;
+    add(
+      'warn',
+      'placed',
+      `${slot} is placed inside ${why} — the lagoon renders it unconditionally, so nothing here proves ` +
+        `the application ever reaches it. Check the branch is one users actually take`,
+    );
+  }
+
   const declared = placedIslands.map((i) => i.slot);
   const missing = declared.filter((s) => !placed.has(s));
-  const unknown = [...placed.keys()].filter((s) => !declared.includes(s));
+  // UNKNOWN means the archipelago declares no such slot — measured against EVERY live island, not
+  // just the source-placed ones. A catalogue member is summoned by data AND may still be wrapped in
+  // source (Twenty's dispatch wraps two of its widget cases), and comparing against the chrome-only
+  // list reported both of them as slots the region had never heard of.
+  const knownSlots = liveIslands.map((i) => i.slot);
+  const unknown = [...placed.keys()].filter((s) => !knownSlots.includes(s));
   if (missing.length) {
     add(
       'error',
@@ -228,6 +254,49 @@ function checkRegion(region, sources) {
  * Deliberately the same code path: an integration gate that only exists behind its own verb is a gate
  * nobody runs, and this is the one question the rest of `check` cannot ask.
  */
+/**
+ * Slots whose `<X.Island>` sits under something that may not run: a logical `&&`, a ternary, or a
+ * callback (`.map`, `.filter`). Uses the AST rather than the text, because "is this line inside a
+ * conditional" is exactly the question a regex cannot answer.
+ */
+function conditionallyPlaced(sources, binding, code) {
+  const out = new Map();
+  for (const [file] of sources) {
+    let sf;
+    try {
+      sf = sourceFileAt(file, { allowJs: true, jsx: 4 });
+    } catch {
+      continue; // unparseable here is not a finding — `placed` already read it as text
+    }
+    for (const kind of [SyntaxKind.JsxOpeningElement, SyntaxKind.JsxSelfClosingElement]) {
+      for (const el of sf.getDescendantsOfKind(kind)) {
+        if (el.getTagNameNode?.().getText() !== `${binding}.Island`) continue;
+        // `getName()` is not the accessor here — on a JsxAttribute the name is a node, and reading it
+        // the wrong way returned undefined for EVERY element, so the whole check silently found
+        // nothing while looking like it ran.
+        const slotAttr = el
+          .getAttributes?.()
+          ?.find((a) => (a.getNameNode?.().getText?.() ?? a.getName?.()) === 'slot');
+        const slot = slotAttr?.getInitializer?.()?.getText?.()?.replace(/['"`{}]/g, '');
+        if (!slot) continue;
+        let why = null;
+        for (let node = el.getParent(); node && !why; node = node.getParent()) {
+          const k = node.getKind();
+          if (k === SyntaxKind.ConditionalExpression) why = 'a ternary';
+          else if (k === SyntaxKind.BinaryExpression && node.getOperatorToken?.().getText() === '&&') why = 'a `&&` guard';
+          else if (k === SyntaxKind.ArrowFunction || k === SyntaxKind.FunctionExpression) {
+            const call = node.getParent();
+            const callee = call?.getExpression?.()?.getText?.() ?? '';
+            if (/\.(map|filter|flatMap|forEach)$/.test(callee)) why = `a \`${callee.split('.').pop()}()\` callback`;
+          }
+        }
+        if (why) out.set(slot, why);
+      }
+    }
+  }
+  return out;
+}
+
 export function integrationResults(only) {
   const regions = readRegions(paths.archipelagosDir).filter((r) => !only || r.id === only);
   if (!regions.length) return [];

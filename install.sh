@@ -7,7 +7,8 @@
 #   ./install.sh --no-path       # skills only (don't touch the shell rc)
 #
 # What it does:
-#   1. links <motu>/packages/cli/src/cli.mjs into a bin dir (default ~/.local/bin) as `motu`
+#   1. installs the checkout's own dependencies if they are missing, then links
+#      <motu>/packages/cli/src/cli.mjs into a bin dir (default ~/.local/bin) as `motu`
 #      (and packages/host/src/cli.mjs as `motu-host`, the lagoon host),
 #   2. makes sure that bin dir is on PATH by adding ONE guarded block to your shell rc
 #      (~/.zshrc, ~/.bashrc, fish config, or ~/.profile — detected from $SHELL),
@@ -50,6 +51,22 @@ if [ -z "$MOTU_ROOT" ]; then
 fi
 
 command -v node >/dev/null 2>&1 || { echo "motu: node is required but not on PATH." >&2; exit 1; }
+
+# --- 1b. the checkout's OWN dependencies ------------------------------------------------------
+# An adopting project installs nothing — motu resolves vite, tsx, ts-morph and playwright from HERE,
+# which is what makes that promise possible. This checkout therefore needs them once, and the README
+# used to say "one command" while never mentioning it: on a clean machine every command, `--help`
+# included, died with ERR_MODULE_NOT_FOUND about two seconds after cloning. Do it here instead.
+if [ ! -d "$MOTU_ROOT/node_modules/ts-morph" ]; then
+  if command -v pnpm >/dev/null 2>&1; then PM="pnpm install";
+  elif command -v bun >/dev/null 2>&1; then PM="bun install";
+  else PM="npm install"; fi
+  echo "installing motu's own dependencies ($PM)…"
+  ( cd "$MOTU_ROOT" && $PM ) || {
+    echo "motu: '$PM' failed in $MOTU_ROOT — install them and re-run." >&2
+    exit 1
+  }
+fi
 
 # --- 2. link the CLI --------------------------------------------------------------------------
 mkdir -p "$BIN_DIR"

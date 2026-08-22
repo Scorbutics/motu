@@ -877,12 +877,19 @@ visible, so the host says it rather than letting the page quietly lose its art.
 
 ## Install (one command)
 
-From a motu checkout:
+Requires **node >= 20.11** and git. From a motu checkout:
 
 ```bash
-./install.sh                 # link `motu` onto PATH + install the skills into the current repo
+git clone https://github.com/Scorbutics/motu.git
+cd motu
+./install.sh                 # deps + link `motu` onto PATH + install the skills into the current repo
 ./install.sh ~/dev/ocean     # ...installing the skills into that repo instead
 ```
+
+`install.sh` installs **the checkout's own** dependencies first if they are missing (pnpm, bun or npm,
+whichever you have). That step is the one thing the framework needs and your project does not: motu
+resolves vite, tsx, ts-morph and playwright from here, which is exactly what lets an adopting project
+install nothing. Running the CLI from a checkout with no `node_modules` fails immediately, and says so.
 
 The script links `packages/cli/src/cli.mjs` into `~/.local/bin/motu` (override with `MOTU_BIN_DIR`),
 adds that directory to `PATH` via one guarded block in your shell rc (`.zshrc` / `.bashrc` / fish

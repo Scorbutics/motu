@@ -19,6 +19,18 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .rv-head h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
 .rv-error { margin: 0; padding: 8px 20px; background: var(--error-bg); color: var(--error-ink); font-size: 12.5px; }
 .rv-body { flex: 1; display: grid; grid-template-columns: 240px 300px 1fr; min-height: 0; }
+/* Below the widest declared viewport the rails cannot keep fixed widths: 240 + 300 already exceeds a
+   phone, so the columns become rows and the viewer takes the height it needs. Measured at 390px, the
+   three-column form overflowed the document by 197px. */
+@media (max-width: 900px) {
+  .rv-body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+  .rv-rail, .rv-shots { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; }
+  .rv { height: auto; min-height: 100vh; }
+}
+@media (max-width: 560px) {
+  .rv-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .ss { flex-wrap: wrap; }
+}
 .rv-rail, .rv-shots { overflow: auto; border-right: 1px solid var(--line); padding: 10px; }
 .rv-view { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 

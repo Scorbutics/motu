@@ -11,6 +11,7 @@ import { relative, resolve } from 'node:path';
 import { color, paths, names, lagoonViewports } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
+import { readScenarios } from './verify.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { captureLagoon, captureRegionLagoon } from '../playwright-lagoon.mjs';
 import { resolveBaselineHost, putShot, fetchShot, acceptShots, writeRemoteArtifacts } from '../lib/baselines.mjs';
@@ -28,14 +29,21 @@ import {
 async function scenariosFor(kebab) {
   const file = paths.fixturesFile(kebab);
   if (!existsSync(file)) return [];
+  let viaNode = [];
   try {
     const mod = await import(`file://${file}?t=${Date.now()}`);
-    return Array.isArray(mod.scenarios) ? mod.scenarios : [];
+    viaNode = Array.isArray(mod.scenarios) ? mod.scenarios : [];
   } catch {
-    // Evidence is TypeScript in most projects; the lagoon compiles it, node cannot. The capture still
-    // runs — one shot of the island in its seeded state — it just cannot name the states.
-    return [];
+    /* handled by the cross-check below */
   }
+  // TWO LOADERS FOR ONE FILE, and they disagree in silence — the exact failure `islandVerify` already
+  // had to fix. A plain node import cannot resolve a `.js` specifier pointing at a `.ts` sibling,
+  // which is the convention every evidence file here uses the moment it shares a fixture module. This
+  // returned [] and the island was pictured ONCE, in its default state, while `data-flow` (which
+  // loads through tsx) saw every scenario. Four new islands were baselined at half their coverage
+  // before the shot count gave it away. Cross-check, and take the fuller answer.
+  const viaTsx = readScenarios(file);
+  return viaTsx.length > viaNode.length ? viaTsx : viaNode;
 }
 
 async function snapshotIsland(argv, kebab, host) {

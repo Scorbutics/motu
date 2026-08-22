@@ -799,7 +799,7 @@ async function runtimeCheckFast(report, tag, fixturesPath, fit) {
  * resolves the island's assets); `--fast` uses the in-process happy-dom harness. Silent when fewer than
  * two scenarios are declared.
  */
-function readScenarios(fixturesPath) {
+export function readScenarios(fixturesPath) {
   const args = ['--import', 'tsx', HARNESS, '', fixturesPath, 'native', 'scenarios'];
   // Node has to be able to resolve @motu/* from the project's own files before it can load them.
   ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);

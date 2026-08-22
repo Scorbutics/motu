@@ -100,6 +100,17 @@ Open the lagoon (`motu lagoon dev --archipelago <id>`) and DRIVE it: click, type
 that a change in one island moves what a different island renders. A region can pass every check while
 nobody has ever used it.
 
+Then picture it, which is the one thing driving it by hand cannot leave behind:
+
+```bash
+motu archipelago snapshot <id> --remote      # the composed page, per flow state × viewport
+```
+
+This is the region's only check on ARRANGEMENT. The frame is not declared, so `archipelago verify`
+is byte-identical between a correct composition and one where two slots swapped — which has happened
+here, on a merge, and shipped one agent's widget rendering as another's. If the diff names no changed
+member island, the arrangement is what moved.
+
 Hand back: the screen, the flows, and a list of what the agents reported as friction. That last list is
 the most valuable output of a fan-out and the easiest to drop.
 

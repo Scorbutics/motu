@@ -128,7 +128,20 @@ motu's lagoon is not a replacement for the host's own checks. Run the ocean's bu
   ask the human for the exact commands if unknown; e.g. the ocean app's Maven build + its test
   suites). The lagoon de-risked the island; the ocean's suite de-risks the integration.
 
-### 6 — Wait for human validation
+### 6 — Picture it, before the human sees it
+
+```bash
+motu island snapshot --all --remote --changed        # what YOU touched, ~11s
+motu archipelago snapshot --all --remote --changed   # the composed page, ~15s
+```
+
+A new island is `new` on both — a first sight, not a failure — so this run passes and leaves the shots
+pending. What it catches is what you changed ON THE WAY: a shared component, a token, a layout. LOOK at
+any `.motu/snapshots/*.diff.png` before accepting, and accept with
+`motu island snapshot --accept <name>` only when the change is what you intended. On a region diff with
+no member island changed, the ARRANGEMENT moved — check the frame before blaming yourself.
+
+### 7 — Wait for human validation
 Do NOT consider the island done until a human validates it on the real page. Present: the verify PASS,
 the integration concerns from step 3, and the ocean-suite result. Stop and hand off — the human is the
 final gate.

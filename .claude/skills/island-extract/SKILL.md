@@ -251,7 +251,13 @@ Then:
 ```bash
 motu island verify <name>               # expect PASS (membership now satisfied)
 motu integrate check <region>           # does the HOST compose, place and read the region?
+motu island snapshot --all --remote --changed        # did anything you touched MOVE? (~11s scoped)
+motu archipelago snapshot --all --remote --changed   # did the composed page move? (~15s scoped)
 ```
+
+The two snapshot runs are the last thing you do. Wrapping an existing component often touches shared
+code on the way — a default, a class, a token — and that lands on islands you never opened. LOOK at any
+`.motu/snapshots/*.diff.png`, then `--accept` only what you meant.
 
 Then the host's OWN build or typecheck (`pnpm typecheck` in this monorepo). motu checks its own
 declarations; only the app's build can tell you the app still compiles.

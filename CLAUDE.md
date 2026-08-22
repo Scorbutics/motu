@@ -75,9 +75,15 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    page's fetch, answering an island's intent — is a `channel`: it is installed in every view, so the
    checks that drive the region see the same answers a human does, and the lens can show it fired.
    Behaviour written inside the frame runs only in the region view, where those checks are not.
- - `motu island snapshot --all` checks the visual baselines (one per scenario × viewport, committed
-   beside the evidence). A difference writes `.actual.png` and `.diff.png` next to the baseline — LOOK
-   at them; re-record with `--update` only when the change is what you intended.
+ - VISUAL BASELINES live on the lagoon host, not in the repository: `motu island snapshot --all
+   --remote` pictures every island (scenario × viewport) and `motu archipelago snapshot --all --remote`
+   pictures the COMPOSED page — the arrangement, which is not declared and which no island shot can
+   see. A difference writes `.actual.png` and `.diff.png` under `.motu/snapshots/` — LOOK at them, then
+   `motu island snapshot --accept <name>` only when the change is what you intended. Accepting is a
+   DECISION, which is why it is its own command: `--update` overwriting files is what made "the
+   baseline is stale" and "you broke something" the same red. Never use `--update` on a project whose
+   baselines are on the host — it starts a second, drifting copy. A region diff names which member
+   islands also changed; when none did, the arrangement moved.
  - The lens (Ctrl/Cmd-Shift-G in the lagoon) opens on the REGION SHEET: one row per key — who owns it,
    who reads it, what it holds, whether it has moved, and a flag where a declared write has never fired
    or the host answered an island. Read it before reading the archipelago; it is the same declaration,
@@ -302,8 +308,20 @@ both win, and the loser's island renders someone else's data.
     motu check --runtime --fast       NO BROWSER   44.0s    while you work (5.9s with --changed)
     motu check --runtime              DOES IT WORK 103.5s    before handing work over
     motu check --audit                IS IT USABLE          before integrating, and in CI
+    motu island snapshot --all --remote      DID IT MOVE    89s    before handing work over
+    motu archipelago snapshot --all --remote DID THE PAGE   18s    before handing work over
 
-(measured on a 16-island, 2-region project)
+(the first four measured on a 16-island, 2-region project; the snapshots on a 20-island, 3-region one)
+
+THE LAST THING YOU DO, both of them, with `--changed`. Scoped to one touched island that is 11s and
+15s — cheaper than the `--fast` loop — because `--changed` maps a changed island to the regions that
+declare it, and a region's picture is its members composed. Unscoped they cost about what
+`check --runtime` costs, which is why they belong in the same slot: the punctual gate, not the loop,
+and not a nightly job — drift detected a day later has a dozen changes behind it and can no longer be
+attributed to any of them.
+
+`--changed` widens back to everything, loudly, when a changed file belongs to no single island; and a
+scoped sweep that pictured nothing exits 2 with NOTHING TO PICTURE rather than green.
 
 `--fast` means NO BROWSER: islands mount under happy-dom in node. It used to be an island-only flag
 whose REGIONS still booted chromium — 43s of an 87s run — because a region's flows, mutation and render

@@ -904,26 +904,30 @@ class Overlay {
    */
   #drawRequests() {
     const byTag = new Map(getMountedIslands().map((i) => [i.element, i]));
-    // source -> island -> calls. Both routes land in the same map: from the graph's point of view a
-    // transport call and a stubbed host module are the same act.
-    const sources = new Map<string, Map<MountedIslandInfo, number>>();
-    const touch = (source: string, tag: string | null | undefined) => {
+    // source -> island -> the calls it made there. Both routes land in the same map: from the graph's
+    // point of view a transport call and a stubbed host module are the same act.
+    const sources = new Map<string, Map<MountedIslandInfo, { n: number; fns: Set<string> }>>();
+    const touch = (source: string, fn: string, tag: string | null | undefined) => {
       const info = tag ? byTag.get(tag) : undefined;
       if (!info) return; // a call from outside any island has no box to draw a spoke to
       let m = sources.get(source);
       if (!m) sources.set(source, (m = new Map()));
-      m.set(info, (m.get(info) ?? 0) + 1);
+      let e = m.get(info);
+      if (!e) m.set(info, (e = { n: 0, fns: new Set() }));
+      e.n++;
+      e.fns.add(fn);
     };
-    for (const c of hostCalls()) touch(shortModule(c.module), c.island);
-    for (const c of this.#calls) touch(c.service, c.island);
+    for (const c of hostCalls()) touch(sourceLabel(c.module), c.fn, c.island);
+    for (const c of this.#calls) touch(c.service, c.method, c.island);
 
     for (const [source, callers] of sources) {
-      const anchors: Point[] = [];
-      for (const info of callers.keys()) {
-        const a = islandAnchor(info.el);
-        if (a) anchors.push(a);
+      const spokes: { at: Point; fns: Set<string> }[] = [];
+      for (const [info, e] of callers) {
+        const at = islandAnchor(info.el);
+        if (at) spokes.push({ at, fns: e.fns });
       }
-      if (!anchors.length) continue;
+      if (!spokes.length) continue;
+      const anchors = spokes.map((s0) => s0.at);
       const shared = callers.size >= 2;
       // BELOW the islands, where a key hub sits above them: the two graphs overlay the same page and
       // a shared midpoint would stack a source node on top of a key node.
@@ -1601,7 +1605,15 @@ class Overlay {
    */
   #hostCallRows(g: HTMLElement, tag?: string): void {
     const all = hostCalls();
-    const calls = tag ? all.filter((c) => c.island === tag) : all;
+    // SCOPED TO THE REGION ON SCREEN, like every other archipelago-level view here. The call log is
+    // global and lives for the whole session, so the switcher moving from club to actions left club's
+    // fetches sitting under actions' REQUESTS — rows naming islands that are not on the page. The
+    // contract-call list has always filtered on the mounted tags; this now uses the same rule.
+    const tags = this.#activeIslandTags();
+    const calls = tag ? all.filter((c) => c.island === tag) : all.filter((c) => c.island && tags.has(c.island));
+    // Calls made outside any island's window (a channel, the frame itself) cannot be attributed to a
+    // region at all. Counting them in one line keeps them visible without pretending they belong here.
+    const loose = tag ? 0 : all.filter((c) => !c.island).length;
     const wrapped = tracedExports();
     const scope = tag ? 'this island' : 'stub \u2192 island';
     if (!wrapped) {
@@ -1620,7 +1632,18 @@ class Overlay {
       return;
     }
     g.append(this.#subLabel(`host modules \u00b7 ${scope} (${calls.length})`));
+    const looseRow = () => {
+      if (!loose) return;
+      g.append(
+        h(
+          'div',
+          { class: 'empty', title: 'made outside any island attribution window — a channel, or the frame itself' },
+          `+${loose} call(s) with no island \u2014 not scoped to this region`,
+        ),
+      );
+    };
     if (!calls.length) {
+      looseRow();
       g.append(
         h(
           'div',
@@ -1651,7 +1674,7 @@ class Overlay {
       // WHO ASKED, when the attribution window was open — the same tag the contract calls carry. A
       // call with no island is not an error: a stub called from a channel or from the frame itself
       // has no island to attribute to, and saying "host" is the honest answer.
-      const who = tag ? shortModule(call.module) : (call.island ?? 'host');
+      const who = tag ? sourceLabel(call.module) : (call.island ?? 'host');
       row.append(h('span', { class: 'isl', title: `${call.module}${call.island ? ` \u00b7 called by ${call.island}` : ''}` }, who));
       const bits: string[] = [];
       if (call.returned != null) bits.push(`\u2192 ${call.returned}`);
@@ -1661,6 +1684,7 @@ class Overlay {
       row.title = `${call.module}.${call.fn}(${call.args.map((a) => preview(a)).join(', ')})`;
       g.append(row);
     }
+    looseRow();
   }
 
   #channelRow(c: ChannelInfo): HTMLElement {
@@ -1910,7 +1934,9 @@ class Overlay {
     const g = this.#group('requests', '#0369a1');
     const tags = this.#activeIslandTags();
     const calls = this.#calls.filter((c) => c.island != null && tags.has(c.island));
-    const traces = hostCalls();
+    // Scoped the same way, or the pointer below ("they reach host modules directly") would be
+    // pointing at another region's rows.
+    const traces = hostCalls().filter((c) => c.island && tags.has(c.island));
     g.append(this.#subLabel(`contract calls \u00b7 \u2192 backend (${calls.length})`));
     if (!calls.length) {
       // WHY it is empty matters, and "No calls yet." answers the wrong question. A region whose
@@ -2080,7 +2106,15 @@ function writeOpen(on: boolean): void {
   writeFlag(OPEN_KEY, on);
 }
 
-/** `@/lib/services/club-feed` -> `club-feed`. The full specifier stays on the row's title. */
-function shortModule(module: string): string {
-  return module.split('/').pop() || module;
+/**
+ * The same module, said in a way that cannot be mistaken for an island: `services/club-feed`.
+ *
+ * One segment is ambiguous exactly where it matters — a service module is usually named after the
+ * thing it serves, which is also what the island reading it is called. On the club screen the bare
+ * form put "club-feed" on a hub between the feed and the counters banner, where it reads as the
+ * island. The parent segment costs a few pixels and removes the reading.
+ */
+function sourceLabel(module: string): string {
+  const parts = module.split('/').filter((p) => p && p !== '@' && p !== '.' && p !== '..');
+  return parts.slice(-2).join('/') || module;
 }

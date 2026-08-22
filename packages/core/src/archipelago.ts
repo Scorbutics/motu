@@ -484,6 +484,10 @@ interface SlotEntry {
 const slots = new Map<string, SlotEntry>();
 const layouts = new Map<string, string>();
 const stores = new Map<string, Store>();
+// The CONFIG, kept by id. `sources` is the region's answer to "where does this key come from" and it
+// was written down, checked, and then reachable nowhere at runtime — so the lens could show an island
+// with no requests and no way to say what feeds it.
+const configs = new Map<string, AnyArchipelagoConfig>();
 const archSlots = new Map<string, string[]>();
 
 /** The layout template registered for an archipelago id (used by <motu-archipelago>). */
@@ -494,6 +498,11 @@ export function getArchipelagoLayout(id: string): string | undefined {
 /** The slot names of an archipelago, in declared order — the mountpoints the gallery view frames. */
 export function getArchipelagoSlots(id: string): string[] {
   return archSlots.get(id) ?? [];
+}
+
+/** Every mounted archipelago's declaration — the lens reads `sources` from it. */
+export function archipelagoConfigs(): AnyArchipelagoConfig[] {
+  return [...configs.values()];
 }
 
 /** The store of an archipelago by id — the inbound seam <motu-archipelago>.provide() writes to. */
@@ -931,6 +940,7 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
     slots.set(island.slot, { spec: island, store, host });
   }
   stores.set(config.id, store);
+  configs.set(config.id, config as AnyArchipelagoConfig);
   archSlots.set(config.id, config.islands.map((i) => i.slot));
   if (config.layout) {
     layouts.set(config.id, config.layout);

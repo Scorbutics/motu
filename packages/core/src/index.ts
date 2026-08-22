@@ -31,7 +31,7 @@ export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedEx
 export type { HostCall } from './provenance.js';
 export { checkCatalogue } from './catalogue.js';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue.js';
-export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
+export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago.js';
 export type {
   HostBridge,
   IslandContext,

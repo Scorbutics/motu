@@ -16,6 +16,7 @@ import {
   observeStoreWrites,
   observeHostIntents,
   getArchipelagoStore,
+  archipelagoConfigs,
   startSeedRecording,
   stopSeedRecording,
   motuToolbar,
@@ -935,16 +936,25 @@ class Overlay {
         ? { x: avg(anchors.map((a) => a.x)), y: avg(anchors.map((a) => a.y)) }
         : { x: anchors[0].x, y: anchors[0].y + 52 };
       const color = '#0369a1';
-      for (const a of anchors) {
-        const spoke = wire(hub.x, hub.y, a.x, a.y, color);
+      for (const { at, fns } of spokes) {
+        const spoke = wire(hub.x, hub.y, at.x, at.y, color);
         if (!shared) spoke.setAttribute('stroke-opacity', '.45');
         this.#wires.append(spoke);
+        // WHAT THIS ISLAND CALLED, on the spoke rather than on the hub. The hub is the module, and a
+        // module label alone answers the wrong question the moment two islands call different things
+        // in it: peps' banner and feed share `@/lib/services/club-feed`, and one hub reading
+        // "club-feed" said neither which function each called nor that the word was a module at all —
+        // next to an island literally named `x-club-feed` it read as the island's own name.
+        if (spokes.length <= 4) {
+          const label = [...fns].slice(0, 2).join(', ') + (fns.size > 2 ? ` +${fns.size - 2}` : '');
+          this.#wires.append(svgLabel((hub.x + at.x) / 2, (hub.y + at.y) / 2 - 4, label, color));
+        }
       }
       const dot = svgDot(hub.x, hub.y, color, shared ? 5 : 3.5);
       dot.setAttribute('stroke', '#fffefb');
       dot.setAttribute('stroke-width', '2');
       this.#wires.append(dot);
-      const n = [...callers.values()].reduce((a, b) => a + b, 0);
+      const n = [...callers.values()].reduce((a, b) => a + b.n, 0);
       this.#wires.append(svgLabel(hub.x, hub.y + 16, `${source} \u00b7 ${n}\u00d7`, color));
     }
   }
@@ -1014,6 +1024,12 @@ class Overlay {
       const store = getArchipelagoStore(region.getAttribute('name') ?? '');
       if (store) stores.add(store);
     }
+    // AND the stores of the islands actually on screen. The element route puts a <motu-archipelago>
+    // in the DOM; the React route (`mountReactLagoon`, and any host page using <Island>) does not —
+    // so on every React-mounted region this returned nothing and INPUT read "No channels installed"
+    // over a channel that had fired 44 times. Mounted islands are the definition that holds either
+    // way, and the declared-sources rows are what made the contradiction visible.
+    for (const info of getMountedIslands()) stores.add(info.store);
     return stores;
   }
 
@@ -1372,7 +1388,13 @@ class Overlay {
       p.append(h('span', { class: 'val' }, r.storeKey ? `${r.storeKey} = ${preview(r.value)}` : preview(r.value)));
       if (r.storeKey) {
         const o = this.#keyWriters(info.store, r.storeKey);
-        if (o.channel || o.host) p.append(h('span', { class: 'origin ext' }, `ext \u00b7 ${o.channel ? 'channel' : 'host'}`));
+        // THE DECLARED SOURCE FIRST, because it is the only one of these that answers the question
+        // for an island that fetches nothing. `ext · host` says the value crossed the boundary; it
+        // does not say from WHERE, and for an island like `week-actions` — nine keys, no calls —
+        // that was the whole answer the lens had.
+        const src = this.#sourceOf(info.store, r.storeKey);
+        if (src) p.append(h('span', { class: 'origin ext', title: src.module ?? src.name }, `src \u00b7 ${src.name}`));
+        else if (o.channel || o.host) p.append(h('span', { class: 'origin ext' }, `ext \u00b7 ${o.channel ? 'channel' : 'host'}`));
         else if (o.islands.length) p.append(h('span', { class: 'origin' }, `int \u00b7 ${o.islands.join(',')}`));
       }
       input.append(p);
@@ -1963,7 +1985,72 @@ class Overlay {
       }
     }
     this.#hostCallRows(g);
+    this.#sourceRows(g);
     return g;
+  }
+
+  /**
+   * WHERE THE REST OF IT COMES FROM.
+   *
+   * The rows above answer "what did this screen fetch". They cannot answer the question an island
+   * with no calls raises, which is the more common one: peps' `week-actions` renders nine keys and
+   * asks nobody for anything, so the honest reading of REQUESTS was "this island's data appears from
+   * nowhere". It does not — the PAGE fetches it, the archipelago says so in `sources`, and that
+   * declaration existed in the file, was checked by `sources-live`, and was reachable nowhere at
+   * runtime.
+   *
+   * One row per declared source: the keys it produces, and what actually established them HERE. In
+   * the lagoon that is usually the seed, which is the point rather than a failing — the page's fetch
+   * is exactly what a preview stands in for, and naming the module says what the ocean will run.
+   */
+  /** The declared source that produces a key, if the region names one. */
+  #sourceOf(store: Store, key: string): { name: string; module?: string } | null {
+    const config = archipelagoConfigs().find((c) => getArchipelagoStore(c.id) === store);
+    const sources = Object.entries((config?.sources ?? {}) as Record<string, { module?: string; produces?: readonly string[] }>);
+    for (const [name, source] of sources) {
+      if ((source.produces ?? []).includes(key)) return { name, module: source.module };
+    }
+    return null;
+  }
+
+  #sourceRows(g: HTMLElement): void {
+    const islands = getMountedIslands();
+    if (!islands.length) return;
+    const store = islands[0].store;
+    const config = archipelagoConfigs().find((c) => getArchipelagoStore(c.id) === store);
+    const sources = Object.entries((config?.sources ?? {}) as Record<string, { module?: string; produces?: readonly string[] }>);
+    if (!sources.length) return;
+    const moves = this.#moves.get(store) ?? new Map();
+    const channelKeys = new Set(getChannels().filter((c) => c.store === store).flatMap((c) => [...c.keys]));
+    const called = new Set(hostCalls().map((c) => c.module));
+    g.append(this.#subLabel(`declared sources \u00b7 page \u2192 region (${sources.length})`));
+    for (const [name, source] of sources) {
+      const keys = [...(source.produces ?? [])];
+      const row = h('div', { class: 'ch' });
+      // WHAT ESTABLISHED THESE KEYS, in the order that answers the question: fetched here beats a
+      // channel beats the seed, and a key with no value at all is the finding.
+      const fetched = source.module && called.has(source.module);
+      const viaChannel = keys.some((k) => channelKeys.has(k));
+      const moved = keys.filter((k) => moves.has(k)).length;
+      const held = keys.filter((k) => store.has(k)).length;
+      // live: something ran here. orphan: the keys hold values but the declared source did not
+      // produce them — in the lagoon that is the seed standing in for the page's fetch, which is the
+      // normal reading. never: nothing holds a value, which is the finding.
+      const state = fetched || viaChannel ? 'live' : held ? 'orphan' : 'never';
+      row.append(h('span', { class: `st ch-${state}` }));
+      row.append(h('span', { class: 'ep' }, name));
+      row.append(
+        h(
+          'span',
+          { class: 'n' },
+          fetched ? 'fetched here' : viaChannel ? 'via channel' : held ? `seeded \u00b7 ${moved} moved` : 'nothing holds a value',
+        ),
+      );
+      if (source.module) row.append(h('span', { class: 'pay', title: source.module }, sourceLabel(source.module)));
+      row.append(h('span', { class: `links${held ? '' : ' warn'}` }, `\u2192 ${keys.slice(0, 4).join(', ')}${keys.length > 4 ? ` +${keys.length - 4}` : ''}`));
+      row.title = `${name}${source.module ? ` \u2014 ${source.module}` : ''}\nproduces: ${keys.join(', ')}`;
+      g.append(row);
+    }
   }
 
   #callRow(c: CallRecord, dup: boolean): HTMLElement {

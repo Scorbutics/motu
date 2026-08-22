@@ -414,3 +414,48 @@ export function ensureNoInstallLinks(root, motuRoot) {
   }
   return made;
 }
+
+/**
+ * Does the host's TypeScript config make an out-of-range index visible?
+ *
+ * `default-props` already requires an island to render from defaults alone — which means handling the
+ * ABSENT case and the EMPTY one. motu checks the first mechanically and, until now, only hoped for the
+ * second: `missions[0].weekNumber` on a list that can be empty compiles clean under `strict`, throws at
+ * runtime, and is exactly the shape of a real bug this project has already fixed once.
+ *
+ * `noUncheckedIndexedAccess` types `missions[0]` as `MissionItem | undefined`, so forgetting is a
+ * compile error and `missions[0]?.weekNumber ?? 0` is not. It is the mechanical half of a rule motu
+ * already states, and it belongs in the island's own code rather than in a check that renders the
+ * state and watches for a throw — the compiler gets there first, for free, at authoring time.
+ *
+ * AUDITED, NOT ENFORCED. This is the host's build, the same boundary as a foreign store: motu can say
+ * the guarantee is missing and cannot install it.
+ *
+ * Follows `extends` (one chain, bounded) because a Next app keeps its strictness in a base config.
+ */
+export function hostStrictBoundaries(root = HOST_ROOT) {
+  const seen = new Set();
+  let file = resolve(root, 'tsconfig.json');
+  // No tsconfig is not "the flag is off" — it is a project this check cannot speak about. Saying OFF
+  // would put a finding on every non-TypeScript host.
+  if (!existsSync(file)) return { known: false, enabled: false, file };
+  for (let hop = 0; hop < 8 && existsSync(file) && !seen.has(file); hop++) {
+    seen.add(file);
+    // MATCHED, NOT PARSED. A tsconfig is JSONC, and stripping its comments with a regex ate the `/*`
+    // inside a `"@/*"` path mapping — every project with a path alias came back "unknown". Two
+    // targeted patterns need no parser and cannot be confused by the rest of the file. Whole-line
+    // comments are dropped first, so a commented-out setting does not read as a setting.
+    const raw = readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+    const flag = raw.match(/"noUncheckedIndexedAccess"\s*:\s*(true|false)/);
+    if (flag) return { known: true, enabled: flag[1] === 'true', file };
+    const extends_ = raw.match(/"extends"\s*:\s*"([^"]+)"/);
+    if (!extends_) break;
+    const ext = extends_[1];
+    // A package specifier ('next/tsconfig.json') is not resolved here — its value is not knowable
+    // without walking node_modules, and reporting "off" for a base that enables it would be a lie.
+    if (!ext.startsWith('.')) return { known: false, enabled: false, file };
+    file = resolve(dirname(file), ext.endsWith('.json') ? ext : `${ext}.json`);
+  }
+  // Absent means OFF: `strict` does not include it, so silence in the config is a real answer.
+  return { known: true, enabled: false, file };
+}

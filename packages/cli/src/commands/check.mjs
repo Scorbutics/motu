@@ -12,7 +12,7 @@
 // Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
 // (a browser per island), which belongs in CI or before a release, not in a tight loop.
 import { existsSync, readdirSync } from 'node:fs';
-import { color, paths } from '../lib/util.mjs';
+import { color, paths, hostStrictBoundaries } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
@@ -126,6 +126,24 @@ export async function checkCommand(argv) {
   }
 
   console.log(color.bold('\nmotu check — contracts\n'));
+  {
+    // The mechanical half of `default-props`: an island must render from defaults alone, which means
+    // the EMPTY case too, and `strict` alone lets `list[0].x` compile. Audited, never enforced — the
+    // host owns its build. Unknown is silent: a project with no tsconfig gets no finding.
+    const b = hostStrictBoundaries();
+    if (b.known && !b.enabled)
+      console.log(
+        `  ${color.yellow('!')} ${color.dim('strict-boundaries'.padEnd(20))}` +
+          `${color.yellow('noUncheckedIndexedAccess is off')} in ${paths.rel(b.file)} — \`list[0].x\` on a list that can be ` +
+          `empty compiles under \`strict\` and throws in the browser, which is a bug this project has already shipped once. ` +
+          `Turning it on makes forgetting a compile error; scope it to a tsconfig over the island + ui files if the ` +
+          `app-wide flip is too large today.`,
+      );
+    else if (b.known)
+      console.log(
+        `  ${color.green('✓')} ${color.dim('strict-boundaries'.padEnd(20))}${color.dim('noUncheckedIndexedAccess is on — an unguarded index is a compile error')}`,
+      );
+  }
   console.log(
     drift.stale
       ? `  ${color.red('✗')} ${color.dim('generated'.padEnd(20))} ${color.red(drift.reason)} — run \`motu island sync\``

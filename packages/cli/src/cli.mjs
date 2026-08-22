@@ -31,11 +31,10 @@ const missing = REQUIRED.filter((name) => {
 });
 
 if (missing.length) {
-  const pm = existsSync(resolve(CHECKOUT, 'pnpm-lock.yaml'))
-    ? 'pnpm install'
-    : existsSync(resolve(CHECKOUT, 'bun.lock'))
-      ? 'bun install'
-      : 'npm install';
+  // A pnpm workspace: `npm install` cannot resolve `workspace:*`, so never suggest it. corepack ships
+  // with node and honours the declared `packageManager`, which is the one instruction that works
+  // whether or not pnpm is already on PATH.
+  const pm = existsSync(resolve(CHECKOUT, 'pnpm-lock.yaml')) ? 'corepack pnpm install' : 'npm install';
   console.error(`\x1b[31m✗ motu cannot start: ${missing.join(', ')} ${missing.length > 1 ? 'are' : 'is'} not installed\x1b[0m`);
   console.error(`\x1b[2m  The framework resolves its own build tools from its checkout, so that checkout needs its\x1b[0m`);
   console.error(`\x1b[2m  dependencies once — your project still needs none:\x1b[0m`);

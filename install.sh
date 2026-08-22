@@ -58,12 +58,22 @@ command -v node >/dev/null 2>&1 || { echo "motu: node is required but not on PAT
 # used to say "one command" while never mentioning it: on a clean machine every command, `--help`
 # included, died with ERR_MODULE_NOT_FOUND about two seconds after cloning. Do it here instead.
 if [ ! -d "$MOTU_ROOT/node_modules/ts-morph" ]; then
+  # THIS IS A PNPM WORKSPACE. `npm install` cannot resolve the `workspace:*` ranges the packages use,
+  # so falling back to it looks like it might work and does not — measured on a clean container with
+  # no pnpm, where the fallback failed silently and every command then hit the preflight. node ships
+  # corepack, and package.json declares `packageManager`, so fetch the right pnpm rather than guess.
   if command -v pnpm >/dev/null 2>&1; then PM="pnpm install";
-  elif command -v bun >/dev/null 2>&1; then PM="bun install";
-  else PM="npm install"; fi
+  elif command -v corepack >/dev/null 2>&1; then PM="corepack pnpm install";
+  else PM=""; fi
+  if [ -z "$PM" ]; then
+    echo "motu: this is a pnpm workspace and neither pnpm nor corepack is available." >&2
+    echo "      Install pnpm (https://pnpm.io/installation) or use node >= 16.9 (which ships corepack)," >&2
+    echo "      then re-run ./install.sh." >&2
+    exit 1
+  fi
   echo "installing motu's own dependencies ($PM)…"
-  ( cd "$MOTU_ROOT" && $PM ) || {
-    echo "motu: '$PM' failed in $MOTU_ROOT — install them and re-run." >&2
+  ( cd "$MOTU_ROOT" && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 $PM ) || {
+    echo "motu: '$PM' failed in $MOTU_ROOT — install the dependencies there and re-run." >&2
     exit 1
   }
 fi

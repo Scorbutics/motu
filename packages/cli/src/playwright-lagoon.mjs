@@ -874,6 +874,95 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
 }
 
 /**
+ * Does the COMPOSED page fit, and is it usable — at each declared viewport.
+ *
+ * `responsive` and `a11y` are ISLAND checks: each island is mounted alone and asked whether it fits.
+ * Every island passes that on its own and the page still overflows, because the arrangement is where
+ * a layout breaks — a three-column grid with fixed rails fits nothing at 390px, and no island in it
+ * is at fault. The same blind spot as the frame that renders one island's data in another's slot.
+ *
+ * Measured on the first project to have a region of its own: every island green at every viewport,
+ * and the composed page scrolling sideways on a phone. A human opened the lagoon and saw it in a
+ * second; nothing in the suite could.
+ *
+ * Overflow of the DOCUMENT, not of the region — the same signal the island check uses, for the same
+ * reason: a card that scrolls its own table on purpose is fine, a page the reader has to pan is not.
+ */
+export async function auditRegionLagoon({ id, port = 5199, states = [], viewports = [], a11y = true }) {
+  const { chromium } = await import('playwright');
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const axeSource = a11y ? readFileSync(require.resolve('axe-core'), 'utf8') : null;
+
+  return onLagoonPage(
+    { target: `archipelago:${id}`, port, viewport: { width: viewports[0]?.width ?? 1280, height: 900 }, view: 'region' },
+    async (page) => {
+      await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
+      await page
+        .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 15000 })
+        .catch(() => {});
+
+      const out = [];
+      const list = states.length ? states : [{ name: 'default', seed: {} }];
+      for (const state of list) {
+        await page.evaluate(() => window.__motuLagoon?.remount?.()).catch(() => {});
+        await page
+          .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
+          .catch(() => {});
+        await page.evaluate((seed) => {
+          const l = window.__motuLagoon;
+          if (l) for (const [k, v] of Object.entries(seed || {})) l.seed(k, v);
+        }, state.seed ?? {});
+
+        for (const vp of viewports) {
+          await page.setViewportSize({ width: vp.width, height: 900 });
+          // Two beats: one for the resize to land, one for anything that re-measures on it.
+          await sleep(220);
+          const m = await page.evaluate(() => {
+            const doc = document.documentElement;
+            return {
+              overflow: doc.scrollWidth - doc.clientWidth,
+              client: doc.clientWidth,
+              slots: document.querySelectorAll('[data-motu-slot]').length,
+              // What the region view actually put on the page, for when the measurement disagrees
+              // with a human looking at the same URL.
+              // The ARRANGEMENT's own element, by class — `body.firstElementChild` is a mount
+              // container in both views and tells you nothing about which one you are in.
+              frame: !!document.querySelector('.rv, [class*="Frame"], main, aside'),
+              widest: Math.max(0, ...[...document.body.querySelectorAll('*')].map((e) => e.scrollWidth)),
+              styled: !!document.getElementById('motu-island-styles'),
+              cols: getComputedStyle(document.querySelector('.rv-body') ?? document.body).gridTemplateColumns,
+            };
+          });
+          out.push({ scenario: state.name ?? 'default', viewport: vp.name, width: vp.width, ...m });
+        }
+      }
+
+      let violations = [];
+      if (axeSource) {
+        // One axe pass, at the widest declared viewport: the composed page's structure — landmarks,
+        // heading order, contrast — does not change with width, and running it per viewport triples
+        // the cost of the slowest check for the same answer.
+        await page.setViewportSize({ width: viewports[viewports.length - 1]?.width ?? 1280, height: 900 });
+        await sleep(200);
+        await page.addScriptTag({ content: axeSource });
+        violations = await page.evaluate(async () => {
+          const res = await window.axe.run(document.body, { resultTypes: ['violations'] });
+          return res.violations.map((v) => ({
+            id: v.id,
+            impact: v.impact,
+            help: v.help,
+            nodes: v.nodes.length,
+            target: v.nodes[0]?.target?.join(' ') ?? '',
+          }));
+        });
+      }
+      return { measurements: out, violations };
+    },
+  );
+}
+
+/**
  * Picture the REGION — the composed page, not its parts.
  *
  * WHAT THIS CATCHES THAT AN ISLAND SHOT CANNOT: arrangement. The frame is not declared and therefore

@@ -29,6 +29,7 @@ import {
   axeLagoon,
   probeWiring,
   runRegionFlows,
+  auditRegionLagoon,
 } from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -2401,6 +2402,72 @@ function emittedLiveCheck(report, id, renderOutputs) {
 }
 
 /**
+ * Does the region FIT, and does axe find anything in the composed page.
+ *
+ * Reported per viewport rather than as one verdict: "the region overflows" is not actionable, and the
+ * width it starts at is the whole finding.
+ */
+async function regionAuditCheck(report, id, port) {
+  const viewports = lagoonViewports();
+  if (!viewports.length) return;
+  // The states the flows establish, deduped — the same list `archipelago snapshot` pictures, so the
+  // page is audited in the shapes somebody thought worth driving rather than in one arbitrary one.
+  const seen = new Set();
+  const states = [];
+  for (const f of readScenariosFor(id)) {
+    const key = JSON.stringify(f.seed ?? {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    states.push({ name: f.name ?? 'flow', seed: f.seed ?? {} });
+  }
+  let out;
+  try {
+    out = await step('region-audit', () => auditRegionLagoon({ id, port, states, viewports }));
+  } catch (err) {
+    report[environmentalCause(err) ? 'inconclusive' : 'warn']('region-responsive', `could not audit the region: ${err.message}`);
+    return;
+  }
+
+  // A LAYOUT CANNOT BE JUDGED ON AN UNSTYLED PAGE. The runtime region lane renders through a mount
+  // path that never inserts the island stylesheet, so every box is block-level and nothing ever
+  // overflows: this reported "fits every declared viewport" about a page a human had just watched
+  // scroll sideways by 197px. A false green is worse than no check, so it says what it could not see.
+  if (out.measurements.some((m) => m.styled === false)) {
+    report.inconclusive(
+      'region-responsive',
+      'the region rendered WITHOUT the island stylesheet, so its layout cannot be judged here — ' +
+        'every box is block-level and nothing overflows by construction. Look at the published region ' +
+        '(`motu lagoon publish --remote`) or `motu archipelago snapshot`, which render it styled.',
+    );
+    return;
+  }
+  const over = out.measurements.filter((m) => m.overflow > 1);
+  if (!over.length) {
+    report.ok('region-responsive', `the composed page fits every declared viewport (${viewports.map((v) => `${v.name} ${v.width}px`).join(', ')})`, {
+      n: out.measurements.length,
+      of: 'measurement(s)',
+    });
+  } else {
+    // Narrowest first: that is where it starts, and the wider ones are usually the same cause.
+    const worst = [...over].sort((a, b) => a.width - b.width);
+    report.error(
+      'region-responsive',
+      `the composed page overflows at ${worst.length}/${out.measurements.length} viewport(s): ` +
+        `${worst.map((m) => `${m.viewport} ${m.width}px by ${m.overflow}px${m.scenario !== 'default' ? ` (${m.scenario})` : ''}`).join(', ')} ` +
+        `— every island fits on its own; this is the ARRANGEMENT, which no island check can see`,
+    );
+  }
+
+  const severe = (out.violations ?? []).filter((v) => v.impact === 'critical' || v.impact === 'serious');
+  if (!out.violations?.length) {
+    report.ok('region-a11y', 'axe finds nothing in the composed page', { n: 1, of: 'axe pass' });
+  } else {
+    for (const v of severe) report.warn('region-a11y', `${v.impact}: ${v.help} — ${v.target} (${v.nodes} node(s))`);
+    if (!severe.length) report.ok('region-a11y', `${out.violations.length} minor axe finding(s), none serious`, { n: out.violations.length, of: 'finding(s)' });
+  }
+}
+
+/**
  * PROVENANCE: what the channels really produced, against what the region declared.
  *
  * `sources` is a static promise — "these keys come from that source". This is the runtime half, the
@@ -2591,7 +2658,16 @@ export async function runArchipelagoVerify(argv, id) {
       'flows, mutation and the region render need a browser — re-run without --fast before handing over',
     );
   } else if (argv.runtime === true || argv.audit === true) {
+    // FIRST, before anything that drives the mountpoints view. The lane reuses one page and a warm
+    // re-aim keeps whatever view it already had, so running this after the wiring probe measured a
+    // DIAGNOSTIC layout and reported a page that overflows by 197px as fitting every viewport. The
+    // trap this file already documents, walked into by the check that needed the region view most.
+    if (hasLayout && argv.audit === true) await regionAuditCheck(report, id, 5300 + Math.floor(Math.random() * 400));
     if (hasLayout) await wiringProbe(report, id, 5300 + Math.floor(Math.random() * 400));
+    // THE COMPOSED PAGE, at each declared viewport. Island `responsive` mounts each island alone, so
+    // every one of them fits and the arrangement still overflows — a fixed-rail grid fits nothing on
+    // a phone and no island in it is at fault. Only under `--audit`, beside the island checks whose
+    // answer changes when the RENDERING changes rather than when a key moves.
     // One call, both questions: do the flows hold, and could they have failed.
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);
     if (!hasLayout) {

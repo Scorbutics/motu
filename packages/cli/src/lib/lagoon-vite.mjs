@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveLagoonRoot } from './lagoon-materialize.mjs';
+import { motuProvenance } from './provenance-plugin.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The motu checkout this CLI is running from — where build deps are resolved from first. */
@@ -196,7 +197,13 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
     configFile: false,
     // The host's React transform wins when it has one: two JSX transforms in one pipeline is a
     // duplicated runtime, and it surfaces as hooks failing with nothing to point at.
-    plugins: [...(host.ownsReactTransform ? [] : [react()]), ...(host.plugins ?? [])],
+    plugins: [
+      ...(host.ownsReactTransform ? [] : [react()]),
+      // Framework-level, not the adapter's: every host that aliases a module wants its calls visible,
+      // and one copy per adapter would be three copies of one decision.
+      ...(env.MOTU_DEBUG === '0' ? [] : [motuProvenance(lagoonJson.alias, paths.lagoonDir)]),
+      ...(host.plugins ?? []),
+    ],
     // These defines are the contract with `motu island verify`, which sets the matching MOTU_* env
     // when it boots this server. Dropping one silently weakens verification — keep them in sync.
     define: {

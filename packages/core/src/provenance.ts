@@ -71,6 +71,21 @@ export const openIslandWindow = (id: string): void => void (currentIsland = id);
 export const closeIslandWindow = (): void => void (currentIsland = null);
 
 const calls: HostCall[] = [];
+
+/** Marks a function this module already wrapped, so whole-module tracing does not double-count it. */
+const TRACED = Symbol.for('motu.traced');
+
+function record(module: string, fn: string, args: unknown[], value: unknown, island: string | null): void {
+  calls.push({
+    module,
+    fn,
+    args: args.map((a) => (typeof a === 'object' && a !== null ? '…' : a)),
+    returned: Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : undefined,
+    at: Date.now(),
+    island,
+  });
+  for (const l of listeners) l();
+}
 const listeners = new Set<() => void>();
 
 // How many exports were WRAPPED, which is not the same question as how many were called and must not
@@ -90,26 +105,65 @@ let wrapped = 0;
 export function traced<F extends (...args: never[]) => unknown>(module: string, fn: string, impl: F): F {
   if (!DEBUG) return impl;
   wrapped++;
-  return ((...args: Parameters<F>) => {
+  const out = ((...args: Parameters<F>) => {
     // AT CALL TIME, not at resolution: a fetch starts inside the island's window and comes back long
     // after it has closed, so reading the ambient island in the `.then` attributes every async call
     // to nobody.
     const island = currentIsland;
     const result = impl(...args);
-    const record = (value: unknown) => {
-      calls.push({
-        module,
-        fn,
-        args: args.map((a) => (typeof a === 'object' && a !== null ? '…' : a)),
-        returned: Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : undefined,
-        at: Date.now(),
-        island,
-      });
-      for (const l of listeners) l();
+    const keep = (value: unknown) => {
+      record(module, fn, args, value, island);
       return value;
     };
-    return result instanceof Promise ? result.then(record) : record(result);
+    return result instanceof Promise ? result.then(keep) : keep(result);
   }) as F;
+  (out as { [TRACED]?: boolean })[TRACED] = true;
+  return out;
+}
+
+/**
+ * Trace a WHOLE stubbed module, so provenance costs nobody a decision.
+ *
+ * `traced` is per export, which means a stub that nobody remembered to wrap records nothing and the
+ * lens says the islands fetched nothing — indistinguishable, to a reader, from islands that really
+ * did. And there is nothing to decide: the lagoon's alias map already names every module it stands
+ * down, and standing a module down IS the statement that it is a host boundary. So the build wraps
+ * them all (see the `motu:provenance` plugin in the lagoon's vite config).
+ *
+ * ONLY WHAT IS AWAITED IS RECORDED. A stub exports its reads next to its pure helpers — peps' club
+ * stub has two fetches and five formatters, one of which runs per feed row — and recording every call
+ * would turn a provenance list into a call log, burying the two lines worth reading under 24 copies of
+ * `buildFeedSentence`. A request is something you wait for: the wrapper records when the return value
+ * is a promise, and stays out of the way otherwise. A synchronous read is missed, which is the honest
+ * trade and the rarer shape.
+ */
+export function traceModule<T extends object>(module: string, ns: T): T {
+  if (!DEBUG) return ns;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(ns)) {
+    const value = (ns as Record<string, unknown>)[key];
+    // Already wrapped by hand: leave it, or the call is recorded twice and a stub that opted in
+    // reads as fetching twice as often as it does.
+    if (typeof value !== 'function' || (value as { [TRACED]?: boolean })[TRACED]) {
+      out[key] = value;
+      continue;
+    }
+    const impl = value as (...args: unknown[]) => unknown;
+    const wrapper = (...args: unknown[]) => {
+      const island = currentIsland;
+      const result = impl(...args);
+      if (!(result instanceof Promise)) return result; // not a request — a helper the island called
+      return result.then((value) => {
+        record(module, key, args, value, island);
+        return value;
+      });
+    };
+    Object.defineProperty(wrapper, 'name', { value: key });
+    (wrapper as { [TRACED]?: boolean })[TRACED] = true;
+    wrapped++;
+    out[key] = wrapper;
+  }
+  return out as T;
 }
 
 /** How many exports opted in. Zero means the lagoon is not instrumented, not that nothing fetched. */

@@ -11,6 +11,7 @@ import { relative, resolve } from 'node:path';
 import { color, paths, names, lagoonViewports } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
+import { changedScope } from '../lib/changed.mjs';
 import { captureLagoon, captureRegionLagoon } from '../playwright-lagoon.mjs';
 import { resolveBaselineHost, putShot, fetchShot, acceptShots, writeRemoteArtifacts } from '../lib/baselines.mjs';
 import {
@@ -95,6 +96,39 @@ async function snapshotIsland(argv, kebab, host) {
   return { kebab, dir, results, orphans };
 }
 
+
+/**
+ * Narrow a sweep to what this branch touched — the same flag, and the same discipline, as `motu check`.
+ *
+ * A full island sweep is 89s and a full region sweep 18s on a 20-island project, which is the cost of
+ * a punctual gate, not of a loop. Scoped to one island and its region it is seconds, which is the
+ * difference between a check an agent runs on the way past and one it learns to skip.
+ *
+ * NARROWING IS NEVER SILENT: `changedScope` widens back to everything the moment a file cannot be
+ * attributed, and says why. And nothing examined is NOT a pass — a sweep that pictured no island
+ * proves nothing about the project, so it exits 2 rather than printing green, the same rule this
+ * repository keeps having to reinstate in whichever flag exists to examine less.
+ */
+function scopeTargets(argv, all, pick) {
+  if (argv.changed === undefined) return { targets: all, scope: null };
+  const scope = changedScope(typeof argv.changed === 'string' ? argv.changed : undefined);
+  if (!scope.scoped) {
+    console.log(color.dim(`  --changed: running everything — ${scope.reason}`));
+    return { targets: all, scope };
+  }
+  return { targets: all.filter((id) => pick(scope).includes(id)), scope };
+}
+
+/** The shared verdict for a scoped run that found nothing to do. */
+function nothingToPicture(kind) {
+  console.log('');
+  console.log(
+    color.yellow(color.bold('NOTHING TO PICTURE')) +
+      color.dim(`  no ${kind} changed — this run proves nothing about the project`),
+  );
+  process.exit(2);
+}
+
 export async function snapshotCommand(argv) {
   const name = argv._[0];
   const wantsHost = argv.remote !== undefined || argv.accept !== undefined;
@@ -136,7 +170,14 @@ export async function snapshotCommand(argv) {
     console.error(color.red('✗ --update writes files; --remote stores on the host. Use --remote then --accept.'));
     process.exit(2);
   }
-  const targets = argv.all ? listIslands(paths.islandsDir).map((i) => i.kebab) : [names(name).kebab];
+  const allIslands = listIslands(paths.islandsDir).map((i) => i.kebab);
+  const { targets, scope } = argv.all
+    ? scopeTargets(argv, allIslands, (sc) => sc.islands)
+    : { targets: [names(name).kebab], scope: null };
+  if (scope?.scoped) {
+    console.log(color.dim(`  --changed: ${targets.length}/${allIslands.length} island(s) — from ${scope.files} changed file(s)`));
+    if (!targets.length) nothingToPicture('island');
+  }
 
   const all = [];
   for (const kebab of targets) all.push(await snapshotIsland(argv, kebab, host));
@@ -307,7 +348,15 @@ export async function archipelagoSnapshotCommand(argv) {
     console.error('usage: motu archipelago snapshot <id|--all> [--update|--remote] [--accept] [--json]');
     process.exit(2);
   }
-  const targets = argv.all ? readRegions(paths.archipelagosDir).map((r) => r.id) : [name];
+  const allRegions = readRegions(paths.archipelagosDir).map((r) => r.id);
+  // A changed ISLAND is a changed region here: the region's picture is its members composed, so an
+  // island edit moves it even when no file under archipelagos/ was touched. `changedScope` already
+  // maps islands to the regions that declare them.
+  const { targets, scope } = argv.all ? scopeTargets(argv, allRegions, (sc) => sc.regions) : { targets: [name], scope: null };
+  if (scope?.scoped) {
+    console.log(color.dim(`  --changed: ${targets.length}/${allRegions.length} region(s) — from ${scope.files} changed file(s)`));
+    if (!targets.length) nothingToPicture('region');
+  }
 
   const all = [];
   for (const id of targets) all.push(await snapshotRegion(argv, id, host));

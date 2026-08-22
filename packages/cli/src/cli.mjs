@@ -54,6 +54,7 @@ ${color.bold('Usage:')}
   motu island verify <name|--all>                   the island rules (static; --runtime adds the browser)
   motu island snapshot <name|--all> [--update]      visual baselines, per scenario × viewport
   motu island snapshot --all --remote               ...stored on the lagoon host instead of in git
+  motu island snapshot --all --remote --changed     ...only what this branch touched
   motu island snapshot --accept <name>              move the accepted baseline — a decision, not a write
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
   motu island sync                                  regenerate the element registry from the files on disk
@@ -133,6 +134,8 @@ ${color.bold('island snapshot flags:')}
   --update             record baselines as FILES beside the evidence (the in-repo model)
   --remote [url]       compare against the host's ACCEPTED baseline; nothing is written to git
   --accept [name]      move the accepted pointer to what was last rendered
+  --changed [base]     only islands/regions this branch touched — widens back to everything, loudly,
+                       when a changed file belongs to no single one
   --json          machine-readable report
 
 ${color.bold('lagoon group flags:')}

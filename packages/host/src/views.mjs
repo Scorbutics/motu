@@ -75,10 +75,67 @@ button.member small { display: block; margin-top: 2px; font-weight: 500; color: 
 aside footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line); word-break: break-all; }
 main.stage { flex: 1; position: relative; background: #fff; }
 main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* --- the switcher, on a phone -------------------------------------------------------------------
+   The rail used to stack above the stage at max-height 40vh, so on a 844px-tall phone half the screen
+   was a list of four buttons and the lagoon — the thing being looked at — got the rest. A composed
+   view exists to SHOW the lagoons, so the switcher becomes a bar you can read in one line and a sheet
+   you pull up when you actually want to switch. Desktop is unchanged: a 268px rail beside a wide
+   stage costs nothing there and is faster than any sheet. */
+.topbar { display: none; }
+.scrim { display: none; }
 @media (max-width: 760px) {
   .wrap { flex-direction: column; }
-  aside { width: auto; max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    padding: 8px 10px 8px 14px;
+    background: var(--motu-primary);
+    color: var(--motu-on-primary);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar .who { min-width: 0; flex: 1; line-height: 1.25; }
+  .topbar .who strong { display: block; font: 700 14px/1.25 inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .who span { display: block; font: 500 11.5px/1.3 inherit; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar button {
+    flex: none; display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.34);
+    background: rgba(255,255,255,.14); color: inherit;
+    font: 600 12.5px/1 inherit;
+  }
+  .topbar button::after { content: '▾'; font-size: 11px; opacity: .9; }
+
+  /* The rail becomes a bottom sheet. Same markup, same buttons — only where it sits changes, so the
+     switcher cannot drift into two implementations. */
+  aside {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    width: auto; max-height: 76vh;
+    border-right: 0; border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 34px rgba(6, 46, 43, .26);
+    transform: translateY(100%);
+    transition: transform 220ms cubic-bezier(.2,.9,.3,1);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  body.sheet-open aside { transform: translateY(0); }
+  body.sheet-dragging aside { transition: none; }
+  aside .grab { display: block; }
+  .scrim {
+    display: block; position: fixed; inset: 0; z-index: 39;
+    background: rgba(6, 46, 43, .42);
+    opacity: 0; pointer-events: none; transition: opacity 220ms ease;
+  }
+  body.sheet-open .scrim { opacity: 1; pointer-events: auto; }
+  /* Comfortable targets: this is the one control on the page a thumb uses. */
+  button.member { padding: 12px 13px; font-size: 13.5px; }
+  aside footer { padding-bottom: 16px; }
 }
+/* The drag handle only means anything on the sheet. */
+.grab { display: none; padding: 8px 0 2px; cursor: grab; touch-action: none; }
+.grab i { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 999px; background: var(--line); }
 `;
 
 /**
@@ -119,7 +176,16 @@ export function composedPage({ id, group, members }) {
 </head>
 <body>
 <div class="wrap">
-  <aside>
+  <header class="topbar">
+    <div class="who">
+      <strong id="tb-title">${escapeHtml(members[0]?.title || members[0]?.slug || group)}</strong>
+      <span id="tb-sub">${escapeHtml(group)} · ${members.length} lagoon${members.length === 1 ? '' : 's'}</span>
+    </div>
+    <button type="button" id="tb-switch" aria-haspopup="dialog" aria-expanded="false" aria-controls="switcher">Switch</button>
+  </header>
+  <div class="scrim" id="scrim" hidden></div>
+  <aside id="switcher" aria-label="Choose a lagoon">
+    <div class="grab" id="grab" aria-hidden="true"><i></i></div>
     ${motuBay({ title: group, subtitle: `${members.length} lagoon${members.length === 1 ? '' : 's'}`, compact: true })}
     <div class="rail">${rail}</div>
     <footer class="motu-cap">manifest ${escapeHtml(id)}</footer>
@@ -148,11 +214,64 @@ export function composedPage({ id, group, members }) {
       b.setAttribute('aria-current', String(+b.dataset.i === i));
     });
     current = i;
+    var chosen = document.querySelector('button.member[data-i="' + i + '"]');
+    var label = document.getElementById('tb-title');
+    if (chosen && label) label.textContent = chosen.childNodes[0].textContent.trim();
     if (history.replaceState) history.replaceState(null, '', '#' + i);
   }
+  // --- the sheet, on a phone --------------------------------------------------------------------
+  // Desktop never opens it: the rail is always visible there and these handlers simply never fire,
+  // because the button they hang off is display:none.
+  var body = document.body;
+  var scrim = document.getElementById('scrim');
+  var switchBtn = document.getElementById('tb-switch');
+  var sheet = document.getElementById('switcher');
+  var grab = document.getElementById('grab');
+
+  function openSheet() {
+    scrim.hidden = false;
+    body.classList.add('sheet-open');
+    switchBtn.setAttribute('aria-expanded', 'true');
+  }
+  function closeSheet() {
+    body.classList.remove('sheet-open');
+    switchBtn.setAttribute('aria-expanded', 'false');
+    // Kept in the layout until the transition ends, or the backdrop vanishes before the sheet does.
+    setTimeout(function () { if (!body.classList.contains('sheet-open')) scrim.hidden = true; }, 240);
+  }
+  switchBtn.addEventListener('click', function () {
+    body.classList.contains('sheet-open') ? closeSheet() : openSheet();
+  });
+  scrim.addEventListener('click', closeSheet);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+
+  // DRAG TO DISMISS. A sheet a thumb can only close by reaching the backdrop is a sheet that feels
+  // stuck; following the finger is the part that makes it read as a panel rather than a popup.
+  var startY = null, dy = 0;
+  grab.addEventListener('pointerdown', function (e) {
+    startY = e.clientY; dy = 0;
+    body.classList.add('sheet-dragging');
+    grab.setPointerCapture(e.pointerId);
+  });
+  grab.addEventListener('pointermove', function (e) {
+    if (startY === null) return;
+    dy = Math.max(0, e.clientY - startY);
+    sheet.style.transform = 'translateY(' + dy + 'px)';
+  });
+  function endDrag() {
+    if (startY === null) return;
+    startY = null;
+    body.classList.remove('sheet-dragging');
+    sheet.style.transform = '';
+    // A short pull springs back; past a third of the sheet it is a dismissal.
+    if (dy > Math.min(120, sheet.offsetHeight / 3)) closeSheet();
+  }
+  grab.addEventListener('pointerup', endDrag);
+  grab.addEventListener('pointercancel', endDrag);
+
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('button.member');
-    if (b) show(+b.dataset.i);
+    if (b) { show(+b.dataset.i); closeSheet(); }
   });
   var initial = parseInt((location.hash || '').slice(1), 10);
   show(Number.isInteger(initial) ? initial : 0);

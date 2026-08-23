@@ -355,15 +355,48 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
 
   // --- composition ------------------------------------------------------------------------------
 
-  /** Define a group: an ordered list of `{repo, slug}` the server resolves at assembly time. */
-  function putGroup(name, members) {
-    index.groups[name] = { members, updatedAt: nowIso() };
+  /**
+   * Define a group.
+   *
+   * Either an explicit list of `{repo, slug}`, or `all: true` — meaning EVERY repository, resolved
+   * when the group is assembled rather than when it was defined.
+   *
+   * `--all` always claimed the second thing ("the host already knows which repositories have
+   * published, so the gallery does not need to be maintained by hand") and did the first: it read
+   * `/api/repos` once and froze the answer. A group called `everything` then held three repositories
+   * out of four, and the only way to notice was to count them.
+   */
+  function putGroup(name, spec) {
+    const { members = [], all = false, exclude = [] } = Array.isArray(spec) ? { members: spec } : (spec ?? {});
+    index.groups[name] = { members, all, exclude, updatedAt: nowIso() };
     save();
     return index.groups[name];
   }
 
   function getGroup(name) {
     return index.groups[name] ?? null;
+  }
+
+  /**
+   * A group's members AS OF NOW: the `all` expansion first (in repo order), then anything named
+   * explicitly that it did not already cover, minus the exclusions.
+   *
+   * A repo with no `all` switcher entry contributes its first slug instead, so a project that only
+   * ever publishes one focused archipelago is not silently left out of a composed view.
+   */
+  function membersOf(group) {
+    const out = [];
+    if (group.all) {
+      for (const r of listRepos()) {
+        const slug = r.slugs.includes('all') ? 'all' : r.slugs[0];
+        if (slug) out.push({ repo: r.repo, slug, ref: 'latest' });
+      }
+    }
+    for (const m of group.members ?? []) {
+      if (!out.some((x) => x.repo === m.repo && x.slug === m.slug)) out.push({ ref: 'latest', ...m });
+    }
+    // A bare exclusion (no slug) drops every slug of that repo — the same rule `--remove` uses.
+    return out.filter((m) => !(group.exclude ?? []).some((e) => e.repo === m.repo && (!e.slug || e.slug === m.slug)));
   }
 
   /**
@@ -380,7 +413,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     if (!group) return null;
     const members = [];
     const missing = [];
-    for (const m of group.members) {
+    for (const m of membersOf(group)) {
       const rec = resolveRef(m.repo, m.ref || 'latest', m.slug);
       if (!rec) {
         missing.push(m);
@@ -420,7 +453,9 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   }
 
   function listGroups() {
-    return Object.entries(index.groups).map(([name, g]) => ({ name, members: g.members }));
+    // The EFFECTIVE members, so a caller counting them counts what the group actually composes. An
+    // `all` group reporting its stored (empty) list is how a gallery of four reads as a gallery of none.
+    return Object.entries(index.groups).map(([name, g]) => ({ name, all: !!g.all, members: membersOf(g) }));
   }
 
   function stats() {

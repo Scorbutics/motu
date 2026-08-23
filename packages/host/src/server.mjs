@@ -317,18 +317,33 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     } catch (e) {
       return json(res, 400, { error: `body must be JSON: ${e.message}` });
     }
-    if (!Array.isArray(members) || !members.length) return json(res, 400, { error: 'body must be a non-empty array of {repo, slug, ref?}' });
-    const clean = [];
-    for (const m of members) {
-      const repo = normalizeRepo(m?.repo);
-      const slug = normalizeSegment(m?.slug);
-      const ref = m?.ref ? normalizeSegment(m.ref) : 'latest';
-      if (!repo || !slug || !ref) return json(res, 400, { error: `bad member ${JSON.stringify(m)}` });
-      clean.push({ repo, slug, ref });
-    }
-    store.putGroup(name, clean);
+    // Two body shapes. The array is the original and still works; the object can also say `all: true`,
+    // which means EVERY repository resolved at assembly time rather than a list frozen at definition.
+    const spec = Array.isArray(members) ? { members } : members && typeof members === 'object' ? members : null;
+    if (!spec) return json(res, 400, { error: 'body must be an array of {repo, slug, ref?} or {all?, members?, exclude?}' });
+    const all = !!spec.all;
+    if (!all && (!Array.isArray(spec.members) || !spec.members.length))
+      return json(res, 400, { error: 'body must be a non-empty array of {repo, slug, ref?}, or set all:true' });
+
+    const cleanList = (list, needSlug) => {
+      const out = [];
+      for (const m of list ?? []) {
+        const repo = normalizeRepo(m?.repo);
+        const slug = m?.slug ? normalizeSegment(m.slug) : null;
+        const ref = m?.ref ? normalizeSegment(m.ref) : 'latest';
+        if (!repo || (needSlug && !slug) || !ref) return null;
+        out.push(slug ? { repo, slug, ref } : { repo });
+      }
+      return out;
+    };
+    const clean = cleanList(spec.members, true);
+    const exclude = cleanList(spec.exclude, false);
+    if (!clean || !exclude) return json(res, 400, { error: 'bad member or exclusion in body' });
+
+    store.putGroup(name, { members: clean, all, exclude });
     const snap = store.snapshot(name);
-    return json(res, 200, { ok: true, name, members: clean, url: `/g/${name}`, manifest: snap?.id ?? null, missing: snap?.missing ?? [] });
+    const effective = store.listGroups().find((g) => g.name === name)?.members ?? clean;
+    return json(res, 200, { ok: true, name, all, members: effective, url: `/g/${name}`, manifest: snap?.id ?? null, missing: snap?.missing ?? [] });
   }
 
   const server = createServer((req, res) => {

@@ -90,17 +90,14 @@ export async function lagoonGroupCommand(argv) {
   // Start from what the group already is, so --add/--remove are edits rather than a redefinition.
   const { groups } = await api(base, '/api/groups');
   const existing = groups.find((g) => g.name === name);
-  let members = existing ? existing.members.map((m) => ({ repo: m.repo, slug: m.slug })) : [];
-
-  if (argv.all) {
-    // Every repository that has published, at its switcher entry — the gallery of galleries. Repos
-    // with no `all` entry contribute their first slug instead, so a project that only ever publishes
-    // one focused archipelago is not silently left out of the composed view.
-    const { repos } = await api(base, '/api/repos');
-    members = repos
-      .map((r) => ({ repo: r.repo, slug: r.slugs.includes('all') ? 'all' : r.slugs[0] }))
-      .filter((m) => m.slug);
-  }
+  // `all` is a STANDING RULE now, not a member list. It used to read /api/repos here and freeze the
+  // answer, so `--all` meant "every repository as of the moment you typed this" — and a gallery named
+  // `everything` held three of four the day a fourth was published, with nothing to say so. The host
+  // resolves it when it assembles the group instead, which is what the flag always claimed.
+  let all = existing?.all ?? false;
+  if (argv.all) all = true;
+  let members = existing && !all ? existing.members.map((m) => ({ repo: m.repo, slug: m.slug })) : [];
+  let exclude = existing?.exclude ? existing.exclude.map((m) => ({ repo: m.repo, ...(m.slug ? { slug: m.slug } : {}) })) : [];
 
   for (const spec of memberList(argv, 'add')) {
     const m = parseMember(spec);
@@ -108,6 +105,7 @@ export async function lagoonGroupCommand(argv) {
       console.error(color.red(`✗ --add wants <repo>[:<slug>], got "${spec}"`));
       process.exit(2);
     }
+    exclude = exclude.filter((x) => !(x.repo === m.repo && (!x.slug || x.slug === m.slug)));
     if (!members.some((x) => x.repo === m.repo && x.slug === m.slug)) members.push(m);
   }
   for (const spec of memberList(argv, 'remove')) {
@@ -116,9 +114,14 @@ export async function lagoonGroupCommand(argv) {
     // A bare `--remove acme/web` drops every slug of that repo; with a slug it drops just the one.
     const bare = !String(spec).includes(':');
     members = members.filter((x) => !(x.repo === m.repo && (bare || x.slug === m.slug)));
+    // On an `all` group there is no list to remove from — the exclusion has to outlive this command,
+    // or the next assembly quietly puts the member back.
+    if (all && !exclude.some((x) => x.repo === m.repo && x.slug === m.slug)) {
+      exclude.push(bare ? { repo: m.repo } : { repo: m.repo, slug: m.slug });
+    }
   }
 
-  if (!members.length) {
+  if (!all && !members.length) {
     console.error(color.red(`✗ "${name}" would have no members — nothing published yet, or every member removed`));
     process.exit(1);
   }
@@ -126,7 +129,7 @@ export async function lagoonGroupCommand(argv) {
   const out = await api(base, `/api/group?name=${encodeURIComponent(name)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify(members),
+    body: JSON.stringify({ all, members, exclude }),
   });
 
   const url = `${base}/g/${name}`;

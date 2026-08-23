@@ -5,6 +5,8 @@
   --ink: #22302c; --ink-muted: #6b7d78; --ink-caption: #9a9182;
   --surface: #eef8f6; --panel: rgba(250, 254, 253, .96); --line: rgba(11, 111, 104, .14);
   --changed: #b45309; --new: #0f766e;
+  /* The same two verdicts ON the dark bay, where the ink versions would disappear. */
+  --changed-on-bay: #ffd9a8; --new-on-bay: #bdf3ea; --settled-on-bay: rgba(255, 255, 255, .72);
   --error-bg: #fee; --error-ink: #a11;
 }
 * { box-sizing: border-box; }
@@ -19,17 +21,67 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .rv-head h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
 .rv-error { margin: 0; padding: 8px 20px; background: var(--error-bg); color: var(--error-ink); font-size: 12.5px; }
 .rv-body { flex: 1; display: grid; grid-template-columns: 240px 300px 1fr; min-height: 0; }
-/* Below the widest declared viewport the rails cannot keep fixed widths: 240 + 300 already exceeds a
-   phone, so the columns become rows and the viewer takes the height it needs. Measured at 390px, the
-   three-column form overflowed the document by 197px. */
-@media (max-width: 900px) {
+.rv-head-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* Both phone-only affordances. On a wide screen the projects are already a column, so a control to
+   reveal them would be a button that does nothing visible. */
+.rv-sheet-toggle, .rv-scrim, .rv-grab { display: none; }
+
+/* Between the two: the fixed rails cannot hold (240 + 300 already exceeds a phone), but there is still
+   room to stack them. Measured at 390px, the three-column form overflowed the document by 197px. */
+@media (max-width: 900px) and (min-width: 641px) {
   .rv-body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
   .rv-rail, .rv-shots { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; }
   .rv { height: auto; min-height: 100vh; }
 }
-@media (max-width: 560px) {
-  .rv-head { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .ss { flex-wrap: wrap; }
+
+/* --- THE DECK, on a phone -----------------------------------------------------------------------
+   Stacking all four panels put everything on screen and made none of it usable — least of all the
+   picture, which is the entire reason to open this screen. So: one shot fills the view, the shots
+   become a strip you thumb along, and the projects move into a sheet. Same islands, same ownership,
+   same bindings; only where they sit changes. */
+@media (max-width: 640px) {
+  .rv { height: 100dvh; overflow: hidden; }
+  .rv-head { padding: 10px 14px; gap: 10px; }
+  .rv-head h1 { font-size: 14px; }
+  .rv-sheet-toggle {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 7px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.34); background: rgba(255,255,255,.14);
+    color: inherit; font: 600 12px/1 inherit;
+  }
+  /* The viewer takes what is left; the strip and the accept bar take only what they need. */
+  .rv-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+  .rv-shots {
+    border-right: 0; border-bottom: 1px solid var(--line);
+    max-height: none; padding: 8px 10px;
+    overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  }
+  .rv-view { padding: 12px; }
+
+  /* The projects, as a sheet. Same markup as the desktop rail — a second list would be the same
+     duplication the shared layout just removed, one level down. */
+  .rv-rail {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    max-height: 72dvh; border-right: 0; border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0; background: var(--surface);
+    box-shadow: 0 -12px 34px rgba(6, 46, 43, .26);
+    transform: translateY(100%); transition: transform 220ms cubic-bezier(.2,.9,.3,1);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .rv-sheet-open .rv-rail { transform: translateY(0); }
+  .rv-sheet-dragging .rv-rail { transition: none; }
+  .rv-grab { touch-action: none; cursor: grab; }
+  .rv-grab { display: block; padding: 8px 0 2px; }
+  .rv-grab i { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 999px; background: var(--line); }
+  .rv-scrim {
+    display: block; position: fixed; inset: 0; z-index: 39; border: 0; padding: 0;
+    background: rgba(6, 46, 43, .42); opacity: 0; pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+  .rv-sheet-open .rv-scrim { opacity: 1; pointer-events: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-rail, .rv-scrim { transition: none; }
 }
 .rv-rail, .rv-shots { overflow: auto; border-right: 1px solid var(--line); padding: 10px; }
 .rv-view { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -140,3 +192,56 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .rv-token { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-muted); }
 .rv-token input { border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; }
 .rv-token button { border: 0; background: var(--w-mid); color: #fff; border-radius: 8px; padding: 7px 12px; font: 600 12px/1 inherit; cursor: pointer; }
+
+/* --- the shots, as a thumb strip ----------------------------------------------------------------
+   On a phone the same island renders along the screen instead of down it. The island keeps its
+   grouping and keeps producing `selectedShot` — advancing through a review IS selecting the next
+   shot, so there is no new control and nothing new to own. Chips, because a shot is identified by
+   two short words and a status, and that fits a thumb. */
+@media (max-width: 640px) {
+  /* ONE LINE THAT SCROLLS, not a block that wraps. `inline-block` alone wraps at the container width,
+     which is how the strip became two rows and ate 174px of a screen whose whole point is the picture
+     below it — `nowrap` on the container is what makes the horizontal overflow actually scroll. */
+  .rv-shots { white-space: nowrap; }
+  .rv-shots .sl-group { display: inline-block; vertical-align: top; margin-right: 14px; white-space: normal; }
+  .rv-shots .sl-group h3 { margin: 0 2px 5px; gap: 8px; white-space: nowrap; }
+  .rv-shots .sl-group ul { display: flex; gap: 6px; }
+  .rv-shots .sl-shot {
+    flex-direction: column; align-items: flex-start; gap: 3px; width: auto; white-space: nowrap;
+    border-color: var(--line); background: rgba(255,255,255,.72); border-radius: 8px; padding: 7px 10px;
+  }
+  .rv-shots .sl-shot[aria-current="true"] { border-color: var(--w-mid); background: #fff; }
+  .rv-shots .sl-empty { white-space: nowrap; }
+
+  /* The summary is the progress readout here: the labels are what cost width, and the colours already
+     say which is which. */
+  .ss { gap: 10px; }
+  .ss dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ss div { gap: 0; }
+  .ss div::before {
+    content: ''; width: 8px; height: 8px; border-radius: 999px; margin-right: 6px;
+    background: currentColor; opacity: .9;
+  }
+  .ss div[data-tone="changed"] { color: var(--changed-on-bay); }
+  .ss div[data-tone="new"] { color: var(--new-on-bay); }
+  .ss div[data-tone="match"] { color: var(--settled-on-bay); }
+
+  /* One row, thumb height, and the primary action last so it sits under the thumb. */
+  .ab { gap: 6px; }
+  .ab button { padding: 10px 12px; border-radius: 10px; flex: 1 1 auto; }
+
+  /* THE PICTURE TAKES WHAT IS LEFT. It is the reason this screen exists, and it was sitting at its
+     natural size with dead space under the accept bar. */
+  .rv-view { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .dv { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .dv-img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+  .dv-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .ab { flex: none; }
+
+  /* The mode toggle was clipped mid-word ("Differenc"): three pills plus an island name and a scenario
+     do not fit 390px on one line. The name goes above, the toggle gets the width. */
+  .dv-head { flex-wrap: wrap; row-gap: 8px; padding: 9px 10px; }
+  .dv-head b, .dv-head span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dv-modes { margin-left: 0; width: 100%; }
+  .dv-modes button { flex: 1 1 0; padding: 8px 6px; }
+}

@@ -1,11 +1,13 @@
 // The review console region, for the lagoon: what the page establishes, and where the islands sit.
 //
-// The arrangement is the page's own — a rail of projects, a list of shots, and a viewer filling the
-// rest. Nothing here is invented chrome; when the page grows a layout component worth naming, this
-// becomes a call to it.
+// THE ARRANGEMENT IS THE PAGE'S OWN — `ReviewLayout`, the same component `App.tsx` renders. This file
+// used to hold a second copy of that JSX, which is the thing motu's rules forbid ("never a second copy
+// of the arrangement, which drifts"): the page grows a phone layout, the preview keeps showing the old
+// shape, and the surface a reviewer is judging stops being the surface that ships.
 import type { ReactNode } from 'react';
 import type { LagoonOverrides } from '@motu/react';
 import { REPOS } from '../../../../src/shared/review-evidence.js';
+import { ReviewLayout } from '../../../../src/ui/review-layout/ReviewLayout.js';
 
 export const reviewSeed: NonNullable<LagoonOverrides['seed']>[string] = {
   repos: REPOS,
@@ -20,19 +22,13 @@ export const reviewSeed: NonNullable<LagoonOverrides['seed']>[string] = {
 
 export function ReviewRegionFrame({ island }: { island: (slot: string) => ReactNode }) {
   return (
-    <div className="rv">
-      <header className="rv-head">
-        <h1>Baseline review</h1>
-        {island('status-summary')}
-      </header>
-      <div className="rv-body">
-        <aside className="rv-rail">{island('repo-picker')}</aside>
-        <nav className="rv-shots">{island('shot-list')}</nav>
-        <main className="rv-view">
-          {island('diff-viewer')}
-          {island('accept-bar')}
-        </main>
-      </div>
-    </div>
+    <ReviewLayout
+      title="Baseline review"
+      summary={island('status-summary')}
+      projects={island('repo-picker')}
+      shots={island('shot-list')}
+      viewer={island('diff-viewer')}
+      accept={island('accept-bar')}
+    />
   );
 }

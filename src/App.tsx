@@ -5,6 +5,7 @@ import { reviewArchipelago } from "@/archipelagos/review/review.archipelago"
 import { ELEMENT_REGISTRY } from "@/islands/registry"
 import type { AcceptScope } from "@/ui/accept-bar/AcceptBar"
 import { acceptShots, listRepos, listShots, shotUrl, type HostConfig } from "@/lib/host"
+import { ReviewLayout } from "@/ui/review-layout/ReviewLayout"
 
 /**
  * The host, as the source's port — DATA, and nothing else.
@@ -68,40 +69,32 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
 
 
   return (
-    <div className="rv">
-      <header className="rv-head">
-        <h1>Baseline review</h1>
-        <Review.Island slot="status-summary" />
-      </header>
-      {error && <p className="rv-error">{error}</p>}
-      <div className="rv-body">
-        <aside className="rv-rail">
-          <Review.Island slot="repo-picker" />
-        </aside>
-        <nav className="rv-shots">
-          <Review.Island slot="shot-list" />
-        </nav>
-        <main className="rv-view">
-          <Review.Island slot="diff-viewer" props={{ shotUrl: (h: string) => shotUrl(cfg, h) }} />
-          {cfg.token ? (
-            <Review.Island slot="accept-bar" />
-          ) : (
-            <form
-              className="rv-token"
-              onSubmit={(e) => {
-                e.preventDefault()
-                const v = new FormData(e.currentTarget).get("token")
-                if (typeof v === "string" && v.trim()) onToken(v.trim())
-              }}
-            >
-              <label htmlFor="token">Paste the host token to accept baselines</label>
-              <input id="token" name="token" type="password" autoComplete="off" />
-              <button type="submit">Connect</button>
-            </form>
-          )}
-        </main>
-      </div>
-    </div>
+    <ReviewLayout
+      title="Baseline review"
+      summary={<Review.Island slot="status-summary" />}
+      projects={<Review.Island slot="repo-picker" />}
+      shots={<Review.Island slot="shot-list" />}
+      viewer={<Review.Island slot="diff-viewer" props={{ shotUrl: (h: string) => shotUrl(cfg, h) }} />}
+      error={error ? <p className="rv-error">{error}</p> : null}
+      accept={
+        cfg.token ? (
+          <Review.Island slot="accept-bar" />
+        ) : (
+          <form
+            className="rv-token"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const v = new FormData(e.currentTarget).get("token")
+              if (typeof v === "string" && v.trim()) onToken(v.trim())
+            }}
+          >
+            <label htmlFor="token">Paste the host token to accept baselines</label>
+            <input id="token" name="token" type="password" autoComplete="off" />
+            <button type="submit">Connect</button>
+          </form>
+        )
+      }
+    />
   )
 }
 

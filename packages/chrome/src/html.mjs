@@ -14,9 +14,10 @@ export function escapeHtml(s) {
  * The water header: motu's one piece of identity. `title` is what this page IS; `meta` is the readout
  * beside it (counts, sizes, a manifest id) — the same relationship the bay has with its label.
  */
-export function motuBay({ title, subtitle = '', meta = '', compact = false }) {
+export function motuBay({ title, subtitle = '', meta = '', compact = false, lead = '' }) {
   return `<header class="motu-bay${compact ? ' compact' : ''}">
   <div class="sheen"></div>
+  ${lead}
   <div class="bay-inner">
     <div class="bay-title">
       <strong>${escapeHtml(title)}</strong>

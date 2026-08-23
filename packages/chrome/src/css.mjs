@@ -77,9 +77,22 @@ export function motuWaterCss() {
   gap: 16px;
   flex-wrap: wrap;
 }
-.motu-bay .bay-title strong { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
-.motu-bay.compact .bay-title strong { font-size: 14px; }
-.motu-bay .bay-title span { margin-left: 10px; opacity: .82; font-weight: 500; }
+/* THE SAME READOUT THE DOCK USES. The tide line's label is mono at .04em and the bay was bold sans, so
+   the two pieces of motu chrome a person sees at once — a dock over a page, a bay above it — read as
+   two different products. A bay is a readout too: what this is, and how much of it there is. */
+.motu-bay .bay-title strong {
+  font: 650 16px/1.2 ${MOTU_TYPE.mono};
+  letter-spacing: .02em;
+}
+.motu-bay.compact .bay-title strong { font-size: 13.5px; }
+.motu-bay .bay-title span {
+  margin-left: 10px; opacity: .82;
+  font: 500 11.5px/1 ${MOTU_TYPE.mono};
+  letter-spacing: .04em;
+}
+/* Anything the bay carries ABOVE its title row — a sheet's drag handle, say. It rides on the water
+   rather than on a light strip above it, which is what made a sheet look like two headers. */
+.motu-bay .bay-lead { position: relative; z-index: 1; }
 /* On the SHALLOW end of the ramp the water is light, so the readout needs more than the .78 a deep
    ground would carry. */
 .motu-bay .bay-meta { color: rgba(255,255,255,.92); text-shadow: 0 1px 2px rgba(11,111,104,.35); }

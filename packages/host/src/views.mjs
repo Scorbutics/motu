@@ -173,9 +173,16 @@ main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; bor
   aside {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     width: auto; max-height: 76vh;
-    border-right: 0; border-top: 1px solid var(--line);
+    border-right: 0; border-top: 0;
     border-radius: 16px 16px 0 0;
-    box-shadow: 0 -12px 34px rgba(6, 46, 43, .26);
+    /* THE LENS'S OWN TREATMENT: its panel is this surface, this shadow, and a backdrop blur. The
+       sheet had a flat page background and read as a different surface to the one motu shows over
+       every lagoon. overflow:hidden is what lets the bay fill the rounded top corners. */
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(247, 253, 252, .96), rgba(232, 248, 246, .94));
+    backdrop-filter: blur(14px) saturate(1.35);
+    -webkit-backdrop-filter: blur(14px) saturate(1.35);
+    box-shadow: 0 -14px 40px rgba(11, 111, 104, .22);
     transform: translateY(100%);
     transition: transform 220ms cubic-bezier(.2,.9,.3,1);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -193,9 +200,9 @@ main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; bor
   button.member { padding: 12px 13px; font-size: 13.5px; }
   aside footer { padding-bottom: 16px; }
 }
-/* The drag handle only means anything on the sheet. */
-.grab { display: none; padding: 8px 0 2px; cursor: grab; touch-action: none; }
-.grab i { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 999px; background: var(--line); }
+/* The drag handle only means anything on the sheet, and it rides ON the water. */
+.grab { display: none; padding: 2px 0 8px; cursor: grab; touch-action: none; }
+.grab i { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 999px; background: rgba(255,255,255,.5); }
 `;
 
 /**
@@ -254,8 +261,14 @@ export function composedPage({ id, group, members, live = false }) {
   </header>
   <div class="scrim" id="scrim" hidden></div>
   <aside id="switcher" aria-label="Choose a lagoon">
-    <div class="grab" id="grab" aria-hidden="true"><i></i></div>
-    ${motuBay({ title: group, subtitle: `${members.length} lagoon${members.length === 1 ? '' : 's'}`, compact: true })}
+    ${motuBay({
+      title: group,
+      subtitle: `${members.length} lagoon${members.length === 1 ? '' : 's'}`,
+      compact: true,
+      // INSIDE the bay, not above it. As a sibling it sat on the sheet's own light surface, so the
+      // water started an inch down and the sheet read as two stacked headers.
+      lead: '<div class="bay-lead grab" id="grab" aria-hidden="true"><i></i></div>',
+    })}
     <div class="rail">${rail}</div>
     <footer class="motu-cap">${
       live

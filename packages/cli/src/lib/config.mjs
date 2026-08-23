@@ -121,6 +121,20 @@ export function loadMotuConfig() {
      * the same way the bug was.
      */
     hostSources: Array.isArray(cfg.hostSources) ? cfg.hostSources : undefined,
+    /**
+     * WHO THIS PROJECT IS ON A LAGOON HOST, when the git repository is the wrong answer.
+     *
+     * Publishing normally identifies a project by its git remote, which is right until a repository
+     * holds more than one publishable app: motu's own demo-app and the baseline review console both
+     * live in `Scorbutics/motu` and would land on the same `repo:slug`, each overwriting the other —
+     * and a gallery that takes one lagoon per repo would show whichever published last.
+     *
+     * Either half can be set; whatever is absent keeps its derived value.
+     */
+    publishAs: {
+      repo: typeof cfg.publishAs?.repo === 'string' ? cfg.publishAs.repo : null,
+      slug: typeof cfg.publishAs?.slug === 'string' ? cfg.publishAs.slug : null,
+    },
     /** Whether `legacy` fit is a required strategy + a verified runtime mount for this host. */
     legacyFit: cfg.legacyFit ?? LEGACY_FIT_HOSTS.has(cfg.host ?? 'angularjs'),
     hostRoot: resolve(root, cfg.hostRoot ?? cfg.app ?? '.'),

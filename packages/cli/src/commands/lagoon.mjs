@@ -153,7 +153,10 @@ export async function lagoonPublishCommand(argv) {
     console.error(color.red(`✗ ${err.message}`));
     process.exit(1);
   }
-  const { entry, target, slug } = resolved;
+  const { entry, target } = resolved;
+  // Same override as `serve`, and it has to be BOTH: publishing under one slug while the dev server
+  // registers itself under another is a live member the gallery can never match to a published one.
+  const slug = paths.publishAs?.slug ?? resolved.slug;
   // The derived title says WHAT was built ('Motu Lagoon'); in a composed view listing several repos'
   // switcher entries it says nothing, so a project can name its own.
   const title = typeof argv.title === 'string' ? argv.title.slice(0, 200) : resolved.title;
@@ -227,6 +230,9 @@ async function uploadPublished({ remote, token: flagToken, page, slug, title, ou
     process.exit(1);
   }
   const id = gitIdentity(REPO_ROOT);
+  // A project may say who it is, for the case git cannot answer: several publishable apps in one
+  // repository. The commit and branch still come from git — those are facts about this build.
+  if (paths.publishAs?.repo) id.repo = paths.publishAs.repo;
   if (!id.repo) {
     console.error(color.red('✗ could not derive a repo name from the git remote or the directory name'));
     process.exit(1);
@@ -382,7 +388,8 @@ export function lagoonServeCommand(argv) {
     console.error(color.red(`✗ ${err.message}`));
     process.exit(1);
   }
-  const { entry, target, slug, title } = resolved;
+  const { entry, target, title } = resolved;
+  const slug = paths.publishAs?.slug ?? resolved.slug;
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
 
   const port = Number.parseInt(String(argv.port ?? 8817), 10);

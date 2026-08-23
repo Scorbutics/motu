@@ -41,6 +41,8 @@ export const paths = {
    * bug: the value existed, one layer below where it was asked for.
    */
   isolation: cfg.isolation,
+  /** Who this project is on a lagoon host, when the git repository is the wrong answer. */
+  publishAs: cfg.publishAs,
   /** The ui/ root itself (uiDir(kebab) is one island's folder inside it). */
   uiRoot: UI_DIR,
   islandDir: (kebab) => resolve(ISLANDS_DIR, kebab),

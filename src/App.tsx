@@ -1,14 +1,33 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { createRegion } from "@motu/react"
+import { channelFrom } from "@motu/core"
 import { reviewArchipelago } from "@/archipelagos/review/review.archipelago"
 import { ELEMENT_REGISTRY } from "@/islands/registry"
 import type { AcceptScope } from "@/ui/accept-bar/AcceptBar"
 import { acceptShots, listRepos, listShots, shotUrl, type HostConfig } from "@/lib/host"
-import { createShotsSource } from "@/lib/shots-source"
+
+/**
+ * The host, as the source's port — DATA, and nothing else.
+ *
+ * The token is read at call time rather than captured: reads need none, and the one that does
+ * (accept) must see whatever the operator has pasted since the page loaded.
+ */
+const hostPort = {
+  list: (repo: string) => listShots(cfgNow(), repo),
+  accept: (repo: string, island?: string, shot?: string) => acceptShots(cfgNow(), repo, island, shot),
+}
+function cfgNow(): HostConfig {
+  return { base: "", token: localStorage.getItem("motu-host-token") }
+}
 
 // Module scope, deliberately: the binding is a property of this composition root, not of a render.
 const Review = createRegion(reviewArchipelago, {
   elements: ELEMENT_REGISTRY,
+  // THE SAME CALL THE LAGOON MAKES. The page used to fetch in an effect and `provide()` the result,
+  // which is an expression position the lagoon does not have — so the two halves were free to answer
+  // the region's couplings differently, and did. Here the page supplies the port and nothing else;
+  // what to do with it belongs to the declared source, once, for both.
+  channels: [channelFrom({ to: reviewArchipelago, id: "shots", args: [hostPort] })],
   // ESTABLISHED at the root, not on first fetch. Without this every reader sees `undefined` until the
   // network answers — and the lagoon cannot tell you, because it seeds these keys itself. `integrate
   // check` can, and did.
@@ -39,7 +58,6 @@ function useToken(): [string | null, (t: string) => void] {
  * what an island produces, so trying to would be a compile error rather than a habit.
  */
 function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) => void }) {
-  const { selectedRepo } = Review.useRegion()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -48,35 +66,6 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
       .catch((e: Error) => setError(e.message))
   }, [cfg])
 
-  // The page's data orchestration, in ONE place — shared with the lagoon, which installs this same
-  // object over fixtures. What is left here is the wiring: which port, and when the inputs changed.
-  const source = useMemo(
-    () =>
-      createShotsSource({
-        list: (repo) => listShots(cfg, repo),
-        accept: (repo, island, shot) => acceptShots(cfg, repo, island, shot),
-      }),
-    [cfg],
-  )
-  useEffect(() => () => source.dispose(), [source])
-  const { shots, busy, error: sourceError } = useSyncExternalStore(source.subscribe, source.getState, source.getState)
-
-  // The region key moves; the source is told through the inputs it declared, exactly as the lagoon's
-  // channel tells it. No branch here knows what a repo change means — that lives in the source.
-  useEffect(() => {
-    source.applyInputs({ selectedRepo })
-  }, [source, selectedRepo])
-
-  useEffect(() => {
-    Review.provide("shots", shots)
-    Review.provide("busy", busy)
-    Review.provide("error", sourceError)
-  }, [shots, busy, sourceError])
-
-  const onAcceptRequested = useCallback(
-    (scope: AcceptScope) => void source.accept(scope.island, scope.shot),
-    [source],
-  )
 
   return (
     <div className="rv">
@@ -84,7 +73,7 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
         <h1>Baseline review</h1>
         <Review.Island slot="status-summary" />
       </header>
-      {(error ?? sourceError) && <p className="rv-error">{error ?? sourceError}</p>}
+      {error && <p className="rv-error">{error}</p>}
       <div className="rv-body">
         <aside className="rv-rail">
           <Review.Island slot="repo-picker" />
@@ -95,7 +84,7 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
         <main className="rv-view">
           <Review.Island slot="diff-viewer" props={{ shotUrl: (h: string) => shotUrl(cfg, h) }} />
           {cfg.token ? (
-            <Review.Island slot="accept-bar" props={{ onAcceptRequested }} />
+            <Review.Island slot="accept-bar" />
           ) : (
             <form
               className="rv-token"

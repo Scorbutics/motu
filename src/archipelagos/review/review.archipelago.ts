@@ -47,6 +47,10 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
       // summary said "CHANGED 1 NEW 1" while the bar beside it said "Accept all 0 pending", because
       // in the lagoon there is no page to do the counting.
       bind: [{ repo: 'selectedRepo', shot: 'selectedShot', busy: 'busy', shots: 'shots' }],
+      // ACCEPTING LEAVES THE REGION as a declared intent, answered by the `shots` source. The page
+      // used to pass an `onAcceptRequested` callback that POSTed and refetched — so accepting was a
+      // thing only the page could do, and the lagoon's accept buttons did nothing at all.
+      intents: { 'accept-requested': 'review-accept' },
     },
     {
       slot: 'status-summary',

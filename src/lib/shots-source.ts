@@ -87,6 +87,22 @@ export function createShotsSource(port: ShotsPort) {
       }
     },
 
+    /**
+     * What this source answers when an ISLAND asks the host for something.
+     *
+     * The accept bar cannot accept — the result is whatever the host then says the statuses are — so
+     * it asks, and this is the answer. Declaring it here means no composition root names it: the page
+     * passes intents on, and whatever source claims one handles it. The lagoon's channel installs
+     * this same object, so accepting works there too, against fixtures.
+     */
+    intents: {
+      // `api.accept(...)`, not a reference to the source's own type inside the object defining it.
+      'review-accept': (detail: unknown) => {
+        const { island, shot } = (detail ?? {}) as { island?: string; shot?: string }
+        void api.accept(island, shot)
+      },
+    },
+
     /** The region keys this source consumes — declared once, for the page and the lagoon alike. */
     inputs: ["selectedRepo"] as const,
     applyInputs(values: Partial<ReviewRegion>) {

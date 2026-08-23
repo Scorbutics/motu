@@ -205,6 +205,20 @@ function checkRegion(region, sources) {
     }
   }
 
+  // WHAT A DECLARED SOURCE PRODUCES. Needed twice below: a key a source feeds is established (2c),
+  // and it is not the page's to feed by hand (2d).
+  const sourceKeys = new Map(); // key -> declared source id
+  const unreadable = [];
+  for (const [sourceId, declared] of Object.entries(region.sources ?? {})) {
+    // `produces: null` is "could not be read", which is NOT "produces nothing" — treating the two the
+    // same is how this check would pass by looking at nothing.
+    if (declared?.produces == null) {
+      unreadable.push(`${sourceId} (${declared?.unresolved ?? 'unresolved'})`);
+      continue;
+    }
+    for (const key of declared.produces) sourceKeys.set(key, sourceId);
+  }
+
   // 2c — IS EVERY HOST-FED KEY ACTUALLY ESTABLISHED?
   //
   // Host-fed is DERIVED, exactly as the rules say it is: every bound key that no island `writes`. The
@@ -214,6 +228,10 @@ function checkRegion(region, sources) {
   // binds it, the lagoon SEEDS it (that is what a preview does), and the host quietly feeds nothing.
   const produced = new Set(liveIslands.flatMap((i) => Object.values(i.writes ?? {}).map((t) => (typeof t === 'string' ? t : Object.values(t)).toString())).flat());
   const seeded = seededKeys(sources, binding, code);
+  // THREE acts establish a host-fed key, not two: seed, a passed prop, and `provide()`. The docstring
+  // above named two and the check believed it, so a key the page provides on mount was reported as
+  // never established — advice to go and do what the page already does.
+  const provided = providedKeys(sources, binding, code);
   const fedBy = new Map(); // host-fed key -> the slots whose bind could feed it
   for (const island of liveIslands) {
     for (const [prop, key] of Object.entries(island.bind ?? {})) {
@@ -224,7 +242,11 @@ function checkRegion(region, sources) {
       fedBy.set(key, entry);
     }
   }
-  const starved = [...fedBy].filter(([key, e]) => !e.passed && !seeded.has(key));
+  // A key a DECLARED SOURCE produces is established by that source — it is neither seeded nor passed
+  // as a prop, and reporting it as starved sends someone to add the very hand-feeding that 2d forbids.
+  const starved = [...fedBy].filter(
+    ([key, e]) => !e.passed && !seeded.has(key) && !provided.has(key) && !sourceKeys.has(key),
+  );
   for (const [key, e] of starved) {
     add(
       'warn',
@@ -234,7 +256,45 @@ function checkRegion(region, sources) {
         `seeds the key itself`,
     );
   }
-  if (fedBy.size && !starved.length) add('ok', 'fed', `all ${fedBy.size} host-fed key(s) seeded or passed`);
+  if (fedBy.size && !starved.length)
+    add('ok', 'fed', `all ${fedBy.size} host-fed key(s) established · ${sourceKeys.size} by a declared source`);
+
+  // 2d — DOES THE HOST GO ROUND ITS OWN DECLARED SOURCES?
+  //
+  // A source declares which keys it produces, and the LAGOON has no way to go round it: `channelFrom`
+  // names the declared source and passes data, with no expression position left for hand-written
+  // orchestration. The page had one — fetch however you like, then `provide()` the result — so the
+  // two halves could implement the same coupling differently, or the page could implement one the
+  // region never carried at all. That is not a hypothetical: a console whose archipelago promised
+  // "picking a repo changes what the list shows" performed it in two page effects, so the published
+  // lagoon showed a project rail where clicking did nothing, and every check passed.
+  //
+  // Caught here as well as at runtime because `provide()` throwing is the moment someone runs the
+  // page, and this is the moment they run `motu check`.
+  if (unreadable.length) {
+    add(
+      'warn',
+      'source-owned',
+      `could not read what ${unreadable.join(', ')} produces, so nothing was checked against ` +
+        `${unreadable.length > 1 ? 'those sources' : 'that source'} — the host may be feeding their keys by hand`,
+    );
+  }
+  if (sourceKeys.size) {
+    const bypassed = [...sourceKeys].filter(([key]) => provided.has(key));
+    for (const [key, sourceId] of bypassed) {
+      add(
+        'error',
+        'source-owned',
+        `the host calls ${binding}.provide('${key}'), but ${key} is produced by the declared source ` +
+          `'${sourceId}' — install the source instead of feeding its key by hand ` +
+          `(\`channels: [channelFrom({ to: archipelago, id: '${sourceId}', args: [port] })]\`), or the page ` +
+          `and the lagoon are free to answer the same coupling differently`,
+      );
+    }
+    if (!bypassed.length)
+      add('ok', 'source-owned', `no host write goes round a declared source · ${sourceKeys.size} source-produced key(s)`, sourceKeys.size);
+  }
+
 
   const declared = placedIslands.map((i) => i.slot);
   const missing = declared.filter((s) => !placed.has(s));
@@ -465,6 +525,38 @@ export async function integrateCheckCommand(argv) {
  * Both the positional form (`seed('k', v)`) and the object form (`seed({ k: v })`), because both are
  * written in this codebase and a check that knew only one would report the other as missing.
  */
+/**
+ * Keys the host hands over with `provide(...)`. Same two argument forms as `seededKeys`, and split
+ * from it because the two acts mean different things: a seed is first paint, a provide is the host
+ * feeding a key it owns — and it must not own one a declared source produces.
+ */
+function providedKeys(sources, binding, code) {
+  const keys = new Set();
+  const idents = (text) =>
+    splitTop(text)
+      .map((entry) => entry.split(':')[0].trim())
+      .filter((k) => /^[A-Za-z_$][\w$]*$/.test(k));
+  for (const [, text] of sources) {
+    const src = code(text);
+    for (const m of src.matchAll(new RegExp(`(?:${binding}\\.provide|provideToArchipelago)\\s*\\(`, 'g'))) {
+      let depth = 0;
+      let i = m.index + m[0].length - 1;
+      const start = i + 1;
+      for (; i < src.length; i++) {
+        if (src[i] === '(') depth++;
+        else if (src[i] === ')' && --depth === 0) break;
+      }
+      for (const arg of splitTop(src.slice(start, i))) {
+        const a = arg.trim();
+        const quoted = a.match(/^['"`]([A-Za-z_$][\w$]*)['"`]$/);
+        if (quoted) keys.add(quoted[1]);
+        else if (a.startsWith('{')) for (const k of idents(a.slice(1, -1))) keys.add(k);
+      }
+    }
+  }
+  return keys;
+}
+
 function seededKeys(sources, binding, code) {
   const keys = new Set();
   const idents = (text) =>

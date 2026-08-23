@@ -119,6 +119,20 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    */
   on?: Record<string, ((detail: unknown, ctx: IslandContext) => void) | undefined>;
   /**
+   * What this island's output ASKS THE HOST FOR: event name -> intent name.
+   *
+   * The declarative form of what `on` did with a function. An output that is not a store write is an
+   * intent — "accept these baselines", "load more" — and the island cannot perform it: the result is
+   * whatever the host then says the state is. Writing that as `on: { 'accept-requested': (d, ctx) =>
+   * ctx.host.action('review-accept', d) }` works and is an expression position, which is the thing
+   * `channelFrom` removed from the lagoon and `writes` removed from the page. Same reasoning here.
+   *
+   * A DECLARED SOURCE answers it (`intents` on the source instance), so the coupling is: island
+   * declares what it asks for, source declares what it answers, and nothing in between is written by
+   * hand. Unanswered intents fall through to the host bridge, which is what a navigate is.
+   */
+  intents?: Record<string, string | undefined>;
+  /**
    * What this island's output WRITES: event name -> the store key it owns, or a map from fields of the
    * event's detail to keys. Declaring it does three things a handler function cannot:
    *
@@ -573,11 +587,39 @@ const mountListeners = new Set<() => void>();
  * be reachable by archipelago id too, or the host-feeds-the-region direction would exist on one mount
  * path and not the other.
  */
+/** The declared source that produces `key` for this region, if one does. */
+function sourceProducing(id: string, key: string): string | null {
+  const sources = configs.get(id)?.sources as Record<string, { produces?: readonly string[] }> | undefined;
+  if (!sources) return null;
+  for (const [sourceId, declared] of Object.entries(sources)) {
+    if (declared?.produces?.includes(key)) return sourceId;
+  }
+  return null;
+}
+
 export function provideToArchipelago(id: string, key: string, value: unknown): void {
   const store = stores.get(id);
   if (!store) {
     console.warn(`motu: no archipelago "${id}" to provide("${key}")`);
     return;
+  }
+  // A KEY A DECLARED SOURCE PRODUCES IS NOT THE PAGE'S TO HAND OVER.
+  //
+  // The lagoon has had no expression position for hand-written orchestration since `channelFrom`
+  // stopped taking a factory: it names a declared source and passes DATA. The page kept one — it
+  // could fetch however it liked and `provide()` the result — so the two halves were free to
+  // diverge, and did: a console whose region declared "picking a repo changes what the list shows"
+  // performed that in the page, so the lagoon could not do it at all and no check could see it.
+  // Same rule, both sides. Install the source and supply its port; there is then nothing to write.
+  const source = sourceProducing(id, key);
+  if (source) {
+    throw new Error(
+      `motu: "${key}" is produced by the declared source "${source}" of archipelago "${id}", so the ` +
+        `host cannot provide() it. Install the source instead — the same call the lagoon makes:\n\n` +
+        `    createRegion(archipelago, { channels: [channelFrom({ to: archipelago, id: '${source}', args: [port] })] })\n\n` +
+        `The page supplies the port; what to do with it is the source's, and then the lagoon and the ` +
+        `page cannot disagree about it.`,
+    );
   }
   // Tag as a host-origin (external) write so the overlay classifies this key as coming from outside.
   if (DEBUG) runWithWriteSource('host', () => store.set(key, value));
@@ -880,7 +922,25 @@ export function applyOutput(spec: IslandSpec, eventName: string, detail: unknown
     const fields = (detail ?? {}) as Record<string, unknown>;
     for (const [field, key] of Object.entries(target)) ctx.store.set(key, fields[field]);
   }
+  // A DECLARED SOURCE GETS FIRST REFUSAL on an intent; the host bridge is the fallback.
+  //
+  // `answerHostIntent` and the `intents` a source declares have existed since sources did, and nothing
+  // called it — the ask went straight to the app's bridge and the source's declared answer was dead
+  // code, which left the page as the only thing that could answer, by hand. Routed HERE rather than by
+  // wrapping the bridge at registration, because the mount paths do not share one: the lagoon gallery
+  // builds its own, so a wrapper there covered the page and missed the lagoon — the exact asymmetry
+  // this is meant to remove. The region is found from the store the island is bound to.
+  const intent = spec.intents?.[eventName];
+  if (intent && !answerHostIntent(regionIdOfStore(ctx.store) ?? '', intent, detail)) {
+    ctx.host.action(intent, detail);
+  }
   spec.on?.[eventName]?.(detail, ctx);
+}
+
+/** Which region owns this store. The island spec does not carry its region id; the store identifies it. */
+function regionIdOfStore(store: Store): string | null {
+  for (const [id, s] of stores) if (s === store) return id;
+  return null;
 }
 
 /**

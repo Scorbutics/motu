@@ -17,9 +17,9 @@
 //
 // It is a CODEMOD, not a refactor: it may leave state the page also keeps under another name. That is
 // the honest trade — the ejected app compiles and behaves the same, and a human can tidy after.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { blankComments as blankCommentsShared } from './util.mjs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
 import { readGeneratedContracts } from './contracts.mjs';
 
@@ -43,6 +43,7 @@ export function readRegions(archipelagosDir) {
       /** `catalogue` when the island list is data — see ArchipelagoConfig.membership. */
       membership: text.match(/\bmembership:\s*'(placed|catalogue)'/)?.[1] ?? 'placed',
       islands: readIslands(text),
+      sources: readSources(text, file),
       // The APP's own region type, and where it comes from. Generated state is typed with it —
       // `useState<ActionsRegion['weekMissions']>()` — so an ejected page keeps the exact types it had,
       // from a declaration that is the app's and survives motu's removal.
@@ -66,6 +67,122 @@ function regionTypeOf(text) {
     new RegExp(`\\b${regionType}\\b`).test(names),
   );
   return { regionType, regionTypeFrom: imported?.[2] ?? null };
+}
+
+/**
+ * id -> { produces: [...] } for each DECLARED source, from the config's text.
+ *
+ * Two forms, and the difference matters to how far this has to look:
+ *   sources: { favorites: { module: '…', produces: ['favoriteIds'] } }   produces is right here
+ *   sources: { results: resultsSource }                                   produces is in ANOTHER file
+ * The second is the form the rules prefer — the region points at what produces its keys, not at a
+ * string — so the import is followed and the `produces` array read from the source's own module.
+ * Returning `{}` when a region declares none is correct; returning it when a region declares some and
+ * the import could not be followed is a check that looked at nothing, so that case says so instead.
+ */
+function readSources(text, file) {
+  const code = blankComments(text);
+  const block = blockAfter(code, 'sources:', '{', 0);
+  if (!block) return {};
+  const out = {};
+  for (const entry of splitTopLevel(block.body)) {
+    const m = entry.match(/^\s*(\w+)\s*:\s*([\s\S]+)$/);
+    if (!m) continue;
+    const [, id, value] = m;
+    const inline = value.match(/\bproduces:\s*\[([^\]]*)\]/);
+    if (inline) {
+      const names = quotedNames(inline[1]);
+      out[id] = names ? { produces: names } : { produces: null, unresolved: `${id}.produces` };
+      continue;
+    }
+    const ident = value.trim().match(/^([A-Za-z_$][\w$]*)\s*,?$/)?.[1];
+    if (!ident) continue;
+    const spec = [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)].find(([, names]) =>
+      new RegExp(`\\b${ident}\\b`).test(names),
+    )?.[2];
+    const produces = spec ? producesOf(resolveSourceFile(spec, file), ident) : null;
+    // UNRESOLVED IS NOT EMPTY. A source whose module could not be read has unknown keys, and saying
+    // `[]` would let every check downstream conclude that nothing is source-owned.
+    out[id] = produces ? { produces } : { produces: null, unresolved: spec ?? ident };
+  }
+  return out;
+}
+
+/**
+ * Where a specifier written in an archipelago actually lives.
+ *
+ * Relative is exact. `@/` is the app's own tsconfig alias and motu does not read tsconfig here — it
+ * points at the repo root in one project and at `src/` in another — so rather than guess, walk up
+ * from the archipelago and take the first ancestor where the rest of the path is a real file. Wrong
+ * only if two ancestors both contain the same path, which would make the app's own imports ambiguous.
+ */
+function resolveSourceFile(spec, fromFile) {
+  const isFile = (p) => {
+    try {
+      return existsSync(p) && statSync(p).isFile();
+    } catch {
+      return false;
+    }
+  };
+  const withExt = (base) => [base, `${base}.ts`, `${base}.tsx`, resolve(base, 'index.ts')].find(isFile) ?? null;
+
+  if (spec.startsWith('.')) return withExt(resolve(dirname(fromFile), spec));
+  if (!spec.startsWith('@/')) return null;
+  const rest = spec.slice(2);
+  for (let dir = dirname(fromFile); ; dir = dirname(dir)) {
+    const hit = withExt(resolve(dir, rest));
+    if (hit) return hit;
+    if (dir === dirname(dir)) return null;
+  }
+}
+
+/** The `produces: [...]` of a named export in a source module. */
+function producesOf(file, ident) {
+  if (!file) return null;
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+  const code = blankComments(text);
+  const at = code.search(new RegExp(`export\\s+const\\s+${ident}\\b`));
+  if (at === -1) return null;
+  const arr = code.slice(at).match(/\bproduces:\s*\[([^\]]*)\]/);
+  return arr ? quotedNames(arr[1]) : null;
+}
+
+/**
+ * The quoted names in an array literal — single, double or backtick, because the QUOTE STYLE IS THE
+ * APP'S and its prettier config decides it, not motu's.
+ *
+ * Returns null rather than `[]` when there was text it could not parse. Reading `["shots"]` with a
+ * single-quote regex yields an empty array, and an empty array is a perfectly good answer meaning
+ * "this source produces nothing" — so the caller concludes no key is source-owned and every check
+ * downstream passes by looking at nothing. An honest failure is the only safe kind here.
+ */
+function quotedNames(body) {
+  const names = [...body.matchAll(/['"`]([^'"`]+)['"`]/g)].map((m) => m[1]);
+  if (names.length) return names;
+  return body.trim() ? null : [];
+}
+
+/** Split an object body on commas at depth 0. */
+function splitTopLevel(body) {
+  const out = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if ('{[('.includes(c)) depth++;
+    else if ('}])'.includes(c)) depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(body.slice(start));
+  return out.filter((e) => e.trim());
 }
 
 /** slot -> { element, writes: { event: key | { field: key } } }, from the config's text. */

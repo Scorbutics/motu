@@ -124,8 +124,13 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
    * Returns `deduped: true` when the bytes were already here — the common case for a republish with
    * no UI change, and worth surfacing so the CLI can say so instead of implying work happened.
    */
-  function publish(repo, slug, bytes, { title = slug, sha = null, branch = null } = {}) {
+  function publish(repo, slug, bytes, { title = slug, sha = null, branch = null, brand = null } = {}) {
     const entry = repoEntry(repo);
+    // THE PROJECT'S OWN COLOUR, on the repo rather than on the record: it is a property of the
+    // project, not of one build, and a tool listing repositories should not have to fetch a record to
+    // know what colour to be. Only overwritten when a publish actually carries one, so a project that
+    // stops declaring it keeps the last thing it said rather than silently reverting to motu teal.
+    if (brand) entry.brand = brand;
     const hash = hashBytes(bytes);
     const file = blobPath(hash);
     const deduped = existsSync(file);
@@ -468,6 +473,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
       repo,
       records: entry.history.length,
       slugs: [...new Set(Object.keys(entry.aliases.latest ?? {}))].sort(),
+      brand: entry.brand ?? null,
     }));
   }
 

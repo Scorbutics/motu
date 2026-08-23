@@ -355,6 +355,11 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     const title = (url.searchParams.get('title') || slug).slice(0, 200);
     const sha = normalizeSegment(url.searchParams.get('sha') || '') || null;
     const branch = normalizeSegment(url.searchParams.get('branch') || '') || null;
+    // A CSS COLOUR, not a segment: the value is whatever the project declared, which can be a hex, an
+    // hsl() or a color-mix(). Bounded and screened for the two characters that could break out of the
+    // custom-property declaration it ends up in; anything else is the project's business, not ours.
+    const rawBrand = (url.searchParams.get('brand') || '').slice(0, 120).trim();
+    const brand = rawBrand && !/[;{}<>]/.test(rawBrand) ? rawBrand : null;
 
     let body;
     try {
@@ -383,7 +388,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       .filter((u) => !u.startsWith('/assets/'))
       .slice(0, 10);
 
-    const out = store.publish(repo, slug, body, { title, sha, branch });
+    const out = store.publish(repo, slug, body, { title, sha, branch, brand });
     return json(res, 200, {
       ok: true,
       repo,

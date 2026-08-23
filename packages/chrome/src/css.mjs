@@ -19,10 +19,15 @@ export function motuRootVars(state = 'mock') {
   --motu-primary: ${MOTU_WATER.mock.accent};
   --motu-primary-deep: #0b5b55;
   --motu-on-primary: #fff;
-  --w-deep: ${water.deep};
-  --w-mid: ${water.mid};
-  --w-shallow: ${water.shallow};
-  --tide-accent: ${water.accent};
+  /* DERIVED, not fixed — the same shape the tide line already used.
+     applyMotuChrome rebuilds the ramp around a host's own primary (peps is gold), and the dock
+     followed while everything painted from these tokens stayed motu teal: the same four variable
+     names defined two ways in one package, one adaptive and one not. The literals stay as the
+     fallback, so a page that never sets a palette is unchanged. */
+  --w-deep: var(--motu-water-deep, ${water.deep});
+  --w-mid: var(--motu-water-mid, ${water.mid});
+  --w-shallow: var(--motu-water-shallow, ${water.shallow});
+  --tide-accent: var(--motu-primary, ${water.accent});
   --ink: ${MOTU_INK.body};
   --ink-muted: ${MOTU_INK.muted};
   --ink-caption: ${MOTU_INK.caption};

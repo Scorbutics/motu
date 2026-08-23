@@ -82,11 +82,14 @@ export function gitIdentity(cwd) {
 }
 
 /** POST the fragment. Gzipped: ~430 kB of inlined bundle goes over the wire at roughly a quarter. */
-export async function uploadLagoon({ url, token, repo, slug, title, sha, branch, body }) {
+export async function uploadLagoon({ url, token, repo, slug, title, sha, branch, brand, body }) {
   const base = String(url).replace(/\/+$/, '');
   const qs = new URLSearchParams({ repo, slug, title });
   if (sha) qs.set('sha', sha);
   if (branch) qs.set('branch', branch);
+  // The project's own colour, so tools that list repositories can be the right one. Kept off the
+  // record and on the repo by the host: it describes the project, not this build.
+  if (brand) qs.set('brand', brand);
 
   const gz = gzipSync(Buffer.from(body, 'utf8'));
   const res = await fetch(`${base}/api/publish?${qs}`, {

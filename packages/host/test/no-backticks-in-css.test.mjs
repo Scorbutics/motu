@@ -13,26 +13,60 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(resolve(here, '../src/views.mjs'), 'utf8');
+
+// Every file that builds CSS as a string. Named rather than globbed: the point is that someone adding
+// another one has to say so, and a glob that silently matches nothing is the check looking at nothing.
+const FILES = [
+  '../src/views.mjs',
+  '../../chrome/src/css.mjs',
+  '../../chrome/src/html.mjs',
+];
+
+/** Bodies of every backtick template literal in a source file, with their line numbers. */
+function literals(src) {
+  const out = [];
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] !== '`' || src[i - 1] === '\\') continue;
+    let j = i + 1;
+    let depth = 0;
+    for (; j < src.length; j++) {
+      if (src[j] === '\\') { j++; continue; }
+      if (src[j] === '$' && src[j + 1] === '{') { depth++; j++; continue; }
+      if (src[j] === '}' && depth) { depth--; continue; }
+      if (src[j] === '`' && !depth) break;
+    }
+    out.push({ line: src.slice(0, i).split('\n').length, body: src.slice(i + 1, j) });
+    i = j;
+  }
+  return out;
+}
 
 let failures = 0;
-for (const name of ['SHELL_CSS']) {
-  const open = src.indexOf(`const ${name} = \``);
-  if (open === -1) {
-    console.error(`✗ ${name} not found in views.mjs — did it get renamed?`);
+for (const rel of FILES) {
+  const path = resolve(here, rel);
+  let src;
+  try {
+    src = readFileSync(path, 'utf8');
+  } catch {
+    console.error(`✗ ${rel} — not found; did it move?`);
     failures++;
     continue;
   }
-  const start = open + `const ${name} = \``.length;
-  const end = src.indexOf('`;', start);
-  const body = src.slice(start, end);
-  const count = (body.match(/`/g) ?? []).length;
-  if (count) {
-    console.error(`✗ ${name} contains ${count} backtick(s) — the template literal ends there`);
-    for (const line of body.split('\n')) if (line.includes('`')) console.error(`    ${line.trim()}`);
+  // A COMMENT inside a template literal is where this goes wrong, and a comment is the only thing in
+  // one that has any reason to hold a backtick. Nothing else in these files legitimately does.
+  const bad = [];
+  for (const lit of literals(src)) {
+    for (const [n, line] of lit.body.split('\n').entries()) {
+      const isComment = /^\s*(\/\*|\*|\/\/)/.test(line) || line.includes('/*') || line.includes('//');
+      if (isComment && line.includes('`')) bad.push(`${lit.line + n}: ${line.trim()}`);
+    }
+  }
+  if (bad.length) {
+    console.error(`✗ ${rel} — a comment inside a template literal carries a backtick, which ENDS it`);
+    for (const b of bad) console.error(`    ${b}`);
     failures++;
   } else {
-    console.log(`✓ ${name} — no backticks (${body.split('\n').length} lines)`);
+    console.log(`✓ ${rel}`);
   }
 }
 

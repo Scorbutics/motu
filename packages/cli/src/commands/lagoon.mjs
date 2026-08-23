@@ -199,6 +199,27 @@ export async function lagoonPublishCommand(argv) {
  * replace the artifact. If the host is down, or the token is wrong, the page is still on disk and
  * still publishable as an Artifact — a network failure must not cost you the build.
  */
+/**
+ * The project's own colour, from `lagoon.config.json`'s `chrome.brand`.
+ *
+ * NOT `chrome.primary`, deliberately. That one is for the lagoon itself and is allowed to reference
+ * the host's own CSS variables (peps writes `hsl(var(--primary-control))`), which resolve inside that
+ * app and nowhere else — a host listing repositories would be handed a colour it cannot compute.
+ * `brand` is the same decision written so it travels: any self-contained CSS colour.
+ */
+function declaredBrand() {
+  const file = resolve(paths.lagoonDir, 'lagoon.config.json');
+  if (!existsSync(file)) return null;
+  try {
+    const brand = JSON.parse(readFileSync(file, 'utf8'))?.chrome?.brand;
+    return typeof brand === 'string' && brand.trim() ? brand.trim() : null;
+  } catch {
+    // A lagoon config that does not parse is a problem the lagoon itself will report, loudly and with
+    // the line number. Publishing should not die second, with a worse message.
+    return null;
+  }
+}
+
 async function uploadPublished({ remote, token: flagToken, page, slug, title, out, bytes, json }) {
   const url = remote === true ? null : String(remote);
   if (!url || !/^https?:\/\//.test(url)) {
@@ -214,7 +235,7 @@ async function uploadPublished({ remote, token: flagToken, page, slug, title, ou
 
   let res;
   try {
-    res = await uploadLagoon({ url, token, repo: id.repo, slug, title, sha: id.sha, branch: id.branch, body: page, });
+    res = await uploadLagoon({ url, token, repo: id.repo, slug, title, sha: id.sha, branch: id.branch, brand: declaredBrand(), body: page, });
   } catch (err) {
     if (json) {
       console.log(JSON.stringify({ ok: false, file: out, bytes, error: err.message }, null, 2));

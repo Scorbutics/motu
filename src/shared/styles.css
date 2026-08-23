@@ -48,9 +48,12 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   position: relative; display: flex; align-items: stretch; gap: 10px;
   width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
   padding: 9px 11px 9px 0; overflow: hidden;
-  border: 1px solid var(--line); border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(238,248,246,.55));
-  transition: transform 160ms cubic-bezier(.2,.9,.3,1), box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+  border: 1px solid var(--line); border-radius: 8px;
+  /* FLAT, like the lens's own rows. A vertical tint inside a selected card read as a different era of
+     UI next to the overlay chrome — the colour belongs in the gauge, which is a readout, not in the
+     surface behind the text. */
+  background: rgba(255, 255, 255, .72);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms cubic-bezier(.2,.9,.3,1);
 }
 /* The gauge, and the only piece of pure colour in the row. */
 .rp-gauge {
@@ -64,9 +67,7 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 
 .rp-item[aria-current="true"] {
   border-color: var(--w-mid);
-  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(53,194,179,.16));
-  box-shadow: 0 6px 18px rgba(11,111,104,.14);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, .95);
 }
 .rp-item[aria-current="true"] .rp-gauge { opacity: 1; width: 6px; }
 /* One sweep when a project becomes the one you are reviewing — the tide arriving, not a spinner. */
@@ -86,7 +87,7 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   padding: 4px 8px; border-radius: 999px;
   background: rgba(11,111,104,.08); color: var(--w-deep); border: 1px solid transparent;
 }
-.rp-item[aria-current="true"] .rp-pill { background: rgba(255,255,255,.72); border-color: var(--line); }
+.rp-item[aria-current="true"] .rp-pill { background: rgba(11,111,104,.07); border-color: var(--line); }
 /* The two that are a VERDICT rather than a count, in the colours the shot list already uses. */
 .rp-pill.is-pending { background: rgba(180,83,9,.12); color: var(--changed); border-color: rgba(180,83,9,.24); }
 .rp-pill.is-settled { background: rgba(15,118,110,.12); color: var(--new); border-color: rgba(15,118,110,.24); }

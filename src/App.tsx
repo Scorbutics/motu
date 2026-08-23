@@ -86,7 +86,12 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
     applyMotuChrome(brand ? { primary: brand } : {})
     if (!brand) {
       // `applyMotuChrome` only ever SETS, so leaving a project has to clear what the last one wrote.
-      for (const v of ["--motu-primary", "--motu-primary-deep", "--motu-water-deep", "--motu-water-mid", "--motu-water-shallow"]) {
+      for (const v of [
+        "--motu-primary", "--motu-primary-deep",
+        "--motu-water-deep", "--motu-water-mid", "--motu-water-shallow",
+        // The ground too, or a project with no colour keeps the last one's page and hairline.
+        "--motu-surface-page", "--motu-surface-panel", "--motu-line",
+      ]) {
         document.documentElement.style.removeProperty(v)
       }
     }

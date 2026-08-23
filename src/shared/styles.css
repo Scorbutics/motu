@@ -34,13 +34,71 @@ code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .rv-rail, .rv-shots { overflow: auto; border-right: 1px solid var(--line); padding: 10px; }
 .rv-view { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 
-.rp-list { list-style: none; margin: 0; padding: 0; }
-.rp-item { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none;
-  border-radius: 8px; padding: 8px 10px; cursor: pointer; font: inherit; color: var(--ink); }
-.rp-item:hover { background: var(--panel); }
-.rp-item[aria-current="true"] { background: var(--panel); border-color: var(--w-mid); }
-.rp-item b { display: block; font-weight: 600; }
-.rp-item small, .rp-empty { color: var(--ink-muted); font-size: 11.5px; }
+/* --- the project rail ---------------------------------------------------------------------------
+   Reading the water, the way the lagoon's own chrome does: the gauge is DEPTH, faint for a project
+   sitting still and lit for the one being reviewed. Everything here is a fact the host actually
+   answered — lagoons, records, and, for the selected project only, how many shots are still waiting
+   on a decision. A count invented for the other rows would be a number that means nothing on the row
+   you trust most. */
+.rp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rp-list > li { animation: rp-surface 320ms cubic-bezier(.2,.9,.3,1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes rp-surface { from { opacity: 0; transform: translateY(6px); } }
+
+.rp-item {
+  position: relative; display: flex; align-items: stretch; gap: 10px;
+  width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
+  padding: 9px 11px 9px 0; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(238,248,246,.55));
+  transition: transform 160ms cubic-bezier(.2,.9,.3,1), box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+/* The gauge, and the only piece of pure colour in the row. */
+.rp-gauge {
+  flex: none; width: 4px; border-radius: 999px; margin: 2px 0;
+  background: linear-gradient(180deg, var(--w-shallow), var(--w-deep));
+  opacity: .3; transition: opacity 160ms ease, width 160ms cubic-bezier(.2,.9,.3,1);
+}
+.rp-item:hover { border-color: var(--w-shallow); transform: translateX(2px); }
+.rp-item:hover .rp-gauge { opacity: .65; }
+.rp-item:focus-visible { outline: 2px solid var(--w-mid); outline-offset: 2px; }
+
+.rp-item[aria-current="true"] {
+  border-color: var(--w-mid);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(53,194,179,.16));
+  box-shadow: 0 6px 18px rgba(11,111,104,.14);
+  transform: translateY(-1px);
+}
+.rp-item[aria-current="true"] .rp-gauge { opacity: 1; width: 6px; }
+/* One sweep when a project becomes the one you are reviewing — the tide arriving, not a spinner. */
+.rp-item[aria-current="true"]::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.55) 50%, transparent 80%);
+  transform: translateX(-100%); animation: rp-sheen 720ms ease-out 1;
+}
+@keyframes rp-sheen { to { transform: translateX(100%); } }
+
+.rp-body { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 1px 0; }
+.rp-item b { display: block; font-weight: 700; font-size: 13px; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; }
+.rp-owner { font-weight: 500; color: var(--ink-muted); }
+.rp-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+.rp-pill {
+  font-style: normal; font-weight: 600; font-size: 10.5px; line-height: 1;
+  padding: 4px 8px; border-radius: 999px;
+  background: rgba(11,111,104,.08); color: var(--w-deep); border: 1px solid transparent;
+}
+.rp-item[aria-current="true"] .rp-pill { background: rgba(255,255,255,.72); border-color: var(--line); }
+/* The two that are a VERDICT rather than a count, in the colours the shot list already uses. */
+.rp-pill.is-pending { background: rgba(180,83,9,.12); color: var(--changed); border-color: rgba(180,83,9,.24); }
+.rp-pill.is-settled { background: rgba(15,118,110,.12); color: var(--new); border-color: rgba(15,118,110,.24); }
+
+.rp-empty { color: var(--ink-muted); font-size: 11.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-list > li { animation: none; }
+  .rp-item, .rp-gauge { transition: none; }
+  .rp-item[aria-current="true"] { transform: none; }
+  .rp-item[aria-current="true"]::after { display: none; }
+}
 
 .sl-group h3 { display: flex; justify-content: space-between; align-items: baseline;
   font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-caption); margin: 14px 2px 6px; }

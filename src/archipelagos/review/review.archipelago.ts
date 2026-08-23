@@ -19,7 +19,10 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
     {
       slot: 'repo-picker',
       element: 'x-repo-picker',
-      bind: [{ repos: 'repos', value: 'selectedRepo' }],
+      // `shots` is bound so the SELECTED project can show how many are still waiting on a decision.
+      // Only that one has shots in the region, and the picker says so by showing the count on that row
+      // alone — an invented number on the others would be worse than none.
+      bind: [{ repos: 'repos', value: 'selectedRepo', shots: 'shots' }],
       writes: { 'repo-selected': 'selectedRepo' },
     },
     {

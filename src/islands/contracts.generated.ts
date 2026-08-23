@@ -26,7 +26,7 @@ export const CONTRACTS = {
     ambient: [],
   },
   'x-repo-picker': {
-    input: ['repos', 'value'],
+    input: ['repos', 'value', 'shots'],
     output: { onRepoSelected: 'repo-selected' },
     ambient: [],
   },

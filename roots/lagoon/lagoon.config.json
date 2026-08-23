@@ -3,5 +3,8 @@
   "transport": "mock",
   "defaultTheme": "motu",
   "mount": "react",
-  "stations": {}
+  "stations": {},
+  "chrome": {
+    "brand": "#0f766e"
+  }
 }

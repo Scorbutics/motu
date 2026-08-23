@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { createRegion } from "@motu/react"
-import { channelFrom } from "@motu/core"
+import { applyMotuChrome, channelFrom } from "@motu/core"
 import { reviewArchipelago } from "@/archipelagos/review/review.archipelago"
 import { ELEMENT_REGISTRY } from "@/islands/registry"
 import type { AcceptScope } from "@/ui/accept-bar/AcceptBar"
@@ -61,11 +61,36 @@ function useToken(): [string | null, (t: string) => void] {
 function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) => void }) {
   const [error, setError] = useState<string | null>(null)
 
+  const { repos = [], selectedRepo } = Review.useRegion()
+
   useEffect(() => {
     listRepos(cfg)
-      .then((repos) => Review.provide("repos", repos))
+      .then((r) => Review.provide("repos", r))
       .catch((e: Error) => setError(e.message))
   }, [cfg])
+
+  /**
+   * WEAR THE COLOUR OF THE PROJECT BEING REVIEWED.
+   *
+   * The same thing motu's own chrome does over a host application — peps is gold, so the dock over
+   * peps is gold. This console reviews someone else's screenshots, and looking like motu while
+   * showing peps' work made the two hard to tell apart at a glance. `applyMotuChrome` rebuilds the
+   * water ramp around the project's own primary, and every token this console paints from derives
+   * from that ramp, so the whole surface follows.
+   *
+   * Back to motu's own water when a project declares nothing — an invented colour would be a claim
+   * about someone's brand, which is not the console's to make.
+   */
+  useEffect(() => {
+    const brand = repos.find((r) => r.repo === selectedRepo)?.brand
+    applyMotuChrome(brand ? { primary: brand } : {})
+    if (!brand) {
+      // `applyMotuChrome` only ever SETS, so leaving a project has to clear what the last one wrote.
+      for (const v of ["--motu-primary", "--motu-primary-deep", "--motu-water-deep", "--motu-water-mid", "--motu-water-shallow"]) {
+        document.documentElement.style.removeProperty(v)
+      }
+    }
+  }, [repos, selectedRepo])
 
 
   return (

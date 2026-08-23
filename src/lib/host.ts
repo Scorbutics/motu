@@ -23,6 +23,13 @@ export interface RepoSummary {
   repo: string
   records: number
   slugs: string[]
+  /**
+   * The project's own colour, as it declared it (`chrome.brand` in its lagoon config), or null.
+   *
+   * Any self-contained CSS colour — a hex, an hsl(), a color-mix(). The console does not interpret
+   * it; it hands it to motu's chrome, which rebuilds the water ramp around it.
+   */
+  brand?: string | null
 }
 
 /** Where the host is, and the token that lets us accept. Both are the operator's, not ours to guess. */

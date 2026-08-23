@@ -36,6 +36,33 @@ export const channels: LagoonOverrides['channels'] = {
   ],
 };
 
+/**
+ * What the PAGE passes on the island element, as the lagoon's stand-in.
+ *
+ * `shotUrl` is not region state — where the host lives is the page's business — so no bind declares
+ * it, and the lagoon had no way to supply it. The diff viewer therefore rendered `<img src="">` here
+ * while every check passed, including a flow asserting its heading. A reviewer approving that shot
+ * was approving a blank frame.
+ *
+ * A STAND-IN, deliberately: an inline SVG, so the lagoon reaches no host and the picture is obviously
+ * a fixture rather than something that might be a real baseline.
+ */
+export const props: LagoonOverrides['props'] = {
+  review: {
+    'diff-viewer': {
+      shotUrl: (hash: string) =>
+        'data:image/svg+xml;utf8,' +
+        encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">` +
+            `<rect width="100%" height="100%" fill="#e6efee"/>` +
+            `<text x="50%" y="48%" text-anchor="middle" font-family="monospace" font-size="20" fill="#0f3f3a">fixture shot</text>` +
+            `<text x="50%" y="60%" text-anchor="middle" font-family="monospace" font-size="14" fill="#4a7c76">${hash}</text>` +
+            `</svg>`,
+        ),
+    },
+  },
+};
+
 /** Where each region's islands sit — the page's own arrangement, never a second copy of it. */
 export const layout: LagoonOverrides['layout'] = {
   review: (island) => <ReviewRegionFrame island={island} />,

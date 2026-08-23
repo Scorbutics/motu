@@ -3,11 +3,25 @@
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
 import type { ElementSpec } from '@motu/react';
+import { setDefaultIsolation } from '@motu/core';
 import { element as acceptBarElement } from './accept-bar.island';
 import { element as diffViewerElement } from './diff-viewer.island';
 import { element as repoPickerElement } from './repo-picker.island';
 import { element as shotListElement } from './shot-list.island';
 import { element as statusSummaryElement } from './status-summary.island';
+
+// ISOLATION, from motu.config.json, applied by IMPORTING this file.
+//
+// The lagoon has always had it — its root is scaffolded with `setDefaultIsolation(__MOTU_ISOLATION__)`
+// — and a host application had no way to say it at all: `registerElements` takes css and a theme and
+// nothing else. So a project declaring `light` previewed in light DOM and SHIPPED in shadow, which
+// changes whether the host's own stylesheet reaches the island. Approving a baseline then means
+// approving something the page does not render.
+//
+// Set here rather than as an argument to `registerElements` so no host has to repeat the value and
+// no host can disagree with the config: importing the registry is already what a host does, and this
+// file is generated, so a stale copy is caught the same way every other drift in it is.
+setDefaultIsolation('light');
 
 export const ELEMENT_REGISTRY: ElementSpec[] = [acceptBarElement, diffViewerElement, repoPickerElement, shotListElement, statusSummaryElement];
 

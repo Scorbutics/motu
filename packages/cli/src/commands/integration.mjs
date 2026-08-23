@@ -296,6 +296,60 @@ function checkRegion(region, sources) {
   }
 
 
+  // 2e — DOES THE LAGOON RENDER THESE ISLANDS WITH WHAT THE PAGE GIVES THEM?
+  //
+  // `<R.Island slot="x" props={{ shotUrl }} />` is the page's other expression position. Those props
+  // are NOT region state — where the host lives, a formatter, a URL builder — so no bind declares
+  // them and `fed` never looks. The lagoon had no counterpart at all until `LagoonOverrides.props`,
+  // which means the island a human approves can be missing the very thing that makes it useful: the
+  // review console's diff viewer rendered `<img src="">`, naturalWidth 0, with every check green and
+  // a flow asserting its heading text.
+  const pageEnvProps = elementProps(sources, binding);
+  const overridesFile = paths.lagoonDir ? resolve(paths.lagoonDir, 'src/lagoon.tsx') : null;
+  const fromLagoon = lagoonProps(overridesFile);
+  if (pageEnvProps.size && fromLagoon === null) {
+    add(
+      'warn',
+      'island-props',
+      `the page passes props on ${[...pageEnvProps.keys()].join(', ')}, and the lagoon overrides could ` +
+        `not be read — nothing was compared`,
+    );
+  } else if (pageEnvProps.size) {
+    const slotsHere = new Map(liveIslands.map((i) => [i.slot, i]));
+    const supplied = fromLagoon.get(region.id) ?? new Map();
+    let compared = 0;
+    for (const [slot, names] of pageEnvProps) {
+      const island = slotsHere.get(slot);
+      if (!island) continue;
+      const bound = new Set(Object.keys(island.bind ?? {}));
+      const env = [...names].filter((n) => !bound.has(n));
+      if (!env.length) continue;
+      compared += env.length;
+      const missing = env.filter((n) => !(supplied.get(slot) ?? new Set()).has(n));
+      if (missing.length) {
+        add(
+          'error',
+          'island-props',
+          `the page passes ${missing.join(', ')} to ${slot} and the lagoon supplies ${missing.length > 1 ? 'none of them' : 'nothing for it'} — ` +
+            `the island is previewed and approved without what the page gives it. Add it to the lagoon's ` +
+            `\`props\` override (a stand-in, not the real thing)`,
+        );
+      }
+    }
+    for (const [slot, names] of supplied) {
+      const extra = [...names].filter((n) => !(pageEnvProps.get(slot) ?? new Set()).has(n));
+      if (extra.length && slotsHere.has(slot)) {
+        add(
+          'warn',
+          'island-props',
+          `the lagoon gives ${slot} ${extra.join(', ')} and the page passes ${extra.length > 1 ? 'none of them' : 'no such prop'} — ` +
+            `the preview shows more than the application does`,
+        );
+      }
+    }
+    if (compared) add('ok', 'island-props', `page-passed props are supplied by the lagoon too · ${compared} prop(s)`);
+  }
+
   const declared = placedIslands.map((i) => i.slot);
   const missing = declared.filter((s) => !placed.has(s));
   // UNKNOWN means the archipelago declares no such slot — measured against EVERY live island, not
@@ -385,6 +439,80 @@ function checkRegion(region, sources) {
  * there is nothing here to compare and the slot is absent from the map rather than empty in it —
  * "passes nothing" and "there is nothing to pass" are different answers.
  */
+/**
+ * slot -> the props the page passes on the ISLAND ELEMENT itself (`<R.Island slot="x" props={{ a }} />`).
+ *
+ * Distinct from `passedProps`, which reads the CHILDREN form — the page's own component inside the
+ * island. This is the other placement form, and its props are the ones with no lagoon counterpart:
+ * not region state, so no bind declares them, and until now nothing compared them with anything.
+ */
+function elementProps(sources, binding) {
+  const out = new Map();
+  for (const [file] of sources) {
+    let sf;
+    try {
+      sf = sourceFileAt(file, { allowJs: true, jsx: 4 });
+    } catch {
+      continue;
+    }
+    const opens = [
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxElement).map((e) => e.getOpeningElement?.()).filter(Boolean),
+    ];
+    for (const open of opens) {
+      if (open.getTagNameNode?.().getText() !== `${binding}.Island`) continue;
+      const attrs = open.getAttributes?.() ?? [];
+      const attr = (n) => attrs.find((a) => (a.getNameNode?.().getText?.() ?? a.getName?.()) === n);
+      const slot = attr('slot')?.getInitializer?.()?.getText?.()?.replace(/['"`{}]/g, '');
+      const propsInit = attr('props')?.getInitializer?.();
+      if (!slot || !propsInit) continue;
+      const obj = propsInit.getExpression?.();
+      const names = new Set(out.get(slot) ?? []);
+      for (const prop of obj?.getProperties?.() ?? []) {
+        const name = prop.getNameNode?.()?.getText?.() ?? prop.getName?.();
+        if (name) names.add(String(name).replace(/['"`]/g, ''));
+      }
+      out.set(slot, names);
+    }
+  }
+  return out;
+}
+
+/**
+ * regionId -> slot -> prop names, from the lagoon's `props` override.
+ *
+ * Read with ts-morph rather than a regex: it is a nested object literal whose values are functions,
+ * and a brace-counting reader over that is the kind of thing that silently returns nothing.
+ */
+function lagoonProps(overridesFile) {
+  const out = new Map();
+  if (!overridesFile || !existsSync(overridesFile)) return null;
+  let sf;
+  try {
+    sf = sourceFileAt(overridesFile, { allowJs: true, jsx: 4 });
+  } catch {
+    return null;
+  }
+  const decl = sf.getVariableDeclaration?.('props');
+  const obj = decl?.getInitializer?.();
+  if (!obj?.getProperties) return out;
+  for (const regionProp of obj.getProperties()) {
+    const region = (regionProp.getNameNode?.()?.getText?.() ?? '').replace(/['"`]/g, '');
+    const slots = new Map();
+    for (const slotProp of regionProp.getInitializer?.()?.getProperties?.() ?? []) {
+      const slot = (slotProp.getNameNode?.()?.getText?.() ?? '').replace(/['"`]/g, '');
+      const names = new Set();
+      for (const p of slotProp.getInitializer?.()?.getProperties?.() ?? []) {
+        const n = p.getNameNode?.()?.getText?.() ?? p.getName?.();
+        if (n) names.add(String(n).replace(/['"`]/g, ''));
+      }
+      slots.set(slot, names);
+    }
+    out.set(region, slots);
+  }
+  return out;
+}
+
 function passedProps(sources, binding, code) {
   const out = new Map();
   for (const [file] of sources) {

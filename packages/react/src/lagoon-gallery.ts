@@ -66,6 +66,20 @@ export interface LagoonOverrides {
   /** Initial store contents per archipelago id, so bound islands render meaningfully. */
   seed?: Record<string, Record<string, unknown>>;
   /**
+   * Per region, per slot: the props the PAGE passes on the island element itself.
+   *
+   * The page has always been able to write `<R.Island slot="diff-viewer" props={{ shotUrl }} />` for
+   * what is not region state — where the host lives, a formatter, a URL builder — and the lagoon had
+   * no counterpart at all. So the island rendered here without them and nothing said so: they are not
+   * bound keys, so `fed` does not look, and a flow asserting the island's TEXT passes while the part
+   * that needs the prop is blank. Measured on the review console: the diff viewer's <img> had
+   * `src=""` and `naturalWidth: 0` — the whole point of the island — with every check green.
+   *
+   * DATA, like `seed`, and a stand-in is expected: the lagoon's `shotUrl` should return a fixture
+   * image, not reach the real host.
+   */
+  props?: Record<string, Record<string, Record<string, unknown>>>;
+  /**
    * The region's ARRANGEMENT, per archipelago id — rendered by calling the APPLICATION's own layout
    * component with islands in its slots.
    *
@@ -268,6 +282,7 @@ export function startLagoon(opts: StartLagoonOptions): void {
         channels: overrides.channels?.[id],
         layout: overrides.layout?.[id],
         providers: overrides.providers?.[id],
+        props: overrides.props?.[id],
         view,
       });
       tide.setActive(current, view);

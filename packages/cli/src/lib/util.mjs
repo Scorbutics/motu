@@ -32,6 +32,15 @@ const UI_DIR = cfg.uiDir;
 
 export const paths = {
   islandsDir: ISLANDS_DIR,
+  /**
+   * Shadow or light, from motu.config.json.
+   *
+   * `loadMotuConfig()` has always resolved it and this object never carried it, so every command that
+   * reads config through `paths` saw `undefined` — which is how the generated registry took a silent
+   * `'shadow'` default on a project that declares `light`. Same shape as the `hostSources` whitelist
+   * bug: the value existed, one layer below where it was asked for.
+   */
+  isolation: cfg.isolation,
   /** The ui/ root itself (uiDir(kebab) is one island's folder inside it). */
   uiRoot: UI_DIR,
   islandDir: (kebab) => resolve(ISLANDS_DIR, kebab),

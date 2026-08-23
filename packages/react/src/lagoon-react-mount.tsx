@@ -55,6 +55,8 @@ export interface ReactLagoonOptions {
    * arrangement the host page already expresses, and it drifts. See `LagoonOverrides.layout`.
    */
   layout?: (island: (slot: string) => ReactNode) => ReactNode;
+  /** Per slot: the props the page passes on the island element — see `LagoonOverrides.props`. */
+  props?: Record<string, Record<string, unknown>>;
   /**
    * The ENVIRONMENT the islands need, installed in EVERY view.
    *
@@ -124,7 +126,7 @@ export function mountReactLagoon(
   // region cannot supply that. Page-wide providers repeated per island are idempotent — they are
   // context providers over module-level state — so the per-island form covers both cases.
   const islandNode = (slot: string) => {
-    const el = <Island key={slot} slot={slot} fit={opts.fit} />;
+    const el = <Island key={slot} slot={slot} fit={opts.fit} props={opts.props?.[slot]} />;
     return opts.providers ? opts.providers(el, slot) : el;
   };
 

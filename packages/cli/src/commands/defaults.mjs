@@ -136,7 +136,7 @@ export function islandDefaultsCommand(argv) {
  * it is consumed by the host application's bundler, which has no `import.meta.glob`.
  */
 export function islandSyncCommand() {
-  const { path, count } = syncRegistry(paths.islandsDir);
+  const { path, count } = syncRegistry(paths.islandsDir, paths.isolation);
   console.log(`${paths.rel(path)} — ${count} island(s)`);
   // The contracts are the same kind of file: derived from what is on disk, never edited by hand.
   const contracts = syncContracts(paths.islandsDir, { islandComponentPath, islandComponentExport, names });

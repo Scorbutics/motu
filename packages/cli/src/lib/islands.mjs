@@ -38,7 +38,16 @@ export function elementExportName(file) {
 }
 
 /** Render the registry from what is on disk. */
-export function renderRegistry(islands, islandsDir) {
+export function renderRegistry(islands, islandsDir, isolation) {
+  // NO SILENT DEFAULT. Writing `'shadow'` when the caller passed nothing is how this generator put the
+  // wrong isolation into a project declaring `light` — the value was missing from the `paths` object,
+  // not from the config, and a fallback turned a plumbing bug into a wrong file nobody would question.
+  if (isolation !== 'light' && isolation !== 'shadow') {
+    throw new Error(
+      `motu: renderRegistry needs the project's isolation ('light' or 'shadow'), got ${JSON.stringify(isolation)}. ` +
+        `It comes from motu.config.json via \`paths.isolation\`.`,
+    );
+  }
   const rows = islands.map((i) => {
     const name = elementExportName(i.element);
     // Extensionless. motu's packages declare `moduleResolution: "Bundler"`, and the registry this
@@ -57,7 +66,21 @@ export function renderRegistry(islands, islandsDir) {
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and \`import.meta.glob\` is Vite-only.
 import type { ElementSpec } from '@motu/react';
+import { setDefaultIsolation } from '@motu/core';
 ${rows.map((r) => r.import).join('\n')}
+
+// ISOLATION, from motu.config.json, applied by IMPORTING this file.
+//
+// The lagoon has always had it — its root is scaffolded with \`setDefaultIsolation(__MOTU_ISOLATION__)\`
+// — and a host application had no way to say it at all: \`registerElements\` takes css and a theme and
+// nothing else. So a project declaring \`light\` previewed in light DOM and SHIPPED in shadow, which
+// changes whether the host's own stylesheet reaches the island. Approving a baseline then means
+// approving something the page does not render.
+//
+// Set here rather than as an argument to \`registerElements\` so no host has to repeat the value and
+// no host can disagree with the config: importing the registry is already what a host does, and this
+// file is generated, so a stale copy is caught the same way every other drift in it is.
+setDefaultIsolation('${isolation}');
 
 export const ELEMENT_REGISTRY: ElementSpec[] = [${rows.map((r) => r.local).join(', ')}];
 
@@ -73,9 +96,9 @@ ${rows.map((r) => `  '${r.tag}': typeof ${r.local};`).join('\n')}
 }
 
 /** Write the registry for a project. Returns the path written. */
-export function syncRegistry(islandsDir) {
+export function syncRegistry(islandsDir, isolation) {
   const islands = listIslands(islandsDir);
   const out = resolve(islandsDir, 'registry.ts');
-  writeFileSync(out, renderRegistry(islands, islandsDir));
+  writeFileSync(out, renderRegistry(islands, islandsDir, isolation));
   return { path: out, count: islands.length };
 }

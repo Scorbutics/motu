@@ -220,7 +220,7 @@ export async function createCommand(argv) {
 
   // The registry is GENERATED from what is on disk, not edited: adding an island is a file operation,
   // and reconciling is what keeps a deleted or renamed one from lingering in it.
-  syncRegistry(paths.islandsDir);
+  syncRegistry(paths.islandsDir, paths.isolation);
   // AND THE CONTRACTS, in the same breath. Creating an island left `contracts.generated.ts` missing,
   // so the very first `motu check` a new project runs — straight after the next-step this command
   // prints — opened with `✗ generated  contracts.generated.ts is missing`. The scaffolder failing its

@@ -1,0 +1,83 @@
+import type { Shot } from "@/lib/host"
+import type { ShotRef } from "@/lib/review-region"
+
+type Mode = "accepted" | "last" | "diff"
+
+const MODES: { id: Mode; label: string }[] = [
+  { id: "accepted", label: "Accepted" },
+  { id: "last", label: "Last run" },
+  { id: "diff", label: "Difference" },
+]
+
+/**
+ * The three images a decision needs, one at a time.
+ *
+ * Side by side was the first instinct and it is wrong at these sizes: a 1280px baseline beside a
+ * 1280px actual is two thumbnails, and the whole question is "what moved". Toggling in place keeps
+ * the frame still so the eye does the diffing.
+ */
+export function DiffViewer({
+  shot = null,
+  mode = "diff",
+  shots = [],
+  shotUrl,
+  onViewChanged,
+}: {
+  shot?: ShotRef | null
+  mode?: Mode
+  /**
+   * The region's shots. The viewer finds its OWN record rather than being handed one: a `detail` prop
+   * derived by the page is a key the page computes from two region keys and passes to a third island,
+   * which is the laundering the ownership rules exist to stop — and it left this island unable to
+   * render anything in the lagoon, where there is no page to derive it.
+   */
+  shots?: Shot[]
+  /** How to turn a content hash into a URL. Injected: the viewer must not know where the host is. */
+  shotUrl?: (hash: string) => string
+  onViewChanged?: (mode: Mode) => void
+}) {
+  if (!shot) return <div className="dv-empty">Pick a shot to see what changed.</div>
+
+  const detail = shots.find((s) => s.island === shot.island && s.shot === shot.shot) ?? null
+  const hash = mode === "accepted" ? (detail?.accepted ?? null) : (detail?.last?.hash ?? null)
+  const missing =
+    mode === "accepted" && !detail?.accepted
+      ? "Nothing accepted yet — this shot has never had a baseline."
+      : !hash
+        ? "This shot has not been rendered yet."
+        : null
+
+  return (
+    <div className="dv">
+      <div className="dv-head">
+        <b>{shot.island}</b>
+        <span>{shot.shot}</span>
+        <div className="dv-modes" role="group" aria-label="Which image to show">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              aria-current={m.id === mode}
+              disabled={m.id === "diff" && detail?.status !== "changed"}
+              onClick={() => onViewChanged?.(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {mode === "diff" ? (
+        // The diff image is produced locally by `motu island snapshot`, not by the host — so the
+        // viewer says where to look rather than pretending it has one.
+        <div className="dv-empty">
+          The pixel diff lives beside the run that produced it:
+          <code>.motu/snapshots/{shot.island}/{shot.shot}.diff.png</code>
+        </div>
+      ) : missing ? (
+        <div className="dv-empty">{missing}</div>
+      ) : (
+        <img className="dv-img" alt={`${shot.island} ${shot.shot} (${mode})`} src={shotUrl?.(hash!) ?? ""} />
+      )}
+    </div>
+  )
+}

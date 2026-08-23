@@ -6,9 +6,19 @@ import type { LagoonOverrides } from '@motu/react';
 import { channelFrom } from '@motu/core';
 import { ReviewRegionFrame, reviewSeed } from './regions/review';
 import { reviewArchipelago } from '../../../src/archipelagos/review/review.archipelago.js';
+import { installMotuChrome } from '../../../src/shared/motu-chrome.js';
 import { shotsFixturePort } from '../../../src/shared/review-evidence.js';
 
 /** Initial store contents per archipelago id, so bound islands render on first paint. */
+/**
+ * The lagoon's boot hook — motu's own palette, in the place the console is JUDGED.
+ *
+ * The application entry installs it too. Installing it in only one of them is the drift this whole
+ * change removes, one level down: the console would look like motu in the app and like something else
+ * in the preview a reviewer actually opens.
+ */
+export const setup: LagoonOverrides['setup'] = () => installMotuChrome();
+
 export const seed: LagoonOverrides['seed'] = {
   review: reviewSeed,
 };

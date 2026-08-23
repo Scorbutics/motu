@@ -1,13 +1,16 @@
 /* The console's own sheet — motu's water palette, because this is motu's tool.
    Tokens rather than literals so a rebrand moves it, and so `css-tokens` stays green. */
+/* THE WATER, THE INK AND THE LINE COME FROM @motu/chrome — see shared/motu-chrome.ts. They used to be
+   spelled out here, and had already drifted: --line was .14 against the framework's .12. What is left
+   below is what this console genuinely owns; a review verdict is not a framework concept. */
 :root {
-  --w-deep: #0b6f68; --w-mid: #12988f; --w-shallow: #35c2b3;
-  --ink: #22302c; --ink-muted: #6b7d78; --ink-caption: #9a9182;
-  --surface: #eef8f6; --panel: rgba(250, 254, 253, .96); --line: rgba(11, 111, 104, .14);
   --changed: #b45309; --new: #0f766e;
   /* The same two verdicts ON the dark bay, where the ink versions would disappear. */
   --changed-on-bay: #ffd9a8; --new-on-bay: #bdf3ea; --settled-on-bay: rgba(255, 255, 255, .72);
   --error-bg: #fee; --error-ink: #a11;
+  /* Two names this console reads that the framework spells differently. Aliases, not copies. */
+  --surface: var(--surface-page);
+  --panel: var(--surface-row);
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--surface); color: var(--ink);

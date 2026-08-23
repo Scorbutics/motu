@@ -52,33 +52,83 @@ aside {
 aside .motu-bay { flex: none; position: sticky; top: 0; z-index: 2; }
 aside .rail { padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
 .rail .motu-cap { padding: 10px 8px 4px; }
+/* THE WATER IS A READOUT, the same rule the lagoon's own chrome follows: the gauge down the left of a
+   row is depth — faint for a lagoon sitting there, full and lit for the one on screen. */
 button.member {
-  display: block;
+  position: relative; overflow: hidden;
+  display: flex; align-items: stretch; gap: 10px;
   width: 100%;
   text-align: left;
-  padding: 9px 11px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: none;
+  padding: 9px 11px 9px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.66), rgba(232,248,246,.5));
   color: var(--ink);
   font: 600 12.5px/1.35 inherit;
   cursor: pointer;
   animation: motu-swim 260ms cubic-bezier(.2,.9,.3,1) both;
+  transition: transform 160ms cubic-bezier(.2,.9,.3,1), box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
-button.member:hover { background: var(--surface-row); border-color: var(--line); }
+button.member .gauge {
+  flex: none; width: 4px; margin: 2px 0; border-radius: 999px;
+  background: linear-gradient(180deg, var(--w-shallow), var(--w-deep));
+  opacity: .3; transition: opacity 160ms ease, width 160ms cubic-bezier(.2,.9,.3,1);
+}
+button.member .body { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 1px 0; }
+button.member .name { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.member .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+button.member .tag {
+  font-style: normal; font-weight: 600; font-size: 10.5px; line-height: 1;
+  padding: 4px 8px; border-radius: 999px;
+  background: rgba(11,111,104,.08); color: var(--w-deep);
+}
+button.member .tag.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.02em; }
+button.member .tag.faint { background: none; color: var(--ink-muted); padding-left: 2px; }
+button.member:hover { border-color: var(--w-shallow); transform: translateX(2px); }
+button.member:hover .gauge { opacity: .65; }
+button.member:focus-visible { outline: 2px solid var(--w-mid); outline-offset: 2px; }
 button.member[aria-current="true"] {
-  background: var(--surface-row);
   border-color: var(--tide-accent);
-  box-shadow: inset 3px 0 0 var(--tide-accent);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(53,194,179,.16));
+  box-shadow: 0 6px 18px rgba(11,111,104,.14);
+  transform: translateY(-1px);
 }
-button.member small { display: block; margin-top: 2px; font-weight: 500; color: var(--ink-muted); }
+button.member[aria-current="true"] .gauge { opacity: 1; width: 6px; }
+button.member[aria-current="true"] .tag { background: rgba(255,255,255,.72); }
+/* One sweep when a lagoon becomes the one on screen — the tide arriving, not a spinner. */
+button.member[aria-current="true"]::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.5) 50%, transparent 80%);
+  transform: translateX(-100%); animation: motu-sheen 720ms ease-out 1;
+}
 /* LIVE is a state, not a decoration: this member is being served by a dev server right now, so what is
    in the frame can change under you — which is exactly what you asked for, and worth saying. */
+/* LIVE is a state, not a decoration: this member is being served by a dev server right now, so what is
+   in the frame can change under you. It breathes, because that is the difference between "this is a
+   build" and "this is someone's editor". */
 button.member .live-dot {
-  float: right; font-style: normal; font-weight: 700; font-size: 9.5px; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--motu-primary-deep);
-  background: var(--w-shallow); border: 1px solid var(--tide-accent);
-  border-radius: 999px; padding: 2px 7px;
+  float: right; margin-left: 8px;
+  font-style: normal; font-weight: 800; font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--motu-on-primary);
+  background: var(--tide-accent); border-radius: 999px; padding: 3px 8px;
+  box-shadow: 0 0 0 0 rgba(53,194,179,.65);
+  animation: motu-breathe 2.4s ease-in-out infinite;
+}
+@keyframes motu-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(53,194,179,.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(53,194,179,0); }
+}
+/* The repo caption gets the water too, so the eye groups by project before it reads a word. */
+.rail .motu-cap { display: flex; align-items: center; gap: 7px; }
+.rail .motu-cap::before {
+  content: ''; width: 6px; height: 6px; border-radius: 999px; flex: none;
+  background: linear-gradient(180deg, var(--w-shallow), var(--w-mid));
+}
+@media (prefers-reduced-motion: reduce) {
+  button.member, button.member .gauge { transition: none; }
+  button.member[aria-current="true"] { transform: none; }
+  button.member[aria-current="true"]::after { display: none; }
+  button.member .live-dot { animation: none; }
 }
 aside footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line); word-break: break-all; }
 main.stage { flex: 1; position: relative; background: #fff; }
@@ -168,9 +218,16 @@ export function composedPage({ id, group, members, live = false }) {
           .map(
             (m) =>
               `<button class="member" data-i="${m.i}" aria-current="${m.i === 0}" data-live="${m.live ? 'true' : 'false'}">` +
-              `${escapeHtml(m.title || m.slug)}` +
+              `<span class="gauge" aria-hidden="true"></span>` +
+              `<span class="body"><span class="name">${escapeHtml(m.title || m.slug)}` +
               (m.live ? `<em class="live-dot" title="served live by motu lagoon serve --watch">live</em>` : '') +
-              `<small>${escapeHtml(m.slug)}${m.sha ? ` · ${escapeHtml(m.sha.slice(0, 7))}` : m.live ? ' · not published yet' : ''}</small></button>`,
+              `</span><span class="tags"><em class="tag">${escapeHtml(m.slug)}</em>` +
+              (m.sha
+                ? `<em class="tag mono">${escapeHtml(m.sha.slice(0, 7))}</em>`
+                : m.live
+                  ? `<em class="tag faint">not published yet</em>`
+                  : '') +
+              `</span></span></button>`,
           )
           .join(''),
     )

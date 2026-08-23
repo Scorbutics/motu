@@ -61,13 +61,17 @@ button.member {
   text-align: left;
   padding: 9px 11px 9px 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,.66), rgba(232,248,246,.5));
+  border-radius: 8px;
+  /* FLAT, the same surface motu-row uses. A vertical tint inside a selected card read as a different
+     era of UI beside the lens and the dock — the colour belongs in the gauge, which is a readout, not
+     in the surface behind the text. Only the BAY and the panels carry a gradient.
+     (No backticks in here: this whole stylesheet is a template literal, and one ends it.) */
+  background: var(--surface-row);
   color: var(--ink);
   font: 600 12.5px/1.35 inherit;
   cursor: pointer;
   animation: motu-swim 260ms cubic-bezier(.2,.9,.3,1) both;
-  transition: transform 160ms cubic-bezier(.2,.9,.3,1), box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms cubic-bezier(.2,.9,.3,1);
 }
 button.member .gauge {
   flex: none; width: 4px; margin: 2px 0; border-radius: 999px;
@@ -89,12 +93,10 @@ button.member:hover .gauge { opacity: .65; }
 button.member:focus-visible { outline: 2px solid var(--w-mid); outline-offset: 2px; }
 button.member[aria-current="true"] {
   border-color: var(--tide-accent);
-  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(53,194,179,.16));
-  box-shadow: 0 6px 18px rgba(11,111,104,.14);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, .95);
 }
 button.member[aria-current="true"] .gauge { opacity: 1; width: 6px; }
-button.member[aria-current="true"] .tag { background: rgba(255,255,255,.72); }
+button.member[aria-current="true"] .tag { background: rgba(11,111,104,.07); }
 /* One sweep when a lagoon becomes the one on screen — the tide arriving, not a spinner. */
 button.member[aria-current="true"]::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;

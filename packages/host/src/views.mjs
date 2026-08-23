@@ -72,6 +72,14 @@ button.member[aria-current="true"] {
   box-shadow: inset 3px 0 0 var(--tide-accent);
 }
 button.member small { display: block; margin-top: 2px; font-weight: 500; color: var(--ink-muted); }
+/* LIVE is a state, not a decoration: this member is being served by a dev server right now, so what is
+   in the frame can change under you — which is exactly what you asked for, and worth saying. */
+button.member .live-dot {
+  float: right; font-style: normal; font-weight: 700; font-size: 9.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--motu-primary-deep);
+  background: var(--w-shallow); border: 1px solid var(--tide-accent);
+  border-radius: 999px; padding: 2px 7px;
+}
 aside footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line); word-break: break-all; }
 main.stage { flex: 1; position: relative; background: #fff; }
 main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
@@ -145,7 +153,7 @@ main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; bor
  * kept because re-pointing a single frame would throw away whatever state you had just driven the
  * region into, which is the one thing you opened it to look at.
  */
-export function composedPage({ id, group, members }) {
+export function composedPage({ id, group, members, live = false }) {
   const byRepo = new Map();
   members.forEach((m, i) => {
     if (!byRepo.has(m.repo)) byRepo.set(m.repo, []);
@@ -159,8 +167,10 @@ export function composedPage({ id, group, members }) {
         list
           .map(
             (m) =>
-              `<button class="member" data-i="${m.i}" aria-current="${m.i === 0}">` +
-              `${escapeHtml(m.title || m.slug)}<small>${escapeHtml(m.slug)} · ${escapeHtml(m.sha.slice(0, 7))}</small></button>`,
+              `<button class="member" data-i="${m.i}" aria-current="${m.i === 0}" data-live="${m.live ? 'true' : 'false'}">` +
+              `${escapeHtml(m.title || m.slug)}` +
+              (m.live ? `<em class="live-dot" title="served live by motu lagoon serve --watch">live</em>` : '') +
+              `<small>${escapeHtml(m.slug)}${m.sha ? ` · ${escapeHtml(m.sha.slice(0, 7))}` : m.live ? ' · not published yet' : ''}</small></button>`,
           )
           .join(''),
     )
@@ -188,7 +198,11 @@ export function composedPage({ id, group, members }) {
     <div class="grab" id="grab" aria-hidden="true"><i></i></div>
     ${motuBay({ title: group, subtitle: `${members.length} lagoon${members.length === 1 ? '' : 's'}`, compact: true })}
     <div class="rail">${rail}</div>
-    <footer class="motu-cap">manifest ${escapeHtml(id)}</footer>
+    <footer class="motu-cap">${
+      live
+        ? `today${id ? ` · <a style="color:inherit" href="/m/${escapeHtml(id)}/">pin this view</a>` : ''}`
+        : `manifest ${escapeHtml(id ?? '')}`
+    }</footer>
   </aside>
   <main class="stage" id="stage"></main>
 </div>

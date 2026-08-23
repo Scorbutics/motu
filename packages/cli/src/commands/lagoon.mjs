@@ -279,7 +279,23 @@ function injectReloadClient(page) {
 (function () {
   // Reconnects on its own: the server restarts (or the phone sleeps) far more often than you reload.
   function listen() {
-    var es = new EventSource('/__motu_reload');
+    // Relative to WHERE THIS PAGE IS, not to the origin root: in a composed gallery the frame lives at
+    // /g/<group>/f/<i>, and an absolute '/__motu_reload' would ask the host for a stream it does not
+    // have instead of the dev server for the one it does.
+    //
+    // NO REGEX HERE, deliberately. This whole client lives inside a template literal, where a
+    // backslash starts an escape sequence JS resolves before the string is ever written out — so a
+    // trailing-slash regex was emitted with its backslash eaten, turning the rest of the line into a
+    // comment. The script then failed to parse, no EventSource was ever constructed, and the only
+    // symptom was a page that quietly stopped reloading. Nothing here needs a backslash, so nothing
+    // here has one. (This comment cannot carry backticks either, for the same reason.)
+    var here = location.pathname;
+    while (here.length > 1 && here.charAt(here.length - 1) === '/') here = here.slice(0, -1);
+    // AT THE ROOT this must become the empty string, not '/'. Served standalone the page IS at '/',
+    // and '/' + '/__motu_reload' is '//__motu_reload' — a protocol-relative URL naming a host called
+    // __motu_reload, which fails on the one path this feature has always worked on.
+    if (here === '/') here = '';
+    var es = new EventSource(here + '/__motu_reload');
     es.onmessage = function (e) { if (e.data === 'reload') location.reload(); };
     es.onerror = function () { es.close(); setTimeout(listen, 1500); };
   }
@@ -390,7 +406,10 @@ export function lagoonServeCommand(argv) {
   // One artifact, no asset requests to route: every path serves the page, so deep links work too.
   const server = createServer((req, res) => {
     if (req.url === '/favicon.ico') return void res.writeHead(204).end(); // keeps the console clean
-    if (watching && req.url === '/__motu_reload') {
+    // ENDS WITH, not equals. Inside a composed frame the page is served at /g/<group>/f/<i>, and the
+    // injected client asks for `<that path>/__motu_reload` so the host can route the stream back here.
+    // Standing alone at :8817 the path is exactly '/__motu_reload', which still ends with it.
+    if (watching && String(req.url).split('?')[0].endsWith('/__motu_reload')) {
       res.writeHead(200, {
         'content-type': 'text/event-stream',
         'cache-control': 'no-store',
@@ -437,6 +456,57 @@ export function lagoonServeCommand(argv) {
   });
 
   if (watching) startWatching();
+  if (watching) registerLive();
+
+  /**
+   * Tell the lagoon host this member is being served live, and keep telling it.
+   *
+   * The composed gallery then serves THIS process in that member's frame — one URL for the whole
+   * gallery, live where a dev server happens to be running and the last published build everywhere
+   * else. Without it the gallery could only ever show what had been published, which is why a page
+   * under active work looked static there.
+   *
+   * The heartbeat is what makes a killed process harmless: the host expires an entry that stops being
+   * refreshed and falls back to the stored bytes. `off` on exit is the polite version of the same
+   * thing, and it is best-effort by design — nothing here should keep the CLI alive.
+   */
+  function registerLive() {
+    const cfg = loadHostConfig();
+    const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
+    const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
+    if (!base || !hostToken) return; // no host configured: serving locally is the whole feature
+    const { repo } = gitIdentity(REPO_ROOT);
+    const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
+    const call = (path, body) =>
+      fetch(`${base}${path}?${qs}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${hostToken}` },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      }).catch(() => null);
+
+    let announced = false;
+    const beat = async () => {
+      const res = await call('/api/live', { url: `http://127.0.0.1:${port}` });
+      if (res?.ok && !announced) {
+        announced = true;
+        console.log(color.dim(`  live in the gallery: ${base}/g/<group>  (${repo}:${slug})`));
+      }
+    };
+    void beat();
+    const timer = setInterval(beat, 30_000);
+    timer.unref?.();
+
+    let leaving = false;
+    const leave = async () => {
+      if (leaving) return;
+      leaving = true;
+      clearInterval(timer);
+      await call('/api/live/off');
+      process.exit(0);
+    };
+    process.on('SIGINT', leave);
+    process.on('SIGTERM', leave);
+  }
 
   /**
    * Rebuild on source change, debounced, and never concurrently: a vite build takes seconds, and a

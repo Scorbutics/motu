@@ -37,6 +37,47 @@ import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.m
  * The decompressed ceiling is sized for a real outlier (Twenty's record page inlines its whole
  * front-end) rather than for the ~430 kB typical case.
  */
+/**
+ * WHO IS SERVING WHAT, LIVE — in memory, on purpose.
+ *
+ * A dev server is ephemeral. Writing it to the store would leave a dead endpoint behind every crash
+ * and every closed laptop, and the store is the thing that outlives the laptop. So this lives for as
+ * long as the host process does, and no longer.
+ *
+ * TTL rather than trust: `motu lagoon serve --watch` deregisters on exit, but a killed process cannot,
+ * so an entry that stops being refreshed simply expires and the member falls back to its last
+ * published build. That is also what happens when a proxy attempt fails — a dev server that died mid
+ * request should degrade to static, not to an error page.
+ */
+function liveRegistry(ttlMs = 90_000) {
+  const entries = new Map(); // "repo/slug" -> { url, at }
+  const key = (repo, slug) => `${repo}/${slug}`;
+  return {
+    set(repo, slug, url) {
+      entries.set(key(repo, slug), { url, at: Date.now() });
+    },
+    clear(repo, slug) {
+      return entries.delete(key(repo, slug));
+    },
+    /** The endpoint serving this member right now, or null. Expiry is checked on read. */
+    endpointFor(repo, slug) {
+      const e = entries.get(key(repo, slug));
+      if (!e) return null;
+      if (Date.now() - e.at > ttlMs) {
+        entries.delete(key(repo, slug));
+        return null;
+      }
+      return e.url;
+    },
+    list() {
+      const now = Date.now();
+      return [...entries]
+        .filter(([, e]) => now - e.at <= ttlMs)
+        .map(([k, e]) => ({ member: k, url: e.url, ageMs: now - e.at }));
+    },
+  };
+}
+
 const MAX_WIRE = 24 * 1024 * 1024;
 const MAX_DECOMPRESSED = 64 * 1024 * 1024;
 
@@ -102,6 +143,46 @@ const NO_STORE = { 'cache-control': 'no-store' };
 
 export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DEFAULT_MAX_BYTES, token = null } = {}) {
   const store = openStore({ dir, maxRecords, maxBytes });
+  const live = liveRegistry();
+
+  /**
+   * Hand a request to whatever dev server is serving this member, and hand its answer straight back.
+   *
+   * The reload stream goes through here too, which is the point: the composed view is same-origin, so
+   * the page's `EventSource` reaches its own dev server without CORS and without the frame knowing it
+   * is inside a gallery. Streamed rather than buffered — an SSE response that is collected before it
+   * is forwarded never arrives.
+   */
+  async function proxyLive(base, subPath, req, res, member) {
+    const target = `${String(base).replace(/\/+$/, '')}${subPath}`;
+    let upstream;
+    try {
+      upstream = await fetch(target, { headers: { accept: req.headers.accept ?? '*/*' } });
+    } catch {
+      // The dev server went away between resolving and asking. Fall back to what it last published,
+      // rather than showing an error for a frame that has perfectly good bytes in the store.
+      live.clear(member.repo, member.slug);
+      const bytes = member.hash ? store.readHash(member.hash) : null;
+      if (bytes) return void html(res, 200, wrapFragment(bytes, { title: member.title }), NO_STORE);
+      return void html(res, 502, errorPage(502, 'the live lagoon for this member stopped answering'), NO_STORE);
+    }
+    const type = upstream.headers.get('content-type') ?? 'text/html; charset=utf-8';
+    res.writeHead(upstream.status, {
+      'content-type': type,
+      'cache-control': 'no-store',
+      // Same reason the dev server sets it: without this the stream is buffered and nothing arrives.
+      ...(type.includes('text/event-stream') ? { 'x-accel-buffering': 'no', connection: 'keep-alive' } : {}),
+    });
+    if (!upstream.body) return void res.end();
+    const reader = upstream.body.getReader();
+    req.on('close', () => reader.cancel().catch(() => {}));
+    for (;;) {
+      const { done, value } = await reader.read().catch(() => ({ done: true }));
+      if (done) break;
+      res.write(Buffer.from(value));
+    }
+    res.end();
+  }
 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://host');
@@ -117,6 +198,10 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       return json(res, 200, { repo, shots: store.listShots(repo, url.searchParams.get('island') || null) });
     }
     if (path === '/api/groups') return json(res, 200, { groups: store.listGroups() });
+    // GUARDED BY METHOD, unlike its neighbours, because this path also takes a POST. Without the guard
+    // the read branch answered the registration too — a cheerful 200 with an empty list, so the CLI
+    // reported itself live and the host had never heard of it.
+    if (path === '/api/live' && req.method === 'GET') return json(res, 200, { live: live.list() });
 
     if (req.method === 'POST') {
       if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
@@ -126,6 +211,25 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (path === '/api/group') return void (await group(req, res, url));
       if (path === '/api/baseline') return void (await baseline(req, res, url));
       if (path === '/api/baseline/accept') return void (await acceptBaseline(req, res, url));
+      if (path === '/api/live' || path === '/api/live/off') {
+        const repo = normalizeRepo(url.searchParams.get('repo'));
+        const slug = normalizeSegment(url.searchParams.get('slug'));
+        if (!repo || !slug) return json(res, 400, { error: 'repo and slug are required' });
+        if (path === '/api/live/off') return json(res, 200, { ok: true, cleared: live.clear(repo, slug) });
+        let where;
+        try {
+          where = JSON.parse((await readBody(req, 4096)).toString('utf8'))?.url;
+        } catch {
+          where = null;
+        }
+        // LOOPBACK ONLY. This host proxies to whatever it is told, so anything else would make it an
+        // open relay for the machine it runs on — pointed at a metadata endpoint, say, by anyone who
+        // has the token. A dev server on another machine is not a case this needs to serve.
+        if (typeof where !== 'string' || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(where.replace(/\/+$/, '')))
+          return json(res, 400, { error: 'url must be http://127.0.0.1:<port>' });
+        live.set(repo, slug, where.replace(/\/+$/, ''));
+        return json(res, 200, { ok: true, member: `${repo}/${slug}`, url: where, ttlMs: 90_000 });
+      }
       return json(res, 404, { error: `no route for POST ${path}` });
     }
 
@@ -146,16 +250,51 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     }
 
     // --- composed views ---------------------------------------------------------------------
+    //
+    // TWO AXES, and they mean different things. `/g/<name>` is TODAY: resolved per request, so a member
+    // someone is running `motu lagoon serve --watch` on is served LIVE from that dev server, hot reload
+    // and all, while the rest come from their last published build. `/m/<id>` is what a day LOOKED
+    // like: stored bytes, pinned, immutable, and deliberately never live — making it live would break
+    // the one guarantee its URL exists to make.
+    //
+    // The group used to 302 to the manifest, which made those two the same URL and left no place for a
+    // live frame to live.
     if (segments[0] === 'g') {
       const name = normalizeSegment(segments[1]);
       if (!name) return html(res, 400, errorPage(400, 'bad group name'), NO_STORE);
+      const group = store.getGroup(name);
+      if (!group) return html(res, 404, errorPage(404, `no group "${name}"`), NO_STORE);
+      const members = store.resolveGroup(name, live.endpointFor);
+      if (!members.length)
+        return html(res, 404, errorPage(404, `group "${name}" resolves to nothing yet — no member has published`), NO_STORE);
+
+      // A frame, and the reload stream that belongs to it.
+      if (segments[2] === 'f') {
+        const i = Number.parseInt(segments[3] ?? '', 10);
+        const member = Number.isInteger(i) ? members[i] : null;
+        if (!member) return html(res, 404, errorPage(404, 'no such frame'), NO_STORE);
+        if (member.live) return void (await proxyLive(member.live, segments[4] ? `/${segments[4]}` : '/', req, res, member));
+        if (!member.hash) return html(res, 404, errorPage(404, 'this member has never published'), NO_STORE);
+        const bytes = store.readHash(member.hash);
+        if (!bytes) return html(res, 410, errorPage(410, 'this frame’s object is gone'), NO_STORE);
+        // NOT immutable here: the group means today, and today's `latest` moves.
+        return html(res, 200, wrapFragment(bytes, { title: member.title }), NO_STORE);
+      }
+
+      // The trailing slash is LOAD-BEARING — the shell's frame src is relative (`f/<i>`).
+      if (segments.length === 2 && !path.endsWith('/'))
+        return void res.writeHead(302, { location: `/g/${name}/`, 'cache-control': 'no-store' }).end();
+      if (segments.length > 2) return html(res, 404, errorPage(404, 'no such group view'), NO_STORE);
+
+      // The pin: what this view would be if it were frozen now. Live members pin their last published
+      // build, because a dev server has nothing to pin — and the footer says so.
       const snap = store.snapshot(name);
-      if (!snap) return html(res, 404, errorPage(404, `no group "${name}"`), NO_STORE);
-      if (!snap.id) return html(res, 404, errorPage(404, `group "${name}" resolves to nothing yet — no member has published`), NO_STORE);
-      // Assemble, then hand out the IMMUTABLE id. The group URL always means "today"; the manifest it
-      // redirects to keeps rendering what today looked like. Identical resolution → identical id, so
-      // viewing a stable group a thousand times adds one manifest, not a thousand.
-      return void res.writeHead(302, { location: `/m/${snap.id}/`, 'cache-control': 'no-store' }).end();
+      return html(
+        res,
+        200,
+        composedPage({ id: snap?.id ?? null, group: name, members, live: true }),
+        NO_STORE,
+      );
     }
 
     if (segments[0] === 'm') {

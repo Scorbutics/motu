@@ -400,6 +400,35 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   }
 
   /**
+   * A group's members AS THEY WOULD BE SERVED RIGHT NOW.
+   *
+   * The same expansion `snapshot` uses, but resolved for the mutable axis: each member carries its
+   * latest published hash if it has one, and a `live` endpoint if something is currently serving it
+   * with `motu lagoon serve --watch`. A member that is live but has never published is still a member
+   * — that is the whole point of the live axis, and pinning is what needs a published build, not
+   * looking.
+   */
+  function resolveGroup(name, endpointFor) {
+    const group = getGroup(name);
+    if (!group) return [];
+    const out = [];
+    for (const m of membersOf(group)) {
+      const rec = resolveRef(m.repo, m.ref || 'latest', m.slug);
+      const liveUrl = endpointFor ? endpointFor(m.repo, m.slug) : null;
+      if (!rec && !liveUrl) continue;
+      out.push({
+        repo: m.repo,
+        slug: m.slug,
+        hash: rec?.hash ?? null,
+        title: rec?.title ?? m.slug,
+        sha: rec?.sha ?? null,
+        live: liveUrl,
+      });
+    }
+    return out;
+  }
+
+  /**
    * Assemble a group into an IMMUTABLE manifest: resolve every member's `latest` NOW, and store the
    * resolved hashes.
    *
@@ -489,6 +518,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     listRepos,
     listRepo,
     listGroups,
+    resolveGroup,
     stats,
     sweepRepo,
     save,

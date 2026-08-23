@@ -10,7 +10,8 @@
     "dev:focus": "pnpm --filter @demo-app/lagoon focus",
     "dev:console": "pnpm --filter @demo-app/bridge watch:console",
     "gen:contract": "node packages/codegen/src/cli.mjs ../ocean/web-console/target/classes/motu-manifest.json demo-app/contract/src",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "build:packages": "node scripts/build-packages.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

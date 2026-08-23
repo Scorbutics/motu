@@ -78,6 +78,18 @@ if [ ! -d "$MOTU_ROOT/node_modules/ts-morph" ]; then
   }
 fi
 
+# --- 1b. build the packages -------------------------------------------------------------------
+# The `@motu/*` packages ship COMPILED, so their entry points are in dist/ and a clone has none.
+# This is not an optimisation: shipping compiled is what lets a host install them into its own
+# node_modules, where `react` resolves to the HOST's copy and the peerDependency means what it says.
+if [ ! -f "$MOTU_ROOT/packages/core/dist/index.js" ]; then
+  echo "building motu's packages…"
+  ( cd "$MOTU_ROOT" && node scripts/build-packages.mjs ) || {
+    echo "motu: building the packages failed in $MOTU_ROOT." >&2
+    exit 1
+  }
+fi
+
 # --- 2. link the CLI --------------------------------------------------------------------------
 mkdir -p "$BIN_DIR"
 chmod +x "$MOTU_ROOT/packages/cli/src/cli.mjs"

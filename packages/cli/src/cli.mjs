@@ -45,4 +45,20 @@ if (missing.length) {
   process.exit(2);
 }
 
+// THE PACKAGES HAVE TO BE BUILT, and only in a checkout. `@motu/*` publish compiled output — that is
+// what puts them inside a host's node_modules, where `react` resolves to the HOST's copy instead of
+// whatever sits next to motu. Their `exports` therefore point at `dist/`, which is gitignored, so a
+// fresh clone has none: the no-install links land on a package whose entry point does not exist, and
+// the host's bundler says `@motu/core could not be resolved` — pointing at the consumer, not here.
+// Same failure mode the dependency check above exists for, one layer down.
+if (existsSync(resolve(CHECKOUT, 'packages/core/src/index.ts')) && !existsSync(resolve(CHECKOUT, 'packages/core/dist/index.js'))) {
+  console.error(`\x1b[31m✗ motu cannot start: the framework packages are not built\x1b[0m`);
+  console.error(`\x1b[2m  They ship compiled, so their entry points live in dist/ — which a fresh clone does not have:\x1b[0m`);
+  console.error('');
+  console.error(`      cd ${CHECKOUT} && node scripts/build-packages.mjs`);
+  console.error('');
+  console.error(`\x1b[2m  (\`./install.sh\` does it for you.)\x1b[0m`);
+  process.exit(2);
+}
+
 await import('./run.mjs');

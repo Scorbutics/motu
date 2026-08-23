@@ -1,7 +1,6 @@
 {
   "name": "@motu/host",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "bin": {
     "motu-host": "src/cli.mjs"
@@ -9,5 +8,11 @@
   "main": "src/store.mjs",
   "dependencies": {
     "@motu/chrome": "workspace:*"
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

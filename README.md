@@ -448,10 +448,17 @@ the `legacy` strategy gate and the second runtime mount. `--host next` also defa
 
 ### No install of the framework itself
 
-`@motu/*` are unpublished workspace packages whose entry point is raw TypeScript, so an existing app
-cannot simply depend on them. The lagoon is a Vite app and transpiles TS anyway, so motu points it
-straight at the checkout's sources instead — and **works out where that checkout is by itself**, from
-the binary you just ran. There is no machine-specific path to commit:
+`@motu/*` ship COMPILED (`node scripts/build-packages.mjs`, which `./install.sh` runs), so an app can
+depend on them normally. That matters for one reason beyond convenience: an installed package sits
+inside the host's own `node_modules`, so `import 'react'` from inside `@motu/react` resolves to the
+HOST's React and the `peerDependency` means what it says. Consumed as raw TypeScript through a symlink
+into the checkout, it could not: Node resolution walks up from a module's REAL path, which leaves the
+host's tree entirely and finds whatever sits next to motu — a React 18 against a host's React 19 gives
+`Objects are not valid as a React child` and every island renders nothing, with no error naming motu.
+
+The LAGOON is a different consumer and still reads the checkout's sources directly: it is a Vite app,
+it transpiles TS anyway, and it **works out where that checkout is by itself** from the binary you just
+ran. There is no machine-specific path to commit:
 
 ```jsonc
 // motu.config.json — no motuRoot. $MOTU_ROOT, then a `motuRoot` key, override it if you need to.

@@ -1,7 +1,6 @@
 {
   "name": "@motu/chrome",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "src/index.mjs",
   "exports": {
@@ -13,5 +12,11 @@
     "./css": "./src/css.mjs",
     "./html": "./src/html.mjs"
   },
-  "types": "src/index.d.ts"
+  "types": "src/index.d.ts",
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

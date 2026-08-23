@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { createRegion } from "@motu/react"
 import { reviewArchipelago } from "@/archipelagos/review/review.archipelago"
 import { ELEMENT_REGISTRY } from "@/islands/registry"
 import type { AcceptScope } from "@/ui/accept-bar/AcceptBar"
 import { acceptShots, listRepos, listShots, shotUrl, type HostConfig } from "@/lib/host"
+import { createShotsSource } from "@/lib/shots-source"
 
 // Module scope, deliberately: the binding is a property of this composition root, not of a render.
 const Review = createRegion(reviewArchipelago, {
@@ -47,43 +48,34 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
       .catch((e: Error) => setError(e.message))
   }, [cfg])
 
-  // The ONE place shots are fetched: when the selection moves, and again after an accept. The islands
-  // never fetch — what the statuses become is the host's answer, and this is where it is asked for.
-  const load = useCallback(
-    async (repo: string) => {
-      Review.provide("busy", true)
-      setError(null)
-      try {
-        Review.provide("shots", await listShots(cfg, repo))
-      } catch (e) {
-        setError((e as Error).message)
-      } finally {
-        Review.provide("busy", false)
-      }
-    },
+  // The page's data orchestration, in ONE place — shared with the lagoon, which installs this same
+  // object over fixtures. What is left here is the wiring: which port, and when the inputs changed.
+  const source = useMemo(
+    () =>
+      createShotsSource({
+        list: (repo) => listShots(cfg, repo),
+        accept: (repo, island, shot) => acceptShots(cfg, repo, island, shot),
+      }),
     [cfg],
   )
+  useEffect(() => () => source.dispose(), [source])
+  const { shots, busy, error: sourceError } = useSyncExternalStore(source.subscribe, source.getState, source.getState)
+
+  // The region key moves; the source is told through the inputs it declared, exactly as the lagoon's
+  // channel tells it. No branch here knows what a repo change means — that lives in the source.
+  useEffect(() => {
+    source.applyInputs({ selectedRepo })
+  }, [source, selectedRepo])
 
   useEffect(() => {
-    if (selectedRepo) void load(selectedRepo)
-  }, [selectedRepo, load])
-
-  const shots = Review.useRegion().shots ?? []
-  const pending = shots.filter((s) => s.status !== "match").length
+    Review.provide("shots", shots)
+    Review.provide("busy", busy)
+    Review.provide("error", sourceError)
+  }, [shots, busy, sourceError])
 
   const onAcceptRequested = useCallback(
-    async (scope: AcceptScope) => {
-      Review.provide("busy", true)
-      try {
-        await acceptShots(cfg, scope.repo, scope.island, scope.shot)
-        Review.provide("shots", await listShots(cfg, scope.repo))
-      } catch (e) {
-        setError((e as Error).message)
-      } finally {
-        Review.provide("busy", false)
-      }
-    },
-    [cfg],
+    (scope: AcceptScope) => void source.accept(scope.island, scope.shot),
+    [source],
   )
 
   return (
@@ -92,7 +84,7 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
         <h1>Baseline review</h1>
         <Review.Island slot="status-summary" />
       </header>
-      {error && <p className="rv-error">{error}</p>}
+      {(error ?? sourceError) && <p className="rv-error">{error ?? sourceError}</p>}
       <div className="rv-body">
         <aside className="rv-rail">
           <Review.Island slot="repo-picker" />
@@ -103,7 +95,7 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
         <main className="rv-view">
           <Review.Island slot="diff-viewer" props={{ shotUrl: (h: string) => shotUrl(cfg, h) }} />
           {cfg.token ? (
-            <Review.Island slot="accept-bar" props={{ pending, onAcceptRequested }} />
+            <Review.Island slot="accept-bar" props={{ onAcceptRequested }} />
           ) : (
             <form
               className="rv-token"

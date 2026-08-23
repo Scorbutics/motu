@@ -16,7 +16,7 @@ import type { StatusSummary as C_status_summary } from '../ui/status-summary/Sta
 
 export const CONTRACTS = {
   'x-accept-bar': {
-    input: ['repo', 'shot', 'busy', 'pending'],
+    input: ['repo', 'shot', 'busy', 'shots'],
     output: { onAcceptRequested: 'accept-requested' },
     ambient: [],
   },

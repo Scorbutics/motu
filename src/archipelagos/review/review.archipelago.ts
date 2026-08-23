@@ -11,6 +11,7 @@ import { archipelago } from '@motu/core';
 import type { ProducedKeysAre, RegionOwnershipOk, RegionWiringOk } from '@motu/core';
 import type { ElementTypes } from '../../islands/registry';
 import type { ReviewRegion, ProducedReviewKeys } from '@/lib/review-region';
+import { shotsSource } from '@/lib/shots-source';
 
 export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()({
   id: 'review',
@@ -40,7 +41,12 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
       // claiming an answer only the host can give.
       slot: 'accept-bar',
       element: 'x-accept-bar',
-      bind: [{ repo: 'selectedRepo', shot: 'selectedShot', busy: 'busy' }],
+      // `shots` IS bound, and how many are pending is worked out from it here. It used to be counted
+      // in the page and handed over as a prop — a value derived from region state, travelling by prop
+      // between two islands that both read the region. The lagoon showed exactly what that costs: the
+      // summary said "CHANGED 1 NEW 1" while the bar beside it said "Accept all 0 pending", because
+      // in the lagoon there is no page to do the counting.
+      bind: [{ repo: 'selectedRepo', shot: 'selectedShot', busy: 'busy', shots: 'shots' }],
     },
     {
       slot: 'status-summary',
@@ -48,8 +54,20 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
       bind: [{ shots: 'shots' }],
     },
   ],
+  sources: {
+    // The source ITSELF, imported: the region points at what produces its keys, not at a string.
+    // This is what makes "picking a repo changes what the list shows" a declaration rather than two
+    // effects in the page — the lagoon installs the same object over fixtures.
+    shots: shotsSource,
+  },
 });
 
-type _Ownership = RegionOwnershipOk<typeof reviewArchipelago>;
-type _Wiring = RegionWiringOk<typeof reviewArchipelago, ElementTypes>;
-type _Produced = ProducedKeysAre<typeof reviewArchipelago, ProducedReviewKeys>;
+// The three cross-checks, as CONSTANTS. They were `type _Ownership = …` aliases, which assert nothing:
+// a type alias NAMES the result, so a failing check quietly resolves to its error object and no one
+// reads it. Only the assignment to `true` makes the compiler reject it.
+const _everyKeyIsOwned: RegionOwnershipOk<typeof reviewArchipelago> = true;
+const _everyWiredEventExists: RegionWiringOk<typeof reviewArchipelago, ElementTypes> = true;
+const _producedKeysMatchTheApp: ProducedKeysAre<typeof reviewArchipelago, ProducedReviewKeys> = true;
+void _everyKeyIsOwned;
+void _everyWiredEventExists;
+void _producedKeysMatchTheApp;

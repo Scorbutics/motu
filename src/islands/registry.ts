@@ -3,11 +3,11 @@
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
 import type { ElementSpec } from '@motu/react';
-import { element as acceptBarElement } from './accept-bar.island.js';
-import { element as diffViewerElement } from './diff-viewer.island.js';
-import { element as repoPickerElement } from './repo-picker.island.js';
-import { element as shotListElement } from './shot-list.island.js';
-import { element as statusSummaryElement } from './status-summary.island.js';
+import { element as acceptBarElement } from './accept-bar.island';
+import { element as diffViewerElement } from './diff-viewer.island';
+import { element as repoPickerElement } from './repo-picker.island';
+import { element as shotListElement } from './shot-list.island';
+import { element as statusSummaryElement } from './status-summary.island';
 
 export const ELEMENT_REGISTRY: ElementSpec[] = [acceptBarElement, diffViewerElement, repoPickerElement, shotListElement, statusSummaryElement];
 

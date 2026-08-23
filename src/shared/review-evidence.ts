@@ -28,3 +28,37 @@ export const SHOTS_ALL_GREEN = SHOTS.map((s) => ({
 }))
 
 export const SELECTED: ShotRef = { island: "week-actions", shot: "compact-rows@mobile" }
+
+/**
+ * What EACH project holds — the thing a single `SHOTS` list could not express.
+ *
+ * With one list, every project card rendered the same three shots, so the console's central promise
+ * ("picking a repo changes what the list shows") was indistinguishable from a console where clicking
+ * does nothing. The three states below are deliberately different SHAPES, not just different rows:
+ * a project mid-review, a project that has never published, and a project where everything is settled.
+ */
+export const SHOTS_BY_REPO: Record<string, Shot[]> = {
+  "Scorbutics/peps_ta_boite_app": SHOTS,
+  "Scorbutics/motu": [
+    { island: "region-actions", shot: "default@desktop", status: "new", accepted: null, acceptedAt: null, last: at("ddd4") },
+    { island: "region-actions", shot: "default@mobile", status: "new", accepted: null, acceptedAt: null, last: at("eee5") },
+  ],
+  // A project that has published a lagoon and no baselines. The empty list is a state worth having
+  // evidence for: it is what a reviewer sees most often on a project someone just adopted.
+  "twentyhq/twenty": [],
+}
+
+/** The port the lagoon installs the shots source over — the host's answer, from fixtures. */
+export const shotsFixturePort = {
+  list: async (repo: string): Promise<Shot[]> => SHOTS_BY_REPO[repo] ?? [],
+  // Accepting in the lagoon settles the shots it was asked about, which is what the host would then
+  // report. It is a stand-in for an ANSWER, not a re-implementation of the host: no storage, no hashes.
+  accept: async (repo: string, island?: string, shot?: string) => {
+    SHOTS_BY_REPO[repo] = (SHOTS_BY_REPO[repo] ?? []).map((s) =>
+      (island && s.island !== island) || (shot && s.shot !== shot)
+        ? s
+        : { ...s, status: "match" as const, accepted: s.last?.hash ?? null },
+    )
+    return { accepted: [], count: 0 }
+  },
+}

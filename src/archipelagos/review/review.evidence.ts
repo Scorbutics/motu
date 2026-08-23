@@ -20,6 +20,27 @@ export const scenarios: RegionScenario[] = [
     ],
   },
   {
+    // THE ONE THAT WAS MISSING, and the console shipped broken in the lagoon for want of it.
+    //
+    // "Picking a repo changes what the list shows" is the first promise the archipelago makes, and it
+    // had no flow — because the page performed it, and a flow can only drive the region. So the shot
+    // list rendered the seeded project's shots for every card, nothing failed, and the published
+    // lagoon looked like a console whose project rail does nothing.
+    //
+    // It asserts what ANOTHER island renders — `region-actions` is an island name only motu's own
+    // baselines carry, so it cannot appear unless the selection genuinely reached the source and the
+    // source genuinely answered for that project.
+    name: 'picking a project is what the shot list is for',
+    seed: SEED,
+    steps: [
+      { expectRender: { 'shot-list': 'week-actions' } },
+      {
+        emit: { slot: 'repo-picker', event: 'repo-selected', detail: 'Scorbutics/motu' },
+        expectRender: { 'shot-list': 'region-actions' },
+      },
+    ],
+  },
+  {
     // THE coupling this console exists for: the list picks, the viewer follows. Two different
     // islands, one region key between them, and nothing but the region carries it.
     name: 'picking a shot is what the viewer is for',

@@ -5,12 +5,14 @@
 // becomes a call to it.
 import type { ReactNode } from 'react';
 import type { LagoonOverrides } from '@motu/react';
-import { REPOS, SHOTS } from '../../../../src/shared/review-evidence.js';
+import { REPOS } from '../../../../src/shared/review-evidence.js';
 
 export const reviewSeed: NonNullable<LagoonOverrides['seed']>[string] = {
   repos: REPOS,
+  // A project IS selected on open, because a console that opens on nothing shows nothing. `shots` is
+  // NOT seeded: the channel answers the selection, and a seeded list would sit in front of it — the
+  // first paint would show one project's shots and never move again, which is the bug this fixes.
   selectedRepo: 'Scorbutics/peps_ta_boite_app',
-  shots: SHOTS,
   viewMode: 'last',
   busy: false,
   error: null,

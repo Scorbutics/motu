@@ -1,5 +1,6 @@
 {
   "about": "The review-islands lagoon: this project's islands rendered against fixtures, with no backend, no session and no host application around them.",
+  "title": "Baseline review",
   "transport": "mock",
   "defaultTheme": "motu",
   "mount": "react",

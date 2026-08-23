@@ -10,5 +10,8 @@
   "lagoon": "roots/lagoon",
   "appPackage": "review-islands",
   "tagPrefix": "x-",
-  "isolation": "light"
+  "isolation": "light",
+  "publishAs": {
+    "repo": "motu-review"
+  }
 }

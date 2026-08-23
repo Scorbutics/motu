@@ -159,7 +159,12 @@ export async function lagoonPublishCommand(argv) {
   const slug = paths.publishAs?.slug ?? resolved.slug;
   // The derived title says WHAT was built ('Motu Lagoon'); in a composed view listing several repos'
   // switcher entries it says nothing, so a project can name its own.
-  const title = typeof argv.title === 'string' ? argv.title.slice(0, 200) : resolved.title;
+  //
+  // DECLARED, not only passed. It used to be a flag alone, so a republish that did not repeat the
+  // flag silently renamed the project back to 'Motu Lagoon' in every gallery — which is exactly what
+  // happened to peps here. The flag still wins for a one-off.
+  const title =
+    typeof argv.title === 'string' ? argv.title.slice(0, 200) : (declaredTitle() ?? resolved.title);
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
 
   if (!json) console.log(color.dim(`building ${target || 'all archipelagos'} (mock fixtures, one chunk)…`));
@@ -210,17 +215,27 @@ export async function lagoonPublishCommand(argv) {
  * app and nowhere else — a host listing repositories would be handed a colour it cannot compute.
  * `brand` is the same decision written so it travels: any self-contained CSS colour.
  */
-function declaredBrand() {
+/** What this project calls its lagoon, from `lagoon.config.json`'s `title`. */
+function declaredTitle() {
+  return readLagoonConfig()?.title?.trim?.() || null;
+}
+
+/** The project's lagoon config, or null. Parsed once per process, and never fatal here. */
+function readLagoonConfig() {
   const file = resolve(paths.lagoonDir, 'lagoon.config.json');
   if (!existsSync(file)) return null;
   try {
-    const brand = JSON.parse(readFileSync(file, 'utf8'))?.chrome?.brand;
-    return typeof brand === 'string' && brand.trim() ? brand.trim() : null;
+    return JSON.parse(readFileSync(file, 'utf8'));
   } catch {
-    // A lagoon config that does not parse is a problem the lagoon itself will report, loudly and with
-    // the line number. Publishing should not die second, with a worse message.
+    // A lagoon config that does not parse is a problem the lagoon itself reports, with a line number.
+    // Publishing should not die second, with a worse message.
     return null;
   }
+}
+
+function declaredBrand() {
+  const brand = readLagoonConfig()?.chrome?.brand;
+  return typeof brand === 'string' && brand.trim() ? brand.trim() : null;
 }
 
 async function uploadPublished({ remote, token: flagToken, page, slug, title, out, bytes, json }) {
@@ -503,7 +518,11 @@ export function lagoonServeCommand(argv) {
     const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
     const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
     if (!base || !hostToken) return; // no host configured: serving locally is the whole feature
-    const { repo } = gitIdentity(REPO_ROOT);
+    // THE SAME IDENTITY PUBLISHING USES. Taking the git repo here while publish takes the override
+    // registers a live member under a name the gallery has no published member for — so the frame
+    // never goes live and nothing says why. (It did exactly that: Scorbutics/motu:all against a
+    // published motu-review:all.)
+    const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
     const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
     const call = (path, body) =>
       fetch(`${base}${path}?${qs}`, {

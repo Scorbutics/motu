@@ -4,3 +4,7 @@ packages:
   - 'demo-app'
   - 'demo-app/contract'
   - 'demo-app/roots/*'
+  # The baseline review console: an application built WITH motu, living in motu. It consumes the
+  # packages the same way any adopter does, which makes it the one consumer that cannot drift from
+  # them unnoticed — a framework change that breaks a consumer breaks this one in the same commit.
+  - 'review-console'

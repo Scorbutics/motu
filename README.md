@@ -446,6 +446,21 @@ Fitting an island to a legacy skin is only meaningful when the host has one, so 
 the `legacy` strategy gate and the second runtime mount. `--host next` also defaults isolation to
 `light`: shadow DOM would cut islands off from the host's own stylesheet, Tailwind included.
 
+### Releasing
+
+    npm run release:dry                  what would go out, and at what version
+    npm run release -- --version 0.2.0   bump all ten in lockstep, then publish
+    npm run release                      publish
+
+It builds first (always — `dist/` is gitignored, and a stale one is the bug this arrangement exists to
+prevent), asks the registry what is already published and skips those, checks you are logged in BEFORE
+sending anything, and on a failure says which packages already went out. `--dry-run` writes nothing at
+all, version bump included.
+
+The publish set is a LIST in `scripts/release.mjs`, not "every workspace package that isn't private" —
+deriving it is how `demo-app` and a file generated from the demo's ocean manifest end up on the public
+registry.
+
 ### No install of the framework itself
 
 `@motu/*` ship COMPILED (`node scripts/build-packages.mjs`, which `./install.sh` runs), so an app can

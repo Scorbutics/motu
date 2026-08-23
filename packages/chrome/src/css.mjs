@@ -31,9 +31,15 @@ export function motuRootVars(state = 'mock') {
   --ink: ${MOTU_INK.body};
   --ink-muted: ${MOTU_INK.muted};
   --ink-caption: ${MOTU_INK.caption};
-  --surface-page: ${MOTU_SURFACE.page};
+  /* THE SURFACES ARE THE PRIMARY TOO, at low intensity — these tokens say so themselves: the page is
+     "the palest shallow water" and the line is "teal-tinted, never neutral grey". They were literals,
+     so feeding a host's gold repainted the water and left the ground it sat on teal. Derived like the
+     ramp, with the same literals as fallbacks.
+     surface-row is deliberately NOT derived: it is translucent white, and white has no hue. */
+  --surface-page: var(--motu-surface-page, ${MOTU_SURFACE.page});
   --surface-row: ${MOTU_SURFACE.row};
-  --line: ${MOTU_SURFACE.line};
+  --surface-panel: var(--motu-surface-panel, ${MOTU_SURFACE.panel});
+  --line: var(--motu-line, ${MOTU_SURFACE.line});
 }`;
 }
 
@@ -120,7 +126,7 @@ export function motuWaterCss() {
 export function motuSurfaceCss() {
   return `
 .motu-panel {
-  background: ${MOTU_SURFACE.panel};
+  background: var(--surface-panel, ${MOTU_SURFACE.panel});
   border-radius: ${MOTU_RADIUS.panel};
   box-shadow: ${MOTU_SHADOW.panel};
   backdrop-filter: blur(14px) saturate(1.35);

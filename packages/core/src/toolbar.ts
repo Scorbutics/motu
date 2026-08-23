@@ -145,6 +145,16 @@ export function applyMotuChrome(theme: MotuChromeTheme = {}): void {
   root.setProperty('--motu-water-deep', `color-mix(in srgb, ${theme.primary} 84%, #000)`);
   root.setProperty('--motu-water-mid', theme.primary);
   root.setProperty('--motu-water-shallow', `color-mix(in srgb, ${theme.primary} 68%, #fff)`);
+  // AND THE GROUND IT SITS ON. motu's surfaces are the same hue at low intensity — the page is the
+  // palest shallow water, the hairline is tinted rather than grey — so a palette that moved the water
+  // and left the page teal produced a gold app on a teal ground. Percentages chosen to land on the
+  // defaults when the primary is motu's own: #eef8f6 and rgba(11,111,104,.12).
+  root.setProperty('--motu-surface-page', `color-mix(in srgb, ${theme.primary} 8%, #fff)`);
+  root.setProperty('--motu-line', `color-mix(in srgb, ${theme.primary} 14%, transparent)`);
+  root.setProperty(
+    '--motu-surface-panel',
+    `linear-gradient(180deg, color-mix(in srgb, ${theme.primary} 3%, #fff), color-mix(in srgb, ${theme.primary} 9%, #fff))`,
+  );
 }
 
 export const MOTU_TOOLBAR_CHIP_CSS = [

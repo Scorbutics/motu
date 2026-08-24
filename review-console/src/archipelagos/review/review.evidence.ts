@@ -6,7 +6,20 @@
 import type { RegionScenario } from '@motu/runtime/mock';
 import { REPOS, SHOTS, SELECTED } from '../../shared/review-evidence.js';
 
-const SEED = { repos: REPOS, selectedRepo: 'Scorbutics/peps_ta_boite_app', shots: SHOTS, viewMode: 'last' as const };
+// EVERY KEY THE PAGE ESTABLISHES, not just the interesting ones.
+//
+// `busy` and `error` were absent here while `App.tsx` seeds all seven, so every flow ran against a
+// region shaped differently from the one users get — a missing COLUMN rather than a missing scenario,
+// and internally consistent on both sides, so nothing noticed. `integrate check`'s `flow-shape` does
+// now.
+const SEED = {
+  repos: REPOS,
+  selectedRepo: 'Scorbutics/peps_ta_boite_app',
+  shots: SHOTS,
+  viewMode: 'last' as const,
+  busy: false,
+  error: null,
+};
 
 export const scenarios: RegionScenario[] = [
   {

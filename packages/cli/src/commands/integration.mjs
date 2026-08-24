@@ -268,6 +268,41 @@ function checkRegion(region, sources) {
   if (fedBy.size && !starved.length)
     add('ok', 'fed', `all ${fedBy.size} host-fed key(s) established · ${sourceKeys.size} by a declared source`);
 
+  // DOES THE LAGOON PREVIEW THE REGION IN THE SHAPE THE PAGE CREATES?
+  //
+  // Every other check compares the region against its DECLARATION. This compares two things that are
+  // both real: the keys the page establishes on first paint, and the keys the flows ever establish.
+  // A key the page always seeds and no flow ever seeds is not a missing scenario — it is a missing
+  // COLUMN. Every flow runs against a region shaped differently from the one users get, and nothing
+  // else notices, because each side is internally consistent.
+  //
+  // Found by the coverage fold on motu's own review console — `App.tsx` seeds seven keys, its flows
+  // seed four, so `busy` and `error` were absent from every previewed state. Which is the point of
+  // putting it HERE: that finding cost a beacon, a corpus and a comparison to learn, and it is two
+  // literal object key-lists in source. No browser, no traffic, no production.
+  const flowSeeded = flowSeedKeys(region.id);
+  // BOTH WAYS A PAGE CAN SEED: the call forms `seededKeys` knows, and the `createRegion` option.
+  const pageSeeded = new Set([...seeded, ...createRegionSeedKeys(bindingFile, constName)]);
+  if (flowSeeded === null) {
+    add('skip', 'flow-shape', 'no readable flows — nothing to compare the page\'s seed against');
+  } else if (!pageSeeded.size) {
+    add('skip', 'flow-shape', 'the page establishes no keys by `seed(...)` — nothing to compare');
+  } else {
+    const missing = [...pageSeeded].filter((k) => !flowSeeded.has(k)).sort();
+    if (missing.length) {
+      add(
+        'warn',
+        'flow-shape',
+        `the page seeds ${pageSeeded.size} key(s) and the flows seed ${flowSeeded.size}: ${missing.join(', ')} ` +
+          `${missing.length === 1 ? 'is' : 'are'} established on every real page load and in no flow. ` +
+          `The lagoon previews a region shaped differently from the one users get — add ${missing.length === 1 ? 'it' : 'them'} ` +
+          `to the flow seeds in ${paths.rel(paths.archipelagoEvidence(region.id))}`,
+      );
+    } else {
+      add('ok', 'flow-shape', `the flows seed every key the page does · ${pageSeeded.size} key(s)`, pageSeeded.size);
+    }
+  }
+
   // 2d — DOES THE HOST GO ROUND ITS OWN DECLARED SOURCES?
   //
   // A source declares which keys it produces, and the LAGOON has no way to go round it: `channelFrom`
@@ -654,6 +689,107 @@ export async function integrateCheckCommand(argv) {
   if (errors) console.log(color.red(color.bold('FAIL')) + `  ${errors} error(s), ${warns} warning(s)`);
   else console.log(color.green(color.bold('PASS')) + color.dim(`  ${results.length} region(s) integrated · ${warns} warning(s)`));
   process.exit(errors ? 1 : 0);
+}
+
+/**
+ * Keys the host establishes through `createRegion(config, { seed: { … } })`.
+ *
+ * `seededKeys` knows the two CALL forms — `X.seed(k, v)` and `X.seed({ k })` — and motu's own review
+ * console uses neither: it hands the seed to `createRegion` as an option, at module scope, which is
+ * what the scaffolding produces and what the docs show. So the one shape most likely to be in front
+ * of a reader was the shape this could not see.
+ */
+function createRegionSeedKeys(bindingFile, constName) {
+  if (!bindingFile) return new Set();
+  let src;
+  try {
+    src = blankComments(readFileSync(bindingFile, 'utf8'));
+  } catch {
+    return new Set();
+  }
+  const call = src.match(new RegExp(`createRegion\\(\\s*${constName}\\b`));
+  if (!call) return new Set();
+  const seedAt = src.indexOf('seed:', call.index);
+  if (seedAt < 0) return new Set();
+  const brace = src.indexOf('{', seedAt);
+  if (brace < 0) return new Set();
+  let depth = 0;
+  let body = '';
+  for (let i = brace; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) {
+      body = src.slice(brace + 1, i);
+      break;
+    }
+  }
+  const keys = new Set();
+  for (const entry of body.split(/,(?![^{[(]*[}\])])/)) {
+    const name = entry.split(':')[0].trim().replace(/^\.\.\./, '');
+    if (/^[A-Za-z_$][\w$]*$/.test(name)) keys.add(name);
+  }
+  return keys;
+}
+
+/**
+ * The union of keys every declared FLOW establishes in its seed.
+ *
+ * Read from source rather than by importing the module: this runs inside a static check that must not
+ * boot a loader, and a flow's seed is a literal object at the top of the file. Returns null when there
+ * is nothing readable — a check that cannot see its input reports a skip, never a pass.
+ *
+ * Deliberately UNION rather than per-flow: one flow establishing a key is enough for the region to
+ * have been previewed with that column present. What this catches is a key NO flow ever mentions.
+ */
+function flowSeedKeys(id) {
+  const file = paths.archipelagoEvidence(id);
+  if (!existsSync(file)) return null;
+  let src;
+  try {
+    src = blankComments(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+  const keys = new Set();
+  // `seed: { a, b: 1, ...SEED }` and `seed: SEED` both appear in real evidence. The spread and the
+  // bare identifier are followed to their `const NAME = { … }` in the same file, which is the form
+  // every evidence module in this repository uses.
+  const objectKeys = (body) => {
+    for (const entry of body.split(/,(?![^{[(]*[}\])])/)) {
+      const name = entry.split(':')[0].trim().replace(/^\.\.\./, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) keys.add(name);
+    }
+  };
+  const balanced = (text, from) => {
+    let depth = 0;
+    for (let i = from; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}' && --depth === 0) return text.slice(from + 1, i);
+    }
+    return '';
+  };
+  const constObject = (name) => {
+    const m = src.match(new RegExp(`const\\s+${name}\\s*(?::[^=]*)?=\\s*\\{`));
+    return m ? balanced(src, m.index + m[0].length - 1) : null;
+  };
+  let found = false;
+  for (const m of src.matchAll(/\bseed\s*:\s*/g)) {
+    const rest = src.slice(m.index + m[0].length);
+    found = true;
+    if (rest.startsWith('{')) {
+      const body = balanced(src, m.index + m[0].length);
+      objectKeys(body);
+      // `{ ...SEED, selectedShot }` — follow every spread to its declaration.
+      for (const sp of body.matchAll(/\.\.\.([A-Za-z_$][\w$]*)/g)) {
+        const inner = constObject(sp[1]);
+        if (inner) objectKeys(inner);
+      }
+    } else {
+      const ident = rest.match(/^([A-Za-z_$][\w$]*)/);
+      const inner = ident && constObject(ident[1]);
+      if (inner) objectKeys(inner);
+    }
+  }
+  return found ? keys : null;
 }
 
 /**

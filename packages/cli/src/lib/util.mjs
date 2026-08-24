@@ -41,6 +41,12 @@ export const paths = {
    * bug: the value existed, one layer below where it was asked for.
    */
   isolation: cfg.isolation,
+  /**
+   * Coverage, from motu.config.json. On `paths` for the same reason `isolation` is: the registry
+   * generator needs it, and a value that is whitelisted in the config loader but never surfaced here
+   * is whitelisted into a dead end — which is precisely how `hostSources` shipped doing nothing.
+   */
+  coverage: cfg.coverage,
   /** Who this project is on a lagoon host, when the git repository is the wrong answer. */
   publishAs: cfg.publishAs,
   /** The ui/ root itself (uiDir(kebab) is one island's folder inside it). */

@@ -38,7 +38,7 @@ export function elementExportName(file) {
 }
 
 /** Render the registry from what is on disk. */
-export function renderRegistry(islands, islandsDir, isolation) {
+export function renderRegistry(islands, islandsDir, isolation, coverage = null) {
   // NO SILENT DEFAULT. Writing `'shadow'` when the caller passed nothing is how this generator put the
   // wrong isolation into a project declaring `light` — the value was missing from the `paths` object,
   // not from the config, and a fallback turned a plumbing bug into a wrong file nobody would question.
@@ -66,7 +66,7 @@ export function renderRegistry(islands, islandsDir, isolation) {
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and \`import.meta.glob\` is Vite-only.
 import type { ElementSpec } from '@motu/react';
-import { setDefaultIsolation } from '@motu/core';
+import { setDefaultIsolation${coverage?.enabled ? ', configureCoverage' : ''} } from '@motu/core';
 ${rows.map((r) => r.import).join('\n')}
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
@@ -81,7 +81,22 @@ ${rows.map((r) => r.import).join('\n')}
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('${isolation}');
-
+${coverage?.enabled ? `
+// COVERAGE, from motu.config.json, applied the same way and for the same reasons.
+//
+// It arrives by IMPORT rather than as a build constant. \`__MOTU_DEBUG__\` exists so the seam lens'
+// whole import tree dead-code-eliminates — the lens must not ship. Coverage is meant to ship, so
+// elimination is not the goal, and a define would oblige every host's bundler to declare a global or
+// fail with a ReferenceError. No application file mentions coverage; this generated one does.
+//
+// Which of a region's keys are closed sets is NOT here: that is a fact about the key, declared on the
+// archipelago beside it.
+configureCoverage(${JSON.stringify({
+    enabled: true,
+    ...(coverage.endpoint ? { endpoint: coverage.endpoint } : {}),
+    ...(coverage.regions ? { regions: coverage.regions } : {}),
+  })});
+` : ''}
 export const ELEMENT_REGISTRY: ElementSpec[] = [${rows.map((r) => r.local).join(', ')}];
 
 /**
@@ -96,9 +111,9 @@ ${rows.map((r) => `  '${r.tag}': typeof ${r.local};`).join('\n')}
 }
 
 /** Write the registry for a project. Returns the path written. */
-export function syncRegistry(islandsDir, isolation) {
+export function syncRegistry(islandsDir, isolation, coverage = null) {
   const islands = listIslands(islandsDir);
   const out = resolve(islandsDir, 'registry.ts');
-  writeFileSync(out, renderRegistry(islands, islandsDir, isolation));
+  writeFileSync(out, renderRegistry(islands, islandsDir, isolation, coverage));
   return { path: out, count: islands.length };
 }

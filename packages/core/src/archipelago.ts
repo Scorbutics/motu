@@ -4,6 +4,7 @@
 
 import { Store, declareProducers, declareReaders, noteIslandOutput } from './store';
 import { installChannels, type Channel } from './channel';
+import { installRegionCoverage } from './coverage';
 import { runWithWriteSource, currentWriteSource } from './store';
 
 // Stripped in production (see the debug overlay). The mount registry below only tracks when this
@@ -211,6 +212,19 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * of them a place to typo a key that `keyof TRegion` would have caught anyway.
    */
   provides?: readonly (keyof TRegion & string)[];
+  /**
+   * Which of this region's keys are CLOSED SETS, for the coverage fold.
+   *
+   * Declared here rather than in `motu.config.json` because it is a fact about the KEY — `viewMode`
+   * is one of three words wherever this region is mounted — and it travels with the region rather
+   * than with a deployment. Everything else about coverage (whether it runs, where a corpus goes) is
+   * a deployment fact and lives in the config.
+   *
+   * OPT-IN PER KEY, never inferred. A fingerprint reduces every other value to a category precisely
+   * so that nothing identifying survives it; motu cannot tell an enum from an email address by
+   * looking at one string, and guessing wrong writes a customer's data into a coverage report.
+   */
+  coverage?: { enums?: readonly (keyof TRegion & string)[] };
   /**
    * The "new design" layout: HTML arranging the island slots (e.g. hero + toolbar + results). It is
    * rendered natively by <motu-archipelago name="id"> in the standalone app, and swapped in as a
@@ -1008,6 +1022,12 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
   if (opts.channels?.length) {
     installChannels(store, opts.channels);
   }
+  // WHICH STATES THIS REGION ACTUALLY REACHES, when the project asked for it. Installed here because
+  // this is where BOTH mount paths meet — the element route and the React one — so a host gets it
+  // whichever way it composes, and per-region falls out of the fact that this runs once per region.
+  // A no-op unless `configureCoverage` was told `enabled`, which the generated registry does from
+  // motu.config.json.
+  installRegionCoverage(config.id, { enums: config.coverage?.enums as readonly string[] | undefined });
   return store;
 }
 

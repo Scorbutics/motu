@@ -102,6 +102,12 @@ export {
   declaredRegionKeys,
   observeRegionCoverage,
   beaconSink,
+  configureCoverage,
+  markCoverageSandbox,
+  coverageEgressAllowed,
+  installRegionCoverage,
+  regionCoverage,
+  resetRegionCoverage,
 } from './coverage';
 export type {
   KeyState,
@@ -113,4 +119,5 @@ export type {
   CoverageReport,
   RegionCoverageOptions,
   RegionCoverageHandle,
+  CoverageConfig,
 } from './coverage';

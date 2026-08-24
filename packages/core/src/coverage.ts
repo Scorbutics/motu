@@ -454,3 +454,92 @@ export function beaconSink(url: string): (corpus: CoverageCorpus) => void {
     }
   };
 }
+
+// --- CONFIGURED, NOT CALLED ----------------------------------------------------------------------
+
+/**
+ * What `motu.config.json` says about coverage, baked into the generated island registry by
+ * `motu island sync` and applied by IMPORTING it — the same route `setDefaultIsolation` takes, and
+ * for the same reason: importing the registry is already what a host does, so no application file
+ * has to mention coverage and no host's bundler has to define a constant.
+ *
+ * NOT A BUILD CONSTANT, deliberately, and the difference from `__MOTU_DEBUG__` is worth stating
+ * because it looks inconsistent. That flag exists so the seam lens' whole import tree DEAD-CODE
+ * ELIMINATES: the lens must not ship. Coverage is meant to ship — running in production is the entire
+ * point of it — so elimination is not the goal and a runtime switch is the honest mechanism.
+ *
+ * Only DEPLOYMENT facts live here. Whether a key is a closed set is a fact about the key, so `enums`
+ * is declared on the archipelago beside the keys themselves, where it survives the region moving
+ * between projects.
+ */
+export interface CoverageConfig {
+  /** Off unless this is true. A thing that runs in production is a thing somebody switched on. */
+  enabled?: boolean;
+  /** Where a corpus is posted. Absent means fold in memory and send nothing. */
+  endpoint?: string;
+  /** Region ids to watch. Absent means every region. */
+  regions?: readonly string[];
+}
+
+let coverageConfig: CoverageConfig = {};
+let sandbox = false;
+const installed = new Map<string, RegionCoverageHandle>();
+
+/** Apply the project's coverage configuration. Called by the generated registry; idempotent. */
+export function configureCoverage(config: CoverageConfig): void {
+  coverageConfig = config ?? {};
+}
+
+/**
+ * THIS IS THE LAGOON. Called by both lagoon entries, and the reason it is a framework rule rather
+ * than a config field.
+ *
+ * `enabled: true` lives in a committed file, so it is true in the lagoon too — and a lagoon that
+ * beacons records exactly the states the FLOWS produce and posts them into the corpus. The next
+ * comparison then reports those states as covered in production. The tool would silently validate
+ * itself, and the report would look better rather than broken, which is the worst way for a check to
+ * fail. No configuration should be able to arrange that.
+ *
+ * The FOLD is still allowed here: it costs nothing and a preview that knows which states it reached
+ * is useful. Only egress is refused.
+ */
+export function markCoverageSandbox(): void {
+  sandbox = true;
+}
+
+/** Whether egress is permitted. False in the lagoon, and false with nowhere to send anything. */
+export function coverageEgressAllowed(): boolean {
+  return !sandbox && !!coverageConfig.endpoint;
+}
+
+/**
+ * Start watching a region, if the project asked for it. Called from `defineArchipelago`, which is the
+ * one place both mount paths meet — so this is per-region by construction rather than by wiring, and
+ * a host gets it whichever route it composes through.
+ */
+export function installRegionCoverage(
+  regionId: string,
+  opts: { enums?: readonly string[] } = {},
+): RegionCoverageHandle | null {
+  if (!coverageConfig.enabled) return null;
+  if (coverageConfig.regions && !coverageConfig.regions.includes(regionId)) return null;
+  const already = installed.get(regionId);
+  if (already) return already;
+  const handle = observeRegionCoverage(regionId, {
+    enums: opts.enums,
+    sink: coverageEgressAllowed() ? beaconSink(coverageConfig.endpoint!) : undefined,
+  });
+  installed.set(regionId, handle);
+  return handle;
+}
+
+/** Every region being watched, for a lens or a test that wants to read the fold. */
+export function regionCoverage(): Map<string, RegionCoverageHandle> {
+  return new Map(installed);
+}
+
+/** Forget every installed watcher. Test seam; the lagoon re-mounts regions constantly. */
+export function resetRegionCoverage(): void {
+  for (const h of installed.values()) h.stop();
+  installed.clear();
+}

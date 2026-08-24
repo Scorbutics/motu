@@ -122,6 +122,23 @@ export function loadMotuConfig() {
      */
     hostSources: Array.isArray(cfg.hostSources) ? cfg.hostSources : undefined,
     /**
+     * WHICH STATES A REGION ACTUALLY REACHES — the coverage fold, and the one part of motu designed
+     * to run in production.
+     *
+     * DEPLOYMENT FACTS ONLY. Whether a key is a closed set is a fact about the key and is declared on
+     * the archipelago beside it (`coverage.enums`), where it travels with the region. What lives here
+     * is whether the fold runs at all, where a corpus is posted, and which regions are watched.
+     *
+     * Baked into the generated island registry by `motu island sync`, so no application file mentions
+     * coverage and no host's bundler has to define a constant. `enabled` defaults to FALSE: a thing
+     * that runs in production is a thing somebody switched on.
+     */
+    coverage: {
+      enabled: cfg.coverage?.enabled === true,
+      endpoint: typeof cfg.coverage?.endpoint === 'string' ? cfg.coverage.endpoint : null,
+      regions: Array.isArray(cfg.coverage?.regions) ? cfg.coverage.regions : null,
+    },
+    /**
      * Does this project CLAIM motu is removable?
      *
      * `removal-check` asks one question — delete motu, does the application still compile? — and it

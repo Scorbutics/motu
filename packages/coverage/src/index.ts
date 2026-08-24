@@ -597,7 +597,10 @@ export function beaconSink(url: string): (corpus: CoverageCorpus) => void {
 export interface CoverageConfig {
   /** Off unless this is true. A thing that runs in production is a thing somebody switched on. */
   enabled?: boolean;
-  /** Where a corpus is posted. Absent means fold in memory and send nothing. */
+  /**
+   * Where a corpus is posted. Normally ABSENT here and read from a `motu-coverage-endpoint` meta tag
+   * instead — see `metaContent` for why an address must not be baked into the island registry.
+   */
   endpoint?: string;
   /** Region ids to watch. Absent means every region. */
   regions?: readonly string[];
@@ -620,6 +623,32 @@ export interface CoverageConfig {
 }
 
 let coverageConfig: CoverageConfig = {};
+
+/**
+ * WHERE THE ADDRESSES COME FROM, and why they are not in the config.
+ *
+ * `motu island sync` bakes the coverage config into the generated island registry — and the LAGOON
+ * imports that registry. A published lagoon is one self-contained HTML file on a host anybody can
+ * reach, so anything in that config becomes a public string. Grepping a real one found exactly that:
+ *
+ *   wI({enabled:!0,endpoint:"/api/motu/coverage",knownUrl:"/api/motu/coverage/known",…})
+ *
+ * Inert there — the lagoon is a sandbox and refuses egress — but published all the same, and an
+ * internal route name is not something a preview page should hand out.
+ *
+ * So the SWITCH is baked (it is not a secret and it must survive into production) and the ADDRESSES
+ * are read from the document at runtime. A page that wants coverage renders two meta tags; the
+ * lagoon renders neither, so it has nowhere to send anything even if the sandbox rule were removed.
+ * Defence that does not depend on a flag being right.
+ *
+ *   <meta name="motu-coverage-endpoint" content="/api/motu/coverage" />
+ *   <meta name="motu-coverage-known"    content="/api/motu/coverage/known" />
+ */
+function metaContent(name: string): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const value = document.querySelector(`meta[name="${name}"]`)?.getAttribute('content');
+  return value && value.trim() ? value.trim() : undefined;
+}
 const installed = new Map<string, RegionCoverageHandle>();
 
 /**
@@ -649,8 +678,8 @@ export function configureCoverage(config: CoverageConfig): void {
  * better rather than broken. `isSandbox()` is core's, set by the lagoon entries before anything
  * mounts. The FOLD still runs there; only egress is refused.
  */
-export function coverageEgressAllowed(): boolean {
-  return !isSandbox() && !!coverageConfig.endpoint;
+export function coverageEgressAllowed(endpoint = coverageConfig.endpoint ?? metaContent('motu-coverage-endpoint')): boolean {
+  return !isSandbox() && !!endpoint;
 }
 
 /**
@@ -666,11 +695,13 @@ export function installRegionCoverage(
   if (coverageConfig.regions && !coverageConfig.regions.includes(regionId)) return null;
   const already = installed.get(regionId);
   if (already) return already;
+  const endpoint = coverageConfig.endpoint ?? metaContent('motu-coverage-endpoint');
+  const knownUrl = coverageConfig.knownUrl ?? metaContent('motu-coverage-known');
   const handle = observeRegionCoverage(regionId, {
     enums: opts.enums,
-    sink: coverageEgressAllowed() ? beaconSink(coverageConfig.endpoint!) : undefined,
+    sink: coverageEgressAllowed(endpoint) ? beaconSink(endpoint!) : undefined,
     known: new Set(coverageConfig.known ?? []),
-    knownSource: coverageConfig.knownUrl && !isSandbox() ? fetchKnown(coverageConfig.knownUrl) : undefined,
+    knownSource: knownUrl && !isSandbox() ? fetchKnown(knownUrl) : undefined,
     remember: true,
     maxReports: coverageConfig.maxReports ?? 4,
   });

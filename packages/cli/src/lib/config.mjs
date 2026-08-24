@@ -135,10 +135,13 @@ export function loadMotuConfig() {
      */
     coverage: {
       enabled: cfg.coverage?.enabled === true,
-      endpoint: typeof cfg.coverage?.endpoint === 'string' ? cfg.coverage.endpoint : null,
+      // NO ADDRESSES HERE. They would be baked into the generated island registry, which the lagoon
+      // imports and publishes as a public page. The application renders them as meta tags; see
+      // `metaContent` in @motu/coverage. `corpusUrl` is different — it is read by the CLI on a
+      // developer's machine and never reaches a browser.
+      corpusUrl: typeof cfg.coverage?.corpusUrl === 'string' ? cfg.coverage.corpusUrl : null,
       regions: Array.isArray(cfg.coverage?.regions) ? cfg.coverage.regions : null,
       /** Where the current known set is served from, so it is not frozen at build time. */
-      knownUrl: typeof cfg.coverage?.knownUrl === 'string' ? cfg.coverage.knownUrl : null,
     },
     /**
      * Does this project CLAIM motu is removable?

@@ -94,11 +94,14 @@ ${coverage?.enabled ? `
 // No application file mentions coverage; this generated one does.
 //
 // Which of a region's keys are closed sets is NOT here: that is a fact about the key, declared on the
-// archipelago beside it.
+// archipelago beside it. Neither are the ADDRESSES — this file is imported by the lagoon, and a
+// published lagoon is a public page, so an endpoint baked here becomes a public string. The page that
+// wants coverage renders them as meta tags instead:
+//
+//   <meta name="motu-coverage-endpoint" content="…" />
+//   <meta name="motu-coverage-known"    content="…" />
 configureCoverage(${JSON.stringify({
     enabled: true,
-    ...(coverage.endpoint ? { endpoint: coverage.endpoint } : {}),
-    ...(coverage.knownUrl ? { knownUrl: coverage.knownUrl } : {}),
     ...(coverage.regions ? { regions: coverage.regions } : {}),
   })});
 ` : ''}

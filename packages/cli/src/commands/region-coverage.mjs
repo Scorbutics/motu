@@ -9,7 +9,7 @@
 // IT DOES NOT WRITE ANYTHING. The scenario skeletons go to stdout for someone to paste and fill in.
 // Written to a file they would be a file full of TODO, which looks like coverage and rots — the same
 // reason `island create` stopped scaffolding `fixtures.mock.ts`.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -193,14 +193,52 @@ export async function regionCoverageCommand(argv) {
     process.exit(2);
   }
 
+  // A TOKEN NEVER COMES FROM CONFIG. Committed config is read by `island sync` and baked into the
+  // generated registry, which the LAGOON imports — so a secret placed there would travel into a
+  // published, publicly reachable page. It comes from the environment, is used for this one fetch,
+  // and is never written anywhere.
+  const token = argv.token ?? process.env.MOTU_COVERAGE_TOKEN ?? null;
+
   // A URL IS A FILE HERE. The corpus lives wherever the project put it, and the whole point of the
   // read side being a cacheable blob is that checking against the real thing should not need an
   // export step — `motu region coverage <id> --corpus https://…` is the drift check.
   const load = async (f) => {
     if (!/^https?:\/\//.test(f)) return JSON.parse(readFileSync(f, 'utf8'));
-    const res = await fetch(f);
+    const res = await fetch(f, token ? { headers: { authorization: `Bearer ${token}` } } : undefined);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `${f} answered ${res.status}` +
+          (token ? ' with the token given' : ' — set MOTU_COVERAGE_TOKEN, or pass --token'),
+      );
+    }
     if (!res.ok) throw new Error(`${f} answered ${res.status}`);
-    return res.json();
+    const body = await res.json();
+    // A STATUS PAGE IS ALSO A CORPUS SOURCE. `/coverage/status` answers in a summary shape
+    // (`{ top: [{ browsers, state }] }`) because a phone has to render it; accept that too rather
+    // than making somebody stand up a second endpoint to say the same thing.
+    if (Array.isArray(body?.top)) {
+      const entries = body.top.map((t) => ({
+        fingerprint: Object.fromEntries(
+          String(t.state)
+            .split(' ')
+            .map((pair) => {
+              const i = pair.indexOf(':');
+              return [pair.slice(0, i), pair.slice(i + 1)];
+            }),
+        ),
+        count: t.browsers ?? 1,
+        firstAt: 0,
+        lastAt: 0,
+      }));
+      return {
+        v: 1,
+        keysHash: body.declarations?.[0] ?? keysHash(Object.keys(entries[0]?.fingerprint ?? {})),
+        regionId: body.region ?? id,
+        keys: Object.keys(entries[0]?.fingerprint ?? {}).sort(),
+        entries,
+      };
+    }
+    return body;
   };
 
   let corpus;
@@ -209,6 +247,37 @@ export async function regionCoverageCommand(argv) {
   } catch (err) {
     console.log(`  ${color.red('✗')} ${color.dim('corpus'.padEnd(20))} ${color.red(String(err?.message ?? err))}`);
     process.exit(2);
+  }
+
+  // --save: PUT THE DATA WHERE THE LAGOON CAN SHOW IT, and nothing else.
+  //
+  // A published lagoon is one self-contained HTML file on a host anybody can reach, so it must not
+  // carry the address it was fetched from or the credential that opened it. Baking the corpus at
+  // BUILD time is what makes that true by construction rather than by redaction: the page holds the
+  // rows and has no idea where they came from.
+  //
+  // Written into the lagoon root so the build globs it, and only ever the corpus — the URL and the
+  // token do not appear in the file, which the assertion below enforces rather than assumes.
+  if (argv.save) {
+    const dir = resolve(paths.lagoonDir, 'src/coverage');
+    mkdirSync(dir, { recursive: true });
+    const out = resolve(dir, `${id}.json`);
+    const body = JSON.stringify(
+      { v: corpus.v ?? 1, keysHash: corpus.keysHash, regionId: corpus.regionId, keys: corpus.keys, entries: corpus.entries },
+      null,
+      2,
+    );
+    for (const secret of [token, ...files.filter((f) => /^https?:\/\//.test(f))]) {
+      if (secret && body.includes(secret)) {
+        console.error(color.red(`refusing to save: the corpus body contains ${secret === token ? 'the token' : 'its source URL'}`));
+        process.exit(2);
+      }
+    }
+    writeFileSync(out, body + '\n');
+    console.log(
+      `  ${color.green('✓')} ${color.dim('saved'.padEnd(20))} ` +
+        color.dim(`${paths.rel(out)} · ${corpus.entries.length} state(s), no URL and no token in it`),
+    );
   }
 
   const report = compareCoverage(corpus, covered, keys);

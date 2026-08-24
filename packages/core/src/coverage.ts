@@ -296,3 +296,161 @@ export function diffFromNearest(
   // Everything that differed was systemic: the row IS the systemic cause, nothing else distinguishes it.
   return best && best.diff.length ? best.diff.join(' ') : '(differs only in the systemic keys above)';
 }
+
+// --- THE BEACON ----------------------------------------------------------------------------------
+
+import { archipelagoConfigs, getArchipelagoStore, bindEntries, writtenKeys } from './archipelago';
+
+/**
+ * Every region key the archipelago declares: what islands READ (bind), what they PRODUCE (writes),
+ * what a `reads` claim names, and what a declared source promises.
+ *
+ * Derived rather than configured, for the same reason the fingerprint's columns are the declaration:
+ * a key list someone maintains by hand drifts from the region, and a corpus recorded against a drifted
+ * list is not comparable to anything. `compareCoverage` can then SAY the two sides disagree instead of
+ * quietly reporting nonsense.
+ */
+export function declaredRegionKeys(regionId: string): string[] {
+  const config = archipelagoConfigs().find((c) => c.id === regionId) as
+    | { islands?: { bind?: unknown; reads?: readonly string[] }[]; sources?: Record<string, { produces?: readonly string[] }> }
+    | undefined;
+  if (!config) return [];
+  const keys = new Set<string>();
+  for (const island of config.islands ?? []) {
+    for (const [, key] of bindEntries(island as never)) keys.add(key);
+    for (const key of writtenKeys(island as never)) keys.add(key);
+    for (const key of island.reads ?? []) keys.add(key);
+  }
+  for (const source of Object.values(config.sources ?? {})) {
+    for (const key of source.produces ?? []) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
+export interface RegionCoverageOptions extends FingerprintOptions {
+  /** Override the derived key list. Rarely right — see `declaredRegionKeys`. */
+  keys?: readonly string[];
+  /** Distinct-state cap. See CoverageRecorder. */
+  limit?: number;
+  /** Where a corpus goes when it is flushed. Omit to keep it in memory and read it yourself. */
+  sink?: (corpus: CoverageCorpus) => void;
+  /** Also flush on a timer. Off by default: the page-leave flush is enough and costs nothing idle. */
+  flushEveryMs?: number;
+}
+
+export interface RegionCoverageHandle {
+  /** The corpus so far. Safe to call any time. */
+  corpus(): CoverageCorpus;
+  /** Send what has accumulated, if there is anything and a sink to send it to. */
+  flush(): void;
+  /** Unsubscribe and stop flushing. Does NOT flush — call it first if you want what is held. */
+  stop(): void;
+}
+
+/**
+ * Watch a region and fold every state it enters.
+ *
+ * OFF UNLESS CALLED, and it should stay behind whatever build constant the host already uses to strip
+ * dev code — this is the one piece of motu designed to run in production, and a thing that runs in
+ * production has to be a thing someone switched on.
+ *
+ * COALESCED TO THE END OF THE TURN. A handler that writes three keys passes through two states that
+ * never reached a screen, and counting them would fill the corpus with combinations nobody can
+ * reproduce or write a scenario for. What is recorded is the state the region SETTLED in.
+ *
+ * NOTHING HERE MAY THROW INTO THE APPLICATION. A coverage probe that breaks a page is worse than no
+ * coverage, so the fold and the sink are both wrapped: a corpus is a nice-to-have and the page is not.
+ */
+export function observeRegionCoverage(regionId: string, opts: RegionCoverageOptions = {}): RegionCoverageHandle {
+  const store = getArchipelagoStore(regionId);
+  const keys = opts.keys ?? declaredRegionKeys(regionId);
+  const recorder = new CoverageRecorder(keys, opts);
+  const noop: RegionCoverageHandle = { corpus: () => recorder.corpus(regionId), flush: () => {}, stop: () => {} };
+  if (!store || !keys.length) return noop;
+
+  let queued = false;
+  const capture = () => {
+    queued = false;
+    try {
+      recorder.record((k) => store.get(k), Date.now());
+    } catch {
+      // A key whose getter throws is the application's problem, not a reason to break it further.
+    }
+  };
+  const onChange = () => {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(capture);
+  };
+
+  capture(); // the state the region STARTS in — the one a seed establishes, and the one flows skip
+  const unsubscribe = store.subscribe(onChange);
+
+  let sent = 0;
+  const flush = () => {
+    if (!opts.sink) return;
+    const corpus = recorder.corpus(regionId);
+    // Nothing new since the last flush: a beacon that repeats itself is pure cost.
+    if (corpus.entries.length === sent) return;
+    sent = corpus.entries.length;
+    try {
+      opts.sink(corpus);
+    } catch {
+      // Egress is best-effort by construction — see `beaconSink`.
+    }
+  };
+
+  // ON THE WAY OUT, which is the only moment a session's corpus is complete. `pagehide` fires where
+  // `unload` is unreliable (bfcache, mobile Safari) and `visibilitychange` catches a backgrounded tab
+  // that never comes back, which on a phone is most of them.
+  const onLeave = () => flush();
+  const onHidden = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') flush();
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', onLeave);
+    document.addEventListener('visibilitychange', onHidden);
+  }
+  const timer = opts.flushEveryMs ? setInterval(flush, opts.flushEveryMs) : null;
+
+  return {
+    corpus: () => recorder.corpus(regionId),
+    flush,
+    stop() {
+      unsubscribe();
+      if (timer) clearInterval(timer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pagehide', onLeave);
+        document.removeEventListener('visibilitychange', onHidden);
+      }
+    },
+  };
+}
+
+/**
+ * A sink that posts the corpus and does not care what happens next.
+ *
+ * `sendBeacon` rather than `fetch`, because the flush that matters happens as the page goes away:
+ * a fetch is cancelled on unload, and one kept alive with `keepalive` still competes with the
+ * navigation. A beacon is queued by the browser and sent whether or not the document survives — and
+ * it cannot be read, which is correct here. Nothing about a coverage corpus needs a response.
+ *
+ * Falls back to a keepalive fetch where `sendBeacon` is unavailable, and gives up quietly if that
+ * fails too. There is no error path worth taking: the alternative to a lost corpus is a broken page.
+ */
+export function beaconSink(url: string): (corpus: CoverageCorpus) => void {
+  return (corpus) => {
+    const body = JSON.stringify(corpus);
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+        return;
+      }
+      void fetch(url, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'application/json' } }).catch(
+        () => {},
+      );
+    } catch {
+      /* the page is leaving; there is nowhere to report this to and nothing to do about it */
+    }
+  };
+}

@@ -99,6 +99,9 @@ export {
   compareCoverage,
   diffFromNearest,
   CoverageRecorder,
+  declaredRegionKeys,
+  observeRegionCoverage,
+  beaconSink,
 } from './coverage';
 export type {
   KeyState,
@@ -108,4 +111,6 @@ export type {
   CoverageCorpus,
   CoverageFinding,
   CoverageReport,
+  RegionCoverageOptions,
+  RegionCoverageHandle,
 } from './coverage';

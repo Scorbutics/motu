@@ -916,13 +916,18 @@ function RegionCoupling() {
     }
   }
 
+  // KEYED BY INDEX AS WELL AS NAME. A store key can appear in more than one of these lists — two
+  // laundering suspects can name the same key, and React then silently duplicates or drops a row. The
+  // lens found this in its own panel the first time anything drove a region hard enough to produce
+  // two, which is the argument for driving one.
+  //
   // An observation that has seen NOTHING. Silence from an instrument reads exactly like a clean
   // region, and is the more likely of the two: the adapter derives its keys from the host's store, and
   // a convention it depends on can change without anyone noticing here.
-  for (const o of foreignObservations()) {
+  for (const [i, o] of foreignObservations().entries()) {
     if (o.writesSeen > 0) continue;
     rows.push(
-      <Row key={`fo-${o.regionId}`} mono className="cp">
+      <Row key={`fo-${i}-${o.regionId}`} mono className="cp">
         <span>{o.regionId}</span>
         <span className="who">watching {o.watching.length} key(s)</span>
         <Pill
@@ -941,9 +946,9 @@ function RegionCoupling() {
   // account for it. Only ever populated when the host installs a `StoreAdapter`. The culprit is
   // deliberately absent: naming it would mean being in the write path, which is the rewrite the
   // adapter seam exists to avoid.
-  for (const w of unattributedWrites()) {
+  for (const [i, w] of unattributedWrites().entries()) {
     rows.push(
-      <Row key={`uw-${w.key}`} mono className="cp">
+      <Row key={`uw-${i}-${w.key}`} mono className="cp">
         <span>{w.key}</span>
         <span className="who">
           <b>{w.declaredOwner}</b> declared owner
@@ -962,9 +967,9 @@ function RegionCoupling() {
 
   // Provenance the declarations cannot prove: the host wrote a key an island reads, moments after
   // another island emitted. Reported here because it is a suspicion, not a violation.
-  for (const s of launderingSuspects()) {
+  for (const [i, s] of launderingSuspects().entries()) {
     rows.push(
-      <Row key={`ls-${s.key}`} mono className="cp">
+      <Row key={`ls-${i}-${s.key}`} mono className="cp">
         <span>{s.key}</span>
         <span className="who">
           <b>host</b> → {s.readers.join(',')}

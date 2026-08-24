@@ -724,6 +724,19 @@ export function mergeCorpora(corpora: readonly CoverageCorpus[]): CoverageCorpus
  * The other half of the round trip, and the reason it is here rather than in a backend: "known" has
  * to mean the same thing to the client suppressing a report and to the job producing the list, and
  * that agreement is a motu fact.
+ *
+ * THE ONE INVARIANT THAT KEEPS THE LOOP HONEST: nothing may promote a state to "known" except a flow
+ * or a person. The GET/POST cycle is a SUPPRESSION loop, not a learning one — it exists so a state
+ * already accounted for stops costing a request, and for no other purpose.
+ *
+ * It would be trivial for a merge job to pass the corpus' own fingerprints as `accepted`, and the
+ * result would look like success: the report empties, the beacons stop, every state is "known". It
+ * would also be the tool validating itself for the third time in this design — after the lagoon
+ * beaconing its own flows, and after a fingerprint auto-expanded into a scenario. All three have the
+ * same shape, which is why it is worth naming: a system that can mark its own findings resolved
+ * reports nothing, and reporting nothing is indistinguishable from having nothing to report.
+ *
+ * `accepted` is an explicit argument for that reason. There is no way to derive it.
  */
 export function knownIds(
   scenarioStates: readonly RegionFingerprint[],

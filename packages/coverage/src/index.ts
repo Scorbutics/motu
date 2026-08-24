@@ -92,6 +92,30 @@ export function fingerprintId(fp: RegionFingerprint): string {
 /** The corpus format. Bumped when a reader could misread an older one, never for an addition. */
 export const CORPUS_VERSION = 1;
 
+/**
+ * A short stable stamp for a DECLARATION — the sorted key list a corpus was recorded against.
+ *
+ * The `keys` array already carries this and `mergeCorpora` already compares it, so nothing is proved
+ * by the hash that the array does not prove. What it buys is a place to PUT it: a server upserting on
+ * `(region, keysHash, fingerprint)` buckets automatically, so the deploy that adds a key starts a new
+ * bucket instead of silently mixing states that fingerprint differently — and the old bucket becomes
+ * a thing you can drop in one statement rather than a set you would have to reason about.
+ *
+ * It is also what makes drift cheap to CHECK. Comparing declarations otherwise means pulling the
+ * corpus; comparing eight characters does not.
+ *
+ * FNV-1a, not a crypto hash: this identifies a declaration, it does not protect one, and a dependency
+ * would be a strange price for eight characters.
+ */
+export function keysHash(keys: readonly string[]): string {
+  let h = 0x811c9dc5;
+  for (const ch of [...keys].sort().join('\u0000')) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
 /** One state, and how much of it there was. */
 export interface CoverageEntry {
   fingerprint: RegionFingerprint;
@@ -109,6 +133,9 @@ export interface CoverageCorpus {
    * merge that silently folds two incompatible shapes is worse than one that refuses.
    */
   v?: number;
+  /** Which DECLARATION this was recorded against — see `keysHash`. Absent in a v1 corpus written
+   *  before the stamp existed, which is why every reader falls back to comparing `keys`. */
+  keysHash?: string;
   regionId: string;
   /** Declared keys at the time of recording — a corpus taken against a different declaration is not
    *  comparable, and this is what lets the check say so instead of reporting nonsense. */
@@ -158,6 +185,7 @@ export class CoverageRecorder {
   corpus(regionId: string): CoverageCorpus {
     return {
       v: CORPUS_VERSION,
+      keysHash: keysHash(this.keys),
       regionId,
       keys: [...this.keys].sort(),
       entries: [...this.#seen.values()].sort((a, b) => b.count - a.count),
@@ -711,6 +739,7 @@ export function mergeCorpora(corpora: readonly CoverageCorpus[]): CoverageCorpus
   }
   return {
     v: CORPUS_VERSION,
+    keysHash: first!.keysHash ?? keysHash(first!.keys),
     regionId,
     keys: first!.keys,
     entries: [...entries.values()].sort((a, b) => b.count - a.count),

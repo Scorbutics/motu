@@ -19,6 +19,7 @@ import {
   compareCoverage,
   mergeCorpora,
   knownIds,
+  keysHash,
 } from '@motu/coverage';
 import { color, paths } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
@@ -192,9 +193,19 @@ export async function regionCoverageCommand(argv) {
     process.exit(2);
   }
 
+  // A URL IS A FILE HERE. The corpus lives wherever the project put it, and the whole point of the
+  // read side being a cacheable blob is that checking against the real thing should not need an
+  // export step — `motu region coverage <id> --corpus https://…` is the drift check.
+  const load = async (f) => {
+    if (!/^https?:\/\//.test(f)) return JSON.parse(readFileSync(f, 'utf8'));
+    const res = await fetch(f);
+    if (!res.ok) throw new Error(`${f} answered ${res.status}`);
+    return res.json();
+  };
+
   let corpus;
   try {
-    corpus = mergeCorpora(files.map((f) => JSON.parse(readFileSync(f, 'utf8'))));
+    corpus = mergeCorpora(await Promise.all(files.map(load)));
   } catch (err) {
     console.log(`  ${color.red('✗')} ${color.dim('corpus'.padEnd(20))} ${color.red(String(err?.message ?? err))}`);
     process.exit(2);
@@ -208,7 +219,7 @@ export async function regionCoverageCommand(argv) {
     console.log(
       `  ${color.red('✗')} ${color.dim('declaration'.padEnd(20))} ` +
         color.red(
-          `the corpus was recorded against a different key set — ` +
+          `corpus ${corpus.keysHash ?? keysHash(corpus.keys)} vs code ${keysHash(keys)} — ` +
             `${onlyRecorded.length ? `recorded only: ${onlyRecorded.join(', ')}. ` : ''}` +
             `${onlyDeclared.length ? `declared only: ${onlyDeclared.join(', ')}. ` : ''}` +
             `The same state fingerprints differently on each side, so nothing below is comparable`,

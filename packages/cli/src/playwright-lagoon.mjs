@@ -1307,8 +1307,14 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
 
-    const differentiates = outputs.every((o) => o.trim().length > 0) && new Set(outputs).size > 1;
-    return { differentiates, scenarioCount: scenarios.length, mounted: true, diagnostics };
+    // TWO FAILURES, REPORTED AS ONE. `differentiates` folds "every scenario rendered" and "at least two
+    // differ" into a boolean, and the caller could only say "rendered identically" — which is a lie
+    // when the truth is that one scenario rendered NOTHING. That message sent someone looking for a
+    // bind gap when the actual answer was an empty state the island renders on purpose.
+    const empty = outputs.map((o, i) => (o.trim().length ? null : (scenarios[i]?.name ?? `#${i + 1}`))).filter(Boolean);
+    const distinctOutputs = new Set(outputs).size;
+    const differentiates = empty.length === 0 && distinctOutputs > 1;
+    return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics };
   });
 }
 

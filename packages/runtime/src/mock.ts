@@ -5,7 +5,8 @@ import { MotuError, type Transport } from './index';
  *  for ANY input, not just pre-recorded ones. Explicitly a stub for verifying the ISLAND's wiring. */
 export type FixtureResponder = (args: unknown[]) => unknown;
 
-export interface Fixture {
+/** What every fixture names, whether it answers with data or with a failure. */
+interface FixtureCall {
   service: string;
   method: string;
   /** Optional role gate: caller must hold one of these for the call to succeed. */
@@ -20,6 +21,10 @@ export interface Fixture {
    * over the fallback when it matches.
    */
   match?: unknown[];
+}
+
+/** A call that answers with data. */
+export interface FixtureResponse extends FixtureCall {
   /**
    * The response: a fixed VALUE (static replay), or a FUNCTION of the call args (`FixtureResponder`) —
    * a stub that derives/filters a dataset per request so the island's REACTIVE behaviour is verifiable
@@ -27,6 +32,47 @@ export interface Fixture {
    * stub, NOT a claim of backend fidelity; use a value (or request-keyed `match`) for recorded truth.
    */
   response: unknown | FixtureResponder;
+  status?: never;
+}
+
+/**
+ * A call that FAILS — the state an island spends most of its life one bad afternoon away from, and
+ * the one the lagoon could not previously show.
+ *
+ * WHY THIS DID NOT EXIST, and what it cost. `MockTransport` could only fail for reasons of its own:
+ * no fixture (404) and role denied (403). A backend that answers 500 for ONE method while everything
+ * else works was not expressible, so "the mission-complete call fails — what does a person see, can
+ * they retry?" had no answer in the lagoon. `FailingTransport` fails EVERY call with one status,
+ * which is the right tool for `error-resilience` ("does it survive?") and the wrong one for a
+ * scenario ("what does it show?").
+ *
+ * The recorder knew. Capturing a real 500 through `motu fixtures record --transport http`, it wrote
+ * the fixture out COMMENTED — it had the truth and nowhere to put it. That comment is gone now.
+ *
+ * What this buys is not an error test. It is that a failure becomes an ORDINARY SCENARIO: it renders
+ * in the lagoon, gets a snapshot baseline, is measured by `responsive` and `a11y`, and can be driven
+ * by a region flow. The retry affordance nobody could look at is now a picture someone accepted.
+ */
+export interface FixtureFailure extends FixtureCall {
+  /** The HTTP status the call answers with. Thrown as a `MotuError`, exactly as a real one would be. */
+  status: number;
+  /** Optional message. Defaults to something that says the failure was declared, not accidental. */
+  message?: string;
+  response?: never;
+}
+
+/**
+ * One recorded or hand-written answer to a contract call.
+ *
+ * A UNION, not an optional `status`, so the two forms cannot be mixed: a fixture that carries both a
+ * response and a status is a fixture whose author did not decide, and the compiler says so at the
+ * point of writing rather than the mock picking one at runtime.
+ */
+export type Fixture = FixtureResponse | FixtureFailure;
+
+/** Narrow to the failing form. */
+function isFailure(f: Fixture): f is FixtureFailure {
+  return typeof (f as FixtureFailure).status === 'number';
 }
 
 /**
@@ -131,6 +177,11 @@ export class MockTransport implements Transport {
     }
     if (fixture.roles && !fixture.roles.some((r) => this.currentRoles.includes(r))) {
       throw new MotuError(403, `mock: role denied for ${service}/${method}`);
+    }
+    // A DECLARED failure. Thrown the way the real transport throws, so the island takes the same code
+    // path it will take in the ocean — not a special "mock is sad" path it would never otherwise run.
+    if (isFailure(fixture)) {
+      throw new MotuError(fixture.status, fixture.message ?? `mock: declared ${fixture.status} for ${service}/${method}`);
     }
     // A function response derives the result from the args (a stub filter) so reactive behaviour works
     // for any input; a value response is a static replay.

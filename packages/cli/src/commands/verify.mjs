@@ -877,6 +877,18 @@ function reportDifferentiation(report, r) {
       `distinct inputs produce distinct output (${r.scenarioCount} scenarios) — data flows past the seam`,
       { n: r.distinctOutputs ?? r.scenarioCount, of: 'distinct render(s)' },
     );
+  } else if (r.empty?.length) {
+    // AN EMPTY SCENARIO IS NOT AN IDENTICAL ONE. The comparison needs every scenario to have rendered
+    // something, so one that renders nothing sinks the check — and saying "rendered identically" then
+    // points at the wrong thing entirely. Name the scenarios, because an island whose empty state IS
+    // its correct answer (a summary of nothing, a bar with nothing to act on) cannot take part in this
+    // check at all, and the author needs to know that rather than hunt a bind gap.
+    report.error(
+      'data-flow',
+      `${r.empty.length} of ${r.scenarioCount} scenario(s) rendered NOTHING — ${r.empty.join(', ')}. ` +
+        `Distinct output cannot be compared against a blank one. Either the island is not receiving that ` +
+        `seed, or its empty state is deliberate — in which case that scenario does not belong here`,
+    );
   } else {
     report.error(
       'data-flow',

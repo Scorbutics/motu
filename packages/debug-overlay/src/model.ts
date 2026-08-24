@@ -132,8 +132,12 @@ export function sourceLabel(module: string): string {
 export function renderRecordedFixtures(calls: RecordedCall[], seed: Record<string, unknown>): string {
   const rows = calls.map((c) => {
     const match = JSON.stringify(c.args);
+    // A CAPTURED FAILURE IS A FIXTURE NOW, not a comment. This used to emit the recorded status as
+    // two commented lines, because `Fixture` had no way to say "this call answers 500" — the recorder
+    // had the truth and nowhere to put it. `FixtureFailure` is that place, so a 500 someone hit while
+    // recording becomes a scenario they can look at.
     if (c.status) {
-      return `  // ${c.status} for ${match}:\n  // { service: ${JSON.stringify(c.service)}, method: ${JSON.stringify(c.method)}, match: ${match}, response: null },`;
+      return `  { service: ${JSON.stringify(c.service)}, method: ${JSON.stringify(c.method)}, match: ${match}, status: ${c.status} },`;
     }
     const response = JSON.stringify(c.response, null, 2)
       .split('\n')

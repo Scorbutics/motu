@@ -83,6 +83,22 @@ export const fixtures: Fixture[] = [
       };
     },
   },
+  // THE BACKEND IS DOWN, for one request shape.
+  //
+  // Selected the way every other per-request answer is selected — by `match`. Fixtures belong to the
+  // ISLAND and scenarios choose between them by seed, so "this scenario's backend fails" is expressed
+  // as a request-keyed fixture the scenario's criteria happens to hit. The structural match means the
+  // page argument stays a wildcard: the failure follows the criteria, not the page.
+  //
+  // This island has had `status === 'error'` since it was written and nothing had ever LOOKED at it:
+  // `Fixture` could not say "500", so the branch was reachable only in the ocean, on a bad afternoon.
+  {
+    service: 'MemberService',
+    method: 'search',
+    roles: ['MEMBER_READ'],
+    match: [undefined, { surname: 'unreachable-backend' }],
+    status: 500,
+  },
 ];
 
 export const roles: string[] = ['MEMBER_READ'];
@@ -91,4 +107,10 @@ export const roles: string[] = ['MEMBER_READ'];
 export const scenarios: Scenario[] = [
   { name: 'no criteria', seed: { criteria: {} } },
   { name: 'email filter', seed: { criteria: { email: 'ada.lovelace@example.com' } } },
+  // A search that finds nothing. Cheap to write, and it is the state a list spends real time in.
+  { name: 'no matches', seed: { criteria: { surname: 'nobody-by-that-name' } } },
+  // THE FAILURE, as an ordinary scenario: it renders in the lagoon, takes a snapshot baseline, and is
+  // measured by `responsive` and `a11y` like any other. Whether what it shows is GOOD — whether there
+  // is a way to retry — is now a question someone can answer by looking, which it was not before.
+  { name: 'the backend fails', seed: { criteria: { surname: 'unreachable-backend' } } },
 ];

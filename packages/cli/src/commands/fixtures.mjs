@@ -121,8 +121,12 @@ function preview(v) {
 function renderFixtures(kebab, calls, seed, transport) {
   const rows = calls.map((c) => {
     const match = JSON.stringify(c.args);
+    // A CAPTURED FAILURE IS A FIXTURE NOW. This emitted the status as a commented line with
+    // `response: null`, because `Fixture` could not express a failing call — so recording a real 500
+    // through `--transport http` produced something nobody could run. `FixtureFailure` is the form it
+    // was reaching for.
     if (c.status) {
-      return `  // ${c.status} captured for these args — replay as a failure/role case if intended:\n  // { service: ${JSON.stringify(c.service)}, method: ${JSON.stringify(c.method)}, match: ${match}, response: null },`;
+      return `  { service: ${JSON.stringify(c.service)}, method: ${JSON.stringify(c.method)}, match: ${match}, status: ${c.status} },`;
     }
     const response = indent(JSON.stringify(c.response, null, 2), 4);
     return `  { service: ${JSON.stringify(c.service)}, method: ${JSON.stringify(c.method)}, match: ${match}, response: ${response} },`;

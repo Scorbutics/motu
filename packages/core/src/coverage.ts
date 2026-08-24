@@ -334,6 +334,24 @@ export interface RegionCoverageOptions extends FingerprintOptions {
   limit?: number;
   /** Where a corpus goes when it is flushed. Omit to keep it in memory and read it yourself. */
   sink?: (corpus: CoverageCorpus) => void;
+  /**
+   * Fingerprints already accounted for — covered by a flow, or accepted by someone who looked. A
+   * state in here is not a finding, so it is never sent. This is what turns the steady state into
+   * zero requests rather than merely fewer.
+   */
+  known?: ReadonlySet<string>;
+  /**
+   * Remember what this browser has already reported, so a returning visitor does not re-send a state
+   * on every visit. Turns "novel per session" into "novel per browser", which is both cheaper and the
+   * more useful denominator.
+   */
+  remember?: boolean;
+  /**
+   * Hard cap on beacons per session. Not expected to bind — a session cannot reach many novel states
+   * — but the environment this runs in is the one nobody is watching, and a cap is cheaper than
+   * finding out.
+   */
+  maxReports?: number;
   /** Also flush on a timer. Off by default: the page-leave flush is enough and costs nothing idle. */
   flushEveryMs?: number;
 }
@@ -386,15 +404,55 @@ export function observeRegionCoverage(regionId: string, opts: RegionCoverageOpti
   capture(); // the state the region STARTS in — the one a seed establishes, and the one flows skip
   const unsubscribe = store.subscribe(onChange);
 
-  let sent = 0;
+  // ONLY WHAT IS NEW — the property that makes this affordable to run on a metered backend.
+  //
+  // The client is told which fingerprints are already accounted for: the ones the region's flows
+  // cover, plus the ones somebody looked at and accepted. That set is small (a list of short hashes)
+  // and is a build-time fact, so it ships with the bundle. A state already in it is not a finding,
+  // and reporting it is pure cost.
+  //
+  // The consequence is worth stating plainly, because it is not "fewer requests": once every state a
+  // user reaches is known, THE BEACON NEVER FIRES. Cost is bounded by NOVELTY rather than by traffic
+  // — a new deploy produces a burst and then silence, and a busy day on unchanged code produces
+  // nothing at all. That is the axis the bill should be on.
+  //
+  // WHAT IT COSTS IN RETURN: in-session counts stop being the frequency signal, because a state is
+  // reported once and then never again. The signal moves to how many BEACONS name a fingerprint —
+  // one per browser that ever reached it — which is a better number anyway. "How many distinct people
+  // hit this" is the question; "how many times did one tab re-enter it" never was.
+  const remembered = (): Set<string> => {
+    if (!opts.remember) return new Set();
+    try {
+      return new Set(JSON.parse(localStorage.getItem(`motu:coverage:${regionId}`) ?? '[]') as string[]);
+    } catch {
+      return new Set();
+    }
+  };
+  const reported = remembered();
+  const known = opts.known ?? new Set<string>();
+  let reports = 0;
+
   const flush = () => {
     if (!opts.sink) return;
+    if (opts.maxReports != null && reports >= opts.maxReports) return;
     const corpus = recorder.corpus(regionId);
-    // Nothing new since the last flush: a beacon that repeats itself is pure cost.
-    if (corpus.entries.length === sent) return;
-    sent = corpus.entries.length;
+    const novel = corpus.entries.filter((e) => {
+      const id = fingerprintId(e.fingerprint);
+      return !known.has(id) && !reported.has(id);
+    });
+    // THE ZERO-REQUEST PATH, and the common one. Nothing novel means nothing to say.
+    if (!novel.length) return;
+    reports++;
+    for (const e of novel) reported.add(fingerprintId(e.fingerprint));
+    if (opts.remember) {
+      try {
+        localStorage.setItem(`motu:coverage:${regionId}`, JSON.stringify([...reported]));
+      } catch {
+        // A browser refusing storage just means this one reports a state it already has.
+      }
+    }
     try {
-      opts.sink(corpus);
+      opts.sink({ ...corpus, entries: novel });
     } catch {
       // Egress is best-effort by construction — see `beaconSink`.
     }
@@ -479,6 +537,14 @@ export interface CoverageConfig {
   endpoint?: string;
   /** Region ids to watch. Absent means every region. */
   regions?: readonly string[];
+  /**
+   * Fingerprints the project already knows about — generated from the region's flows plus whatever
+   * was accepted. Baked in with the rest of this, so the client can stay silent about states nobody
+   * needs to hear about again.
+   */
+  known?: readonly string[];
+  /** Beacons per session, capped. Default 4. */
+  maxReports?: number;
 }
 
 let coverageConfig: CoverageConfig = {};
@@ -528,6 +594,9 @@ export function installRegionCoverage(
   const handle = observeRegionCoverage(regionId, {
     enums: opts.enums,
     sink: coverageEgressAllowed() ? beaconSink(coverageConfig.endpoint!) : undefined,
+    known: new Set(coverageConfig.known ?? []),
+    remember: true,
+    maxReports: coverageConfig.maxReports ?? 4,
   });
   installed.set(regionId, handle);
   return handle;

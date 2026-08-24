@@ -89,6 +89,9 @@ export function fingerprintId(fp: RegionFingerprint): string {
     .join(' ');
 }
 
+/** The corpus format. Bumped when a reader could misread an older one, never for an addition. */
+export const CORPUS_VERSION = 1;
+
 /** One state, and how much of it there was. */
 export interface CoverageEntry {
   fingerprint: RegionFingerprint;
@@ -100,6 +103,12 @@ export interface CoverageEntry {
 }
 
 export interface CoverageCorpus {
+  /**
+   * Format version. Present because a corpus now crosses a PROCESS boundary — written by a browser,
+   * merged by something else, read by the CLI — and the three can be deployed at different times. A
+   * merge that silently folds two incompatible shapes is worse than one that refuses.
+   */
+  v?: number;
   regionId: string;
   /** Declared keys at the time of recording — a corpus taken against a different declaration is not
    *  comparable, and this is what lets the check say so instead of reporting nonsense. */
@@ -148,6 +157,7 @@ export class CoverageRecorder {
 
   corpus(regionId: string): CoverageCorpus {
     return {
+      v: CORPUS_VERSION,
       regionId,
       keys: [...this.keys].sort(),
       entries: [...this.#seen.values()].sort((a, b) => b.count - a.count),
@@ -352,6 +362,21 @@ export interface RegionCoverageOptions extends FingerprintOptions {
    * finding out.
    */
   maxReports?: number;
+  /**
+   * Where the CURRENT known set comes from, when it should not be frozen at build time.
+   *
+   * `known` ships with the bundle and therefore only shrinks the traffic when you redeploy. A source
+   * is asked once per session and can answer from anywhere — a cached GET, a file, a value the host
+   * already had — so a state that gets accepted stops being reported without a release.
+   *
+   * A FUNCTION, not a URL, for the same reason `StoreAdapter` is a pair of functions and not a
+   * database: motu asks the question and the application answers it however it likes. Nothing here
+   * knows what a bucket is.
+   *
+   * Best-effort by construction. A source that throws or never resolves leaves the build-time set in
+   * place, which is the behaviour without one.
+   */
+  knownSource?: () => Promise<readonly string[]> | readonly string[];
   /** Also flush on a timer. Off by default: the page-leave flush is enough and costs nothing idle. */
   flushEveryMs?: number;
 }
@@ -429,7 +454,18 @@ export function observeRegionCoverage(regionId: string, opts: RegionCoverageOpti
     }
   };
   const reported = remembered();
-  const known = opts.known ?? new Set<string>();
+  const known = new Set<string>(opts.known ?? []);
+  // Asked once, merged in whenever it answers. The flush that matters happens at page-leave, so an
+  // answer arriving a second later is still in time; one that never arrives costs nothing.
+  if (opts.knownSource) {
+    void (async () => {
+      try {
+        for (const id of (await opts.knownSource!()) ?? []) known.add(id);
+      } catch {
+        // The build-time set stands. A coverage probe does not get to care about a failed fetch.
+      }
+    })();
+  }
   let reports = 0;
 
   const flush = () => {
@@ -545,6 +581,14 @@ export interface CoverageConfig {
   known?: readonly string[];
   /** Beacons per session, capped. Default 4. */
   maxReports?: number;
+  /**
+   * Where the CURRENT known set is served from — a cached GET of a JSON array of fingerprint ids.
+   *
+   * Optional, and orthogonal to `known`: the baked list is the offline default and this refreshes it,
+   * so a state that gets accepted stops being reported without a redeploy. Anything that serves a
+   * file can serve it. motu does not know or care what.
+   */
+  knownUrl?: string;
 }
 
 let coverageConfig: CoverageConfig = {};
@@ -598,6 +642,7 @@ export function installRegionCoverage(
     enums: opts.enums,
     sink: coverageEgressAllowed() ? beaconSink(coverageConfig.endpoint!) : undefined,
     known: new Set(coverageConfig.known ?? []),
+    knownSource: coverageConfig.knownUrl && !isSandbox() ? fetchKnown(coverageConfig.knownUrl) : undefined,
     remember: true,
     maxReports: coverageConfig.maxReports ?? 4,
   });
@@ -614,4 +659,93 @@ export function regionCoverage(): Map<string, RegionCoverageHandle> {
 export function resetRegionCoverage(): void {
   for (const h of installed.values()) h.stop();
   installed.clear();
+}
+
+// --- WHAT A BACKEND HAS TO DO, AND NOTHING ABOUT WHICH ONE --------------------------------------
+
+/**
+ * Fold corpora into one. PURE, and the whole of the server-side logic.
+ *
+ * Whatever collects beacons — a scheduled job over a bucket of objects, a queue consumer, a person
+ * with a directory of JSON files — needs exactly this and nothing else. Keeping it here rather than
+ * in an adapter is the difference between motu defining the ANSWER and motu defining the QUESTION:
+ * merging fingerprint counts is arithmetic on motu's own format, and every backend would otherwise
+ * reimplement it slightly differently.
+ *
+ * Refuses to fold corpora that disagree about the declaration. Two recordings taken against different
+ * key sets are not summable — the same state has different fingerprints on each side — and a merge
+ * that quietly proceeded would produce a corpus whose rows mean nothing, which no later check could
+ * detect.
+ */
+export function mergeCorpora(corpora: readonly CoverageCorpus[]): CoverageCorpus {
+  if (!corpora.length) throw new Error('motu: mergeCorpora needs at least one corpus');
+  const [first] = corpora;
+  const keys = first!.keys.join(',');
+  const regionId = first!.regionId;
+  const entries = new Map<string, CoverageEntry>();
+  for (const corpus of corpora) {
+    if (corpus.regionId !== regionId) {
+      throw new Error(`motu: cannot merge corpora from different regions (${regionId} and ${corpus.regionId})`);
+    }
+    if (corpus.keys.join(',') !== keys) {
+      throw new Error(
+        `motu: cannot merge corpora recorded against different declarations for ${regionId}. ` +
+          `One has [${keys}], another [${corpus.keys.join(',')}]. The same state fingerprints ` +
+          `differently on each side, so the counts are not summable — re-record, or keep them apart.`,
+      );
+    }
+    if ((corpus.v ?? 1) !== CORPUS_VERSION) {
+      throw new Error(`motu: corpus format v${corpus.v ?? 1} cannot be merged by a v${CORPUS_VERSION} reader`);
+    }
+    for (const e of corpus.entries) {
+      const id = fingerprintId(e.fingerprint);
+      const hit = entries.get(id);
+      if (!hit) {
+        entries.set(id, { ...e });
+        continue;
+      }
+      hit.count += e.count;
+      hit.firstAt = Math.min(hit.firstAt, e.firstAt);
+      hit.lastAt = Math.max(hit.lastAt, e.lastAt);
+    }
+  }
+  return {
+    v: CORPUS_VERSION,
+    regionId,
+    keys: first!.keys,
+    entries: [...entries.values()].sort((a, b) => b.count - a.count),
+  };
+}
+
+/**
+ * The known set to publish back to clients: everything the flows cover, plus everything somebody
+ * looked at and accepted.
+ *
+ * The other half of the round trip, and the reason it is here rather than in a backend: "known" has
+ * to mean the same thing to the client suppressing a report and to the job producing the list, and
+ * that agreement is a motu fact.
+ */
+export function knownIds(
+  scenarioStates: readonly RegionFingerprint[],
+  accepted: readonly RegionFingerprint[] = [],
+): string[] {
+  return [...new Set([...scenarioStates, ...accepted].map(fingerprintId))].sort();
+}
+
+/**
+ * A `knownSource` that reads a URL. A CONVENIENCE, not a dependency — the same standing `beaconSink`
+ * has. It is one `fetch` of a JSON array, so anything that can serve a file can serve it: a bucket, a
+ * CDN, the application's own origin, a `public/` directory.
+ *
+ * Cache-friendly on purpose. This is the request that makes the steady state cheap, so it must not
+ * itself become the cost: served with an ETag it is a 304 on almost every load, and served from a
+ * CDN it never reaches an origin at all.
+ */
+export function fetchKnown(url: string): () => Promise<readonly string[]> {
+  return async () => {
+    const res = await fetch(url, { credentials: 'omit' });
+    if (!res.ok) return [];
+    const body = (await res.json()) as unknown;
+    return Array.isArray(body) ? (body.filter((v) => typeof v === 'string') as string[]) : [];
+  };
 }

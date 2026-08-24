@@ -98,6 +98,7 @@ ${coverage?.enabled ? `
 configureCoverage(${JSON.stringify({
     enabled: true,
     ...(coverage.endpoint ? { endpoint: coverage.endpoint } : {}),
+    ...(coverage.knownUrl ? { knownUrl: coverage.knownUrl } : {}),
     ...(coverage.regions ? { regions: coverage.regions } : {}),
   })});
 ` : ''}

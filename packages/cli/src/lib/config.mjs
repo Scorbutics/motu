@@ -137,6 +137,8 @@ export function loadMotuConfig() {
       enabled: cfg.coverage?.enabled === true,
       endpoint: typeof cfg.coverage?.endpoint === 'string' ? cfg.coverage.endpoint : null,
       regions: Array.isArray(cfg.coverage?.regions) ? cfg.coverage.regions : null,
+      /** Where the current known set is served from, so it is not frozen at build time. */
+      knownUrl: typeof cfg.coverage?.knownUrl === 'string' ? cfg.coverage.knownUrl : null,
     },
     /**
      * Does this project CLAIM motu is removable?

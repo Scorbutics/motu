@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generates the typed @motu/contract from a motu-manifest.json emitted by motu-apt.
+// Generates the typed @motu/contract from a motu-manifest.json emitted by dev.motu:apt.
 // Usage: node src/cli.mjs <path-to-motu-manifest.json> <output-dir>
 //
 // This closes the codegen loop: the browser contract is generated from the compiled backend, so a

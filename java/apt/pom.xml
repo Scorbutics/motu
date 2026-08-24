@@ -5,14 +5,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>dev.motu</groupId>
-    <artifactId>motu-apt</artifactId>
+    <artifactId>apt</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>motu-apt</name>
+    <name>motu apt</name>
     <description>Compile-time annotation processor that emits motu-manifest.json for @BrowserCallable
         beans. Dependency-free: it references motu/host annotations by fully-qualified name, so it
-        couples to neither motu-runtime nor the host application.</description>
+        couples to neither dev.motu:endpoint nor the host application.</description>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>

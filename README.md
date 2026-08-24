@@ -149,10 +149,10 @@ target, not a verified number.
 
 ## Backend
 
-`motu-apt` is an annotation processor that scans for `@BrowserCallable` on existing CDI service
+`dev.motu:apt` is an annotation processor that scans for `@BrowserCallable` on existing CDI service
 beans/methods and emits `motu-manifest.json` at compile time (Java type → TypeScript type
 mapping, `@Roles` extraction). `@motu/codegen` turns that manifest into the typed `@motu/contract`
-package. `motu-runtime`'s `MotuEndpoint` dispatches browser calls to the exact same CDI
+package. `dev.motu:endpoint`'s `MotuEndpoint` dispatches browser calls to the exact same CDI
 contextual reference the rest of the app would use, so the host's existing `@Roles`
 interceptor fires unchanged — motu never reimplements authorization, it only translates the
 outcome to an HTTP status.
@@ -985,7 +985,7 @@ no setup. Pick the transport in three layers, most specific first:
 To browse live data, log in once at `https://localhost:8443/api`, then open the lagoon app
 and switch the pill to HTTP (or start it with `MOTU_TRANSPORT=http`).
 
-**When you still need an EAR redeploy:** only for **Java/backend** changes — `motu-runtime` (e.g.
+**When you still need an EAR redeploy:** only for **Java/backend** changes — `dev.motu:endpoint` (e.g.
 the argument binder), `@BrowserCallable` annotations, or a regenerated contract. The member-list
 seam even taps the legacy `/member/search` endpoint through a channel, so it needs no motu
 dispatcher deployed to iterate.

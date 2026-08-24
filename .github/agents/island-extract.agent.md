@@ -119,7 +119,7 @@ generated contract on a React host.
 
 - If a matching `@BrowserCallable` method already exists in the contract, use it.
 - If not, annotate the CDI service method in the backend with `@BrowserCallable` (and `@Roles` as
-  appropriate — motu never reimplements authorization), rebuild the backend so `motu-apt` emits a
+  appropriate — motu never reimplements authorization), rebuild the backend so `dev.motu:apt` emits a
   fresh `motu-manifest.json`, then regenerate:
 
   ```bash

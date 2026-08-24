@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>dev.motu</groupId>
-    <artifactId>motu-runtime</artifactId>
+    <artifactId>endpoint</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>motu-runtime</name>
+    <name>motu endpoint</name>
     <description>Thin adapter proxy exposing existing CDI service beans to the browser without reimplementing authorization.</description>
 
     <properties>
@@ -18,7 +18,7 @@
     </properties>
 
     <dependencies>
-        <!-- Provided by the WildFly container. motu-runtime never bundles the EE API. -->
+        <!-- Provided by the WildFly container. This module never bundles the EE API. -->
         <dependency>
             <groupId>jakarta.platform</groupId>
             <artifactId>jakarta.jakartaee-api</artifactId>

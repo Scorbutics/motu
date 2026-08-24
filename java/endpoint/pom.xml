@@ -31,8 +31,17 @@
         <plugins>
             <!-- Bundle the freshly-built frontend bridge.js into the jar (WebJar approach), so the
                  embed is a single self-contained artifact and survives host WAR rebuilds/restarts.
-                 The committed copy under src/main/resources is a fallback; this overwrites it with
-                 the latest Vite output when present. -->
+
+                 THE SOURCE PATH WAS `../apps/bridge/dist`, AND `apps/` HAS NOT EXISTED FOR A LONG
+                 TIME. maven-resources-plugin skips a missing directory without failing, so the jar
+                 has been shipping with no bridge.js at all — and the "committed copy under
+                 src/main/resources" this comment used to claim as a fallback was never committed
+                 either, so there was nothing to fall back to. Repointed at the real output.
+
+                 STILL AN OPEN QUESTION, deliberately left rather than decided here: this couples the
+                 framework jar's build to the DEMO app's Vite output. The alternatives are to commit a
+                 real fallback and drop the plugin, or to make a missing bundle fail the build instead
+                 of vanishing quietly. Repointing restores the intended behaviour without choosing. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
@@ -48,7 +57,7 @@
                             <overwrite>true</overwrite>
                             <resources>
                                 <resource>
-                                    <directory>${project.basedir}/../apps/bridge/dist</directory>
+                                    <directory>${project.basedir}/../../demo-app/roots/bridge/dist</directory>
                                     <includes>
                                         <include>bridge.js</include>
                                     </includes>

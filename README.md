@@ -232,10 +232,11 @@ Two things deliberately do **not** follow the brand, because they are readouts r
 ## Layout
 
 ```
-motu-runtime/   Backend adapter JAR (deployed in the EAR): @BrowserCallable annotation,
+java/                     # the framework's JavaEE half (Maven; generic, not ocean-specific)
+  endpoint/      Backend adapter JAR (deployed in the EAR): @BrowserCallable annotation,
                  MotuRegistry, MotuEndpoint dispatcher, MotuAssetEndpoint (serves bridge.js).
                  Invokes existing CDI beans through the container so @Roles/RolesInterceptor fire.
-motu-apt/       Annotation processor emitting motu-manifest.json for @BrowserCallable methods
+  apt/           Annotation processor emitting motu-manifest.json for @BrowserCallable methods
                  (Java -> TS type mapping, @Roles extraction).
 packages/                 # the framework (published @motu/* packages)
   runtime/       Transport seam: configure(), call(), HttpTransport, MockTransport (+ recorder).
@@ -279,7 +280,17 @@ pnpm build:bridge      # produces demo-app/roots/bridge/dist/bridge.js (the embe
 pnpm dev:lagoon        # standalone lagoon for design iteration (mock data, no backend)
 ```
 
-`motu-runtime` / `motu-apt` build with Maven (`mvn install`) and are consumed by the host app.
+The Java half builds with Maven — `cd java && mvn install` builds both — and is consumed by the host
+app. It lives at the root rather than under `packages/` because `packages/` IS the pnpm workspace: the
+workspace globs, the root tsconfig's references and the CLI's no-install links all read `packages/*`
+as npm packages, and a Maven subtree inside it would make the word mean two things.
+
+The `motu-` prefix is dropped wherever a namespace already carries it — the directory sits under
+`java/`, and the Maven coordinate is `dev.motu:endpoint`, for the same reason `@motu/core` is not
+`@motu/motu-core`. It is KEPT on the class names (`MotuEndpoint`, `MotuRegistry`) and on
+`motu-manifest.json`, which land in a HOST application's namespace and its `target/classes`, where
+`Endpoint` would collide with `jakarta.websocket.Endpoint`. `@BrowserCallable` stays unprefixed: it
+reads as the host's own vocabulary, which is the point of it.
 
 ## The motu CLI (agentic workflow)
 

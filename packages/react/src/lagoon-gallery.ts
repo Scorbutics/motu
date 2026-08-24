@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markCoverageSandbox } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
@@ -190,8 +190,8 @@ export function startLagoon(opts: StartLagoonOptions): void {
 // THE LAGOON IS NOT PRODUCTION, and coverage must know it before any region mounts. A lagoon that
 // beacons posts the states its own FLOWS produce into the corpus, and the next comparison reports
 // them as covered in production — the tool validating itself, with a report that looks better rather
-// than broken. The fold still runs; only egress is refused. See markCoverageSandbox.
-markCoverageSandbox();
+// than broken. The fold still runs; only egress is refused. See markSandbox.
+markSandbox();
   if (opts.isolation) setDefaultIsolation(opts.isolation);
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(config.chrome ?? {});

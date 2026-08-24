@@ -419,7 +419,7 @@ export function ensureNoInstallLinks(root, motuRoot) {
   // resolved motu's files by their real path and so fell through to motu's own workspace copy. A host
   // that aliases `@motu/*` to source instead — the arrangement Next and Angular both want — resolves
   // from its own tree and gets an unresolved import from inside a package it never named.
-  const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay', 'chrome'];
+  const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay', 'chrome', 'coverage'];
   let made = 0;
   for (const name of wanted) {
     const target = resolve(motuRoot, 'packages', name);

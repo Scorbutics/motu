@@ -89,35 +89,7 @@ export type {
   IslandDefinition,
 } from './island';
 
-// WHICH STATES A REGION HAS ACTUALLY BEEN IN — the coverage seam. See ./coverage.ts for why this is a
-// fingerprint rather than a recording, and why a region (whose keys are declared) is the one thing in
-// an application whose state space is small enough to count.
-export {
-  fingerprintRegion,
-  fingerprintId,
-  keyState,
-  compareCoverage,
-  diffFromNearest,
-  CoverageRecorder,
-  declaredRegionKeys,
-  observeRegionCoverage,
-  beaconSink,
-  configureCoverage,
-  markCoverageSandbox,
-  coverageEgressAllowed,
-  installRegionCoverage,
-  regionCoverage,
-  resetRegionCoverage,
-} from './coverage';
-export type {
-  KeyState,
-  RegionFingerprint,
-  FingerprintOptions,
-  CoverageEntry,
-  CoverageCorpus,
-  CoverageFinding,
-  CoverageReport,
-  RegionCoverageOptions,
-  RegionCoverageHandle,
-  CoverageConfig,
-} from './coverage';
+// WHICH STATES A REGION HAS ACTUALLY BEEN IN — the SEAM only. The fold, the fingerprint, the beacon
+// and the comparison are `@motu/coverage`, which core never imports: see ./sandbox.ts for why.
+export { markSandbox, isSandbox, setRegionCoverageInstaller, offerRegionToCoverage } from './sandbox';
+export type { RegionCoverageInstaller } from './sandbox';

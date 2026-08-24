@@ -227,6 +227,12 @@ importers:
         specifier: workspace:*
         version: link:../chrome
 
+  packages/coverage:
+    dependencies:
+      '@motu/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/debug-overlay:
     dependencies:
       '@motu/chrome':

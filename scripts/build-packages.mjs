@@ -28,6 +28,7 @@ const COMPILED = [
   'packages/types',
   'packages/core',
   'packages/runtime',
+  'packages/coverage',
   'packages/react',
   'packages/debug-overlay',
   'packages/adapters/angularjs',

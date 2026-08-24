@@ -5,7 +5,7 @@
 import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
-import { applyMotuChrome, bindEntries, markCoverageSandbox } from '@motu/core';
+import { applyMotuChrome, bindEntries, markSandbox } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
@@ -223,8 +223,8 @@ export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
 // THE LAGOON IS NOT PRODUCTION, and coverage must know it before any region mounts. A lagoon that
 // beacons posts the states its own FLOWS produce into the corpus, and the next comparison reports
 // them as covered in production — the tool validating itself, with a report that looks better rather
-// than broken. The fold still runs; only egress is refused. See markCoverageSandbox.
-markCoverageSandbox();
+// than broken. The fold still runs; only egress is refused. See markSandbox.
+markSandbox();
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(opts.chrome ?? {});
   // THE PROJECT'S OWN BOOT HOOK, on the focused entry too.

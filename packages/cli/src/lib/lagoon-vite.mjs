@@ -202,6 +202,7 @@ export function noInstallAliases(paths) {
     // changed.
     { find: /^@motu\/chrome\/react$/, replacement: motu('packages/chrome/src/react/index.tsx') },
     { find: /^@motu\/core$/, replacement: motu('packages/core/src/index.ts') },
+    { find: /^@motu\/coverage$/, replacement: motu('packages/coverage/src/index.ts') },
     { find: /^@motu\/react$/, replacement: motu('packages/react/src/index.ts') },
     { find: /^@motu\/react\/define$/, replacement: motu('packages/react/src/defineReactElement.ts') },
     { find: /^@motu\/runtime\/mock$/, replacement: motu('packages/runtime/src/mock.ts') },

@@ -66,7 +66,7 @@ export function renderRegistry(islands, islandsDir, isolation, coverage = null) 
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and \`import.meta.glob\` is Vite-only.
 import type { ElementSpec } from '@motu/react';
-import { setDefaultIsolation${coverage?.enabled ? ', configureCoverage' : ''} } from '@motu/core';
+import { setDefaultIsolation } from '@motu/core';${coverage?.enabled ? `\nimport { configureCoverage } from '@motu/coverage';` : ''}
 ${rows.map((r) => r.import).join('\n')}
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
@@ -82,12 +82,16 @@ ${rows.map((r) => r.import).join('\n')}
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('${isolation}');
 ${coverage?.enabled ? `
-// COVERAGE, from motu.config.json, applied the same way and for the same reasons.
+// COVERAGE, from motu.config.json.
+//
+// THIS IMPORT IS THE SWITCH. \`@motu/coverage\` is a package of its own precisely so that a project
+// with coverage off never names it — and a module nothing imports is a module no bundler ships. Core
+// only holds a seam (\`offerRegionToCoverage\`) which stays a dead branch until this line fills it.
 //
 // It arrives by IMPORT rather than as a build constant. \`__MOTU_DEBUG__\` exists so the seam lens'
-// whole import tree dead-code-eliminates — the lens must not ship. Coverage is meant to ship, so
-// elimination is not the goal, and a define would oblige every host's bundler to declare a global or
-// fail with a ReferenceError. No application file mentions coverage; this generated one does.
+// whole import tree dead-code-eliminates — the lens must not ship. Coverage is MEANT to ship, so a
+// define would only oblige every host's bundler to declare a global or fail with a ReferenceError.
+// No application file mentions coverage; this generated one does.
 //
 // Which of a region's keys are closed sets is NOT here: that is a fact about the key, declared on the
 // archipelago beside it.

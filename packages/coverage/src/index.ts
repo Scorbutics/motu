@@ -299,7 +299,7 @@ export function diffFromNearest(
 
 // --- THE BEACON ----------------------------------------------------------------------------------
 
-import { archipelagoConfigs, getArchipelagoStore, bindEntries, writtenKeys } from './archipelago';
+import { archipelagoConfigs, getArchipelagoStore, bindEntries, writtenKeys, isSandbox, setRegionCoverageInstaller } from '@motu/core';
 
 /**
  * Every region key the archipelago declares: what islands READ (bind), what they PRODUCE (writes),
@@ -548,34 +548,37 @@ export interface CoverageConfig {
 }
 
 let coverageConfig: CoverageConfig = {};
-let sandbox = false;
 const installed = new Map<string, RegionCoverageHandle>();
 
-/** Apply the project's coverage configuration. Called by the generated registry; idempotent. */
+/**
+ * Turn coverage on for this application — the ONE call the generated island registry makes, and the
+ * only reason this package is ever imported.
+ *
+ * That is the whole point of it living outside `@motu/core`. Core called `installRegionCoverage`
+ * unconditionally from `defineArchipelago`, which put this module in every project's graph whether or
+ * not the project had enabled anything: no bundler can drop a module something calls. Here, a project
+ * with coverage off never generates the import, and pays nothing.
+ *
+ * Core keeps only a seam — see `setRegionCoverageInstaller` — so it still knows nothing about this
+ * package. The same shape as the seam lens, which core also never imports.
+ */
 export function configureCoverage(config: CoverageConfig): void {
   coverageConfig = config ?? {};
+  setRegionCoverageInstaller((regionId, opts) => installRegionCoverage(regionId, opts));
 }
 
 /**
- * THIS IS THE LAGOON. Called by both lagoon entries, and the reason it is a framework rule rather
- * than a config field.
+ * Whether egress is permitted. False in the lagoon, and false with nowhere to send anything.
  *
- * `enabled: true` lives in a committed file, so it is true in the lagoon too — and a lagoon that
- * beacons records exactly the states the FLOWS produce and posts them into the corpus. The next
- * comparison then reports those states as covered in production. The tool would silently validate
- * itself, and the report would look better rather than broken, which is the worst way for a check to
- * fail. No configuration should be able to arrange that.
- *
- * The FOLD is still allowed here: it costs nothing and a preview that knows which states it reached
- * is useful. Only egress is refused.
+ * THE LAGOON RULE IS NOT A CONFIG FIELD, because no configuration should be able to arrange the
+ * alternative: `enabled: true` lives in a committed file, so it is true in the lagoon too, and a
+ * lagoon that beacons posts the states its own FLOWS produce into the corpus. The next comparison
+ * then reports them as covered in production — the tool validating itself, with a report that looks
+ * better rather than broken. `isSandbox()` is core's, set by the lagoon entries before anything
+ * mounts. The FOLD still runs there; only egress is refused.
  */
-export function markCoverageSandbox(): void {
-  sandbox = true;
-}
-
-/** Whether egress is permitted. False in the lagoon, and false with nowhere to send anything. */
 export function coverageEgressAllowed(): boolean {
-  return !sandbox && !!coverageConfig.endpoint;
+  return !isSandbox() && !!coverageConfig.endpoint;
 }
 
 /**

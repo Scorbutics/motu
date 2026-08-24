@@ -88,3 +88,24 @@ export type {
   IslandRenderer,
   IslandDefinition,
 } from './island';
+
+// WHICH STATES A REGION HAS ACTUALLY BEEN IN — the coverage seam. See ./coverage.ts for why this is a
+// fingerprint rather than a recording, and why a region (whose keys are declared) is the one thing in
+// an application whose state space is small enough to count.
+export {
+  fingerprintRegion,
+  fingerprintId,
+  keyState,
+  compareCoverage,
+  diffFromNearest,
+  CoverageRecorder,
+} from './coverage';
+export type {
+  KeyState,
+  RegionFingerprint,
+  FingerprintOptions,
+  CoverageEntry,
+  CoverageCorpus,
+  CoverageFinding,
+  CoverageReport,
+} from './coverage';

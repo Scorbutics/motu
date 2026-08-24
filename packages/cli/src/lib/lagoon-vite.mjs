@@ -195,6 +195,12 @@ export function noInstallAliases(paths) {
     // Plain ESM, no TypeScript: @motu/core imports the palette from here, and so does the lagoon
     // HOST, which runs under bare node. One package both can read is the point of it.
     { find: /^@motu\/chrome$/, replacement: motu('packages/chrome/src/index.mjs') },
+    // The React kit. It is the one COMPILED corner of an as-authored package, so `@motu/chrome/react`
+    // resolves to `dist/react` through the exports map — which would make every kit edit invisible
+    // until someone re-ran the package build. Aliased to source like every other @motu package here,
+    // for the same reason: the lagoon is where motu's own chrome is looked at while it is being
+    // changed.
+    { find: /^@motu\/chrome\/react$/, replacement: motu('packages/chrome/src/react/index.tsx') },
     { find: /^@motu\/core$/, replacement: motu('packages/core/src/index.ts') },
     { find: /^@motu\/react$/, replacement: motu('packages/react/src/index.ts') },
     { find: /^@motu\/react\/define$/, replacement: motu('packages/react/src/defineReactElement.ts') },

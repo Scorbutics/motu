@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
+import { Bay } from "@motu/chrome/react"
 
 /**
  * WHERE THE CONSOLE'S PARTS SIT — once, for the page and for the lagoon.
@@ -76,10 +77,20 @@ export function ReviewLayout({
 
   return (
     <div className={`rv${sheetOpen ? " rv-sheet-open" : ""}${dragging ? " rv-sheet-dragging" : ""}`}>
-      <header className="rv-head">
-        <div className="rv-head-main">
-          {/* PHONE ONLY. On a wide screen the projects are already on screen, so a control to reveal
-              them would be a button that does nothing visible. */}
+      {/* THE BAY, from motu's kit — not a second drawing of it.
+          This header spelled out the same `linear-gradient(160deg, var(--w-deep), var(--w-mid) 60%,
+          var(--w-shallow))` the framework's bay already carried, and missed the crest and the mono
+          readout face that go with it. Two pieces of motu chrome a person sees at once — a published
+          page and the console that reviews it — read as two products when only one of them has the
+          foam. `compact`, because this is a screen's header rather than a page's masthead. */}
+      <Bay
+        className="rv-head"
+        compact
+        title={title}
+        titleAs="h1"
+        leading={
+          /* PHONE ONLY. On a wide screen the projects are already on screen, so a control to reveal
+             them would be a button that does nothing visible. */
           <button
             type="button"
             className="rv-sheet-toggle"
@@ -89,10 +100,10 @@ export function ReviewLayout({
           >
             <span aria-hidden="true">☰</span> Projects
           </button>
-          <h1>{title}</h1>
-        </div>
+        }
+      >
         {summary}
-      </header>
+      </Bay>
 
       {error}
 

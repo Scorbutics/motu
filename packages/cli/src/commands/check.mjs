@@ -169,6 +169,14 @@ export async function checkCommand(argv) {
   console.log(color.bold('\nmotu check — removal\n'));
   if (!removal) {
     console.log(`  ${color.dim('–')} ${color.dim('skipped'.padEnd(20))} ${color.dim('structure checks failed first')}`);
+  } else if (removal.skipped) {
+    // A SKIP, NOT A TICK. The project declared `removable: false`, so nothing was examined — and
+    // rendering that as `✓ removable  0 deleted, 0 unwrapped` is a green light from an empty search,
+    // which is the exact failure this command was rewritten to stop reporting about itself.
+    console.log(
+      `  ${color.dim('–')} ${color.dim('removable'.padEnd(20))} ` +
+        color.dim('not claimed — the project declares `removable: false`, so motu is meant to be load-bearing here'),
+    );
   } else if (removal.pass) {
     const ejected = removal.ejected.reduce((n, e) => n + e.notes.length, 0);
     console.log(
@@ -202,7 +210,14 @@ export async function checkCommand(argv) {
   }
   console.log(
     pass
-      ? color.green(color.bold('PASS')) + color.dim(`  ${islandResults.length} island(s), ${regionResults.length} region(s), removable`)
+      ? color.green(color.bold('PASS')) +
+        color.dim(
+          `  ${islandResults.length} island(s), ${regionResults.length} region(s)` +
+            // Only claim removability when it was actually proved. The verdict line is the one thing
+            // a reader takes away, and "removable" on a run that never examined the host is the same
+            // empty-search claim the line above it was just fixed to stop making.
+            (removal?.skipped ? '' : ', removable'),
+        )
       : color.red(color.bold('FAIL')) + color.dim('  see above'),
   );
   process.exit(pass ? 0 : 1);

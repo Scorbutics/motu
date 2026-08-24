@@ -13,5 +13,6 @@
   "isolation": "light",
   "publishAs": {
     "repo": "motu-review"
-  }
+  },
+  "removable": false
 }

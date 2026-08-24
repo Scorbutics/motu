@@ -1,3 +1,4 @@
+import { Button, Empty, Panel, PanelHead } from "@motu/chrome/react"
 import type { Shot } from "@/lib/host"
 import type { ShotRef } from "@/lib/review-region"
 
@@ -15,6 +16,10 @@ const MODES: { id: Mode; label: string }[] = [
  * Side by side was the first instinct and it is wrong at these sizes: a 1280px baseline beside a
  * 1280px actual is two thumbnails, and the whole question is "what moved". Toggling in place keeps
  * the frame still so the eye does the diffing.
+ *
+ * THE FRAME IS THE KIT'S PANEL — the same frosted sheet the seam lens floats over a page. This card
+ * had its own border, radius and head rule, one pixel and two hundredths of an alpha away from the
+ * framework's; the two were meant to look like one product and did not quite.
  */
 export function DiffViewer({
   shot = null,
@@ -36,7 +41,7 @@ export function DiffViewer({
   shotUrl?: (hash: string) => string
   onViewChanged?: (mode: Mode) => void
 }) {
-  if (!shot) return <div className="dv-empty">Pick a shot to see what changed.</div>
+  if (!shot) return <Empty pad="block" className="dv-empty">Pick a shot to see what changed.</Empty>
 
   const detail = shots.find((s) => s.island === shot.island && s.shot === shot.shot) ?? null
   const hash = mode === "accepted" ? (detail?.accepted ?? null) : (detail?.last?.hash ?? null)
@@ -48,36 +53,35 @@ export function DiffViewer({
         : null
 
   return (
-    <div className="dv">
-      <div className="dv-head">
-        <b>{shot.island}</b>
-        <span>{shot.shot}</span>
+    <Panel shape="window" className="dv">
+      <PanelHead title={shot.island} sub={<span className="dv-shot">{shot.shot}</span>} className="dv-head">
         <div className="dv-modes" role="group" aria-label="Which image to show">
           {MODES.map((m) => (
-            <button
+            <Button
               key={m.id}
-              type="button"
+              shape="pill"
+              weight="quiet"
               aria-current={m.id === mode}
               disabled={m.id === "diff" && detail?.status !== "changed"}
               onClick={() => onViewChanged?.(m.id)}
             >
               {m.label}
-            </button>
+            </Button>
           ))}
         </div>
-      </div>
+      </PanelHead>
       {mode === "diff" ? (
         // The diff image is produced locally by `motu island snapshot`, not by the host — so the
         // viewer says where to look rather than pretending it has one.
-        <div className="dv-empty">
+        <Empty pad="block" className="dv-empty">
           The pixel diff lives beside the run that produced it:
           <code>.motu/snapshots/{shot.island}/{shot.shot}.diff.png</code>
-        </div>
+        </Empty>
       ) : missing ? (
-        <div className="dv-empty">{missing}</div>
+        <Empty pad="block" className="dv-empty">{missing}</Empty>
       ) : (
         <img className="dv-img" alt={`${shot.island} ${shot.shot} (${mode})`} src={shotUrl?.(hash!) ?? ""} />
       )}
-    </div>
+    </Panel>
   )
 }

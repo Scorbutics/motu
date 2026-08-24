@@ -628,14 +628,28 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
               const el = document.querySelector(`[data-motu-slot="${slot}"]`);
               return el ? perceivable(el) : null;
             };
+            /**
+             * CASE-INSENSITIVE, because `innerText` reports what `text-transform` produced.
+             *
+             * A flow asserts that DATA reached a slot. Whether the slot's stylesheet happens to
+             * uppercase it is a presentational choice that can change without the data flow changing
+             * at all — and an assertion that breaks when a caption's letter-case is restyled is
+             * asserting the wrong thing. Found the day the focused lagoon started applying the
+             * project's stylesheet: every flow asserting "changed" or "week-actions" failed against
+             * "CHANGED" and "WEEK-ACTIONS", having passed for as long as the page rendered naked.
+             *
+             * It does not weaken the check. A wrong value and another island's text both still fail;
+             * only the casing stops mattering.
+             */
+            const contains = (haystack, needle) => haystack.toLowerCase().includes(String(needle).toLowerCase());
             await settled(() =>
               Object.entries(st.expectRender ?? {}).every(([slot, want]) => {
                 const text = renderText(slot);
                 if (text === null) return false;
                 const wants = typeof want === 'string' ? { text: want } : want;
                 return (
-                  (wants.text == null || text.includes(wants.text)) &&
-                  (wants.notText == null || !text.includes(wants.notText))
+                  (wants.text == null || contains(text, wants.text)) &&
+                  (wants.notText == null || !contains(text, wants.notText))
                 );
               }),
             );
@@ -648,10 +662,10 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
               }
               const text = perceivable(el);
               const wants = typeof want === 'string' ? { text: want } : want;
-              if (wants.text != null && !text.includes(wants.text)) {
+              if (wants.text != null && !contains(text, wants.text)) {
                 renderMismatches.push({ key: `render:${slot}`, expected: `text containing ${JSON.stringify(wants.text)}`, actual: text });
               }
-              if (wants.notText != null && text.includes(wants.notText)) {
+              if (wants.notText != null && contains(text, wants.notText)) {
                 renderMismatches.push({ key: `render:${slot}`, expected: `text NOT containing ${JSON.stringify(wants.notText)}`, actual: text });
               }
             }
@@ -797,6 +811,16 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
       if (ready) break;
       await sleep(250);
     }
+    // FREEZE MOTION BEFORE MEASURING, the same way the snapshot lane does and for the same reason.
+    //
+    // axe reads computed colour, and an element mid-fade has an opacity the design never ships. The
+    // kit's lists swim in on a stagger, so re-seeding a scenario restarts the entrance and axe caught
+    // whichever row was still transparent — reporting a "serious" contrast failure on a colour that
+    // measures 5.3:1 at rest, and naming a different nth-child on each run. A check whose findings
+    // move between runs is a check people learn to ignore.
+    await page.addStyleTag({
+      content: '*,*::before,*::after{animation:none!important;transition:none!important}',
+    });
     await page.addScriptTag({ content: axeSource });
 
     const findings = [];
@@ -958,6 +982,11 @@ export async function auditRegionLagoon({ id, port = 5199, states = [], viewport
         // heading order, contrast — does not change with width, and running it per viewport triples
         // the cost of the slowest check for the same answer.
         await page.setViewportSize({ width: viewports[viewports.length - 1]?.width ?? 1280, height: 900 });
+        // Same freeze as the island lane: axe reads computed colour, and a region re-lays-out on a
+        // viewport change, so its lists start their entrance again right before this runs.
+        await page.addStyleTag({
+          content: '*,*::before,*::after{animation:none!important;transition:none!important}',
+        });
         await sleep(200);
         await page.addScriptTag({ content: axeSource });
         violations = await page.evaluate(async () => {

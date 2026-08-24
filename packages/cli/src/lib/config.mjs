@@ -122,6 +122,20 @@ export function loadMotuConfig() {
      */
     hostSources: Array.isArray(cfg.hostSources) ? cfg.hostSources : undefined,
     /**
+     * Does this project CLAIM motu is removable?
+     *
+     * `removal-check` asks one question — delete motu, does the application still compile? — and it
+     * is the right question for a host that ADOPTED motu: the promise is that islands leave no
+     * runtime trace. It is not a question motu's own tools can answer. The baseline review console
+     * composes regions with `createRegion` and paints from `@motu/chrome/react`; motu is meant to be
+     * load-bearing there, and it will never compile without it.
+     *
+     * Reported as a SKIP rather than a pass, because a project opting out has not proved anything —
+     * and reported at all, because an opt-out nobody can see is how a check quietly stops running.
+     * Default true: a host must say so deliberately, and the answer for an adopting app stays FAIL.
+     */
+    removable: cfg.removable !== false,
+    /**
      * WHO THIS PROJECT IS ON A LAGOON HOST, when the git repository is the wrong answer.
      *
      * Publishing normally identifies a project by its git remote, which is right until a repository

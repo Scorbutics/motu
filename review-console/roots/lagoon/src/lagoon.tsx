@@ -6,7 +6,7 @@ import type { LagoonOverrides } from '@motu/react';
 import { channelFrom } from '@motu/core';
 import { ReviewRegionFrame, reviewSeed } from './regions/review';
 import { reviewArchipelago } from '../../../src/archipelagos/review/review.archipelago.js';
-import { installMotuChrome } from '../../../src/shared/motu-chrome.js';
+import { installMotuChrome } from '@motu/chrome';
 import { shotsFixturePort } from '../../../src/shared/review-evidence.js';
 
 /** Initial store contents per archipelago id, so bound islands render on first paint. */

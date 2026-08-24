@@ -1,3 +1,4 @@
+import { Empty, Gauge, Grow, List, ListItem, Pill, Row } from "@motu/chrome/react"
 import type { RepoSummary, Shot } from "@/lib/host"
 
 /**
@@ -10,6 +11,11 @@ import type { RepoSummary, Shot } from "@/lib/host"
  * down the left of each row is depth: faint for a project sitting still, full and lit for the one you
  * are reviewing. The counts are pills because they are FACTS about a project, and a fact you can read
  * without leaning in is worth more than one set in muted 11px grey.
+ *
+ * ALL FOUR OF THOSE SHAPES ARE THE KIT'S NOW. The gauge, the staggered entrance, the card row and the
+ * pill were written here from literals that happened to equal motu's tokens — and the seam lens had
+ * grown the same four independently. `--line` had already drifted to .14 against the framework's .12
+ * once; the way that stops happening again is for there to be nothing here to drift.
  */
 export function RepoPicker({
   repos = [],
@@ -25,9 +31,9 @@ export function RepoPicker({
 }) {
   if (!repos.length) {
     return (
-      <div className="rp-empty">
+      <Empty className="rp-empty">
         No project has published a baseline yet — run <code>motu island snapshot --all --remote</code>.
-      </div>
+      </Empty>
     )
   }
   // Only the selected repo has shots in the region, so only it can show a pending count. Showing an
@@ -35,34 +41,38 @@ export function RepoPicker({
   const pending = shots.filter((s) => s.status !== "match").length
 
   return (
-    <ul className="rp-list">
+    <List className="rp-list">
       {repos.map((r, i) => {
         const current = r.repo === value
-        const [owner, name] = r.repo.includes("/") ? [r.repo.slice(0, r.repo.indexOf("/")), r.repo.slice(r.repo.indexOf("/") + 1)] : ["", r.repo]
+        const cut = r.repo.indexOf("/")
+        const [owner, name] = cut >= 0 ? [r.repo.slice(0, cut), r.repo.slice(cut + 1)] : ["", r.repo]
         return (
-          <li key={r.repo} style={{ ["--i" as string]: String(i) }}>
-            <button type="button" className="rp-item" aria-current={current} onClick={() => onRepoSelected?.(r.repo)}>
-              <span className="rp-gauge" aria-hidden="true" />
-              <span className="rp-body">
+          <ListItem key={r.repo} index={i}>
+            <Row as="button" surface="card" current={current} className="rp-item" onClick={() => onRepoSelected?.(r.repo)}>
+              <Gauge />
+              <Grow className="rp-body">
                 <b>
                   {owner && <span className="rp-owner">{owner}/</span>}
                   {name}
                 </b>
                 <span className="rp-stats">
-                  <em className="rp-pill">
+                  <Pill>
                     {r.slugs.length} lagoon{r.slugs.length === 1 ? "" : "s"}
-                  </em>
-                  <em className="rp-pill">
+                  </Pill>
+                  <Pill>
                     {r.records} record{r.records === 1 ? "" : "s"}
-                  </em>
-                  {current && pending > 0 && <em className="rp-pill is-pending">{pending} to review</em>}
-                  {current && shots.length > 0 && pending === 0 && <em className="rp-pill is-settled">all settled</em>}
+                  </Pill>
+                  {/* The two that are a VERDICT rather than a count, in the kit's own tones — which
+                      are the colours this console already used under the names `--changed` and
+                      `--new`. */}
+                  {current && pending > 0 && <Pill tone="warn">{pending} to review</Pill>}
+                  {current && shots.length > 0 && pending === 0 && <Pill tone="ok">all settled</Pill>}
                 </span>
-              </span>
-            </button>
-          </li>
+              </Grow>
+            </Row>
+          </ListItem>
         )
       })}
-    </ul>
+    </List>
   )
 }

@@ -51,9 +51,21 @@ export interface LagoonBootstrapOptions {
     channels?: Record<string, DeclaredChannel[]>;
     layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
     providers?: Record<string, (children: ReactNode, slot: string) => ReactNode>;
+    /**
+     * What the PAGE passes on an island element — the lagoon's stand-in for a prop that is not
+     * region state (a URL builder, a formatter). Honoured by the gallery since it existed; absent
+     * from this type, and therefore silently dropped here, which is why an island whose picture
+     * needs one rendered a blank frame in every check while the gallery showed it.
+     */
+    props?: Record<string, Record<string, Record<string, unknown>>>;
+    /**
+     * The project's boot hook. Same reason as `props`: the gallery calls it, the type here did not
+     * name it, so it was never called on the entry every check drives.
+     */
+    setup?: () => void;
   };
   /** Every archipelago, so an `island:` target can find the region that declares it. */
-  archipelagos?: Record<string, { islands: { element: string; bind?: Record<string, string> }[] }>;
+  archipelagos?: Record<string, { islands: { slot?: string; element: string; bind?: Record<string, string> }[] }>;
   /** Element id to append the archipelago into (default 'lagoon'). */
   mountId?: string;
   /** When set, every contract call fails with this HTTP status — verify's error-resilience mount. */
@@ -163,9 +175,66 @@ function translateRegionSeed(
   return out;
 }
 
+/**
+ * THE ISLAND STYLESHEET, on the React path.
+ *
+ * `css` reaches `defineLagoon` on the ELEMENT path and reached nothing at all on the React one — a
+ * project with `"mount": "react"` bundled its `shared/styles.css` and never inserted it here. The
+ * gallery fixed exactly this and the fix was never carried across, so the focused entry — the one
+ * `motu island verify`, the flow checks and both snapshot lanes drive — rendered every island naked.
+ *
+ * Light DOM, so one <style> in the head; the element path adopts the same text per shadow root and
+ * must not get a second copy, which is what the `mount` test is for. Same id as the gallery uses, so
+ * whichever entry runs first wins and neither doubles up.
+ */
+function installIslandStyles(opts: LagoonBootstrapOptions): void {
+  if (opts.mount !== 'react' || !opts.css || typeof document === 'undefined') return;
+  const ID = 'motu-island-styles';
+  if (document.getElementById(ID)) return;
+  const style = document.createElement('style');
+  style.id = ID;
+  style.textContent = opts.css;
+  document.head.appendChild(style);
+}
+
+/**
+ * Translate the region's per-slot PROPS for whatever is actually mounted.
+ *
+ * Same shape of problem as `translateRegionSeed`, and the same cause: a lone island is mounted
+ * through a synthesised one-slot config whose slot is literally `'lagoon'`, so the region's own slot
+ * key ("diff-viewer") matches nothing and the island is mounted without the prop. The review
+ * console's viewer takes its image URL that way — it rendered `<img src="">` in every island check
+ * and every baseline, while the gallery, which mounts the real region, showed the picture.
+ */
+function propsFor(
+  target: LagoonTarget,
+  regionId: string | undefined,
+  opts: LagoonBootstrapOptions,
+): Record<string, Record<string, unknown>> | undefined {
+  const bySlot = regionId ? opts.overrides?.props?.[regionId] : undefined;
+  if (!bySlot) return undefined;
+  if (target.kind === 'archipelago') return bySlot;
+  const slot = opts.archipelagos?.[regionId!]?.islands?.find((i) => i.element === target.tag)?.slot;
+  const own = slot ? bySlot[slot] : undefined;
+  return own ? { lagoon: own } : undefined;
+}
+
 export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(opts.chrome ?? {});
+  // THE PROJECT'S OWN BOOT HOOK, on the focused entry too.
+  //
+  // The gallery has always called it (`startLagoon` -> `overrides.setup?.()`); this entry never did —
+  // and this is the entry EVERY CHECK DRIVES. `motu island verify`, the flow checks, `responsive`,
+  // `a11y` and both snapshot lanes all navigate to `lagoon.html`, so a project whose `setup` installs
+  // anything a render depends on was measured without it, forever, while the gallery a human opens
+  // looked correct. The review console installs motu's chrome sheet there: every one of its visual
+  // baselines was an unstyled page, and the checks were green because the baseline was unstyled too.
+  //
+  // Idempotent by contract — the gallery re-runs it on hot reload — so calling it here is safe even
+  // when both entries end up loaded.
+  opts.overrides?.setup?.();
+  installIslandStyles(opts);
   configure(
     opts.forceErrorStatus
       ? new FailingTransport(opts.forceErrorStatus)
@@ -233,6 +302,8 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElemen
       // NOT gated on the view the way `layout` is: providers are what an island cannot render
       // without, so a single-slot mount needs them exactly as much as the region does.
       providers: regionId ? opts.overrides?.providers?.[regionId] : undefined,
+      // Per-slot props the page supplies and the region does not carry — re-keyed for a lone island.
+      props: propsFor(target, regionId, opts),
       fit: target.kind === 'island' ? target.fit : undefined,
       // The harness drives DECLARED wires in 'mountpoints', where every slot the archipelago names is
       // framed on its own. In 'region' the app's arrangement decides what exists — an island behind a

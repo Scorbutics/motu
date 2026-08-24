@@ -8,14 +8,20 @@
 // Everything here derives from ./tokens.mjs. Nothing in this file may hardcode a colour — a literal
 // here is the beginning of the second palette this package exists to prevent.
 import { MOTU_CHROME, MOTU_WATER, MOTU_SURFACE, MOTU_INK, MOTU_SHADOW, MOTU_TYPE, MOTU_RADIUS, MOTU_MOTION } from './tokens.mjs';
+import { motuKitCss } from './kit.mjs';
 
 /**
  * The custom properties every other rule reads. Emitted as real properties rather than substituted
  * values so a page can be re-themed at runtime exactly as `applyMotuChrome` re-themes a lagoon.
+ *
+ * `scope` is where they land. A document declares them on `:root`; the seam lens declares them on the
+ * `:host` of its closed shadow root, because nothing outside that root reaches in — including these.
+ * It is the ONLY difference between painting a page and painting an overlay, which is why it is an
+ * argument here rather than a second copy of this function inside the overlay.
  */
-export function motuRootVars(state = 'mock') {
+export function motuRootVars(state = 'mock', scope = ':root') {
   const water = MOTU_WATER[state] ?? MOTU_WATER.mock;
-  return `:root {
+  return `${scope} {
   --motu-primary: ${MOTU_WATER.mock.accent};
   --motu-primary-deep: #0b5b55;
   --motu-on-primary: #fff;
@@ -132,48 +138,14 @@ export function motuSurfaceCss() {
   backdrop-filter: blur(14px) saturate(1.35);
   -webkit-backdrop-filter: blur(14px) saturate(1.35);
 }
-.motu-cap {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-  color: var(--ink-caption);
-}
-.motu-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: ${MOTU_RADIUS.row};
-  background: var(--surface-row);
-  border: 1px solid ${MOTU_SURFACE.line};
-  color: var(--ink);
-  text-decoration: none;
-}
-.motu-row:hover { border-color: var(--tide-accent); }
-.motu-row .grow { flex: 1; min-width: 0; }
-.motu-row small { color: var(--ink-muted); font-size: 11.5px; font-weight: 500; }
-/* Rows swim in from the edge, staggered, so a list assembles rather than appearing. */
-.motu-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.motu-list > * { animation: motu-swim ${MOTU_MOTION.swimIn} both; }
-@keyframes motu-swim { from { opacity: 0; transform: translateX(-8px); } }
+/* THE CAP, THE ROW, THE LIST AND THE PILL MOVED TO ./kit.mjs.
+   They were declared here AND there, and the kit's copies won on order alone: four shapes with two
+   definitions each, inside the one package whose whole job is to stop exactly that. The kit owns them
+   now, and the server's markup (./html.mjs) emits the attributes the kit reads.
+   What stays is the sheen's reduced-motion answer, which belongs to the bay above it. */
 @media (prefers-reduced-motion: reduce) {
-  .motu-list > *, .motu-bay .sheen { animation: none; }
-  .motu-bay .sheen { display: none; }
+  .motu-bay .sheen { animation: none; display: none; }
 }
-.motu-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 11px;
-  border: 0;
-  border-radius: ${MOTU_RADIUS.pill};
-  background: ${MOTU_CHROME.primary};
-  color: ${MOTU_CHROME.onPrimary};
-  font: 600 11px/1 ${MOTU_TYPE.family};
-  cursor: pointer;
-}
-.motu-pill[data-state="idle"] { background: rgba(255,255,255,.22); }
-.motu-pill[data-state="caution"] { background: ${MOTU_CHROME.caution}; }
 code, .motu-mono { font-family: ${MOTU_TYPE.mono}; font-size: 11.5px; }
 a { color: ${MOTU_CHROME.primaryDeep}; text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -194,7 +166,46 @@ body {
 `;
 }
 
-/** Everything, in the order a stylesheet wants it. */
+/**
+ * Everything, in the order a stylesheet wants it.
+ *
+ * The KIT is in here too, so a page that installs motu's chrome gets the SHAPES and not only the
+ * palette. That was the gap: the review console installed this sheet and then re-drew the bay, the
+ * pill and the empty state by hand, because the vocabulary it needed was not in what it installed.
+ */
 export function motuChromeCss(state = 'mock') {
-  return [motuRootVars(state), motuBaseCss(), motuWaterCss(), motuSurfaceCss()].join('\n');
+  return [motuRootVars(state), motuBaseCss(), motuWaterCss(), motuSurfaceCss(), motuKitCss()].join('\n');
+}
+
+/**
+ * The same language, for a SHADOW ROOT.
+ *
+ * The seam lens draws a fixed layer over somebody else's page from inside a closed shadow root, so it
+ * needs the tokens on `:host`, the `all: initial` guard, and none of `motuBaseCss` — there is no
+ * document to reset here, and styling `html, body` from inside a shadow root does nothing at all.
+ */
+export function motuShadowCss(state = 'mock', scope = ':host') {
+  return [motuRootVars(state, scope), motuKitCss(scope)].join('\n');
+}
+
+/**
+ * Put motu's chrome into the document, once.
+ *
+ * Idempotent, because the surfaces that need it have more than one entry: the review console calls it
+ * from the application root AND from the lagoon's `setup`, and a palette that arrives in only one is
+ * exactly the drift this package exists to remove, one level down.
+ *
+ * FIRST in the head, so an application's own stylesheet still wins where it means to override — the
+ * framework supplies the vocabulary, the app decides what to do with it.
+ *
+ * Lives here rather than beside the React components because it emits DOM, not JSX, and because
+ * `src/react/` is the one compiled corner of an otherwise as-authored package: a relative import
+ * reaching out of it would resolve from `dist/react/` at runtime, where the rest of this is not.
+ */
+export function installMotuChrome(state = 'mock') {
+  if (typeof document === 'undefined' || document.getElementById('motu-chrome')) return;
+  const style = document.createElement('style');
+  style.id = 'motu-chrome';
+  style.textContent = motuChromeCss(state);
+  document.head.prepend(style);
 }

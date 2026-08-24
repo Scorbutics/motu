@@ -1,0 +1,346 @@
+// The UI KIT: the shapes motu's own tools are built out of, as one stylesheet.
+//
+// WHY THIS EXISTS. `./css.mjs` gave the host's server-rendered pages a vocabulary — a bay, a panel, a
+// row, a pill. The two INTERACTIVE surfaces motu ships never used it, and each grew the whole thing
+// again from scratch:
+//
+//   the seam lens        `packages/debug-overlay` — its own `--ink: #22302c`, its own glass gradient,
+//                        its own `0 14px 40px rgba(11,111,104,.18)`. Character-for-character the
+//                        tokens, spelled as literals, inside a shadow root.
+//   the review console   installs `motuChromeCss()` into its <head> and then uses NONE of its
+//                        classes: `.rv-head` re-draws the bay's exact gradient, `.rp-pill` re-draws
+//                        the pill, `.sl-empty` re-draws the empty state.
+//
+// Three copies of one design language, and `css.mjs`' own header says why that is not survivable:
+// "a literal here is the beginning of the second palette this package exists to prevent."
+//
+// TWO GROUNDS, ONE VOCABULARY. The console paints a document; the lens paints a CLOSED SHADOW ROOT
+// over somebody else's page. That is the only real difference between them, and it is a difference
+// about ONE SELECTOR — where the custom properties are declared. So `motuKitCss({ scope })` takes it
+// as an argument rather than the two surfaces taking a copy each.
+//
+// PLAIN .mjs, like everything else here: `./css.mjs` composes it for the host, which runs under bare
+// node with no bundler, and `./react/` composes the same rules for the two React surfaces.
+import {
+  MOTU_CHROME,
+  MOTU_SURFACE,
+  MOTU_INK,
+  MOTU_SHADOW,
+  MOTU_TYPE,
+  MOTU_RADIUS,
+  MOTU_MOTION,
+  MOTU_VERDICT,
+} from './tokens.mjs';
+
+/**
+ * The kit's own custom properties, on whatever selector the surface declares them.
+ *
+ * `:root` for a document, `:host` for a shadow root. Everything below reads these and nothing below
+ * mentions the scope again — which is what lets one stylesheet serve a page and an overlay.
+ *
+ * The BRAND half is derived (`var(--motu-primary, …)`), so `applyMotuChrome` pointing motu at a
+ * host's colour moves the whole kit. The VERDICT half is not, for the reason MOTU_VERDICT gives.
+ */
+export function motuKitVars(scope = ':root') {
+  return `${scope} {
+  --ok: ${MOTU_VERDICT.ok};
+  --warn: ${MOTU_VERDICT.warn};
+  --broken: ${MOTU_VERDICT.broken};
+  --neutral: ${MOTU_VERDICT.neutral};
+  --ink-soft: #5c6b63;
+  --ink-faint: ${MOTU_INK.faint};
+  --mono: ${MOTU_TYPE.mono};
+  --sans: ${MOTU_TYPE.family};
+  /* The frosted ground every panel in the kit sits on. Mixed from the primary so a re-branded motu
+     re-frosts too, with the literal as the fallback for a surface that never sets one. */
+  --glass: linear-gradient(180deg, color-mix(in srgb, var(--motu-primary, ${MOTU_CHROME.primary}) 3%, #fff), color-mix(in srgb, var(--motu-primary, ${MOTU_CHROME.primary}) 9%, #fff));
+  --hair: color-mix(in srgb, var(--motu-primary, ${MOTU_CHROME.primary}) 14%, transparent);
+  --tint: color-mix(in srgb, var(--motu-primary, ${MOTU_CHROME.primary}) 11%, transparent);
+}`;
+}
+
+/**
+ * The reset a SHADOW ROOT needs and a document does not.
+ *
+ * `all: initial` is what keeps the host page's stylesheet — and any island's — from reaching in. It
+ * also throws away the font, so the family is re-stated immediately after. Emitted only for a shadow
+ * scope: applying `all: initial` to a document's `:root` would strip the page it is trying to style.
+ */
+export function motuKitShadowReset(scope = ':host') {
+  return `${scope} { all: initial; }
+* { box-sizing: border-box; font-family: var(--sans); }`;
+}
+
+/**
+ * The shapes. Class-based throughout, so the same rules apply under `:root` and under `:host`.
+ *
+ * Naming follows `./css.mjs`: `motu-` prefixed, one class per shape, state on a `data-` attribute
+ * rather than a modifier class — `data-tone="warn"` reads as a value and a modifier class reads as a
+ * second shape, and the kit has one shape per concept on purpose.
+ */
+export function motuKitCss(scope = ':root') {
+  const shadow = scope.startsWith(':host');
+  return [
+    motuKitVars(scope),
+    shadow ? motuKitShadowReset(scope) : '',
+    `
+/* --- PANEL: the frosted sheet everything else sits on -------------------------------------------
+   The lens' floating window and the console's viewer card are the same object at two sizes. */
+.motu-sheet-panel {
+  background: var(--glass);
+  border-radius: ${MOTU_RADIUS.panel};
+  box-shadow: ${MOTU_SHADOW.panel};
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  color: var(--ink);
+  overflow: hidden;
+}
+/* A panel with a defined head and a scrolling body — a window, rather than a card. */
+.motu-sheet-panel[data-shape="window"] { display: flex; flex-direction: column; }
+
+/* --- HEAD: a panel's title bar ------------------------------------------------------------------ */
+.motu-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--hair);
+}
+.motu-head > b {
+  font: 700 11px/1 var(--sans);
+  text-transform: uppercase; letter-spacing: .09em;
+  color: var(--ink-faint);
+}
+.motu-head .motu-spacer { flex: 1; }
+/* A head that is also a drag handle must not start a text selection instead. */
+.motu-head[data-grab] { cursor: grab; user-select: none; -webkit-user-select: none; }
+.motu-head[data-grab][data-grabbing] { cursor: grabbing; }
+
+/* --- BODY: the scrolling half of a window ------------------------------------------------------- */
+.motu-body { overflow-y: auto; padding: 10px 12px 14px; }
+.motu-body::-webkit-scrollbar { width: 6px; }
+.motu-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--motu-primary, ${MOTU_CHROME.primary}) 22%, transparent);
+  border-radius: ${MOTU_RADIUS.pill};
+}
+
+/* --- CAP / SUB: the two label sizes -------------------------------------------------------------
+   'cap' heads a section, 'sub' heads a list inside one. Both are the tide line's warm caption; a
+   cool grey here reads as a different family. */
+.motu-cap {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--ink-caption); font-weight: 700;
+}
+.motu-sub {
+  margin: 7px 0 3px;
+  font: 700 9px/1 var(--sans); text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-faint);
+}
+
+/* --- ROW: one record in a list ------------------------------------------------------------------
+   Flat, hairlined, lifting on hover. The lens' call rows, the console's project and shot rows. */
+.motu-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px; border-radius: ${MOTU_RADIUS.row};
+  background: transparent; border: 1px solid transparent;
+  color: var(--ink); text-decoration: none; text-align: left;
+  font: inherit; width: 100%;
+}
+.motu-row[data-surface="card"] { background: var(--surface-row); border-color: var(--line); }
+.motu-row[data-interactive] { cursor: pointer; transition: background 160ms, border-color 160ms, transform 160ms; }
+.motu-row[data-interactive]:hover { background: var(--tint); transform: translateX(2px); }
+.motu-row[data-interactive]:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
+.motu-row[aria-current="true"], .motu-row[data-selected] {
+  background: var(--tint); border-color: var(--tide-accent);
+  color: var(--motu-primary-deep, ${MOTU_CHROME.primaryDeep});
+}
+.motu-row .motu-grow { flex: 1; min-width: 0; }
+/* Values being inspected stay MONOSPACE — a different job from the labels around them, and column
+   alignment is what makes a wall of them scannable. */
+.motu-row[data-mono], .motu-mono { font-family: var(--mono); font-size: 11px; }
+.motu-row .motu-trail { margin-left: auto; color: var(--ink-faint); font-size: 10px; }
+.motu-row .motu-ellipsis, .motu-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- LIST: rows that assemble rather than appear ------------------------------------------------ */
+.motu-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.motu-list > * { animation: motu-swim ${MOTU_MOTION.swimIn} both; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes motu-swim { from { opacity: 0; transform: translateX(-8px); } }
+
+/* --- PILL: a fact, or a state ------------------------------------------------------------------- */
+.motu-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border: 1px solid transparent; border-radius: ${MOTU_RADIUS.pill};
+  font: 600 10.5px/1 var(--sans); font-style: normal;
+  background: color-mix(in srgb, var(--motu-primary, ${MOTU_CHROME.primary}) 8%, transparent);
+  color: var(--w-deep);
+  white-space: nowrap;
+}
+.motu-pill[data-mono] { font-family: var(--mono); }
+/* THE TEXT IS A DEEPER SHADE OF ITS OWN VERDICT.
+   A tinted pill puts the verdict colour on a 12% wash of itself, which is a low-contrast pairing by
+   construction: --ok on its own tint measures about 4.3:1 at 10.5px, and axe is right to call that
+   serious. Mixing the tone toward body ink keeps the hue -- an ok pill is still teal, a warn pill is
+   still amber, which is the whole job -- and takes all four tones past 5:1. One formula rather than
+   four hand-picked hexes, so a re-branded verdict cannot land back under the threshold. */
+.motu-pill[data-tone] { color: color-mix(in srgb, var(--ink) var(--tone-mix, 32%), var(--tone, var(--ink))); }
+.motu-pill[data-tone="ok"] { --tone: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 24%, transparent); }
+.motu-pill[data-tone="warn"] { --tone: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 24%, transparent); }
+.motu-pill[data-tone="broken"] { --tone: var(--broken); background: color-mix(in srgb, var(--broken) 12%, transparent); border-color: color-mix(in srgb, var(--broken) 24%, transparent); }
+/* NEUTRAL NEEDS MORE INK. The other three start from a saturated verdict colour, which is already
+   dark; --neutral is a mid grey, so the same 32% left it at 4.3:1 -- the one tone the formula did not
+   carry on its own. The mix ratio is a variable for exactly this. */
+.motu-pill[data-tone="neutral"] { --tone: var(--neutral); --tone-mix: 48%; background: color-mix(in srgb, var(--neutral) 16%, transparent); }
+/* Filled: a pill that is a CONTROL's state, not a fact about a record. */
+.motu-pill[data-fill] { background: ${MOTU_CHROME.primary}; color: ${MOTU_CHROME.onPrimary}; border-color: transparent; }
+/* THE SERVER'S THREE STATES, on the same shape. ./html.mjs renders data-state from bare node and
+   cannot import a React component, so a rule is the only thing the two can share. They were two
+   separate .motu-pill definitions in one package until they were not. */
+.motu-pill[data-state] { background: ${MOTU_CHROME.primary}; color: ${MOTU_CHROME.onPrimary}; border-color: transparent; padding: 5px 11px; gap: 7px; }
+.motu-pill[data-state="idle"] { background: rgba(255,255,255,.22); }
+.motu-pill[data-state="caution"] { background: ${MOTU_CHROME.caution}; }
+.motu-pill[data-fill][data-tone="warn"] { background: var(--warn); color: #fff; }
+.motu-pill[data-fill][data-tone="broken"] { background: var(--broken); color: #fff; }
+/* Uppercase micro-pill: the lens' prop badges and its coupling flags. */
+.motu-pill[data-size="micro"] {
+  padding: 2px 7px; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+
+/* --- CHIPS: a wrapped run of pills --------------------------------------------------------------- */
+.motu-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* --- DOT: a status, at the head of a row --------------------------------------------------------- */
+.motu-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--neutral); }
+.motu-dot[data-tone="ok"] { background: var(--ok); box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 70%, transparent); }
+.motu-dot[data-tone="warn"] { background: var(--warn); }
+.motu-dot[data-tone="broken"] { background: var(--broken); }
+.motu-dot[data-tone="neutral"] { background: #cdd6d2; }
+.motu-dot[data-tone="pending"] { background: var(--w-mid); }
+.motu-dot[data-tone="external"] { background: #7c5cbf; }
+
+/* --- BUTTON: three weights, one shape ------------------------------------------------------------
+   ghost   the lens' header controls — no ground until you touch them
+   quiet   an outlined control on a light surface: the console's accept buttons, the fit toggle
+   strong  the one action a screen is about */
+.motu-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid transparent; border-radius: ${MOTU_RADIUS.row};
+  padding: 6px 10px; font: 600 12px/1 var(--sans); cursor: pointer;
+  color: var(--ink-soft); background: transparent;
+  transition: background 160ms, color 160ms, border-color 160ms;
+}
+.motu-btn:hover { color: var(--ink); background: var(--tint); }
+.motu-btn:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
+.motu-btn:disabled { opacity: .45; cursor: not-allowed; }
+.motu-btn:disabled:hover { background: transparent; color: var(--ink-soft); }
+.motu-btn[data-weight="quiet"] { border-color: var(--line); background: rgba(255, 255, 255, .72); color: var(--ink); }
+.motu-btn[data-weight="quiet"]:hover { border-color: var(--tide-accent); background: #fff; }
+/* THE ACCENT, not the mid-water. White on --w-mid is 3.06:1, below AA for a 12px label, and axe says
+   so now that it can see the button at all. The accent is the brand primary (5.3:1 on white), which
+   is also what every other "on" state in this kit already uses: a primary action and an armed toggle
+   were two different greens that nobody chose. */
+.motu-btn[data-weight="strong"] { background: var(--tide-accent); border-color: var(--tide-accent); color: ${MOTU_CHROME.onPrimary}; }
+.motu-btn[data-weight="strong"]:hover { background: var(--w-deep); border-color: var(--w-deep); color: ${MOTU_CHROME.onPrimary}; }
+/* ON is a STATE, not a hover — an armed mode has to be readable from across the screen. */
+.motu-btn[aria-pressed="true"], .motu-btn[aria-current="true"], .motu-btn[data-on] {
+  background: var(--tide-accent); border-color: transparent; color: var(--motu-on-primary, #fff);
+}
+.motu-btn[aria-pressed="true"]:hover, .motu-btn[aria-current="true"]:hover, .motu-btn[data-on]:hover {
+  background: var(--tide-accent); color: var(--motu-on-primary, #fff);
+}
+.motu-btn[data-on][data-tone="warn"] { background: var(--warn); }
+.motu-btn[data-on][data-tone="broken"], .motu-btn[data-tone="broken"][data-on] { background: var(--broken); color: #fff; }
+/* The pill-shaped variant: a segmented control, a "back" affordance, a mode toggle. */
+.motu-btn[data-shape="pill"] { border-radius: ${MOTU_RADIUS.pill}; padding: 5px 10px; font-size: 11px; }
+.motu-btn[data-size="icon"] { padding: 4px 8px; font-size: 12px; }
+
+/* --- EMPTY: the sentence a list shows instead of nothing -----------------------------------------
+   Italic and faint on purpose: it is the tool talking, not a record. A blank box reads as broken. */
+/* MUTED IS NOT ENOUGH, and faint is far from it. An empty state is a SENTENCE a person has to read
+   ("this project has no shots yet"), where a caption is a label they scan past. On the page ground
+   --ink-faint measures 2.2:1 and --ink-muted 4.0:1 -- both under AA, the second deceptively close.
+   --ink-soft is 5.2:1 and still reads as the tool talking rather than as a record. Found the day the
+   audit started seeing this project's styles at all. */
+.motu-empty { color: var(--ink-soft); font-style: italic; padding: 5px 0; font-family: var(--sans); }
+.motu-empty[data-pad="block"] { padding: 28px 16px; text-align: center; font-style: normal; }
+
+/* --- NOTICE: a finding, inline ------------------------------------------------------------------- */
+.motu-notice {
+  margin: 3px 0 6px; padding: 5px 9px; border-radius: ${MOTU_RADIUS.row};
+  font: 600 10px/1.35 var(--sans);
+  color: var(--broken); background: color-mix(in srgb, var(--broken) 10%, transparent);
+}
+.motu-notice[data-tone="warn"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.motu-notice[data-tone="ok"], .motu-notice[data-tone="info"] {
+  color: var(--motu-primary-deep, ${MOTU_CHROME.primaryDeep});
+  background: var(--tint);
+}
+.motu-notice[data-mono] { font-family: var(--mono); }
+
+/* --- GROUP: a section barred in its seam colour ---------------------------------------------------
+   The bar is the same hue the coupling graph draws that seam's hubs in, so a blue group in the panel
+   and a blue hub on the page are one fact seen twice. */
+/* The seam colour arrives as --seam, set by the component. It was 'currentColor' with the colour on
+   the group, which meant every child inherited it and the content had to be reset — and that reset
+   (.motu-group > *:not(.motu-group__h)) outranked .motu-empty, so an empty state inside a group came
+   out body ink instead of faint italic. Colouring only what is coloured has no such trap. */
+.motu-group { margin-top: 10px; padding: 2px 0 4px 11px; border-left: 2px solid var(--seam, var(--tide-accent)); }
+.motu-group > .motu-group__h {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  font: 700 10px/1 var(--sans); text-transform: uppercase; letter-spacing: .09em;
+  color: var(--seam, var(--tide-accent));
+}
+.motu-group > .motu-group__h::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+
+/* --- TABLE: fixed columns, one line per row -------------------------------------------------------
+   For a sheet meant to be SCANNED. A wrapping cell turns twenty-four keys into a page nobody reads
+   to the end, so every cell truncates and the full text goes on the row's title. */
+.motu-table { display: grid; gap: 6px; align-items: baseline; padding: 2px 0; font-size: 10.5px; line-height: 1.5; }
+.motu-table > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- GAUGE: depth, as a readout ------------------------------------------------------------------
+   Faint for a record sitting still, full and lit for the one in hand. The water is a READOUT here,
+   the same rule the lagoon's own chrome follows — never decoration. */
+.motu-gauge {
+  flex: none; width: 4px; border-radius: ${MOTU_RADIUS.pill}; margin: 2px 0; align-self: stretch;
+  background: linear-gradient(180deg, var(--w-shallow), var(--w-deep));
+  opacity: .3; transition: opacity 160ms ease, width 160ms cubic-bezier(.2,.9,.3,1);
+}
+.motu-row[data-interactive]:hover .motu-gauge { opacity: .65; }
+.motu-row[aria-current="true"] .motu-gauge, .motu-row[data-selected] .motu-gauge { opacity: 1; width: 6px; }
+
+/* --- FIELD: a labelled value ---------------------------------------------------------------------- */
+.motu-field { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font: 11px/1.4 var(--mono); }
+.motu-field > .motu-field__l { color: var(--ink-soft); min-width: 92px; flex: none; }
+.motu-field > .motu-field__v { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.motu-field > .motu-field__t { margin-left: auto; color: var(--w-mid); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- BAY, the parts a React caller adds ---------------------------------------------------------
+   The server-rendered bay in ./html.mjs makes its title a <strong>, and ./css.mjs styles it as one.
+   An application whose bay IS the page's heading needs a real <h1> there, so the readout treatment is
+   restated for the heading forms — and their default margins removed, which is the whole reason a
+   swapped element does not just work. */
+.motu-bay .bay-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.motu-bay .bay-title .bay-name { margin: 0; }
+.motu-bay .bay-title h1.bay-name, .motu-bay .bay-title h2.bay-name {
+  font: 650 16px/1.2 ${MOTU_TYPE.mono};
+  letter-spacing: .02em;
+}
+.motu-bay.compact .bay-title h1.bay-name, .motu-bay.compact .bay-title h2.bay-name { font-size: 13.5px; }
+
+/* --- METER: a run of counts, read at a glance ------------------------------------------------------
+   The number that decides whether to open a screen at all should not require reading a list. */
+.motu-meter { display: flex; gap: 14px; margin: 0; }
+.motu-meter > div { display: flex; align-items: baseline; gap: 5px; }
+.motu-meter dt { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
+.motu-meter dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .motu-list > *, .motu-row, .motu-gauge, .motu-btn { animation: none; transition: none; }
+  .motu-row[data-interactive]:hover { transform: none; }
+}
+`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}

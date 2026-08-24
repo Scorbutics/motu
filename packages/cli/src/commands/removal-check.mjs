@@ -51,7 +51,17 @@ function importGraph(hostRoot, motuRoot, cfg) {
     }
     for (const e of entries) {
       const full = resolve(dir, e.name);
-      if (full.startsWith(motuRoot)) continue;
+      // MOTU'S OWN SOURCE IS NOT THE HOST'S — unless the host lives inside the checkout.
+      //
+      // This skipped everything under `motuRoot`, which is right for an application that sits beside
+      // motu and wrong for one that sits inside it. The review console does: it was subtree'd into
+      // this repository, so every one of its files matched and the walk returned nothing, and the
+      // check reported "examined no files" over a fully integrated app — the same empty-search
+      // failure the roots guess above was written to stop, arriving by a different door.
+      //
+      // Guarded on the two being different so the repo-root project, whose hostRoot IS the checkout,
+      // does not start walking motu's own packages and calling them the host.
+      if (full.startsWith(motuRoot) && (hostRoot === motuRoot || !full.startsWith(hostRoot))) continue;
       if (e.isDirectory()) {
         if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
         walk(full);
@@ -134,12 +144,28 @@ function unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec) {
     const spec = imp.getModuleSpecifierValue();
     const target = resolveSpec(sf, spec);
     if (!isMotuSpec(spec) && !(target && motuOnly.has(target))) continue;
+    // A UI KIT IS NOT A SEAM, so its tags are not unwrappable.
+    //
+    // Unwrapping means "keep the children, drop the wrapper" — right for `<X.Island slot="y">`, which
+    // WRAPS host content, and wrong for `<Panel>` or `<PanelHead title={…} sub={<span/>}>`, which IS
+    // the content. Unwrapping those threw their attributes away and could leave invalid JSX behind,
+    // so the check reported TS1005 (a syntax error it had caused) instead of TS2304 (the true answer:
+    // this name no longer exists). The import is still removed below, which is what makes the honest
+    // diagnostic appear.
+    //
+    // It also states something real: an application that builds its UI out of `@motu/chrome/react` is
+    // load-bearing on motu for its APPEARANCE, not just its wiring. That is a legitimate thing to
+    // adopt and it should show up here as exactly what it is.
+    if (CHROME_KIT.test(spec)) continue;
     for (const named of imp.getNamedImports()) names.add(named.getNameNode().getText());
     const def = imp.getDefaultImport();
     if (def) names.add(def.getText());
   }
   return names;
 }
+
+/** motu's design kit: motu's own code, but presentation rather than a boundary. */
+const CHROME_KIT = /^@motu\/chrome(\/|$)/;
 
 /** `Actions.Island` -> `Actions`: what a qualified JSX tag was imported as. */
 function rootTagName(tag) {
@@ -207,8 +233,29 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   const hostRoot = cfg.hostRoot;
   const backupDir = resolve(cfg.cacheDir, 'removal-check');
 
+  // A PROJECT THAT NEVER CLAIMED REMOVABILITY. See `removable` in the config loader for why motu's
+  // own tools cannot answer this question. Said out loud rather than passed over, and reported as a
+  // SKIP: opting out proves nothing, and the verdict must not read like proof.
+  if (!cfg.removable) {
+    if (!quiet) {
+      console.log(
+        color.dim('– removal-check') +
+          color.dim('  this project declares `removable: false` — motu is meant to be load-bearing here, ' +
+            'so "does it compile without motu" is not a question about its integration'),
+      );
+    }
+    return { pass: true, skipped: true, scanned: 0, deleted: [], stripped: [], ejected: [], errors: [] };
+  }
+
   // The app's own sources — never motu's own tree, which is what is being removed.
-  const graph = importGraph(hostRoot, cfg.root, cfg);
+  // THE FRAMEWORK CHECKOUT, not the project root.
+  //
+  // This passed `cfg.root` — the directory holding motu.config.json — into a parameter named
+  // `motuRoot` and used as "skip motu's own source". Every project keeps its sources under its own
+  // root, so the exclusion swallowed the entire application and the walk returned nothing, for every
+  // project, always. That is the real reason removal-check kept reporting "scanned 0 files"; the
+  // roots guess above it was fixed twice for a symptom this was causing.
+  const graph = importGraph(hostRoot, cfg.motuRoot, cfg);
   const motuDir = relative(hostRoot, cfg.root) || 'motu';
   const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(graph, hostRoot, motuDir);
 

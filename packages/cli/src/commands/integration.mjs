@@ -141,7 +141,16 @@ function checkRegion(region, sources) {
   for (const [, alias] of code(readFileSync(bindingFile, 'utf8')).matchAll(new RegExp(`const\\s+(\\w+)\\s*=\\s*${binding}\\.Region`, 'g'))) {
     wrappers.push(alias);
   }
-  const mountedIn = [...sources].filter(([f, t]) => f !== bindingFile && wrappers.some((w) => code(t).includes(`<${w}`)));
+  // EVERY source, INCLUDING the one that composed it. This excluded `bindingFile`, on the assumption
+  // that a region is composed in one module and rendered from another — true of a Next app, and false
+  // of any application small enough to do both in its page. The review console does exactly that:
+  // `const Review = createRegion(...)` at module scope and `<Review.Region>` in the component below
+  // it, in one file, which is the shape motu's own scaffolding produces. It reported "nothing renders
+  // <Review.Region>" about a file containing `<Review.Region>`.
+  //
+  // Nothing is lost by including it: the claim is "someone renders this wrapper", and the alias
+  // declaration that prompted the exclusion (`const X = Review.Region`) has no `<` in front of it.
+  const mountedIn = [...sources].filter(([, t]) => wrappers.some((w) => code(t).includes(`<${w}`)));
   if (mountedIn.length) add('ok', 'mounted', `<${wrappers[wrappers.length - 1]}> renders in ${rel(mountedIn[0][0])}`);
   else
     add(

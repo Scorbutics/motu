@@ -10,13 +10,31 @@
     },
     "./tokens": "./src/tokens.mjs",
     "./css": "./src/css.mjs",
-    "./html": "./src/html.mjs"
+    "./html": "./src/html.mjs",
+    "./kit": "./src/kit.mjs",
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    }
   },
   "types": "src/index.d.ts",
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   }
 }

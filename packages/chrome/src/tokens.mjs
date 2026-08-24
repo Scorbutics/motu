@@ -69,8 +69,15 @@ export const MOTU_SURFACE = {
 export const MOTU_INK = {
   body: '#22302c',
   muted: '#6b7d78',
-  /** Captions and unit labels — warm, deliberately not a cool grey. */
-  caption: '#9a9182',
+  /**
+   * Captions and unit labels — warm, deliberately not a cool grey.
+   *
+   * DARKENED from #9a9182, which measured 2.87:1 on the page ground: uppercase 10px at .09em is the
+   * smallest text motu sets, and it was the least legible. Still the same warm family — the point of
+   * this token is that a cool grey here reads as a different product — just readable. Nothing else
+   * reads it: `.motu-cap` is the only rule, and the bay's own meta rule outranks it on the water.
+   */
+  caption: '#6e6659',
   faint: '#a39a8a',
 };
 
@@ -101,4 +108,56 @@ export const MOTU_RADIUS = {
 export const MOTU_MOTION = {
   swimIn: '260ms cubic-bezier(.2,.9,.3,1)',
   pop: '220ms cubic-bezier(.22,1.2,.36,1)',
+};
+
+/**
+ * VERDICTS. Semantic, and deliberately NOT derived from the primary.
+ *
+ * Everything above is BRAND: point `--motu-primary` at a host's own colour and the water, the
+ * surfaces and the pills follow. These four must not. A gold-branded app deriving "ok" from its
+ * primary ends up with a yellow ok sitting beside an amber warn, and the reader can no longer tell
+ * "fine" from "look at this" — which is the only job these have.
+ *
+ * They were spelled out twice before this existed: as `--ok/--warn/--broken/--neutral` in the seam
+ * lens' shadow stylesheet, and as `--changed/--new` in the review console. Same four hex values,
+ * two vocabularies, and the console's `changed` IS the lens' `warn` — a shot that moved is a thing
+ * to look at, which is what amber has always meant here.
+ */
+export const MOTU_VERDICT = {
+  /** Settled, matching, wired. The console's `new`, the lens' `ok`. */
+  ok: '#0f766e',
+  /** Look at this. The console's `changed`, the lens' `warn`. Not an error. */
+  warn: '#b45309',
+  /** Contradicted: a declaration that does not hold. */
+  broken: '#b91c1c',
+  /** Nothing to say — no declared props, no status. */
+  neutral: '#8d8578',
+};
+
+/**
+ * The SEAM colours: one per kind of thing crossing an island's boundary. The lens bars its groups
+ * with these and the graph draws its hubs in them, so a blue hub on the page and a blue group in
+ * the panel are the same fact seen twice.
+ *
+ * `output` and `coupling` share their hue with `warn` and `broken` on purpose — an output that
+ * surprises you and a contradiction are read with the same eye.
+ */
+export const MOTU_SEAM = {
+  /** What comes IN: props, channels, host scope. */
+  input: '#12988f',
+  /** What goes OUT: events, writes, intents. */
+  output: '#b45309',
+  /** What the region ASKED the outside for. */
+  requests: '#0369a1',
+  /** Islands entangled through a shared key. */
+  coupling: '#b91c1c',
+  /** The region's own sheet. */
+  region: '#0f766e',
+};
+
+/** Verdicts, on a DARK ground (the bay), where the ink versions disappear. */
+export const MOTU_VERDICT_ON_BAY = {
+  ok: '#bdf3ea',
+  warn: '#ffd9a8',
+  neutral: 'rgba(255, 255, 255, .72)',
 };

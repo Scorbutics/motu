@@ -13,12 +13,17 @@
   },
   "dependencies": {
     "@motu/core": "workspace:*",
-    "@motu/runtime": "workspace:*"
+    "@motu/runtime": "workspace:*",
+    "@motu/chrome": "workspace:*"
   },
   "files": [
     "dist"
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
   }
 }

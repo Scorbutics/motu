@@ -1,3 +1,4 @@
+import { Cap, Empty, Grow, Pill, Row } from "@motu/chrome/react"
 import type { Shot } from "@/lib/host"
 import type { ShotRef } from "@/lib/review-region"
 
@@ -19,6 +20,19 @@ const LABEL: Record<Shot["status"], string> = {
 }
 
 /**
+ * A shot's status, as one of motu's four verdicts.
+ *
+ * A shot that moved is `warn` — look at this — and a shot with no baseline is `ok`. Those are the two
+ * this console used to call `--changed` and `--new`, spelled `#b45309` and `#0f766e`: MOTU_VERDICT's
+ * own values, arrived at separately. A settled shot has nothing to say, which is what `neutral` is.
+ */
+const TONE: Record<Shot["status"], "warn" | "ok" | "neutral"> = {
+  changed: "warn",
+  new: "ok",
+  match: "neutral",
+}
+
+/**
  * Every shot of the selected project, grouped by island.
  *
  * `changed` first within each island: a review session is about what moved, and making someone scroll
@@ -35,8 +49,8 @@ export function ShotList({
   busy?: boolean
   onShotSelected?: (ref: ShotRef) => void
 }) {
-  if (busy && !shots.length) return <div className="sl-empty">Loading…</div>
-  if (!shots.length) return <div className="sl-empty">This project has no shots yet.</div>
+  if (busy && !shots.length) return <Empty className="sl-empty">Loading…</Empty>
+  if (!shots.length) return <Empty className="sl-empty">This project has no shots yet.</Empty>
 
   const rank = (s: Shot) => (s.status === "changed" ? 0 : s.status === "new" ? 1 : 2)
 
@@ -46,10 +60,10 @@ export function ShotList({
         const pending = list.filter((s) => s.status !== "match").length
         return (
           <section key={island} className="sl-group">
-            <h3>
+            <Cap as="h3" className="sl-head">
               {island}
               {pending > 0 && <span className="sl-pending">{pending} pending</span>}
-            </h3>
+            </Cap>
             <ul>
               {[...list]
                 .sort((a, b) => rank(a) - rank(b) || a.shot.localeCompare(b.shot))
@@ -57,16 +71,18 @@ export function ShotList({
                   const isSelected = selected?.island === s.island && selected?.shot === s.shot
                   return (
                     <li key={s.shot}>
-                      <button
-                        type="button"
+                      <Row
+                        as="button"
+                        current={isSelected}
                         className="sl-shot"
                         data-status={s.status}
-                        aria-current={isSelected}
                         onClick={() => onShotSelected?.({ island: s.island, shot: s.shot })}
                       >
-                        <span className="sl-name">{s.shot}</span>
-                        <span className="sl-status">{LABEL[s.status]}</span>
-                      </button>
+                        <Grow className="sl-name">{s.shot}</Grow>
+                        <Pill tone={TONE[s.status]} className="sl-status">
+                          {LABEL[s.status]}
+                        </Pill>
+                      </Row>
                     </li>
                   )
                 })}

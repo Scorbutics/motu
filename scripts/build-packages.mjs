@@ -38,6 +38,15 @@ const COMPILED = [
 // over them would only produce a worse copy of what is already there.
 const AS_IS = ['packages/chrome', 'packages/cli', 'packages/host'];
 
+// A package that ships as authored AND has one compiled corner.
+//
+// `@motu/chrome` is plain .mjs because the lagoon HOST reads it under bare node — that is the whole
+// reason the package exists. Its React kit cannot be: it is .tsx, and its consumers are bundled
+// applications, which do not reliably transform a raw .tsx sitting inside node_modules. So the
+// subtree is compiled and exposed at `@motu/chrome/react`, a subpath node never resolves, while the
+// rest of the package stays exactly as node-readable as before.
+const HYBRID = [{ dir: 'packages/chrome', src: 'src/react', out: 'dist/react' }];
+
 /** Add the '.js' that Node's ESM resolver requires and the source deliberately omits. */
 function addExtensions(dir) {
   let touched = 0;
@@ -62,10 +71,12 @@ function addExtensions(dir) {
   return touched;
 }
 
-function build(pkgDir) {
+function build(pkgDir, part) {
   const abs = resolve(ROOT, pkgDir);
   const name = JSON.parse(readFileSync(join(abs, 'package.json'), 'utf8')).name;
-  rmSync(join(abs, 'dist'), { recursive: true, force: true });
+  const rootDir = part?.src ?? 'src';
+  const outDir = part?.out ?? 'dist';
+  rmSync(join(abs, outDir), { recursive: true, force: true });
 
   // Written here rather than committed as seven near-identical files. It is derived from the package
   // layout, so a package that changes shape does not also need someone to remember this.
@@ -73,8 +84,8 @@ function build(pkgDir) {
   writeFileSync(cfg, JSON.stringify({
     extends: relative(abs, join(ROOT, 'tsconfig.base.json')).split('\\').join('/'),
     compilerOptions: {
-      rootDir: 'src',
-      outDir: 'dist',
+      rootDir,
+      outDir,
       declaration: true,
       declarationMap: true,
       sourceMap: true,
@@ -83,7 +94,7 @@ function build(pkgDir) {
       noEmit: false,
       types: [],
     },
-    include: ['src/**/*'],
+    include: [`${rootDir}/**/*`],
   }, null, 2));
 
   try {
@@ -97,9 +108,10 @@ function build(pkgDir) {
     rmSync(cfg, { force: true });
   }
 
-  const fixed = addExtensions(join(abs, 'dist'));
-  const files = readdirSync(join(abs, 'dist'), { recursive: true }).filter((f) => String(f).endsWith('.js')).length;
-  console.log(`  ✓ ${name.padEnd(26)} ${String(files).padStart(3)} js, ${String(fixed).padStart(3)} specifiers extended`);
+  const fixed = addExtensions(join(abs, outDir));
+  const files = readdirSync(join(abs, outDir), { recursive: true }).filter((f) => String(f).endsWith('.js')).length;
+  const label = part ? `${name} (${part.src})` : name;
+  console.log(`  ✓ ${label.padEnd(26)} ${String(files).padStart(3)} js, ${String(fixed).padStart(3)} specifiers extended`);
 }
 
 console.log('building publishable packages');
@@ -108,3 +120,4 @@ for (const p of AS_IS) {
   const name = JSON.parse(readFileSync(resolve(ROOT, p, 'package.json'), 'utf8')).name;
   console.log(`  – ${name.padEnd(26)} ships as authored (already JavaScript)`);
 }
+for (const part of HYBRID) build(part.dir, part);

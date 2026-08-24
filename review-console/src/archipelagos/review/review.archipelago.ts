@@ -15,6 +15,11 @@ import { shotsSource } from '@/lib/shots-source';
 
 export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()({
   id: 'review',
+  // WHICH OF THIS REGION'S KEYS ARE CLOSED SETS, for the coverage fold. `viewMode` is one of three
+  // words wherever this region is mounted, so its value is safe to keep and worth keeping — the
+  // difference between "the viewer showed something" and "the viewer showed the ACCEPTED image" is
+  // exactly the kind of state a scenario set misses. Everything else stays a category.
+  coverage: { enums: ['viewMode'] },
   islands: [
     {
       slot: 'repo-picker',

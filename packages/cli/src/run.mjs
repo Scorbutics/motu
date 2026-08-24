@@ -13,6 +13,7 @@ import { snapshotCommand, archipelagoSnapshotCommand } from './commands/snapshot
 import { integrateCommand } from './commands/integrate.mjs';
 import { integrateCheckCommand } from './commands/integration.mjs';
 import { regionInitCommand } from './commands/region.mjs';
+import { regionCoverageCommand } from './commands/region-coverage.mjs';
 import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
@@ -60,6 +61,7 @@ ${color.bold('Usage:')}
   motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
   motu region init <id> --page <file>              scaffold everything a page needs before its 1st island
+  motu region coverage <id> [--corpus <f>]         states production reached that no flow previews
   motu integrate check [region]                    does the HOST compose, place and read the region?
   motu archipelago create <id>                      scaffold + register a new archipelago
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
@@ -188,6 +190,9 @@ async function main() {
   // Everything a page needs before its FIRST island — the step that makes adoption feel expensive.
   if (group === 'region') {
     if (sub === 'init') return regionInitCommand(argv);
+    // What the region DOES, against what it previews. The only check here that compares motu to
+    // reality rather than to a declaration — see the command's own header.
+    if (sub === 'coverage') return regionCoverageCommand(argv);
     console.error(color.red(`unknown: motu region ${sub ?? ''}`));
     console.log(USAGE);
     process.exit(2);

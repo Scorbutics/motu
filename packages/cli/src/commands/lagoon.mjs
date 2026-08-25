@@ -21,7 +21,7 @@ import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
+import { REPO_ROOT, APP_ROOT, MOTU_CHECKOUT, paths, names, color } from '../lib/util.mjs';
 import { gitIdentity, uploadLagoon, loadHostConfig } from '../lib/remote.mjs';
 
 /** The framework's own lagoon build runner — replaces the vite.config.ts each project used to carry. */
@@ -531,9 +531,21 @@ export function lagoonServeCommand(argv) {
         ...(body ? { body: JSON.stringify(body) } : {}),
       }).catch(() => null);
 
+    // WHICH ROOTS THIS FRAME MAY BE READ FROM, declared by the only party that knows: this process.
+    //
+    // A Vite dev server hands out any file under its fs root through `/@fs/<absolute path>`, which is
+    // right on a laptop and wrong through a tunnel — peps' lagoon will serve `app/layout.tsx`,
+    // `lib/supabase/admin.ts` and the backend migrations, all 200. The host refuses what is not
+    // listed here, and refuses everything when nothing is (fails closed).
+    //
+    // Two roots, and only two: the framework checkout, whose source is public already and which the
+    // lagoon genuinely resolves through `/@fs/`; and the motu project itself, which is the thing
+    // being previewed. The host APPLICATION around it is deliberately absent.
+    const fsAllow = [MOTU_CHECKOUT, REPO_ROOT].filter(Boolean);
+
     let announced = false;
     const beat = async () => {
-      const res = await call('/api/live', { url: `http://127.0.0.1:${port}` });
+      const res = await call('/api/live', { url: `http://127.0.0.1:${port}`, fsAllow });
       if (res?.ok && !announced) {
         announced = true;
         console.log(color.dim(`  live in the gallery: ${base}/g/<group>  (${repo}:${slug})`));

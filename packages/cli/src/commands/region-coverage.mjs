@@ -180,9 +180,22 @@ export async function regionCoverageCommand(argv) {
 
   // NO CORPUS IS NOT A PASS. Without one this can still say what the flows cover and print the known
   // set to publish, which is useful on its own — but it has examined no reality, and says so.
-  const files = [argv.corpus, ...(argv._.slice(1) ?? [])].flat().filter(Boolean);
+  //
+  // `corpusUrl` FROM CONFIG IS THE DEFAULT, so the everyday invocation is `motu region coverage
+  // <id>` rather than a URL somebody has to remember. It is the one coverage address allowed in
+  // committed config, because it is read HERE — on a developer's machine — and never reaches a
+  // browser; the beacon's own addresses stay in the page's meta tags for exactly that reason.
+  const configured = paths.coverage?.corpusUrl ? [paths.coverage.corpusUrl] : [];
+  const asked = [argv.corpus, ...(argv._.slice(1) ?? [])].flat().filter(Boolean);
+  const files = asked.length ? asked : configured;
+  if (files.length && !asked.length) {
+    console.log(`  ${color.dim('·')} ${color.dim('corpus'.padEnd(20))} ${color.dim(`${files[0]}  (coverage.corpusUrl)`)}`);
+  }
   if (!files.length) {
-    console.log(`  ${color.dim('–')} ${color.dim('coverage'.padEnd(20))} ${color.dim('no --corpus given: nothing was compared')}`);
+    console.log(
+      `  ${color.dim('–')} ${color.dim('coverage'.padEnd(20))} ` +
+        color.dim('no --corpus given and no coverage.corpusUrl configured: nothing was compared'),
+    );
     console.log(
       color.dim(
         `\n  ${covered.length} state(s) previewed by ${flows.length} flow(s) over ${keys.length} declared key(s).` +
@@ -203,6 +216,17 @@ export async function regionCoverageCommand(argv) {
   // read side being a cacheable blob is that checking against the real thing should not need an
   // export step — `motu region coverage <id> --corpus https://…` is the drift check.
   const load = async (f) => {
+    // A ROOT-RELATIVE PATH IS A CONFIG MISTAKE, NOT A FILENAME. `corpusUrl` is a browser-shaped
+    // string in a file full of browser-shaped strings, so `/api/motu/coverage/status` is the natural
+    // thing to write — and it reaches here as a path, misses on disk, and reports
+    // "ENOENT: no such file or directory, open '/api/…'", which sends the reader looking for a file
+    // they never meant to have. Say what is actually wrong.
+    if (f.startsWith('/') && !existsSync(f)) {
+      throw new Error(
+        `${f} looks like a route, not a file. coverage.corpusUrl is fetched from a developer's ` +
+          `machine, so it needs the origin too — e.g. https://your-app${f}`,
+      );
+    }
     if (!/^https?:\/\//.test(f)) return JSON.parse(readFileSync(f, 'utf8'));
     const res = await fetch(f, token ? { headers: { authorization: `Bearer ${token}` } } : undefined);
     if (res.status === 401 || res.status === 403) {

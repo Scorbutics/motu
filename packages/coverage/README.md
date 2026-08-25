@@ -50,14 +50,27 @@ Nothing in your application calls this package. `motu island sync` writes the sw
 generated island registry, and `defineArchipelago` picks each region up as it mounts:
 
 ```jsonc
-// motu.config.json — deployment facts only
+// motu.config.json — NO ADDRESSES. This file is read by `island sync` and baked into the generated
+// island registry, which the lagoon imports and publishes as a public page.
 "coverage": {
   "enabled": true,
-  "endpoint": "/api/motu/coverage",          // where a beacon POSTs
-  "knownUrl": "/api/motu/coverage/known",    // optional: the accepted set, refreshed without a deploy
-  "regions": ["actions"]                     // optional: all regions when absent
+  "regions": ["actions"],                                     // optional: all regions when absent
+  "corpusUrl": "https://your-app/api/motu/coverage/status"    // optional: the CLI's default --corpus
 }
 ```
+
+```html
+<!-- the application's own <head>: where a beacon POSTs, and where the accepted set is served from.
+     Here rather than in config precisely BECAUSE they are addresses — the page renders them, the
+     published lagoon does not carry them, and they change without a rebuild. -->
+<meta name="motu-coverage-endpoint" content="/api/motu/coverage" />
+<meta name="motu-coverage-known" content="/api/motu/coverage/known" />
+```
+
+`corpusUrl` is the exception that proves the rule: it is read by the CLI on a developer's machine and
+never reaches a browser. `endpoint` and `knownUrl` are NOT config keys — this document described them
+as such for a while and the loader dropped them silently, so following the docs produced a project
+that said `enabled: true` and posted nowhere.
 
 ```ts
 // the archipelago — a fact about the KEY, so it travels with the region
@@ -179,6 +192,50 @@ reads `provide` steps and accumulates them; anything behind an `emit` is reporte
 though a flow does exercise it. **A false positive, printed with its cause.** The fix is for the
 browser flow lane to contribute its own fingerprints.
 
+## Seeing it in the lagoon
+
+`motu region coverage` compares a corpus to the region's FLOWS — a file against a file, and the right
+way to answer *what should we preview next?*. It has no running region, so it cannot answer the
+question a person standing in front of the lagoon actually has: **does this state happen?**
+
+```
+motu region coverage actions --save        # writes <lagoon>/src/coverage/actions.json
+motu lagoon dev                            # the build bakes it in
+```
+
+The lens (Ctrl/Cmd-Shift-G) then carries a COVERAGE section under the region sheet:
+
+```
+● COVERAGE
+6 recorded state(s) · 160 occurrence(s)
+on screen now                    [ production reaches this · 96× · 60% ]
+busy:false repos:set selectedRepo:set selectedShot:absent shots:set viewMode:set
+how the recorded states differ from this one
+  26%   busy:true
+  7.5%  busy:true shots:empty
+```
+
+**Three verdicts, not two.** `production reaches this` / `never recorded` / `not comparable`. The
+third exists because a state folded over one key list cannot be looked up in a corpus folded over
+another — under drift, "never recorded" would be a finding manufactured by the mismatch, and it read
+exactly that way before the drift notice existed to contradict it.
+
+`never recorded` is the one worth the section. It means no beacon has ever reported this combination:
+either it cannot happen — and the preview is showing a state the application does not produce — or
+nobody has reached it yet. That is the fixture-inventing-a-vocabulary failure, and it passes every
+static check motu has.
+
+Rows show only the keys that DIFFER from what is on screen, which is why the heading names the
+comparison: a bare `64% busy:true` would read as "64% of production has busy:true", a much stronger
+claim than the true one.
+
+**Files, never a fetch.** The build reads what `--save` already sanitised, so a published lagoon
+carries the rows and cannot carry the address they came from. A build that fetched would put the URL
+and the token one environment variable away from a public page.
+
+**A corpus is a build constant**, so refreshing one needs a dev-server restart. With no corpus the
+section renders nothing at all — a permanent empty box is how people learn to skip a section.
+
 ## Storage, and why motu knows nothing about yours
 
 The boundary is the one motu already draws for `Transport`, `StoreAdapter`, `HostBridge` and the seam
@@ -193,6 +250,69 @@ lens: **motu defines the question, the application answers it.**
 `mergeCorpora` living here is the load-bearing choice: it is arithmetic on motu's own format, and
 every backend would otherwise reimplement it slightly differently — which is how two corpora stop
 being comparable.
+
+### Reading it back, without making the table public
+
+The corpus is read by a **machine on a developer's laptop** — `motu region coverage <id> --corpus
+<url>` — and almost every app's status route authenticates a **human**, through a session cookie. A
+Bearer token bounces off it, so the first thing this runs into is a 401 that no credential fixes.
+
+Two options, and the tempting one is wrong:
+
+**Making the read public is a bigger step than it looks.** The corpus does end up on a public page —
+`--save` bakes it into the published lagoon — so the confidentiality argument seems already spent. It
+is not the same exposure. A published snapshot is a point in time somebody CHOSE to publish; a public
+endpoint is a live production feed anybody can poll forever, carrying your error rate (`error:set`'s
+share is exactly that), your deploy cadence (first/last seen) and your app's internal vocabulary,
+updating by itself. And it is a one-way door: once scraped, unpublishing changes nothing.
+
+**Give the route a second door instead.** Accept a Bearer token as an ALTERNATIVE to the session, so
+humans keep the gate they have and machines get one of their own. Roughly:
+
+```ts
+function hasReadToken(request: Request): boolean {
+  const expected = process.env.MOTU_COVERAGE_READ_TOKEN;
+  if (!expected) return false;                       // fails closed: an unset secret is not a door
+  const header = request.headers.get('authorization') ?? '';
+  const offered = header.startsWith('Bearer ') ? header.slice(7) : '';
+  // Digested first, because `timingSafeEqual` THROWS on a length mismatch — and a throw is a 500
+  // that tells an attacker a wrong-LENGTH token from a wrong one. Two sha256 digests are always 32
+  // bytes, so the comparison is total and still constant time.
+  const digest = (v: string) => createHash('sha256').update(v, 'utf8').digest();
+  return timingSafeEqual(digest(offered), digest(expected));
+}
+
+export async function GET(request: Request) {
+  if (!hasReadToken(request)) {
+    /* … the existing admin-session check, unchanged … */
+  }
+  /* … */
+}
+```
+
+Then, on the machine that publishes:
+
+```
+MOTU_COVERAGE_TOKEN=… motu region coverage actions \
+  --corpus https://your-app/api/motu/coverage/status?region=actions --save
+```
+
+**The token cannot travel into the page, and that is enforced rather than promised.** It is read from
+the environment only — never from `motu.config.json`, because committed config is baked into the
+generated island registry, which the lagoon imports and publishes. And `--save` scans the bytes it is
+about to write for both the token and the source URL, and exits 2 rather than write either.
+
+So the address and the credential stay on your machine while the rows travel; the published lagoon
+holds a corpus and has no idea where it came from.
+
+**A status route is a corpus source.** No second endpoint is needed: a body with a `top: [{ browsers,
+state }]` array is accepted and converted, because a route built to be readable on a phone already
+says the same thing.
+
+**Decide separately whether the snapshot should be public at all.** Baking a corpus into a published
+lagoon puts those rows on an unregistered URL. That is usually the intent — it is what makes the lens
+able to answer "does this state happen?" for whoever opens the page — but it is a choice, and the
+alternative is to keep the corpus local and publish the lagoon without it.
 
 ### `keysHash` is the declaration
 

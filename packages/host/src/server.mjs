@@ -23,7 +23,6 @@
 import { createServer } from 'node:http';
 import { gunzipSync, brotliDecompressSync } from 'node:zlib';
 import { timingSafeEqual } from 'node:crypto';
-import { resolve as resolvePath } from 'node:path';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
 import { wrapFragment } from './document.mjs';
 import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
@@ -51,11 +50,11 @@ import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.m
  * request should degrade to static, not to an error page.
  */
 function liveRegistry(ttlMs = 90_000) {
-  const entries = new Map(); // "repo/slug" -> { url, at, fsAllow }
+  const entries = new Map(); // "repo/slug" -> { url, at }
   const key = (repo, slug) => `${repo}/${slug}`;
   return {
-    set(repo, slug, url, fsAllow = []) {
-      entries.set(key(repo, slug), { url, at: Date.now(), fsAllow });
+    set(repo, slug, url) {
+      entries.set(key(repo, slug), { url, at: Date.now() });
     },
     clear(repo, slug) {
       return entries.delete(key(repo, slug));
@@ -69,12 +68,6 @@ function liveRegistry(ttlMs = 90_000) {
         return null;
       }
       return e.url;
-    },
-    /** Which absolute roots this member's frame may read through `/@fs/`. Empty = none. */
-    fsAllowFor(repo, slug) {
-      const e = entries.get(key(repo, slug));
-      if (!e || Date.now() - e.at > ttlMs) return [];
-      return e.fsAllow ?? [];
     },
     list() {
       const now = Date.now();
@@ -160,51 +153,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
    * is inside a gallery. Streamed rather than buffered — an SSE response that is collected before it
    * is forwarded never arrives.
    */
-/**
- * WHAT A LIVE FRAME MAY ASK ITS DEV SERVER FOR.
- *
- * A Vite dev server hands out any file under its `fs.allow` root through `/@fs/<absolute path>`. That
- * is correct for a dev server on a laptop and wrong for one reachable through a public tunnel: peps'
- * lagoon will serve `app/layout.tsx`, `lib/supabase/admin.ts`, `middleware.ts` and the backend
- * migrations, all 200. Secrets are safe — `.env.local` and anything outside the root come back 403 —
- * but the application's whole source is not.
- *
- * A BLANKET DENY OF `/@fs/` DOES NOT WORK, which is the thing worth knowing before writing this rule:
- * the lagoon resolves `@motu/*` to a checkout OUTSIDE the project, and Vite serves exactly those
- * through `/@fs/`. Refuse them all and the frame does not boot.
- *
- * So it is an allowlist within `/@fs/`, and the split is by WHOSE source it is:
- *
- *   the motu checkout        allowed — the framework, public on GitHub already
- *   the project's own lagoon allowed — that is the thing being previewed
- *   anything else            refused — which is precisely the host application
- *
- * Everything outside `/@fs/` passes untouched. `/@id/` and `/@vite/client` name resolved module ids
- * and the HMR client, not paths, so they leak nothing and the frame needs both.
- */
-function liveFsAllowed(subPath, allow) {
-  const marker = subPath.indexOf('/@fs/');
-  if (marker < 0) return true;
-  let target = subPath.slice(marker + '/@fs/'.length);
-  const q = target.search(/[?#]/);
-  if (q >= 0) target = target.slice(0, q);
-  try {
-    target = decodeURIComponent(target);
-  } catch {
-    return false;
-  }
-  // Windows dev servers prefix the drive; both forms normalise to an absolute path here.
-  const abs = resolvePath('/', target);
-  // `resolve` has already collapsed `..`, so a traversal cannot smuggle a path past the prefix test.
-  return allow.some((root) => abs === root || abs.startsWith(root.endsWith('/') ? root : root + '/'));
-}
-
   async function proxyLive(base, subPath, req, res, member) {
-    if (!liveFsAllowed(subPath, live.fsAllowFor(member.repo, member.slug))) {
-      // 403 rather than a fallback to the stored artifact: the frame asked for a file, and answering
-      // with a page would look like the file was empty rather than refused.
-      return void json(res, 403, { error: 'this path is not served through a live lagoon frame' });
-    }
     const target = `${String(base).replace(/\/+$/, '')}${subPath}`;
     let upstream;
     try {
@@ -267,10 +216,9 @@ function liveFsAllowed(subPath, allow) {
         const slug = normalizeSegment(url.searchParams.get('slug'));
         if (!repo || !slug) return json(res, 400, { error: 'repo and slug are required' });
         if (path === '/api/live/off') return json(res, 200, { ok: true, cleared: live.clear(repo, slug) });
-        const bodyText = (await readBody(req, 8192)).toString('utf8');
         let where;
         try {
-          where = JSON.parse(bodyText)?.url;
+          where = JSON.parse((await readBody(req, 4096)).toString('utf8'))?.url;
         } catch {
           where = null;
         }
@@ -279,18 +227,8 @@ function liveFsAllowed(subPath, allow) {
         // has the token. A dev server on another machine is not a case this needs to serve.
         if (typeof where !== 'string' || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(where.replace(/\/+$/, '')))
           return json(res, 400, { error: 'url must be http://127.0.0.1:<port>' });
-        // WHICH ROOTS THIS FRAME MAY READ THROUGH `/@fs/`, declared by the dev server that registers.
-        // Sent by the registrar rather than configured here because only it knows where its framework
-        // checkout is — and absent, the guard allows nothing, which fails closed.
-        let fsAllow = [];
-        try {
-          const raw = JSON.parse(bodyText)?.fsAllow;
-          if (Array.isArray(raw)) fsAllow = raw.filter((p) => typeof p === 'string' && p.startsWith('/')).map((p) => resolvePath(p));
-        } catch {
-          fsAllow = [];
-        }
-        live.set(repo, slug, where.replace(/\/+$/, ''), fsAllow);
-        return json(res, 200, { ok: true, member: `${repo}/${slug}`, url: where, ttlMs: 90_000, fsAllow });
+        live.set(repo, slug, where.replace(/\/+$/, ''));
+        return json(res, 200, { ok: true, member: `${repo}/${slug}`, url: where, ttlMs: 90_000 });
       }
       return json(res, 404, { error: `no route for POST ${path}` });
     }
@@ -337,12 +275,12 @@ function liveFsAllowed(subPath, allow) {
         if (!member) return html(res, 404, errorPage(404, 'no such frame'), NO_STORE);
         if (member.live) {
           // THE WHOLE REMAINING PATH, and the query with it. This forwarded `segments[4]` alone — one
-          // segment — so `/@fs/home/…/file.ts` reached the dev server as `/@fs`, which Vite answers
-          // with index.html. Two consequences: a live frame could never load its own modules, and the
-          // `/@fs/` guard below had nothing to guard because no deep path ever arrived.
+          // segment — so anything nested arrived truncated. It costs nothing today, because the
+          // process behind a live frame answers every path with the same self-contained artifact
+          // (`lagoon serve --watch`), and the one path it distinguishes it matches with `endsWith`.
+          // It is here so that stays true of a frame served by something that does route on a path.
           const rest = segments.slice(4).join('/');
-          const sub = `/${rest}${url.search}`;
-          return void (await proxyLive(member.live, sub, req, res, member));
+          return void (await proxyLive(member.live, `/${rest}${url.search}`, req, res, member));
         }
         if (!member.hash) return html(res, 404, errorPage(404, 'this member has never published'), NO_STORE);
         const bytes = store.readHash(member.hash);

@@ -32,7 +32,7 @@ export type MotuTone = 'ok' | 'warn' | 'broken' | 'neutral';
 export type MotuDotTone = MotuTone | 'pending' | 'external';
 
 /** The seams a group can be about. The bar's colour is the hue the coupling graph draws it in. */
-export type MotuSeam = 'input' | 'output' | 'requests' | 'coupling' | 'region';
+export type MotuSeam = 'input' | 'output' | 'requests' | 'coupling' | 'region' | 'coverage';
 
 const SEAM_COLOR: Record<MotuSeam, string> = {
   input: '#12988f',
@@ -40,6 +40,9 @@ const SEAM_COLOR: Record<MotuSeam, string> = {
   requests: '#0369a1',
   coupling: '#b91c1c',
   region: '#0f766e',
+  // Not a seam the coupling graph draws: coverage is about the region over TIME, so it takes a hue
+  // none of the wires use rather than borrowing one and implying a relationship to it.
+  coverage: '#7c3aed',
 };
 
 /** Join class names, dropping the falsy ones. Every component ends with the caller's own className. */

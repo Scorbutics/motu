@@ -34,8 +34,11 @@ import {
   Trail,
   type MotuDotTone,
 } from '@motu/chrome/react';
+import { corpusFor, liveCoverage } from './coverage';
 import {
   getMountedIslands,
+  regionIdOfStore,
+  archipelagoConfigs,
   getChannels,
   getIslandDefinition,
   hostCalls,
@@ -434,6 +437,7 @@ function RegionScope() {
         {getMountedIslands().length} island(s) on screen · click ⌖ above, or Alt-click one, to inspect it
       </div>
       <RegionSheet />
+      <RegionCoverage />
       <RegionInput />
       <RegionRequests />
       <RegionOutput />
@@ -990,6 +994,129 @@ function RegionCoupling() {
 }
 
 // --- Shared rows --------------------------------------------------------------------------------
+
+/**
+ * COVERAGE: has the region ever actually been in the state you are looking at?
+ *
+ * The one question in this panel that is not about the declaration. Everything else compares the
+ * region to what it says about itself — this compares it to what it HAS BEEN, using a corpus of
+ * production states baked into the build by `motu region coverage <id> --save`.
+ *
+ * WHY IT IS HERE AND NOT ONLY IN THE CLI. `motu region coverage` compares a corpus to the region's
+ * flows: a file against a file, and the right way to answer "what should we preview next?". It has no
+ * running region, so it cannot answer the question a person in front of the lagoon actually has —
+ * *does this state happen?* A scenario that renders beautifully in a state production never reaches
+ * is the fixture-inventing-a-vocabulary failure, it passes every static check motu has, and CLAUDE.md
+ * records it as one of the two things only opening the page has ever caught. Here it is one line.
+ *
+ * Absent a corpus this renders NOTHING — not an empty state. A panel that shows an empty coverage box
+ * to every project that never enabled coverage is teaching people to skip a section.
+ */
+function RegionCoverage() {
+  const islands = getMountedIslands();
+  if (!islands.length) return null;
+  const store = islands[0].store;
+  const regionId = regionIdOfStore(store);
+  const corpus = corpusFor(regionId);
+  if (!corpus) return null;
+
+  // WHAT THE REGION DECLARES TODAY — the same union the sheet above is built from, so the two cannot
+  // disagree about what this region is. The fold itself runs over the CORPUS' keys (a fingerprint is
+  // only comparable over the same list); these are here so `drift` has something to compare against.
+  const declaredKeys = new Set<string>();
+  for (const info of islands.filter((i) => i.store === store)) {
+    for (const key of writtenKeys(info.spec)) declaredKeys.add(key);
+    for (const key of bindKeys(info)) declaredKeys.add(key);
+  }
+  // THE REGION'S DECLARED ENUMS, not none.
+  //
+  // A key the archipelago declares a closed set fingerprints as `= last`, not `set`. Folding the live
+  // region without them produces `set` for exactly those keys, so EVERY state would miss its corpus
+  // row and the section would read "never recorded" for a region whose coverage is perfect — a
+  // wrong answer that looks like a finding, which is the worst kind.
+  const enums = archipelagoConfigs().find((c) => c.id === regionId)?.coverage?.enums ?? [];
+  const cov = liveCoverage(corpus, [...declaredKeys].sort(), (k) => store.get(k), enums);
+  const pct = (n: number) => `${(n * 100).toFixed(n >= 0.1 ? 0 : 1)}%`;
+
+  return (
+    <Group seam="coverage">
+      <Sub>
+        {corpus.entries.length} recorded state(s) · {cov.total} occurrence(s)
+      </Sub>
+
+      {cov.drift && (
+        // Said rather than silently worked around: a fingerprint over one key set cannot be placed in
+        // a corpus recorded over another, so every verdict below would be confidently wrong.
+        <Notice tone="warn">
+          the corpus was recorded against a different declaration — {cov.drift.onlyRecorded.length} key(s) gone
+          ({cov.drift.onlyRecorded.join(', ') || '—'}), {cov.drift.onlyDeclared.length} added
+          ({cov.drift.onlyDeclared.join(', ') || '—'}). Re-record before trusting this.
+        </Notice>
+      )}
+
+      {/* THIS STATE — the line the CLI cannot write. */}
+      <Table className="cov" columns="1fr auto">
+        <span className="k">on screen now</span>
+        {/* THREE VERDICTS, NOT TWO. Under drift the honest answer is neither "recorded" nor "never
+            recorded" — a state folded over one key list cannot be looked up in a corpus folded over
+            another, so "never recorded" would be a finding manufactured by the mismatch. It read
+            exactly that way before the drift notice existed to contradict it. */}
+        {cov.drift ? (
+          <Pill tone="neutral" mono>
+            not comparable
+          </Pill>
+        ) : cov.entry ? (
+          <Pill tone="ok" mono>
+            production reaches this · {cov.entry.count}× · {pct(cov.share)}
+          </Pill>
+        ) : (
+          <Pill tone="warn" mono>
+            never recorded
+          </Pill>
+        )}
+      </Table>
+      {/* The fingerprint on its own wrapped line, because it IS the content of this section — in the
+          row above it truncated at the column edge, which hid the very keys a reader is checking. */}
+      <div className="cov-fp">{cov.id}</div>
+      {!cov.entry && !cov.drift && (
+        <Sub>no beacon has reported this combination — either it cannot happen, or nobody has reached it yet</Sub>
+      )}
+
+      {/* THE WORKLIST, beside the region it is about: what production does that you are not looking at.
+          THE HEADING CARRIES THE SEMANTICS. Each row shows only the keys that DIFFER from the state on
+          screen, so a bare "64% busy:true" reads as "64% of production has busy:true" — a different and
+          much stronger claim than the true one, which is "the state holding 64% differs from this one
+          by busy:true". Naming the comparison in the heading is what stops the misreading. */}
+      {cov.ranked.filter((r) => !r.current).length > 0 && <Sub>how the recorded states differ from this one</Sub>}
+      {cov.ranked
+        .filter((r) => !r.current)
+        .slice(0, 6)
+        .map((r, n) => (
+          <Table
+            // INDEX IN THE KEY. The fingerprint looks like a unique id and is not guaranteed to be
+            // one: a corpus is only deduped by whatever folded it, and two entries sharing a
+            // fingerprint make React drop one row silently — the same duplicate-key bug the coupling
+            // view had. Malformed input should render badly and visibly, never quietly short.
+            key={`${r.id}#${n}`}
+            className="cov"
+            columns="52px 1fr"
+            title={`${r.id}\nseen ${r.entry.count}\u00d7, last ${ago(r.entry.lastAt)}`}
+          >
+            <span className="share">{pct(r.share)}</span>
+            <span className="val">{r.diff || '\u2014 identical to this one'}</span>
+          </Table>
+        ))}
+    </Group>
+  );
+}
+
+/** The whole fingerprint, one key per line — for a title attribute, where length is free. *//** The whole fingerprint, one key per line — for a title attribute, where length is free. */
+function fingerprintLine(fp: Record<string, string>): string {
+  return Object.keys(fp)
+    .sort()
+    .map((k) => `${k}: ${fp[k]}`)
+    .join('\n');
+}
 
 function CallRow({ call: c, dup }: { call: CallRecord; dup: boolean }) {
   const bits: string[] = [];

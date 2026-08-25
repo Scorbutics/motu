@@ -12,9 +12,10 @@
     }
   },
   "dependencies": {
+    "@motu/chrome": "workspace:*",
     "@motu/core": "workspace:*",
-    "@motu/runtime": "workspace:*",
-    "@motu/chrome": "workspace:*"
+    "@motu/coverage": "workspace:*",
+    "@motu/runtime": "workspace:*"
   },
   "files": [
     "dist"

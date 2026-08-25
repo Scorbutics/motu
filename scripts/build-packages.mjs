@@ -116,9 +116,15 @@ function build(pkgDir, part) {
 }
 
 console.log('building publishable packages');
+// HYBRID FIRST. `@motu/chrome/react` is a DEPENDENCY of the compiled packages — the lens and the
+// review console both import the kit from it — and it resolves through `dist`, so building it last
+// meant a change to its types could never compile in one pass: the compiled packages typechecked
+// against the PREVIOUS build of it. Adding a seam to `MotuSeam` and using it in the same commit
+// failed here, and the second run of an unchanged script succeeded, which is the signature of an
+// ordering bug rather than a real error.
+for (const part of HYBRID) build(part.dir, part);
 for (const p of COMPILED) build(p);
 for (const p of AS_IS) {
   const name = JSON.parse(readFileSync(resolve(ROOT, p, 'package.json'), 'utf8')).name;
   console.log(`  – ${name.padEnd(26)} ships as authored (already JavaScript)`);
 }
-for (const part of HYBRID) build(part.dir, part);

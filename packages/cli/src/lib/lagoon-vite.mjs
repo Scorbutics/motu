@@ -10,7 +10,7 @@
 // A project declares its posture in motu.config.json and its lagoon in lagoon.config.json. That is all.
 // `motu lagoon eject` writes the old files back out for a project that genuinely needs to fork.
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveLagoonRoot } from './lagoon-materialize.mjs';
@@ -277,6 +277,15 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // The lagoon is the sandbox — the overlay is present by default; MOTU_DEBUG=0 strips it.
       __MOTU_DEBUG__: JSON.stringify(env.MOTU_DEBUG !== '0'),
       __MOTU_ISOLATION__: JSON.stringify(paths.isolation),
+      // THE CORPUS, BAKED IN — what the region has actually been in, so the lens can say whether the
+      // state on screen is one production reaches.
+      //
+      // Read from FILES that `motu region coverage --save` wrote, never fetched here. That is what
+      // keeps the promise a published lagoon has to keep: the page is reachable by anyone, so it may
+      // carry the rows and must not carry the address they came from or the credential that opened
+      // it. A build that fetched would put both one env var away from the bundle; a build that reads
+      // a sanitised file cannot leak what is not in the file.
+      __MOTU_CORPUS__: JSON.stringify(savedCorpora(paths)),
       ...(host.define ?? {}),
     },
     resolve: {
@@ -338,4 +347,27 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       ...(host.server ?? {}),
     },
   };
+}
+
+/**
+ * The corpora `motu region coverage <id> --save` has written, keyed by region.
+ *
+ * Nothing here is required: a project with no coverage has no directory, and the lens simply has
+ * nothing to compare against. Unreadable or malformed files are SKIPPED rather than fatal — a preview
+ * that will not boot because a coverage artifact is stale is a worse failure than one that shows less.
+ */
+function savedCorpora(paths) {
+  const dir = resolve(paths.lagoonDir, 'src/coverage');
+  if (!existsSync(dir)) return {};
+  const out = {};
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.json')) continue;
+    try {
+      const corpus = JSON.parse(readFileSync(resolve(dir, name), 'utf8'));
+      if (corpus?.regionId && Array.isArray(corpus.entries)) out[corpus.regionId] = corpus;
+    } catch {
+      // skipped on purpose; see above
+    }
+  }
+  return out;
 }

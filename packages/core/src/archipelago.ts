@@ -951,8 +951,13 @@ export function applyOutput(spec: IslandSpec, eventName: string, detail: unknown
   spec.on?.[eventName]?.(detail, ctx);
 }
 
-/** Which region owns this store. The island spec does not carry its region id; the store identifies it. */
-function regionIdOfStore(store: Store): string | null {
+/**
+ * Which region owns this store. The island spec does not carry its region id; the store identifies it.
+ *
+ * Exported for the lens, which has a store in hand (every panel section starts from one) and needs the
+ * region's NAME to look anything up that is keyed by region — the coverage corpus, to begin with.
+ */
+export function regionIdOfStore(store: Store): string | null {
   for (const [id, s] of stores) if (s === store) return id;
   return null;
 }

@@ -115,6 +115,17 @@ ${motuShadowCss('mock')}
 .sheet .still { color: #cbd5e1; text-align: right; }
 .sheet .flag { font-size: 9px; }
 
+/* COVERAGE rows. Same table idiom as the sheet, one column narrower: a share and what differs. */
+.cov .k { font-weight: 600; }
+.cov .share { color: #7c3aed; font-variant-numeric: tabular-nums; text-align: right; }
+/* The diff wraps rather than truncating. It is usually two or three keys and it is the whole content
+   of the row — an ellipsis here would hide the only thing the row says. */
+.cov .val { color: #0f172a; white-space: normal; overflow-wrap: anywhere; }
+/* The live fingerprint, in full. Wraps rather than truncating: it is the content of the section, and
+   the keys a reader is checking are as likely to be at the end of it as the start. */
+.cov-fp { font-family: var(--mono); font-size: 9.5px; color: #475569; line-height: 1.5;
+          margin: 1px 0 2px; white-space: normal; overflow-wrap: anywhere; }
+
 /* --- WHAT AN ISLAND IS, at the head of its detail ------------------------------------------------ */
 .detail__title { display: flex; align-items: baseline; gap: 8px; padding-bottom: 2px; font: 700 12px/1.3 var(--mono); color: var(--ink); }
 .detail__slot { font-weight: 500; font-size: 10px; color: var(--ink-faint); font-family: var(--sans); }

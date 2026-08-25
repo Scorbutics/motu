@@ -237,6 +237,11 @@ export class Store {
    * the hook keeps the guarantee where the writes are.
    */
   private snapshotCache: Record<string, unknown> | null = null;
+  /** Depth of nested `batch()` calls; above zero, writes accumulate instead of notifying. */
+  private batchDepth = 0;
+  /** Whether anything actually changed inside the current batch — an empty batch notifies nobody. */
+  private batchDirty = false;
+
   /** Bumped on every real change — the cheapest thing a subscriber can compare. */
   private revision = 0;
 
@@ -316,7 +321,54 @@ export class Store {
       // provide() tags its writes 'host'; capture them (with the value) as lagoon seed.
       if (seedSink && writeSource === 'host') seedSink.push({ key, value, source: 'host' });
     }
-    this.listeners.forEach((l) => l());
+    if (this.batchDepth > 0) this.batchDirty = true;
+    else this.listeners.forEach((l) => l());
+  }
+
+  /**
+   * Apply several keys as ONE observable change.
+   *
+   * A region is written a key at a time, and `set` notifies as it goes — so a caller holding a whole
+   * region object publishes every step in between as if it were a state of the region. peps' actions
+   * page computes
+   *
+   *     const isCurrentWeek = …
+   *     isOtherWeek: selectedWeekIndex !== -1 && !isCurrentWeek
+   *
+   * so `isOtherWeek` is DEFINED as `!isCurrentWeek` and both can never be true in one render. A
+   * corpus from staging holds a state with both true. Written through here, that interleaving cannot
+   * be observed: subscribers are told once, after every key has landed.
+   *
+   * EXPLICIT RATHER THAN AUTOMATIC, and that was tried the other way first. Coalescing every
+   * notification to a microtask fixes this without a caller changing anything — and it silently
+   * removes the guarantee that a write is visible to a bound island in the same synchronous block,
+   * which model-b asserts (`act(() => store.set(k, v))`, then read the DOM). React batches
+   * `useSyncExternalStore` re-renders anyway, so islands do not tear within a commit; the coalescing
+   * bought nothing there and cost a real guarantee everywhere.
+   *
+   * KNOW WHAT THIS DOES NOT FIX. Two keys published from two DIFFERENT React commits — which is what
+   * `<Island>` does when the page's props are spread across components — are genuinely inconsistent
+   * between those commits, and the browser may paint in the interval. No batching here can change
+   * that; it is a fact about where the page computes its values, and the fix is to publish them
+   * together.
+   */
+  batch(fn: () => void): void {
+    this.batchDepth++;
+    try {
+      fn();
+    } finally {
+      this.batchDepth--;
+      if (this.batchDepth === 0 && this.batchDirty) {
+        this.batchDirty = false;
+        this.listeners.forEach((l) => l());
+      }
+    }
+  }
+
+  setAll(values: Record<string, unknown>): void {
+    this.batch(() => {
+      for (const [key, value] of Object.entries(values)) this.set(key, value);
+    });
   }
 
   /**

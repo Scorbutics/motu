@@ -17,7 +17,12 @@
 // not on you. Eviction orders by LAST ACCESS rather than publish date: the six-week-old lagoon
 // somebody bookmarked is exactly the one that must survive ten builds from this morning.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs';
+// THE FOLD IS NOT REIMPLEMENTED HERE. Merging two corpora is arithmetic on motu's own format, and the
+// moment a second copy of it exists the two stop agreeing — which is the whole reason `mergeCorpora`
+// lives in @motu/coverage instead of in every backend that stores one. The package compiles to plain
+// ESM, so bare node reads it exactly as the browser does.
+import { mergeCorpora } from '@motu/coverage';
 import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 
@@ -72,8 +77,19 @@ export function hashBytes(buf) {
   return createHash('sha256').update(buf).digest('hex');
 }
 
+/**
+ * Where the store lives when nobody says otherwise.
+ *
+ * Exported because `motu-host access` edits a file INSIDE it and must land in the same place the
+ * server will read from. Two copies of this expression is two directories, and the symptom is a
+ * policy that was written and appears to do nothing.
+ */
+export function storeDir(dir) {
+  return resolve(dir || process.env.MOTU_HOST_DIR || resolve(homedir(), '.motu/host'));
+}
+
 export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DEFAULT_MAX_BYTES } = {}) {
-  const root = resolve(dir || process.env.MOTU_HOST_DIR || resolve(homedir(), '.motu/host'));
+  const root = storeDir(dir);
   const indexPath = resolve(root, 'index.json');
   mkdirSync(resolve(root, 'objects'), { recursive: true });
 
@@ -506,10 +522,73 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     };
   }
 
+  // --- coverage ------------------------------------------------------------------------------
+  //
+  // Small, sparse and per repo: motu's own review console reaches 7 states out of ~2,900 possible
+  // ones. Kept as files beside the objects rather than in the index, so a corpus cannot bloat the one
+  // document every request reads, and so a stale one is a file to delete.
+
+  /** Where one declaration's corpus lives. Nested so a repo id with an owner segment stays a path. */
+  function coveragePath(repo, region, keysHash) {
+    return resolve(dir, 'coverage', repo, region, `${keysHash}.json`);
+  }
+
+  /**
+   * Fold an incoming corpus into the stored one for its declaration.
+   *
+   * BUCKETED BY `keysHash`, never mixed across it: a corpus recorded against a different key list is
+   * not comparable to this one, and folding the two would produce counts that mean nothing. Add a key
+   * to a region and its old rows simply stop being written to — visible, and one file to delete.
+   */
+  function mergeCoverage(repo, region, incoming) {
+    const keysHash = String(incoming.keysHash ?? '').trim() || 'unstamped';
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(keysHash)) throw new Error('keysHash must be [A-Za-z0-9_-]');
+    const file = coveragePath(repo, region, keysHash);
+    let stored = null;
+    if (existsSync(file)) {
+      try {
+        stored = JSON.parse(readFileSync(file, 'utf8'));
+      } catch {
+        // A corrupt corpus is a worklist nobody can read, not data anyone is owed. Start it again
+        // rather than refuse every write from now on.
+        stored = null;
+      }
+    }
+    const merged = stored ? mergeCorpora([stored, incoming]) : incoming;
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    writeFileSync(tmp, JSON.stringify(merged), 'utf8');
+    renameSync(tmp, file);
+    return { states: merged.entries.length, keysHash };
+  }
+
+  /**
+   * Every declaration's corpus for a region, newest declaration first.
+   *
+   * Returns them separately rather than merged: they are not comparable, and a reader deciding which
+   * one is current needs to see that there is more than one.
+   */
+  function readCoverage(repo, region) {
+    const base = resolve(dir, 'coverage', repo, region);
+    if (!existsSync(base)) return [];
+    const out = [];
+    for (const name of readdirSync(base)) {
+      if (!name.endsWith('.json')) continue;
+      try {
+        out.push(JSON.parse(readFileSync(resolve(base, name), 'utf8')));
+      } catch {
+        // skipped: see mergeCoverage
+      }
+    }
+    return out.sort((a, b) => (b.entries?.length ?? 0) - (a.entries?.length ?? 0));
+  }
+
   return {
     root,
     maxRecords,
     maxBytes,
+    mergeCoverage,
+    readCoverage,
     publish,
     resolveRef,
     read,

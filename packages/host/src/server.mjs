@@ -26,6 +26,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
 import { wrapFragment } from './document.mjs';
 import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
+import { loadAccess, isPublic, canRead, canIngest, cookieValue, READ_COOKIE } from './access.mjs';
 
 /**
  * Two limits, because one of them was measuring the wrong thing.
@@ -188,22 +189,70 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     const url = new URL(req.url, 'http://host');
     const path = url.pathname;
 
+    // THE ACCESS POLICY, re-read per request so editing it does not need a restart. See access.mjs;
+    // absent, every repo is public and the global token admits every write, which is what the host
+    // did before any of this existed.
+    const access = loadAccess(dir);
+    const bearer = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const adminOk = Boolean(token) && tokenMatches(bearer, token);
+    const readSecret = cookieValue(req.headers.cookie, READ_COOKIE);
+    /** A reader's verdict for one repo, and the 404 that hides a private one's existence. */
+    const readable = (repo) => canRead(access, repo, { adminOk, readSecret });
+
+    // UNLOCKING A PRIVATE LINK. A browser following a URL cannot set a header, so the secret arrives
+    // once as `?k=`, becomes an HttpOnly cookie, and is redirected away — so it stops appearing in the
+    // address bar, in history, and in any Referer the page later sends.
+    if (url.searchParams.has('k')) {
+      const clean = new URL(url.href);
+      clean.searchParams.delete('k');
+      res.writeHead(302, {
+        location: clean.pathname + clean.search + clean.hash,
+        'set-cookie': `${READ_COOKIE}=${encodeURIComponent(url.searchParams.get('k') ?? '')}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`,
+        'cache-control': 'no-store',
+      });
+      return void res.end();
+    }
+
     if (path === '/favicon.ico') return void res.writeHead(204).end();
     if (path === '/api/health') return json(res, 200, { ok: true, ...store.stats() });
     // The two read APIs the CLI needs to build a gallery without scraping the HTML index.
-    if (path === '/api/repos') return json(res, 200, { repos: store.listRepos() });
+    if (path === '/api/repos')
+      return json(res, 200, { repos: store.listRepos().filter((r) => readable(r.repo)) });
     if (path === '/api/baselines') {
       const repo = normalizeRepo(url.searchParams.get('repo'));
       if (!repo) return json(res, 400, { error: 'repo is required' });
+      if (!readable(repo)) return json(res, 404, { error: 'no such repo' });
       return json(res, 200, { repo, shots: store.listShots(repo, url.searchParams.get('island') || null) });
     }
-    if (path === '/api/groups') return json(res, 200, { groups: store.listGroups() });
+    if (path === '/api/groups')
+      return json(res, 200, {
+        groups: store
+          .listGroups()
+          .map((g) => ({ ...g, members: (g.members ?? []).filter((m) => readable(m.repo)) }))
+          .filter((g) => g.members.length),
+      });
     // GUARDED BY METHOD, unlike its neighbours, because this path also takes a POST. Without the guard
     // the read branch answered the registration too — a cheerful 200 with an empty list, so the CLI
     // reported itself live and the host had never heard of it.
     if (path === '/api/live' && req.method === 'GET') return json(res, 200, { live: live.list() });
 
     if (req.method === 'POST') {
+      // INGEST IS ITS OWN DOOR, checked before the admin gate and never falling through to it.
+      //
+      // This is the one write an application's server makes, so its credential lives in that
+      // application's environment rather than on this machine. It is therefore the credential most
+      // likely to leak, and it is scoped to match: one repo, one route, no reads. An ingest token
+      // cannot publish a lagoon, register a live frame, accept a baseline, or touch another project.
+      //
+      // The admin token still works here — one credential that can do everything is exactly what it
+      // is for — but nothing an app holds needs to be that credential.
+      if (path === '/api/coverage') {
+        const repo = normalizeRepo(url.searchParams.get('repo'));
+        if (!repo) return json(res, 400, { error: 'repo must be `name` or `owner/name`, [A-Za-z0-9._-]' });
+        if (!adminOk && !canIngest(access, repo, bearer))
+          return json(res, 401, { error: 'bad or missing ingest token for this repo' });
+        return void (await ingestCoverage(req, res, url, repo));
+      }
       if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
       const auth = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!tokenMatches(auth, token)) return json(res, 401, { error: 'bad or missing token' });
@@ -237,7 +286,19 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       return json(res, 405, { error: `${req.method} not allowed` });
 
     if (path === '/') {
-      return html(res, 200, rootIndexPage({ repos: store.listRepos(), groups: store.listGroups(), stats: store.stats() }), NO_STORE);
+      // FILTERED, or the gate leaks the very thing it hides: a private repo the visitor cannot open
+      // would still be listed here by name, with its lagoon count.
+      const repos = store.listRepos().filter((r) => readable(r.repo));
+      // A GROUP'S SUMMARY NAMES ITS MEMBERS — "2 lagoons · acme/secret + acme/open" — so filtering the
+      // repo list alone still printed the private repo on the front page. The gallery itself was
+      // already filtered; this is the line ABOUT it, which is the easier one to forget. A group left
+      // with nothing readable is dropped rather than shown empty: "a gallery you may not see" is
+      // itself the fact being withheld.
+      const groups = store
+        .listGroups()
+        .map((g) => ({ ...g, members: (g.members ?? []).filter((m) => readable(m.repo)) }))
+        .filter((g) => g.members.length);
+      return html(res, 200, rootIndexPage({ repos, groups, stats: store.stats() }), NO_STORE);
     }
 
     const segments = path.split('/').filter(Boolean).map(decodeURIComponent);
@@ -264,7 +325,15 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (!name) return html(res, 400, errorPage(400, 'bad group name'), NO_STORE);
       const group = store.getGroup(name);
       if (!group) return html(res, 404, errorPage(404, `no group "${name}"`), NO_STORE);
-      const members = store.resolveGroup(name, live.endpointFor);
+      // A GALLERY MUST NOT BE A WAY ROUND THE GATE. A group is a list of members by repo, and serving
+      // its frames without this check would hand out exactly the pages the per-repo route refuses —
+      // `motu lagoon group <name> --all` composes EVERY published project, so a private one joins a
+      // public gallery by default rather than by anyone choosing it.
+      //
+      // Filtered rather than refused: a gallery of five projects, one of them private, is still a
+      // gallery of the four you may see. Frame indices come from this same filtered list, so /f/2
+      // means the third READABLE member and cannot be walked past the end of it.
+      const members = store.resolveGroup(name, live.endpointFor).filter((m) => readable(m.repo));
       if (!members.length)
         return html(res, 404, errorPage(404, `group "${name}" resolves to nothing yet — no member has published`), NO_STORE);
 
@@ -309,6 +378,10 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       const id = normalizeSegment(segments[1]);
       const found = id && store.manifest(id);
       if (!found) return html(res, 404, errorPage(404, 'unknown manifest'), NO_STORE);
+      // A pinned manifest is a snapshot of a group, so it carries the same risk and takes the same
+      // filter. Its immutability is about the BYTES, never about who may see them.
+      found.members = (found.members ?? []).filter((m) => readable(m.repo));
+      if (!found.members.length) return html(res, 404, errorPage(404, 'unknown manifest'), NO_STORE);
       if (segments[2] === 'f') {
         const i = Number.parseInt(segments[3] ?? '', 10);
         const member = Number.isInteger(i) ? found.members[i] : null;
@@ -340,6 +413,10 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       const ref = normalizeSegment(segments[segments.length - 2]);
       const repo = normalizeRepo(segments.slice(0, -2).join('/'));
       if (repo && ref && slug) {
+        // 404, NOT 403, for a private repo somebody cannot read. A 403 confirms the repo exists,
+        // which is the one thing a private host should not tell an unauthenticated stranger — and the
+        // name of an unreleased project is often the interesting part.
+        if (!readable(repo)) return html(res, 404, errorPage(404, `nothing at ${path}`), NO_STORE);
         const rec = store.resolveRef(repo, ref, slug);
         if (!rec) return html(res, 404, errorPage(404, `nothing at ${repo}/${ref}/${slug}`), NO_STORE);
         const bytes = store.read(repo, rec.id, rec.hash);
@@ -349,10 +426,45 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     }
 
     const repo = normalizeRepo(segments.join('/'));
-    const listing = repo && store.listRepo(repo);
+    const listing = repo && readable(repo) && store.listRepo(repo);
     if (listing) return html(res, 200, repoIndexPage(listing), NO_STORE);
 
     return html(res, 404, errorPage(404, `nothing at ${path}`), NO_STORE);
+  }
+
+  /**
+   * Accept a coverage corpus for one repo and fold it into what is already stored.
+   *
+   * FOLDED HERE, NOT APPENDED. A corpus is a set of distinct states with counts, and two corpora for
+   * the same declaration are added by merging their entries — which is arithmetic on motu's own
+   * format, and the reason `mergeCorpora` lives in @motu/coverage rather than in each backend that
+   * ever stores one. Appending would give a file that grows with traffic and a report that counts the
+   * same state many times.
+   *
+   * BUCKETED BY DECLARATION. `keysHash` stamps which key list a corpus was recorded against; a
+   * corpus taken against a different declaration is not comparable to this one, so it is kept
+   * separately rather than mixed. That also makes cleanup after a region changes a single delete.
+   */
+  async function ingestCoverage(req, res, url, repo) {
+    const region = normalizeSegment(url.searchParams.get('region') || '');
+    if (!region) return json(res, 400, { error: 'region is required' });
+    let incoming;
+    try {
+      incoming = JSON.parse((await readBody(req, 1_000_000)).toString('utf8'));
+    } catch {
+      return json(res, 400, { error: 'body must be a JSON corpus' });
+    }
+    if (!Array.isArray(incoming?.entries) || !Array.isArray(incoming?.keys))
+      return json(res, 400, { error: 'a corpus needs `keys` and `entries`' });
+    try {
+      const result = store.mergeCoverage(repo, region, incoming);
+      // NOTHING ABOUT THE CORPUS COMES BACK. The caller is an application server forwarding on behalf
+      // of a browser; it needs to know the write LANDED so the client can stop re-reporting that
+      // state, and it has no business reading what anyone else's browser has reached.
+      return json(res, 200, { ok: true, states: result.states });
+    } catch (err) {
+      return json(res, 400, { error: String(err?.message ?? err) });
+    }
   }
 
   async function publish(req, res, url) {

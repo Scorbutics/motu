@@ -69,6 +69,86 @@ if (!Number.isInteger(maxBytes) || maxBytes < 1) {
   console.error(color.red(`✗ --max-bytes must be a positive integer, got "${argv['max-bytes']}"`));
   process.exit(1);
 }
+// `motu-host access` — mint a credential, or make a repo private.
+//
+// THE HASHES ARE NOT HAND-WRITABLE, which is the only reason this subcommand exists. access.json
+// stores sha256 digests so a backup of a preview server is not a credential leak, and asking somebody
+// to produce one with an openssl incantation is asking them to skip the feature.
+//
+// The secret is printed ONCE and never stored — the file keeps only its digest, so there is nothing
+// here to read it back from. That is the point, and it is worth saying out loud at the moment
+// somebody is deciding whether to copy it.
+if (argv._[0] === 'access') {
+  const { digest, loadAccess } = await import('./access.mjs');
+  const { randomBytes } = await import('node:crypto');
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const { storeDir } = await import('./store.mjs');
+  const dir = storeDir(typeof argv.dir === 'string' ? argv.dir : undefined);
+  const file = resolve(dir, 'access.json');
+  const access = loadAccess(dir);
+  if (access.malformed) {
+    console.error(color.red(`✗ ${file} is not valid JSON — refusing to overwrite it`));
+    process.exit(1);
+  }
+  const out = { readHash: access.readHash, repos: { ...access.repos } };
+  const repo = typeof argv.repo === 'string' ? argv.repo : null;
+  const minted = [];
+
+  if (argv.read) {
+    const secret = randomBytes(32).toString('hex');
+    out.readHash = digest(secret).toString('hex');
+    minted.push(['read secret (opens every private lagoon)', secret]);
+  }
+  if (argv.ingest) {
+    if (!repo) {
+      console.error(color.red('✗ --ingest needs --repo <owner/name>: an ingest token grants exactly one repo'));
+      process.exit(1);
+    }
+    const secret = randomBytes(32).toString('hex');
+    out.repos[repo] = { ...(out.repos[repo] ?? {}), ingestHash: digest(secret).toString('hex') };
+    minted.push([`ingest token for ${repo}`, secret]);
+  }
+  if (argv.private || argv.public) {
+    if (!repo) {
+      console.error(color.red('✗ --private/--public needs --repo <owner/name>'));
+      process.exit(1);
+    }
+    out.repos[repo] = { ...(out.repos[repo] ?? {}), visibility: argv.private ? 'private' : 'public' };
+  }
+  if (!minted.length && !argv.private && !argv.public) {
+    console.log('');
+    console.log('  motu-host access --read                      mint the secret that opens private lagoons');
+    console.log('  motu-host access --repo <r> --ingest         mint a write-only coverage token for one repo');
+    console.log('  motu-host access --repo <r> --private        stop serving that repo to strangers');
+    console.log('  motu-host access --repo <r> --public         serve it again');
+    console.log('');
+    const names = Object.keys(access.repos);
+    console.log(color.dim(`  ${file}`));
+    console.log(color.dim(`  ${names.length} repo(s) with a policy${names.length ? `: ${names.join(', ')}` : ''}`));
+    console.log(color.dim(`  read secret ${access.readHash ? 'set' : 'NOT set — every private lagoon is closed to everyone but the admin token'}`));
+    process.exit(0);
+  }
+
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`);
+  console.log('');
+  for (const [what, secret] of minted) {
+    console.log(`  ${color.green('✓')} ${what}`);
+    console.log(`    ${secret}`);
+  }
+  if (argv.private) console.log(`  ${color.green('✓')} ${repo} is private — strangers get 404, not 403`);
+  if (argv.public) console.log(`  ${color.green('✓')} ${repo} is public`);
+  if (minted.length) {
+    console.log('');
+    console.log(color.dim('  Shown once. Only the digest is stored, so this cannot be read back — mint a new one if it is lost.'));
+    if (argv.read) console.log(color.dim('  A reader opens a private link by visiting it with ?k=<secret> once.'));
+  }
+  console.log(color.dim(`  ${file}`));
+  console.log('');
+  process.exit(0);
+}
+
 const token = typeof argv.token === 'string' ? argv.token : process.env.MOTU_HOST_TOKEN || null;
 const lan = argv.host === true || argv.host === '0.0.0.0';
 const bind = lan ? '0.0.0.0' : '127.0.0.1';

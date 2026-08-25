@@ -371,7 +371,13 @@ export interface RegionCoverageOptions extends FingerprintOptions {
   /** Distinct-state cap. See CoverageRecorder. */
   limit?: number;
   /** Where a corpus goes when it is flushed. Omit to keep it in memory and read it yourself. */
-  sink?: (corpus: CoverageCorpus) => void;
+  /**
+   * Where a novel state goes. May report whether it landed — see the flush.
+   *
+   * `void` means "cannot know" (`sendBeacon`), a boolean is a synchronous verdict, and a promise is
+   * one from a transport that read a response. Only a confirmed send is remembered.
+   */
+  sink?: (corpus: CoverageCorpus) => void | boolean | Promise<boolean>;
   /**
    * Fingerprints already accounted for — covered by a flow, or accepted by someone who looked. A
    * state in here is not a finding, so it is never sent. This is what turns the steady state into
@@ -507,18 +513,39 @@ export function observeRegionCoverage(regionId: string, opts: RegionCoverageOpti
     // THE ZERO-REQUEST PATH, and the common one. Nothing novel means nothing to say.
     if (!novel.length) return;
     reports++;
-    for (const e of novel) reported.add(fingerprintId(e.fingerprint));
-    if (opts.remember) {
+    const ids = novel.map((e) => fingerprintId(e.fingerprint));
+    // REMEMBER WHAT LANDED, NOT WHAT WAS ATTEMPTED.
+    //
+    // This used to mark the states reported and write localStorage BEFORE calling the sink, and
+    // unconditionally. A send that failed was therefore indistinguishable from one that worked: the
+    // browser never offered those states again, so a state reached while the receiving end was down
+    // was lost from that browser permanently — not delayed. Novelty-gating is what makes this cheap
+    // to run, and it is also what makes a dropped report final.
+    //
+    // Survivable while the sink was a same-origin write to the app's own database. Not survivable
+    // once it forwards to a host that can be a tunnel somebody closed: motu's own went down for 41
+    // hours without anyone noticing, which is fine for a gallery and fatal for this.
+    const confirm = (ok: boolean) => {
+      if (!ok || !opts.remember) return;
+      for (const id of ids) reported.add(id);
       try {
         localStorage.setItem(`motu:coverage:${regionId}`, JSON.stringify([...reported]));
       } catch {
         // A browser refusing storage just means this one reports a state it already has.
       }
-    }
+    };
     try {
-      opts.sink({ ...corpus, entries: novel });
+      const result = opts.sink({ ...corpus, entries: novel });
+      // A sink may answer three ways, and all three are legitimate. `undefined` is the old contract
+      // and the one `sendBeacon` is stuck with — it cannot know, so it is taken at its word. A
+      // boolean is a synchronous verdict (sendBeacon's own queue result). A promise is a real one,
+      // from a transport that read a response.
+      if (result === undefined) confirm(true);
+      else if (typeof result === 'boolean') confirm(result);
+      else void Promise.resolve(result).then(confirm, () => confirm(false));
     } catch {
-      // Egress is best-effort by construction — see `beaconSink`.
+      // Egress is best-effort by construction — see `beaconSink`. A throw is a failure, so nothing is
+      // remembered and the state is offered again next time.
     }
   };
 
@@ -560,19 +587,25 @@ export function observeRegionCoverage(regionId: string, opts: RegionCoverageOpti
  * Falls back to a keepalive fetch where `sendBeacon` is unavailable, and gives up quietly if that
  * fails too. There is no error path worth taking: the alternative to a lost corpus is a broken page.
  */
-export function beaconSink(url: string): (corpus: CoverageCorpus) => void {
+export function beaconSink(url: string): (corpus: CoverageCorpus) => boolean | Promise<boolean> {
   return (corpus) => {
     const body = JSON.stringify(corpus);
     try {
       if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-        navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
-        return;
+        // THE WEAKEST USEFUL CONFIRMATION, and worth taking. `sendBeacon` returns whether the browser
+        // QUEUED the request, never whether it arrived — so `true` here is a hope and `false` is a
+        // fact. Treating false as failure is what stops a state being marked reported when the
+        // browser has already refused to try (over the queue limit, or a blocked URL).
+        return navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
       }
-      void fetch(url, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'application/json' } }).catch(
-        () => {},
-      );
+      // `keepalive` outlives the page like a beacon does AND can be read, so where this path runs the
+      // answer is real rather than hopeful.
+      return fetch(url, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'application/json' } })
+        .then((res) => res.ok)
+        .catch(() => false);
     } catch {
       /* the page is leaving; there is nowhere to report this to and nothing to do about it */
+      return false;
     }
   };
 }

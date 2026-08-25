@@ -9,6 +9,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./server/next": {
+      "types": "./dist/server/next.d.ts",
+      "default": "./dist/server/next.js"
     }
   },
   "dependencies": {

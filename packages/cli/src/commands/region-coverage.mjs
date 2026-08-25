@@ -215,6 +215,43 @@ export async function regionCoverageCommand(argv) {
   // A URL IS A FILE HERE. The corpus lives wherever the project put it, and the whole point of the
   // read side being a cacheable blob is that checking against the real thing should not need an
   // export step — `motu region coverage <id> --corpus https://…` is the drift check.
+  /**
+   * A STATUS PAGE IS ALSO A CORPUS SOURCE, whichever way it arrived.
+   *
+   * `/coverage/status` answers in a summary shape (`{ top: [{ browsers, state }] }`) because a phone
+   * has to render it, and accepting that is what saves somebody standing up a second endpoint to say
+   * the same thing.
+   *
+   * This used to live inside the fetch branch, so the SAME BODY was a corpus from a URL and garbage
+   * from a file — and a file is exactly how it arrives when the person reading the status page is on
+   * their phone and pastes it. The failure was not even a message about shape: `mergeCorpora` reached
+   * `corpus.keys.join(...)` on an object that has no `keys`, and the CLI printed
+   * "Cannot read properties of undefined (reading 'join')".
+   */
+  const asCorpus = (body) => {
+    if (!Array.isArray(body?.top)) return body;
+    const entries = body.top.map((t) => ({
+      fingerprint: Object.fromEntries(
+        String(t.state)
+          .split(' ')
+          .map((pair) => {
+            const i = pair.indexOf(':');
+            return [pair.slice(0, i), pair.slice(i + 1)];
+          }),
+      ),
+      count: t.browsers ?? 1,
+      firstAt: 0,
+      lastAt: 0,
+    }));
+    return {
+      v: 1,
+      keysHash: body.declarations?.[0] ?? keysHash(Object.keys(entries[0]?.fingerprint ?? {})),
+      regionId: body.region ?? id,
+      keys: Object.keys(entries[0]?.fingerprint ?? {}).sort(),
+      entries,
+    };
+  };
+
   const load = async (f) => {
     // A ROOT-RELATIVE PATH IS A CONFIG MISTAKE, NOT A FILENAME. `corpusUrl` is a browser-shaped
     // string in a file full of browser-shaped strings, so `/api/motu/coverage/status` is the natural
@@ -227,7 +264,7 @@ export async function regionCoverageCommand(argv) {
           `machine, so it needs the origin too — e.g. https://your-app${f}`,
       );
     }
-    if (!/^https?:\/\//.test(f)) return JSON.parse(readFileSync(f, 'utf8'));
+    if (!/^https?:\/\//.test(f)) return asCorpus(JSON.parse(readFileSync(f, 'utf8')));
     const res = await fetch(f, token ? { headers: { authorization: `Bearer ${token}` } } : undefined);
     if (res.status === 401 || res.status === 403) {
       throw new Error(
@@ -236,33 +273,7 @@ export async function regionCoverageCommand(argv) {
       );
     }
     if (!res.ok) throw new Error(`${f} answered ${res.status}`);
-    const body = await res.json();
-    // A STATUS PAGE IS ALSO A CORPUS SOURCE. `/coverage/status` answers in a summary shape
-    // (`{ top: [{ browsers, state }] }`) because a phone has to render it; accept that too rather
-    // than making somebody stand up a second endpoint to say the same thing.
-    if (Array.isArray(body?.top)) {
-      const entries = body.top.map((t) => ({
-        fingerprint: Object.fromEntries(
-          String(t.state)
-            .split(' ')
-            .map((pair) => {
-              const i = pair.indexOf(':');
-              return [pair.slice(0, i), pair.slice(i + 1)];
-            }),
-        ),
-        count: t.browsers ?? 1,
-        firstAt: 0,
-        lastAt: 0,
-      }));
-      return {
-        v: 1,
-        keysHash: body.declarations?.[0] ?? keysHash(Object.keys(entries[0]?.fingerprint ?? {})),
-        regionId: body.region ?? id,
-        keys: Object.keys(entries[0]?.fingerprint ?? {}).sort(),
-        entries,
-      };
-    }
-    return body;
+    return asCorpus(await res.json());
   };
 
   let corpus;

@@ -24,7 +24,66 @@ export function corpora(): Record<string, CoverageCorpus> {
 
 export function corpusFor(regionId: string | null): CoverageCorpus | null {
   if (!regionId) return null;
-  return corpora()[regionId] ?? null;
+  return corpora()[regionId] ?? fetched.get(regionId) ?? null;
+}
+
+// --- the corpus this host already holds -------------------------------------------------------
+//
+// A published lagoon is served BY the lagoon host, so it can ask that host about itself on its OWN
+// origin: no address in the page, and no credential — whoever is reading was already let in (or not)
+// by the same cookie that opened the page. That is what lets a corpus reach a published lagoon
+// without the page carrying either of the two things it must never carry.
+//
+// The baked corpus still wins. `motu region coverage --save` writes a file the build inlines, which
+// is what makes `lagoon dev` on a laptop work at all — there is no host in front of it to ask.
+
+const fetched = new Map<string, CoverageCorpus>();
+const asked = new Set<string>();
+const listeners = new Set<() => void>();
+let version = 0;
+
+/** The repo this page belongs to — stamped by the host as it served the bytes. */
+function servedRepo(): string | null {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector<HTMLMetaElement>('meta[name="motu-repo"]')?.content?.trim() || null;
+}
+
+/**
+ * Ask the host for this region's corpus, at most once per region per page.
+ *
+ * NOTHING HERE MAY THROW INTO THE LENS. A panel that disappears because a fetch failed is worse than
+ * a panel with one section missing, and this runs in a browser where the host may be a tunnel that is
+ * simply not up.
+ */
+export function ensureCorpus(regionId: string | null): void {
+  if (!regionId || asked.has(regionId)) return;
+  if (corpora()[regionId]) return; // baked at build time; nothing to ask
+  const repo = servedRepo();
+  if (!repo) return; // not served by a host — `lagoon dev`, or a page opened from disk
+  asked.add(regionId);
+  const url = `/api/coverage?repo=${encodeURIComponent(repo)}&region=${encodeURIComponent(regionId)}`;
+  void fetch(url, { credentials: 'same-origin' })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((body) => {
+      if (!body?.corpus?.entries) return;
+      fetched.set(regionId, body.corpus as CoverageCorpus);
+      version++;
+      listeners.forEach((l) => l());
+    })
+    .catch(() => {
+      // The host is not answering. The section renders nothing, which is the honest outcome.
+    });
+}
+
+/** Subscribe to corpora arriving — the lens re-reads when one does. */
+export function subscribeCorpus(onChange: () => void): () => void {
+  listeners.add(onChange);
+  return () => listeners.delete(onChange);
+}
+
+/** A version number, so `useSyncExternalStore` has something stable to compare. */
+export function corpusVersion(): number {
+  return version;
 }
 
 export interface LiveCoverage {

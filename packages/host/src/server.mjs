@@ -24,7 +24,7 @@ import { createServer } from 'node:http';
 import { gunzipSync, brotliDecompressSync } from 'node:zlib';
 import { timingSafeEqual } from 'node:crypto';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
-import { wrapFragment } from './document.mjs';
+import { wrapFragment, withRepoMeta } from './document.mjs';
 import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
 import { loadAccess, isPublic, canRead, canIngest, cookieValue, READ_COOKIE } from './access.mjs';
 
@@ -164,7 +164,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // rather than showing an error for a frame that has perfectly good bytes in the store.
       live.clear(member.repo, member.slug);
       const bytes = member.hash ? store.readHash(member.hash) : null;
-      if (bytes) return void html(res, 200, wrapFragment(bytes, { title: member.title }), NO_STORE);
+      if (bytes) return void html(res, 200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo), NO_STORE);
       return void html(res, 502, errorPage(502, 'the live lagoon for this member stopped answering'), NO_STORE);
     }
     const type = upstream.headers.get('content-type') ?? 'text/html; charset=utf-8';
@@ -223,6 +223,23 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (!repo) return json(res, 400, { error: 'repo is required' });
       if (!readable(repo)) return json(res, 404, { error: 'no such repo' });
       return json(res, 200, { repo, shots: store.listShots(repo, url.searchParams.get('island') || null) });
+    }
+    // THE CORPUS, READ BACK. Same gate as the pages: if you may not see this repo's lagoon, you may
+    // not see what its region has been through either. A published lagoon calls this on its OWN
+    // origin, so the page carries no address and no credential — the reader's cookie is the answer.
+    if (path === '/api/coverage' && req.method === 'GET') {
+      const repo = normalizeRepo(url.searchParams.get('repo'));
+      const region = normalizeSegment(url.searchParams.get('region') || '');
+      if (!repo || !region) return json(res, 400, { error: 'repo and region are required' });
+      // ONE ANSWER FOR EVERY KIND OF NOTHING. A private repo, a repo that does not exist, and a repo
+      // with no corpus yet all get the same 404. Answering 404 for private and 200 for unknown is a
+      // name oracle: guess a repo, and the status tells you whether it exists and is being hidden —
+      // which is exactly what the page route's 404 was chosen to avoid, given away by its neighbour.
+      const corpora = readable(repo) ? store.readCoverage(repo, region) : [];
+      if (!corpora.length) return json(res, 404, { error: 'no corpus here' });
+      // The newest DECLARATION only. Older key lists are kept (they are not comparable, and mixing
+      // them is nonsense) but a reader wants the one that describes the region as it is now.
+      return json(res, 200, { repo, region, corpus: corpora[0], declarations: corpora.length });
     }
     if (path === '/api/groups')
       return json(res, 200, {
@@ -355,7 +372,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         const bytes = store.readHash(member.hash);
         if (!bytes) return html(res, 410, errorPage(410, 'this frame’s object is gone'), NO_STORE);
         // NOT immutable here: the group means today, and today's `latest` moves.
-        return html(res, 200, wrapFragment(bytes, { title: member.title }), NO_STORE);
+        return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo), NO_STORE);
       }
 
       // The trailing slash is LOAD-BEARING — the shell's frame src is relative (`f/<i>`).
@@ -388,7 +405,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         if (!member) return html(res, 404, errorPage(404, 'no such frame'), NO_STORE);
         const bytes = store.readHash(member.hash);
         if (!bytes) return html(res, 410, errorPage(410, 'this frame’s object is gone'), NO_STORE);
-        return html(res, 200, wrapFragment(bytes, { title: member.title }), IMMUTABLE);
+        return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo), IMMUTABLE);
       }
       if (segments.length === 2) {
         // The trailing slash is LOAD-BEARING: the shell's frame src is relative (`f/<i>`), so at
@@ -421,7 +438,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         if (!rec) return html(res, 404, errorPage(404, `nothing at ${repo}/${ref}/${slug}`), NO_STORE);
         const bytes = store.read(repo, rec.id, rec.hash);
         if (!bytes) return html(res, 410, errorPage(410, 'the object behind this URL has been swept'), NO_STORE);
-        return html(res, 200, wrapFragment(bytes, { title: rec.title }), rec.mutable ? NO_STORE : IMMUTABLE);
+        return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: rec.title }), repo), rec.mutable ? NO_STORE : IMMUTABLE);
       }
     }
 

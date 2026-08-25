@@ -86,6 +86,23 @@ t('the same state stays one row', stored.entries.length === 1, `${stored.entries
 // give two rows; a store that overwrote would give 3.
 t('...with the counts added', stored.entries[0].count === 6, `count ${stored.entries[0].count}`);
 
+console.log('\nhost access — reading the corpus back\n');
+// The private repo needs a corpus before "its reader can read it" means anything — the ingest
+// section above deliberately FAILED to write this one, which is the point of that section.
+await post('/api/coverage?repo=acme/secret&region=actions', CORPUS, { authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
+t('a public repo serves its corpus', (await get('/api/coverage?repo=acme/open&region=actions')).status === 200);
+t('a private repo does not', (await get('/api/coverage?repo=acme/secret&region=actions')).status === 404);
+t('...but its reader does', (await get('/api/coverage?repo=acme/secret&region=actions', COOKIE)).status === 200);
+// ONE ANSWER FOR EVERY KIND OF NOTHING. 404 for private and 200 for unknown would be a name oracle:
+// guess a repo, and the status says whether it exists and is being hidden — giving away exactly what
+// the page route's 404 was chosen to hide.
+t('a repo that does not exist looks the same', (await get('/api/coverage?repo=no/such&region=actions')).status === 404);
+t('a region with no corpus looks the same', (await get('/api/coverage?repo=acme/open&region=ghost')).status === 404);
+t('the served page is stamped with its repo', (await (await get('/acme/open/latest/all')).text()).includes('name="motu-repo" content="acme/open"'));
+// The stamp must be in the OUTER head. Inside the body, the page's own React render replaces it and
+// the lens finds nothing — which is how this first shipped, correct in curl and useless in a browser.
+t('...in the head, before the body starts', (await (await get('/acme/open/latest/all')).text()).indexOf('motu-repo') < (await (await get('/acme/open/latest/all')).text()).indexOf('<body'));
+
 server.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);

@@ -34,7 +34,7 @@ import {
   Trail,
   type MotuDotTone,
 } from '@motu/chrome/react';
-import { corpusFor, liveCoverage } from './coverage';
+import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus, corpusVersion } from './coverage';
 import {
   getMountedIslands,
   regionIdOfStore,
@@ -1013,12 +1013,19 @@ function RegionCoupling() {
  * to every project that never enabled coverage is teaching people to skip a section.
  */
 function RegionCoverage() {
+  // FIRST, AND BEFORE EVERY EARLY RETURN. This section returns null in three ordinary situations —
+  // no islands, no region id, no corpus — and a hook below any of them is a conditional hook: React
+  // counts them per render and throws "rendered fewer hooks than expected" the moment an island
+  // mounts or unmounts. Which is constantly, in a lens whose whole job is watching that happen.
+  useSyncExternalStore(subscribeCorpus, corpusVersion, corpusVersion);
   const islands = getMountedIslands();
-  if (!islands.length) return null;
-  const store = islands[0].store;
-  const regionId = regionIdOfStore(store);
+  const store = islands.length ? islands[0].store : null;
+  const regionId = store ? regionIdOfStore(store) : null;
+  // Ask the host once, and re-render when the answer lands. A corpus baked at build time short-
+  // circuits this; a page served by the lagoon host fetches its own on the host's origin.
+  ensureCorpus(regionId);
   const corpus = corpusFor(regionId);
-  if (!corpus) return null;
+  if (!store || !corpus) return null;
 
   // WHAT THE REGION DECLARES TODAY — the same union the sheet above is built from, so the two cannot
   // disagree about what this region is. The fold itself runs over the CORPUS' keys (a fingerprint is

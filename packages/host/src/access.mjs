@@ -88,6 +88,21 @@ export function canRead(access, repo, { adminOk, readSecret }) {
 }
 
 /**
+ * The read secret, from wherever this reader could put it.
+ *
+ * A BROWSER CANNOT SET A HEADER when it follows a link, so a person reading a private lagoon carries
+ * a cookie. A SERVER CANNOT SEND A COOKIE it was never given, so an application reading a corpus back
+ * — a status page, a CI job — carries a bearer. Same secret, two transports, because the constraint
+ * is the caller's and not the policy's.
+ *
+ * The ingest token deliberately does NOT open this door: it is write-only so that a credential
+ * sitting in somebody else's production environment cannot be used to read what is stored here.
+ */
+export function readSecretFrom({ cookieHeader, bearer }) {
+  return cookieValue(cookieHeader, READ_COOKIE) ?? (bearer || null);
+}
+
+/**
  * May this request INGEST for this repo?
  *
  * Deliberately narrow: an ingest token grants ONE repo and only the corpus route. It cannot publish a

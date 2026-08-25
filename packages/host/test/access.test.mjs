@@ -103,6 +103,12 @@ t('the served page is stamped with its repo', (await (await get('/acme/open/late
 // the lens finds nothing — which is how this first shipped, correct in curl and useless in a browser.
 t('...in the head, before the body starts', (await (await get('/acme/open/latest/all')).text()).indexOf('motu-repo') < (await (await get('/acme/open/latest/all')).text()).indexOf('<body'));
 
+console.log('\nhost access — a server reading back, which cannot send a cookie\n');
+t('the read secret works as a bearer too', (await get('/api/coverage?repo=acme/secret&region=actions', { authorization: 'Bearer READSECRET' })).status === 200);
+// The ingest token must NOT open this door. It lives in somebody else's production environment, so
+// write-only is the whole reason it is a separate credential.
+t('the ingest token still cannot read a corpus', (await get('/api/coverage?repo=acme/secret&region=actions', { authorization: 'Bearer ING-SECRET' })).status === 404);
+
 server.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);

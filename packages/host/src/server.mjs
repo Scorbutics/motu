@@ -26,7 +26,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
 import { wrapFragment, withRepoMeta } from './document.mjs';
 import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
-import { loadAccess, isPublic, canRead, canIngest, cookieValue, READ_COOKIE } from './access.mjs';
+import { loadAccess, isPublic, canRead, canIngest, cookieValue, readSecretFrom, READ_COOKIE } from './access.mjs';
 
 /**
  * Two limits, because one of them was measuring the wrong thing.
@@ -195,7 +195,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     const access = loadAccess(dir);
     const bearer = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const adminOk = Boolean(token) && tokenMatches(bearer, token);
-    const readSecret = cookieValue(req.headers.cookie, READ_COOKIE);
+    const readSecret = readSecretFrom({ cookieHeader: req.headers.cookie, bearer });
     /** A reader's verdict for one repo, and the 404 that hides a private one's existence. */
     const readable = (repo) => canRead(access, repo, { adminOk, readSecret });
 

@@ -239,7 +239,11 @@ export async function regionCoverageCommand(argv) {
             return [pair.slice(0, i), pair.slice(i + 1)];
           }),
       ),
-      count: t.browsers ?? 1,
+      // `count` OR `browsers`. The field was renamed when the status page stopped counting distinct
+      // browsers — a corpus carries one number, because merging two of them can only add, and the old
+      // name claimed a distinction the data no longer makes. Both are accepted so a deployment that
+      // is mid-upgrade reports something rather than silently ingesting ones.
+      count: t.count ?? t.browsers ?? 1,
       firstAt: 0,
       lastAt: 0,
     }));

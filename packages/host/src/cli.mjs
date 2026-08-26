@@ -81,10 +81,45 @@ if (!Number.isInteger(maxBytes) || maxBytes < 1) {
 if (argv._[0] === 'access') {
   const { digest, loadAccess } = await import('./access.mjs');
   const { randomBytes } = await import('node:crypto');
-  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const { writeFileSync, mkdirSync, existsSync } = await import('node:fs');
+  const { homedir } = await import('node:os');
   const { resolve } = await import('node:path');
   const { storeDir } = await import('./store.mjs');
   const dir = storeDir(typeof argv.dir === 'string' ? argv.dir : undefined);
+
+  // IS THIS THE DIRECTORY THE RUNNING HOST READS? Almost the only way to get this wrong, and it fails
+  // silently: the policy is written, the command says ✓, and nothing changes.
+  //
+  // It happened. The service sets MOTU_HOST_DIR in its unit file, which is not in a shell's
+  // environment — so `motu-host access --repo X --private` resolved the DEFAULT `~/.motu/host`,
+  // created it, wrote a correct policy into it, and reported success while the live host at
+  // ~/.local/share/motu-host went on serving the repo to everyone. Sharing `storeDir()` between the
+  // two was not enough, because what differs is the ENVIRONMENT, not the expression.
+  //
+  // `index.json` is the store's own file, so its absence means this directory is not a store — either
+  // the wrong one, or a host that has never run. Refused rather than warned: a warning above a ✓ is
+  // read as a ✓, and the whole failure mode here is a command that looks like it worked.
+  if (!existsSync(resolve(dir, 'index.json'))) {
+    const guesses = [
+      process.env.MOTU_HOST_DIR,
+      resolve(homedir(), '.local/share/motu-host'),
+      resolve(homedir(), '.motu/host'),
+    ].filter((d, i, all) => d && all.indexOf(d) === i && existsSync(resolve(d, 'index.json')));
+    console.error(color.red(`✗ no lagoon host store in ${dir}`));
+    console.error(color.dim('  There is no index.json there, so this is not the directory a host is using — and'));
+    console.error(color.dim('  writing a policy into it would report success and change nothing.'));
+    if (guesses.length) {
+      console.error('');
+      console.error(color.dim('  A store does exist here:'));
+      for (const g of guesses) console.error(`      --dir ${g}`);
+      console.error('');
+      console.error(color.dim('  The service sets MOTU_HOST_DIR in its unit file, which your shell does not inherit.'));
+    } else {
+      console.error(color.dim('  Pass --dir <path>, or set MOTU_HOST_DIR to the directory the host runs with.'));
+    }
+    process.exit(1);
+  }
+
   const file = resolve(dir, 'access.json');
   const access = loadAccess(dir);
   if (access.malformed) {

@@ -37,12 +37,36 @@ export type RegionCoverageInstaller = (regionId: string, opts: { enums?: readonl
 
 let installer: RegionCoverageInstaller | null = null;
 
-/** Fill the seam. Called by `configureCoverage`, which the generated island registry calls. */
+/**
+ * Regions that offered themselves before anything filled the seam.
+ *
+ * THE SEAM CANNOT DEPEND ON MODULE ORDER, and it did. `offerRegionToCoverage` used to call the
+ * installer or silently do nothing, so an archipelago evaluated before `configureCoverage` was never
+ * picked up — not late, never. Both are module-scope side effects in a generated barrel, so which
+ * runs first is decided by the order of two import lines, and that ordering is invisible: everything
+ * imports, everything type-checks, the config is in the bundle, and no beacon is ever sent.
+ *
+ * It happened the moment coverage moved out of the island registry: the archipelago registry imports
+ * its archipelagos above the generated module, so every region defined itself first. Remembering the
+ * offers makes the question moot rather than making the answer careful.
+ */
+const pending = new Map<string, { enums?: readonly string[] }>();
+
+/** Fill the seam, and pick up whatever already went past it. */
 export function setRegionCoverageInstaller(fn: RegionCoverageInstaller | null): void {
   installer = fn;
+  if (!fn) return;
+  for (const [regionId, opts] of pending) fn(regionId, opts);
+  pending.clear();
 }
 
-/** Offer a region to whatever filled the seam. A no-op — and a dead branch — when nothing did. */
+/**
+ * Offer a region to whatever filled the seam — or to whatever fills it next.
+ *
+ * Still a dead branch in a project without coverage: the map holds a handful of ids and nothing ever
+ * reads them.
+ */
 export function offerRegionToCoverage(regionId: string, opts: { enums?: readonly string[] }): void {
-  installer?.(regionId, opts);
+  if (installer) installer(regionId, opts);
+  else pending.set(regionId, opts);
 }

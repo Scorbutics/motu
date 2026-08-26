@@ -11,6 +11,17 @@ import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { mountReactLagoon } from './lagoon-react-mount';
+import {
+  pickState,
+  publishStates,
+  readStateRequest,
+  replayFlow,
+  reportState,
+  stateNames,
+  type LagoonEvidence,
+  type StateOutcome,
+  type StateRequest,
+} from './lagoon-states';
 
 export interface LagoonBootstrapOptions {
   /** The project's element registry (same one the real composition roots use). */
@@ -66,6 +77,13 @@ export interface LagoonBootstrapOptions {
   };
   /** Every archipelago, so an `island:` target can find the region that declares it. */
   archipelagos?: Record<string, { islands: { slot?: string; element: string; bind?: Record<string, string> }[] }>;
+  /**
+   * The project's declared states — island `scenarios` and region flows — so a URL can ADDRESS one.
+   *
+   * Gathered by the entry from the same evidence files the checks read, which is what keeps the state
+   * a human opens and the state a check asserts on the same object rather than two copies.
+   */
+  evidence?: LagoonEvidence;
   /** Element id to append the archipelago into (default 'lagoon'). */
   mountId?: string;
   /** When set, every contract call fails with this HTTP status — verify's error-resilience mount. */
@@ -114,14 +132,22 @@ function resolveTarget(opts: LagoonBootstrapOptions): LagoonTarget {
 function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
   const w = window as unknown as { __motuLagoonHarness?: unknown };
   w.__motuLagoonHarness = {
-    mount(target: string, options?: { fit?: string; forceError?: number }) {
+    mount(target: string, options?: { fit?: string; forceError?: number; scenario?: string }) {
       // The transport is part of what is being asked for: 'the same island, but the backend fails'.
       configure(
         options?.forceError
           ? new FailingTransport(options.forceError)
           : new MockTransport(opts.fixtures ?? [], opts.roles ?? []),
       );
-      render({ ...opts, target, fit: options?.fit ?? opts.fit, host });
+      // A re-aim states its own state (see `render`): no scenario asked for means the target's
+      // ordinary seeded view, never the one the previous URL happened to name.
+      render({
+        ...opts,
+        target,
+        fit: options?.fit ?? opts.fit,
+        host,
+        state: options?.scenario ? { scenario: options.scenario, flow: null, step: null, region: null } : undefined,
+      });
       return true;
     },
   };
@@ -219,6 +245,47 @@ function propsFor(
   return own ? { lagoon: own } : undefined;
 }
 
+/**
+ * The SEED a requested scenario means, or the refusal that stops the mount.
+ *
+ * Not translated through `translateRegionSeed`: a scenario is authored against the island's own prop
+ * names (that is what the synthesised same-named binds make it), while translation maps the REGION's
+ * vocabulary onto those props. Running a scenario through it would let a region bind silently
+ * overwrite a key the scenario had already set correctly.
+ */
+function resolveScenario(
+  request: StateRequest,
+  target: LagoonTarget,
+  opts: LagoonBootstrapOptions,
+): { seed?: Record<string, unknown>; outcome: StateOutcome } {
+  const name = request.scenario!;
+  const label = target.kind === 'island' ? `island:${target.tag}` : `archipelago:${target.config.id}`;
+  if (target.kind !== 'island') {
+    return {
+      outcome: {
+        ok: false,
+        target: label,
+        kind: 'scenario',
+        error: `?scenario= addresses an ISLAND's state — this target is a region. Name the island (target=island:x-…), or address the region with ?flow=`,
+      },
+    };
+  }
+  const declared = opts.evidence?.scenarios?.[target.tag];
+  const found = pickState(declared, name);
+  if (!found) {
+    return {
+      outcome: {
+        ok: false,
+        target: label,
+        kind: 'scenario',
+        error: `no scenario "${name}" in ${target.tag}'s evidence`,
+        available: stateNames(declared),
+      },
+    };
+  }
+  return { seed: found.seed, outcome: { ok: true, target: label, kind: 'scenario', name: found.name ?? name } };
+}
+
 export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
 // THE LAGOON IS NOT PRODUCTION, and coverage must know it before any region mounts. A lagoon that
 // beacons posts the states its own FLOWS produce into the corpus, and the next comparison reports
@@ -260,15 +327,72 @@ markSandbox();
   // page re-renders in place. It is the same seam the lagoon's own switcher uses; the checks are just
   // another visitor.
   installHarness(opts, host);
+  // WHAT THIS PAGE CAN BE OPENED IN, published before it is opened in anything — the list is most
+  // needed by whoever just got a name wrong, which is exactly when the mount may not have happened.
+  publishStates(opts.evidence);
 
-  return render({ ...opts, host });
+  const request = readStateRequest();
+  const el = render({ ...opts, host, state: request });
+
+  // A FLOW IS NOT A SEED. Its steps fire islands' declared outputs, so they need islands mounted
+  // first — this cannot ride along with the initial render the way a scenario's seed does. Nothing
+  // here awaits it: the outcome lands in `window.__motuLagoonState`, which is what a driver reads.
+  if (request.flow) void applyFlow(request, opts);
+  return el;
 }
 
-/** Render one target into the lagoon's mount element. Called on boot and by the harness. */
-function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElement {
+/** Replay a requested flow against the region that just mounted, and say what happened either way. */
+async function applyFlow(request: StateRequest, opts: LagoonBootstrapOptions): Promise<void> {
+  const name = request.flow!;
+  const target = resolveTarget(opts);
+  if (target.kind !== 'archipelago') {
+    reportState({
+      ok: false,
+      target: `island:${target.tag}`,
+      kind: 'flow',
+      error: `?flow= addresses a REGION's state — this target is one island. Name the region (target=archipelago:…), or address the island with ?scenario=`,
+    });
+    return;
+  }
+  const id = target.config.id;
+  const declared = opts.evidence?.flows?.[id];
+  const flow = pickState(declared, name);
+  if (!flow) {
+    reportState({
+      ok: false,
+      target: `archipelago:${id}`,
+      kind: 'flow',
+      error: `no flow "${name}" in ${id}'s evidence`,
+      available: stateNames(declared),
+    });
+    return;
+  }
+  reportState({ ...(await replayFlow(flow, request.step)), target: `archipelago:${id}` });
+}
+
+/**
+ * Render one target into the lagoon's mount element. Called on boot and by the harness.
+ *
+ * `state` is passed rather than read from the URL here, and that is the whole point: a re-aim
+ * (`__motuLagoonHarness.mount`) must state what IT wants. Reading `location.search` on every render
+ * would carry the first island's `?scenario=` onto every island the page is later re-aimed at, where
+ * that name means nothing — and the refusal below would then stop a check that never asked for a
+ * state at all.
+ */
+function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: StateRequest }): HTMLElement {
   const host = opts.host;
   const target = resolveTarget(opts);
   const mountEl = document.getElementById(opts.mountId ?? 'lagoon');
+
+  // AN UNRESOLVABLE STATE MUST NOT RENDER SOMETHING ELSE. Asking for a scenario that does not exist
+  // and getting the default state back is the failure worth engineering against: it is silent, it
+  // looks exactly like success, and the screenshot it produces is of a state nobody asked for.
+  const wanted = opts.state?.scenario ? resolveScenario(opts.state, target, opts) : null;
+  if (wanted && !wanted.outcome.ok) {
+    reportState(wanted.outcome);
+    mountEl?.replaceChildren();
+    return mountEl ?? document.body;
+  }
 
   // An explicit `seed` still wins; otherwise take the region's own, so the focused entry and the
   // gallery are fed from one source.
@@ -286,12 +410,11 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge }): HTMLElemen
   const seedOff =
     typeof location !== 'undefined' && new URLSearchParams(location.search).get('seed') === 'off';
   const regionSeed = seedOff && target.kind === 'island' ? undefined : regionId ? opts.overrides?.seed?.[regionId] : undefined;
-  const seed = translateRegionSeed(
-    opts.seed ?? regionSeed,
-    target,
-    regionId,
-    opts,
-  );
+  // A NAMED SCENARIO WINS over both the region's seed and `?seed=off`: it is the most specific thing
+  // anyone can ask for, and being handed defaults instead is the failure the refusal above exists for,
+  // one layer down.
+  if (wanted) reportState(wanted.outcome);
+  const seed = wanted ? wanted.seed : translateRegionSeed(opts.seed ?? regionSeed, target, regionId, opts);
   const channels = opts.channels ?? (regionId ? opts.overrides?.channels?.[regionId] : undefined);
 
   if (opts.mount === 'react') {

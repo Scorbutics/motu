@@ -22,6 +22,15 @@ import { resolveTransportMode, mountTransportToggle, type TransportMode } from '
 import { mountFitToggle } from './fit-toggle';
 import { mountTideLine, type TideLens, type TideView } from './tideline';
 import { mountReactLagoon } from './lagoon-react-mount';
+import {
+  pickState,
+  publishStates,
+  readStateRequest,
+  replayFlow,
+  reportState,
+  resolveFlowRegion,
+  type LagoonEvidence,
+} from './lagoon-states';
 
 /** `lagoon.config.json` — everything about a project's lagoon that a declaration can carry. */
 export interface LagoonConfig {
@@ -139,6 +148,14 @@ export interface StartLagoonOptions {
   lens?: LagoonLens;
   /** Recorded callsite frames (`motu archipelago record-frame` output), as a Vite glob result. */
   frames?: Record<string, string>;
+  /**
+   * The project's declared states, so `?flow=<name>` opens this gallery ON one.
+   *
+   * The gallery is what `lagoon serve` and `lagoon publish` actually build — a region publish uses
+   * this entry, not the bare one — so a state address that only worked on `lagoon.html` would not
+   * work on the lagoon anybody looks at.
+   */
+  evidence?: LagoonEvidence;
   /** Element the archipelago mounts into. */
   mountId?: string;
 }
@@ -270,6 +287,30 @@ markSandbox();
   const targeted = (opts.target ?? '').startsWith('archipelago:') ? (opts.target ?? '').slice('archipelago:'.length) : '';
   let current = targeted || localStorage.getItem(STORAGE_KEY) || '';
   if (!ids.includes(current)) current = ids[0] ?? '';
+
+  // A REQUESTED FLOW CHOOSES THE STATION. `?flow=<name>` is an address for a state, and a state
+  // belongs to exactly one region — making the visitor also know (and type) which region declares it
+  // would be asking for the one thing the catalogue already knows.
+  publishStates(opts.evidence);
+  const request = readStateRequest();
+  let flowRegion: string | undefined;
+  if (request.flow) {
+    const resolved = resolveFlowRegion(opts.evidence, request);
+    if ('region' in resolved && ids.includes(resolved.region)) flowRegion = resolved.region;
+    else {
+      reportState({
+        ok: false,
+        target: 'this lagoon',
+        kind: 'flow',
+        ...('region' in resolved
+          ? { error: `region "${resolved.region}" is not in this lagoon`, available: ids }
+          : { error: resolved.error, available: resolved.available }),
+      });
+    }
+  }
+  if (flowRegion) current = flowRegion;
+  // `?region=<id>` on its own opens that station — the same address, minus the state.
+  else if (request.region && ids.includes(request.region)) current = request.region;
   let view: TideView = localStorage.getItem(VIEW_KEY) === 'mountpoints' ? 'mountpoints' : 'region';
 
   function mount(id: string): void {
@@ -291,6 +332,7 @@ markSandbox();
         view,
       });
       tide.setActive(current, view);
+      applyRequestedFlow(id);
       return;
     }
 
@@ -302,6 +344,26 @@ markSandbox();
     if (view === 'mountpoints') el.setAttribute('view', 'mountpoints');
     root!.appendChild(el);
     tide.setActive(current, view);
+    applyRequestedFlow(id);
+  }
+
+  /**
+   * Drive the mounted region to the requested flow's state — on EVERY mount of the region that
+   * declares it, because switching view (or station and back) re-mounts and the state a flow reached
+   * does not survive that. Mounting any OTHER region records that no state is applied rather than
+   * leaving the previous verdict standing, which would outlive the region it described.
+   */
+  function applyRequestedFlow(id: string): void {
+    if (!request.flow || !flowRegion) return;
+    if (id !== flowRegion) {
+      reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
+      return;
+    }
+    const flow = pickState(opts.evidence?.flows?.[id], request.flow);
+    if (!flow) return; // reported at boot, with the whole catalogue
+    void replayFlow(flow, request.step).then((outcome) =>
+      reportState({ ...outcome, target: `archipelago:${id}` }),
+    );
   }
 
   // The lens mounts BEFORE the chrome — it restores its own open state, so it remembers being on

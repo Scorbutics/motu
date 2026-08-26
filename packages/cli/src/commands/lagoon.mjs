@@ -693,3 +693,111 @@ export async function lagoonEjectCommand() {
   console.log(color.dim('  index.html, lagoon.html, src/{main.tsx,lagoon.tsx,fixtures.ts,env.ts}'));
   console.log(color.dim('  the project now owns these — motu will not regenerate them.'));
 }
+
+/**
+ * `motu lagoon states [target]` — every state this project's lagoon can be OPENED in, as a URL.
+ *
+ * The addresses (`?scenario=`, `?flow=`) are only half of a first-class thing; the other half is
+ * being able to find out what exists without reading four evidence files. This is that half, and it
+ * is deliberately the same source the browser gets: island `scenarios` and region flows, read with
+ * the loader every runtime check already uses.
+ *
+ * Paths, not absolute URLs, unless `--base` says otherwise — the port belongs to whichever lagoon is
+ * running (`dev` picks one, `serve` defaults to 8817, a published lagoon has a host), and printing a
+ * guess that resolves to nothing is worse than printing the part that is always true.
+ */
+export async function lagoonStatesCommand(argv) {
+  const { readScenarios } = await import('./verify.mjs');
+  const { listIslands } = await import('../lib/islands.mjs');
+  const { readRegions } = await import('../lib/eject.mjs');
+
+  const base = typeof argv.base === 'string' ? argv.base.replace(/\/$/, '') : '';
+  const only = argv._[0];
+  const q = (params) => new URLSearchParams(params).toString();
+
+  /** The same slug the page accepts, so a URL carries "a-week-to-answer" rather than 40 escaped bytes. */
+  const slug = (name) =>
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  /**
+   * Address each state by its SLUG where that is unambiguous, and by its exact name where it is not.
+   *
+   * The page resolves both. Printing the slug is what makes these URLs quotable in a commit message
+   * or a review comment; falling back the moment two names collide is what keeps them addresses.
+   */
+  const addressFor = (list) => {
+    const slugs = list.map((s, i) => slug(s.name ?? `#${i + 1}`));
+    return (name, i) => (slugs.filter((x) => x === slugs[i]).length === 1 ? slugs[i] : name);
+  };
+
+  const islands = listIslands(paths.islandsDir)
+    .filter(({ kebab }) => !only || kebab === only || names(kebab).tag === only)
+    .map(({ kebab }) => {
+      const file = paths.fixturesFile(kebab);
+      const scenarios = existsSync(file) ? readScenarios(file) : [];
+      const { tag } = names(kebab);
+      const address = addressFor(scenarios);
+      return {
+        target: `island:${tag}`,
+        states: scenarios.map((s, i) => {
+          const name = s.name ?? `#${i + 1}`;
+          return {
+            name,
+            url: `${base}/lagoon.html?${q({ target: `island:${tag}`, scenario: address(name, i) })}`,
+          };
+        }),
+      };
+    })
+    .filter((i) => i.states.length);
+
+  const regions = readRegions(paths.archipelagosDir)
+    .filter(({ id }) => !only || id === only)
+    .map(({ id }) => {
+      const file = paths.archipelagoEvidence(id);
+      const flows = existsSync(file) ? readScenarios(file) : [];
+      const address = addressFor(flows);
+      return {
+        target: `archipelago:${id}`,
+        states: flows.map((f, i) => {
+          const name = f.name ?? `#${i + 1}`;
+          return {
+            name,
+            steps: (f.steps ?? []).length,
+            // The gallery, not lagoon.html: that is the entry `lagoon serve` and `lagoon publish`
+            // build, so this URL works on the lagoon a human is actually looking at.
+            //
+            // `region` is always written out, even though the page can infer it from a unique flow
+            // name. Flow names DO collide across regions ("each slot renders its own island" is a
+            // good name in every region that has one), and a printed URL is the thing someone pastes
+            // six months later into a lagoon that has grown another region since.
+            url: `${base}/?${q({ region: id, flow: address(name, i) })}`,
+          };
+        }),
+      };
+    })
+    .filter((r) => r.states.length);
+
+  if (argv.json) {
+    console.log(JSON.stringify({ islands, regions }, null, 2));
+    return;
+  }
+  if (!islands.length && !regions.length) {
+    console.log(color.dim(only ? `no declared states for "${only}"` : 'no island scenarios and no region flows yet'));
+    console.log(color.dim('  an island declares `scenarios` in <kebab>.evidence.ts; a region declares flows in <id>.evidence.ts'));
+    return;
+  }
+  for (const { target, states } of [...islands, ...regions]) {
+    console.log(color.bold(target));
+    for (const s of states) {
+      const steps = s.steps === undefined ? '' : color.dim(` · ${s.steps} step(s), &step=<n> stops earlier`);
+      console.log(`  ${s.name}${steps}`);
+      console.log(color.dim(`    ${s.url}`));
+    }
+  }
+  if (!base) console.log(color.dim('\n  paths are relative to a running lagoon — pass --base http://localhost:8817 for full URLs'));
+}

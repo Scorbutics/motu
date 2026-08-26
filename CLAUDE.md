@@ -91,6 +91,15 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    baseline is stale" and "you broke something" the same red. Never use `--update` on a project whose
    baselines are on the host — it starts a second, drifting copy. A region diff names which member
    islands also changed; when none did, the arrangement moved.
+ - EVERY DECLARED STATE IS AN ADDRESS — do not hand-drive the store to look at one. `motu lagoon
+   states` lists them (`--json`, `--base <url>`): an island's scenario is
+   `/lagoon.html?target=island:<tag>&scenario=<name-or-slug>`, a region's flow is
+   `/?region=<id>&flow=<name>&step=<n>` on the gallery (the entry `serve` and `publish` build), with
+   `step` stopping the replay early so the states BETWEEN the steps are reachable too. That is how you
+   look at the state you are about to change, and how you hand someone a link to it. A name that
+   resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
+   false` — because being handed the default state while believing it is the one you named is the
+   failure worth engineering against. Read `window.__motuLagoonState` before believing a screenshot.
  - The lens (Ctrl/Cmd-Shift-G in the lagoon) opens on the REGION SHEET: one row per key — who owns it,
    who reads it, what it holds, whether it has moved, and a flag where a declared write has never fired
    or the host answered an island. Read it before reading the archipelago; it is the same declaration,

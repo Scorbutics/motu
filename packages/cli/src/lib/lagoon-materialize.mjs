@@ -70,6 +70,10 @@ export function materializeLagoon(paths, outDir) {
     // Both evidence layouts. Vite accepts an array of patterns, so a project can migrate island by
     // island without the lagoon losing sight of the ones that have not moved yet.
     fixturesGlob: `['${relPosix(src, paths.islandsDir)}/*.evidence.ts', '${relPosix(src, paths.islandsDir)}/*/fixtures.mock.ts']`,
+    // A REGION's evidence, kept in its own glob: it holds the flows a URL can address, and its
+    // `fixtures` must NOT join the mock transport's corpus (that would change what every existing
+    // check replays, from a change that was supposed to only add an address).
+    flowsGlob: `'${relPosix(src, paths.archipelagosDir)}/*/*.evidence.ts'`,
     framesGlob: relPosix(src, resolve(paths.lagoonDir, 'src/frames')) + '/*.css',
     lagoonConfigImport: relPosix(src, resolve(paths.lagoonDir, 'lagoon.config.json')),
     overridesImport: existsSync(projectOverrides) ? relPosix(src, projectOverrides) : './lagoon.js',

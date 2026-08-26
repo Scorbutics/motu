@@ -190,17 +190,52 @@ Object.assign(g.process.env, { NODE_ENV: 'development', ...(config.env ?? {}) })
 
 /** Fixture aggregation by glob, so adding an island needs no edit here (the demo app's hand-maintained
  *  fixtures.ts drifts by construction — its own header admits the manual step). */
-export const LAGOON_FIXTURES = `// Every island's lagoon fixtures, gathered by glob so adding an island is not also an edit here.
+export const LAGOON_FIXTURES = `// Every island's lagoon EVIDENCE, gathered by glob so adding an island is not also an edit here.
 // A \`fixtures.mock.ts\` that exports \`fixtures\` / \`roles\` is picked up automatically.
-import type { Fixture } from '@motu/runtime/mock';
+//
+// The same modules carry the project's declared STATES, which used to be dropped here: this file read
+// \`fixtures\` and \`roles\` off each evidence module and ignored \`scenarios\`, so every state the project
+// had written down existed in the node-side checks and nowhere a browser could reach. Passing them to
+// the entry is what makes \`?scenario=\` / \`?flow=\` an address (see @motu/react's lagoon-states).
+import type { Fixture, RegionScenario, Scenario } from '@motu/runtime/mock';
 
-type FixtureModule = { fixtures?: Fixture[]; roles?: string[] };
+type FixtureModule = { fixtures?: Fixture[]; roles?: string[]; scenarios?: Scenario[] };
 
 const modules = import.meta.glob<FixtureModule>({{fixturesGlob}}, { eager: true });
 
 export const ALL_FIXTURES: Fixture[] = Object.values(modules).flatMap((m) => m.fixtures ?? []);
 
 export const ALL_ROLES: string[] = [...new Set(Object.values(modules).flatMap((m) => m.roles ?? []))];
+
+const EVIDENCE_SUFFIX = '.evidence.ts';
+
+/** \`…/week-actions.evidence.ts\` -> \`week-actions\`; \`…/week-actions/fixtures.mock.ts\` -> \`week-actions\`.
+ *  Derived from the PATH rather than declared: both evidence layouts are named after the island, and a
+ *  second declaration of which island a file belongs to is a second thing that can be wrong. */
+function ownerOf(path: string): string {
+  const parts = path.split('/');
+  const file = parts[parts.length - 1] ?? '';
+  return file.endsWith(EVIDENCE_SUFFIX) ? file.slice(0, -EVIDENCE_SUFFIX.length) : (parts[parts.length - 2] ?? '');
+}
+
+/** Island scenarios by element tag — the states \`?scenario=\` addresses. */
+export const ALL_SCENARIOS: Record<string, Scenario[]> = Object.fromEntries(
+  Object.entries(modules)
+    .map(([path, m]) => ['{{tagPrefix}}' + ownerOf(path), m.scenarios ?? []] as const)
+    .filter(([, list]) => list.length),
+);
+
+// A REGION's evidence, which is NOT in the fixtures glob above and must not be: its \`fixtures\` would
+// join the mock transport's corpus and change what every existing check replays. Only the flows are
+// read from it.
+const regions = import.meta.glob<{ scenarios?: RegionScenario[] }>({{flowsGlob}}, { eager: true });
+
+/** Region flows by archipelago id — the states \`?flow=\` addresses. */
+export const ALL_FLOWS: Record<string, RegionScenario[]> = Object.fromEntries(
+  Object.entries(regions)
+    .map(([path, m]) => [ownerOf(path), m.scenarios ?? []] as const)
+    .filter(([, list]) => list.length),
+);
 `;
 
 /** The focused entry — this is what `motu island verify` drives via MOTU_TARGET. */
@@ -211,7 +246,7 @@ import { bootstrapLagoon } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, getArchipelago } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
-import { ALL_FIXTURES, ALL_ROLES } from '{{fixturesImport}}';
+import { ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from '{{fixturesImport}}';
 import config from '{{lagoonConfigImport}}';
 // The SAME overrides the gallery entry uses. Without them the focused lagoon — the one
 // \`motu island verify\` drives — ran with no region seed, so the checks asserted against defaults
@@ -244,6 +279,8 @@ bootstrapLagoon({
   fixtures: ALL_FIXTURES,
   roles: ALL_ROLES,
   resolveArchipelago: getArchipelago,
+  // The project's declared states, so this entry can be opened ON one (\`?scenario=\` / \`?flow=\`).
+  evidence: { scenarios: ALL_SCENARIOS, flows: ALL_FLOWS },
   // Region seeds/channels, resolved from the target — including an \`island:\` target, whose seed
   // belongs to the region that declares it.
   overrides,
@@ -326,7 +363,7 @@ import { startLagoon } from '@motu/react';
 import { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from '@motu/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
-import { ALL_FIXTURES, ALL_ROLES } from '{{fixturesImport}}';
+import { ALL_FIXTURES, ALL_ROLES, ALL_FLOWS } from '{{fixturesImport}}';
 import config from '{{lagoonConfigImport}}';
 import * as overrides from '{{overridesImport}}';
 {{hostImport}}{{hostGlobalCss}}
@@ -360,6 +397,8 @@ startLagoon({
   },
   // Recorded callsite frames (\`motu archipelago record-frame\`). The glob has to be written here:
   // Vite resolves it statically, at this file's location.
+  // Region flows only: this entry mounts REGIONS, so an island scenario has nothing here to apply to.
+  evidence: { flows: ALL_FLOWS },
   frames: import.meta.glob('{{framesGlob}}', { query: '?inline', import: 'default', eager: true }),
 });
 `;

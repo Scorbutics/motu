@@ -31,3 +31,5 @@ export type {
   LagoonTarget,
   DefineLagoonOptions,
 } from './bootstrap';
+export { readStateRequest, pickState, stateNames, slug, replayFlow, publishStates, reportState, regionsForFlow, resolveFlowRegion } from './lagoon-states';
+export type { LagoonEvidence, StateRequest, StateOutcome } from './lagoon-states';

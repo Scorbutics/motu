@@ -22,7 +22,7 @@ import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mj
 import { archipelagoSyncCommand } from './commands/archipelago-sync.mjs';
 import { removalCheckCommand } from './commands/removal-check.mjs';
 import { contractCheckCommand } from './commands/contract.mjs';
-import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand } from './commands/lagoon.mjs';
+import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand, lagoonStatesCommand } from './commands/lagoon.mjs';
 import { lagoonGroupCommand, lagoonGroupsCommand } from './commands/lagoon-group.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
@@ -73,6 +73,7 @@ ${color.bold('Usage:')}
   motu archipelago sync                             regenerate the region-side derived files
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
+  motu lagoon states [island|region]                every state the lagoon can be OPENED in, as a URL
   motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
   motu lagoon publish --remote <url>                ...and upload it to a lagoon host (see motu-host)
@@ -111,6 +112,14 @@ ${color.bold('verify flags:')}
   --fast          use the in-process happy-dom lagoon mount instead of the real browser (Playwright)
   --standalone    the island is intentionally not in an archipelago (no membership warning)
   --json          machine-readable report
+
+${color.bold('lagoon states:')}
+  ${color.dim('an island scenario and a region flow are ADDRESSES — open the lagoon directly on one:')}
+  ${color.dim('  /lagoon.html?target=island:x-week-actions&scenario=a%20week%20to%20answer')}
+  ${color.dim('  /?flow=marking%20a%20mission%20done&step=2   (the gallery: `serve`/`publish` build this one)')}
+  --base <url>    print absolute URLs against a running lagoon instead of paths
+  --json          machine-readable catalogue
+  ${color.dim('a name that resolves to nothing REFUSES to render — it never falls back to the default state.')}
 
 ${color.bold('lagoon serve flags:')}
   --port <n>      port to listen on (default 8817)
@@ -258,6 +267,7 @@ async function main() {
     if (sub === 'group') return lagoonGroupCommand(parse(rest));
     if (sub === 'groups') return lagoonGroupsCommand(argv);
     if (sub === 'dev') return lagoonDevCommand(argv);
+    if (sub === 'states') return lagoonStatesCommand(argv);
     if (sub === 'eject') return lagoonEjectCommand(argv);
     if (sub === 'publish') return lagoonPublishCommand(argv);
     if (sub === 'serve') return lagoonServeCommand(argv);

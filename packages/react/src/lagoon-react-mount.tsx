@@ -83,6 +83,16 @@ declare global {
       /** Establish a value (attributed as a seed, not a host write). */
       seed: (key: string, value: unknown) => void;
       remount: () => void;
+      /**
+       * Forget the named keys (all of them when none are named), then re-apply the region's own seed — the state a scenario that seeds
+       * nothing must see. Does NOT rebuild the tree: bound islands read the store through
+       * `useSyncExternalStore`, so they re-render on the change by themselves, and a caller that also
+       * wants a fresh mount can say so by calling `remount()` after this.
+       *
+       * For SCENARIO lanes only. A flow's steps build on each other, so resetting between them would
+       * erase the journey the flow exists to describe.
+       */
+      reset: (keys?: readonly string[]) => void;
       /** Fire one of an island's DECLARED outputs, as if the component had. */
       emit: (slot: string, event: string, detail: unknown) => boolean;
       /** Host modules the islands actually called, for provenance (see `traced`). */
@@ -235,6 +245,21 @@ export function mountReactLagoon(
       root = createRoot(mountEl);
       roots.set(mountEl, root);
       root.render(tree);
+    },
+    //  - reset: forget the region, then put the PAGE's own seed back. A remount alone does NOT do
+    //    this — the store is registered per archipelago id and deliberately survives one, so the tree
+    //    comes back holding everything the last scenario put in it. That is right for a flow and
+    //    wrong for a scenario. Kept separate from `remount` so a lane that measures pixels can reset
+    //    without restarting the entrance animations a fresh mount would replay.
+    reset: (keys) => {
+      getArchipelagoStore(config.id)?.clear(keys);
+      // BACK TO WHAT THE PAGE ESTABLISHES, not to empty. The region's own seed is applied once, when
+      // the store is built (`defineArchipelago` in the provider's `useMemo`, which reuses the store by
+      // id) — so forgetting a key the page seeded and stopping there would measure every later
+      // scenario against a state the application never produces. Re-seeding through `seedArchipelago`
+      // keeps the write attributed as a seed, so the ownership guard stays quiet about keys an island
+      // produces.
+      for (const [key, value] of Object.entries(opts.seed ?? {})) seedArchipelago(config.id, key, value);
     },
   };
 }

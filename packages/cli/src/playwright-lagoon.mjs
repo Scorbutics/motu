@@ -825,8 +825,9 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
 
     const findings = [];
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
+    const owned = scenarioKeys(list);
     for (const scenario of list) {
-      await provideScenario(page, scenario.seed, { tag });
+      await provideScenario(page, scenario.seed, { tag, owned });
       const violations = await page.evaluate(async (t) => {
         const el = window.__motuFindIsland(t);
         if (!el) return [];
@@ -883,17 +884,12 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
 
     const shots = [];
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
+    const owned = scenarioKeys(list);
     for (const scenario of list) {
-      await page.evaluate((seed) => {
-        const arch = document.querySelector('motu-archipelago');
-        const provide =
-          arch && typeof arch.provide === 'function'
-            ? (k, v) => arch.provide(k, v)
-            : window.__motuLagoon
-              ? (k, v) => window.__motuLagoon.provide(k, v)
-              : null;
-        if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
-      }, scenario.seed ?? {});
+      // NO REMOUNT: this lane measures pixels, and a fresh mount replays every entrance animation the
+      // shot would then capture mid-flight. The reset inside still runs, so each picture is of the
+      // scenario it is named after.
+      await provideScenario(page, scenario.seed, { remount: false, owned });
       for (const vp of viewports) {
         await page.setViewportSize({ width: vp.width, height: 900 });
         await sleep(250);
@@ -1099,17 +1095,11 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
     // notice with nothing to say) would otherwise be measured empty at every width and reported as
     // rendering nothing — a false alarm that teaches people to ignore the check.
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
+    const owned = scenarioKeys(list);
     for (const scenario of list) {
-    await page.evaluate((seed) => {
-      const arch = document.querySelector('motu-archipelago');
-      const provide =
-        arch && typeof arch.provide === 'function'
-          ? (k, v) => arch.provide(k, v)
-          : window.__motuLagoon
-            ? (k, v) => window.__motuLagoon.provide(k, v)
-            : null;
-      if (provide) for (const [k, v] of Object.entries(seed || {})) provide(k, v);
-    }, scenario.seed ?? {});
+    // NO REMOUNT, for the same reason the snapshot lane skips it: this one measures layout, and a
+    // fresh mount would have it measuring a tree that is still filling in.
+    await provideScenario(page, scenario.seed, { remount: false, owned });
     for (const vp of viewports) {
       await page.setViewportSize({ width: vp.width, height: 900 });
       // Two beats: one for the resize to land, one for anything that re-measures on it.
@@ -1231,19 +1221,47 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
  * frozen-state problem is open — it needs the page-pool interaction understood first, and a snapshot
  * lane that dies is worse than one that might be stale.
  */
-async function provideScenario(page, seed, { settleMs = 150, tag } = {}) {
-  await page.evaluate((s) => {
+/**
+ * Every key a scenario SET declares — what a reset between scenarios is allowed to forget.
+ *
+ * Scoped to these keys rather than the whole store, because a region's CHANNELS write their keys once,
+ * when they are installed, and nothing re-fires them. Clearing everything took those with it and left
+ * each later scenario looking at a region with no page behind it.
+ */
+function scenarioKeys(scenarios) {
+  const keys = new Set();
+  for (const s of scenarios ?? []) for (const k of Object.keys(s?.seed ?? {})) keys.add(k);
+  return [...keys];
+}
+
+async function provideScenario(page, seed, { settleMs = 150, tag, remount = true, owned = [] } = {}) {
+  await page.evaluate(({ s, remount, owned }) => {
     const arch = document.querySelector('motu-archipelago');
-    // Either mount path exposes the same `provide` seam: the element on the custom-element path,
+    // Either mount path exposes the same seams: the element on the custom-element path,
     // window.__motuLagoon on the React one.
-    const provide =
-      arch && typeof arch.provide === 'function'
-        ? (k, v) => arch.provide(k, v)
-        : window.__motuLagoon
-          ? (k, v) => window.__motuLagoon.provide(k, v)
-          : null;
+    const on = arch && typeof arch.provide === 'function' ? arch : window.__motuLagoon;
+    const provide = on ? (k, v) => on.provide(k, v) : null;
+
+    // FORGET THE LAST SCENARIO FIRST, and this is the whole reason a scenario means anything.
+    //
+    // Seeds were applied to one long-lived store, in order, so they ACCUMULATED: a scenario that seeds
+    // `{}` provided nothing and rendered whatever its predecessor left behind, under its own name, in
+    // the data-flow comparison and in the visual baseline alike. A scenario is a STATE — it says what
+    // the region holds, and everything it does not mention it does not hold — so each one starts from
+    // the region's own seed and adds only its own keys. (Flows are the opposite and do not come
+    // through here: their steps build on each other by design.)
+    //
+    // ONLY THE KEYS THE SCENARIO SET OWNS. A region's channels write their keys once, at install, and
+    // nothing re-fires them — so forgetting the whole store leaves every later scenario measuring a
+    // region with no page behind it, which reads as an island "rendering nothing from default props"
+    // while the lagoon a human opens shows it rendering perfectly.
+    //
+    // Tolerated when absent: an older host bundle has no `reset`, and the lane should degrade to the
+    // previous behaviour rather than fail with a TypeError from inside a page evaluate.
+    on?.reset?.(owned);
     if (provide) for (const [k, v] of Object.entries(s || {})) provide(k, v);
 
+    if (!remount) return;
     // The React path exposes a real teardown. The custom-element path has none, so re-insert the
     // marker: disconnectedCallback disposes the child, connectedCallback mounts a fresh one.
     if (typeof window.__motuLagoon?.remount === 'function') {
@@ -1256,7 +1274,7 @@ async function provideScenario(page, seed, { settleMs = 150, tag } = {}) {
         parent?.insertBefore(el, next);
       }
     }
-  }, seed ?? {});
+  }, { s: seed ?? {}, remount, owned });
   // A re-mount re-runs the island's fetch, so a lane that MEASURES (screenshot, viewport fit, axe)
   // would otherwise sample a tree that is still filling in — a fixed sleep was enough when `provide`
   // only updated props. Wait for the render to go quiet instead, and keep the fixed settle for callers
@@ -1299,8 +1317,9 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
 
     // Drive each scenario's seed through the archipelago boundary and capture rendered output.
     const outputs = [];
+    const owned = scenarioKeys(scenarios);
     for (const scenario of scenarios) {
-      await provideScenario(page, scenario.seed);
+      await provideScenario(page, scenario.seed, { owned });
       outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
     }
 

@@ -148,6 +148,25 @@ export function defineArchipelagoElement(tag = 'motu-archipelago', css = ''): vo
       else store.set(key, value);
     }
 
+    /**
+     * Forget every key this region holds — the seam a SCENARIO lane needs between cases.
+     *
+     * Mirrors `provide` above, and exists for the same reason it does: the checks drive the region
+     * from outside, through a plain DOM method, whatever framework the host is written in. A scenario
+     * says what the region holds and nothing else; without this, the keys of every earlier scenario
+     * are still in the store and a scenario that seeds nothing renders its predecessor.
+     *
+     * Not for flows — their steps build on each other by design.
+     */
+    reset(keys?: readonly string[]) {
+      const store = getArchipelagoStore(this.getAttribute('name') ?? '');
+      if (!store) {
+        console.warn(`motu: <motu-archipelago name="${this.getAttribute('name')}"> has no store to reset()`);
+        return;
+      }
+      store.clear(keys);
+    }
+
     // The legacy region(s) this archipelago stands in for while previewing.
     #region(): HTMLElement[] {
       if (!this.#previewOf) return [];

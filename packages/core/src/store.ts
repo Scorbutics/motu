@@ -372,6 +372,41 @@ export class Store {
   }
 
   /**
+   * Forget every key — back to the state a freshly-built store is in.
+   *
+   * DELETES rather than setting `undefined`, and that distinction is the whole point: `has()` is what
+   * decides whether the store or the component's own default wins for a bound prop, so a key set to
+   * `undefined` still beats the default and the island renders "no value" instead of its default one.
+   * Only removing the key hands the decision back.
+   *
+   * This exists for ONE caller — a check driving a set of SCENARIOS. A scenario is a state, not a
+   * step: it says what the region holds, and everything it does not mention it does not hold. Without
+   * a reset between them, seeds accumulate through the run and a scenario that seeds nothing renders
+   * its predecessor under another name — silently, in the data-flow comparison and in the visual
+   * baseline alike. FLOWS are the opposite and must not use this: their steps build on each other by
+   * design.
+   *
+   * NAME THE KEYS, and the caller does: `keys` is the union of what the scenario SET declares, so a
+   * reset removes what a scenario put there and nothing else. Clearing the whole store instead looks
+   * equivalent and is not — a region's CHANNELS write their keys once, when they are installed, and
+   * nothing re-fires them. Wiping those left every later scenario looking at a region with no page
+   * behind it, which surfaced as an island "rendering nothing from default props" that renders
+   * perfectly well in the lagoon a human opens.
+   *
+   * Not routed through `set()`: nobody wrote these values away, so there is no writer to attribute
+   * and the ownership guard has nothing to say about a key ceasing to exist.
+   */
+  clear(keys?: readonly string[]): void {
+    const doomed = keys ?? Object.keys(this.data);
+    const present = doomed.filter((k) => this.has(k));
+    if (!present.length) return;
+    for (const k of present) delete this.data[k];
+    this.snapshotCache = null;
+    this.revision++;
+    this.listeners.forEach((l) => l());
+  }
+
+  /**
    * Every key currently held, as a plain object — for a host reading the region (see `useRegion`).
    *
    * The SAME object until the next write, so it can be compared by identity.

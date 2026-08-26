@@ -278,9 +278,21 @@ export function compareCoverage(
   // show it neither way. Disjointness is the property that actually means "one cause": no amount of
   // picking a different scenario to compare against gets you closer on this key.
   const systemic: CoverageReport['systemic'] = [];
+  // THE FIRST PAINT IS NOT A STATE OF THE REGION, and counting it here silences this whole check.
+  //
+  // A wholly-absent fingerprint is what a region looks like before anything has been established —
+  // every page load passes through it, so every corpus acquires it almost at once. Include it and
+  // `absent` appears in the recorded set for EVERY key, which overlaps whatever the flows show, so no
+  // key is ever disjoint and nothing is ever systemic.
+  //
+  // Measured on peps: fifteen keys reported disjoint, then zero the moment that one state arrived —
+  // the strongest finding the tool had, switched off by the most ordinary state there is. The check
+  // asks "do the flows ever show the region in the shape production creates?", and the shape before
+  // anything exists is not one of those shapes.
+  const settled = uncovered.filter((u) => Object.values(u.fingerprint).some((v) => v !== 'absent'));
   for (const key of declared) {
     const inScenarios = [...new Set(scenarioStates.map((s) => s[key]))].filter(Boolean) as KeyState[];
-    const inRecorded = [...new Set(uncovered.map((u) => u.fingerprint[key]))].filter(Boolean) as KeyState[];
+    const inRecorded = [...new Set(settled.map((u) => u.fingerprint[key]))].filter(Boolean) as KeyState[];
     if (!inRecorded.length) continue;
     if (inRecorded.some((v) => inScenarios.includes(v))) continue;
     systemic.push({ key, recorded: inRecorded.join(' | ') as KeyState, scenarios: inScenarios });

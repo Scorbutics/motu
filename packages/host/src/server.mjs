@@ -318,6 +318,25 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // "known" except a flow or a person. An ingest credential that could also accept would let the
       // reporting path mark its own findings resolved — and a system that can do that reports
       // nothing, which is indistinguishable from having nothing to report.
+      // FORGETTING IS DESTRUCTIVE, so it takes the admin token — never the ingest one, which sits in an
+      // application's environment. A credential that can both write a corpus and delete from it could
+      // quietly rewrite what the region is known to have done.
+      if (path === '/api/coverage/forget') {
+        if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
+        if (!adminOk) return json(res, 401, { error: 'forgetting a state needs the admin token' });
+        const repo = normalizeRepo(url.searchParams.get('repo'));
+        const region = normalizeSegment(url.searchParams.get('region') || '');
+        const keysHash = normalizeSegment(url.searchParams.get('h') || '');
+        if (!repo || !region || !keysHash) return json(res, 400, { error: 'repo, region and h are required' });
+        let ids = null;
+        try {
+          const raw = JSON.parse((await readBody(req, 100_000)).toString('utf8'));
+          if (Array.isArray(raw)) ids = raw.filter((i) => typeof i === 'string');
+        } catch {
+          ids = null;
+        }
+        return json(res, 200, { ok: true, ...store.forgetCoverage(repo, region, keysHash, ids) });
+      }
       if (path === '/api/coverage/accept') {
         if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
         if (!adminOk) return json(res, 401, { error: 'accepting a state needs the admin token' });

@@ -341,6 +341,43 @@ export async function regionCoverageCommand(argv) {
     );
   }
 
+  // --forget <id…> / --forget-all: remove a recorded state, which is NOT the same act as accepting it.
+  //
+  // Accepting says "we looked and chose not to preview this". Forgetting says "this was never true" —
+  // and the case it exists for is a mistake in the INSTRUMENT, not in the application. peps recorded
+  // `isCurrentWeek:true isOtherWeek:true`, where the second is defined as the negation of the first:
+  // a state the page cannot compute, recorded because the region was published one key at a time.
+  // Fixing the publishing does not un-record it, and a report that keeps offering an impossible state
+  // will eventually be answered with a scenario for something that cannot happen.
+  const toForget = [argv.forget].flat().filter((v) => typeof v === 'string' && v);
+  if (toForget.length || argv['forget-all']) {
+    const { loadHostConfig, gitIdentity } = await import('../lib/remote.mjs');
+    const cfg = loadHostConfig();
+    const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
+    const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
+    if (!base || !hostToken) {
+      say(`  ${color.red('✗')} ${color.dim('forget'.padEnd(20))} ${color.red('no lagoon host configured — see ~/.config/motu/host.json')}`);
+      process.exit(2);
+    }
+    const hash = corpus.keysHash ?? keysHash(corpus.keys);
+    const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
+    const qs = `repo=${encodeURIComponent(repo)}&region=${encodeURIComponent(id)}&h=${encodeURIComponent(hash)}`;
+    const res = await fetch(`${base}/api/coverage/forget?${qs}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${hostToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(argv['forget-all'] ? [] : toForget),
+    }).catch(() => null);
+    if (!res?.ok) {
+      say(`  ${color.red('✗')} ${color.dim('forget'.padEnd(20))} ${color.red(res ? `the host answered ${res.status}` : 'the host is unreachable')}`);
+      process.exit(2);
+    }
+    const body = await res.json();
+    say(
+      `  ${color.green('✓')} ${color.dim('forget'.padEnd(20))} ` +
+        color.dim(`${body.removed} state(s) removed · ${body.remaining} left for declaration ${hash}`),
+    );
+  }
+
   // --accept <id…>: the SECOND of the three answers, and the reason it is its own act.
   //
   // "We looked and chose not to preview this" must not be the same state as "nobody looked" — the

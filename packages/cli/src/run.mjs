@@ -64,6 +64,7 @@ ${color.bold('Usage:')}
   motu region init <id> --page <file>              scaffold everything a page needs before its 1st island
   motu region coverage <id> [--corpus <f>]         states production reached that no flow previews
     --json --ids --accept <id> --fail-above <n>    machine-readable · print ids · accept one · gate
+    --forget <id> | --forget-all                  remove a state the instrument recorded wrongly
   motu integrate check [region]                    does the HOST compose, place and read the region?
   motu archipelago create <id>                      scaffold + register a new archipelago
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks

@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rename
 // moment a second copy of it exists the two stop agreeing — which is the whole reason `mergeCorpora`
 // lives in @motu/coverage instead of in every backend that stores one. The package compiles to plain
 // ESM, so bare node reads it exactly as the browser does.
-import { mergeCorpora } from '@motu/coverage';
+import { mergeCorpora, fingerprintId } from '@motu/coverage';
 import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 
@@ -605,6 +605,45 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   }
 
   /**
+   * Remove recorded states — the corpus is a worklist, and a worklist you cannot cross things off is
+   * a worklist people stop reading.
+   *
+   * THE CASE THIS EXISTS FOR is not a mistake in the data but a mistake in the INSTRUMENT. peps'
+   * corpus recorded `isCurrentWeek:true isOtherWeek:true`, where the second is defined as the negation
+   * of the first: a state the page cannot compute, recorded because the region was published one key
+   * at a time. Fixing the publishing does not un-record it, and a report that keeps offering an
+   * impossible state to triage will eventually be answered with a scenario for something that cannot
+   * happen — fake evidence, which is worse than none.
+   *
+   * DELETING IS NOT ACCEPTING, and they are separate acts for the same reason accepting is separate
+   * from previewing. Accepting says "we looked and chose not to"; deleting says "this was never true".
+   * Only the second is appropriate for an artifact, and only the second loses information.
+   */
+  function forgetCoverage(repo, region, keysHash, ids) {
+    const file = coveragePath(repo, region, keysHash);
+    if (!existsSync(file)) return { removed: 0, remaining: 0 };
+    let corpus;
+    try {
+      corpus = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      return { removed: 0, remaining: 0 };
+    }
+    const before = corpus.entries.length;
+    // No ids: the whole declaration. One recorded by a client that has since been fixed is not worth
+    // triaging entry by entry, and re-recording it costs nothing but a few page loads.
+    if (!ids || !ids.length) {
+      rmSync(file, { force: true });
+      return { removed: before, remaining: 0 };
+    }
+    const drop = new Set(ids);
+    corpus.entries = corpus.entries.filter((e) => !drop.has(fingerprintId(e.fingerprint)));
+    const tmp = `${file}.tmp`;
+    writeFileSync(tmp, JSON.stringify(corpus), 'utf8');
+    renameSync(tmp, file);
+    return { removed: before - corpus.entries.length, remaining: corpus.entries.length };
+  }
+
+  /**
    * Every declaration's corpus for a region, newest declaration first.
    *
    * Returns them separately rather than merged: they are not comparable, and a reader deciding which
@@ -639,6 +678,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     readCoverage,
     readAccepted,
     acceptCoverage,
+    forgetCoverage,
     publish,
     resolveRef,
     read,

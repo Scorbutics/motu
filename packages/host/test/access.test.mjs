@@ -236,6 +236,40 @@ console.log('\nhost access — a lagoon served live\n');
 }
 
 
+// FORGETTING IS NOT ACCEPTING. Accepting says "we looked and chose not to preview this"; forgetting
+// says "this was never true" — the case being a mistake in the INSTRUMENT rather than the application.
+console.log('\nhost access — forgetting a state the instrument recorded wrongly\n');
+{
+  const two = JSON.stringify({
+    v: 1, keysHash: 'ffff0000', regionId: 'forgetme', keys: ['a', 'b'],
+    entries: [
+      { fingerprint: { a: 'true', b: 'true' }, count: 3, firstAt: 1, lastAt: 2 },
+      { fingerprint: { a: 'true', b: 'false' }, count: 7, firstAt: 1, lastAt: 2 },
+    ],
+  });
+  const forget = (tok, body) => post('/api/coverage/forget?repo=acme/open&region=forgetme&h=ffff0000', body,
+    { authorization: `Bearer ${tok}`, 'content-type': 'application/json' });
+  // ITS OWN REGION. `actions` already holds another declaration from the ingest cases above, so
+  // "the whole declaration is gone" would still find that one and the assertion would fail for a
+  // reason unrelated to forgetting — which is exactly what it did.
+  const states = async () =>
+    ((await (await get('/api/coverage?repo=acme/open&region=forgetme')).json()).corpus?.entries ?? []).length;
+
+  await post('/api/coverage?repo=acme/open&region=forgetme', two, { authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
+  // An ingest credential that could also delete could quietly rewrite what a region is known to have
+  // done — so it is admin-only, like accepting.
+  t('the ingest token CANNOT forget', (await forget('ING-OPEN', '["a:true b:true"]')).status === 401);
+  const before = await states();
+  const one = await forget('ADMIN', '["a:true b:true"]');
+  t('the admin token can', one.status === 200);
+  t('...and removes exactly that state', (await states()) === before - 1, `${before} -> ${await states()}`);
+  t('...leaving the other', (await states()) >= 1);
+  const all = await forget('ADMIN', '[]');
+  t('an empty list drops the whole declaration', all.status === 200 && (await get('/api/coverage?repo=acme/open&region=forgetme')).status === 404);
+  t('...and forgetting nothing twice is harmless', (await forget('ADMIN', '[]')).status === 200);
+}
+
+
 server.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);

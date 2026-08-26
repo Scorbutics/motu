@@ -49,6 +49,27 @@ const under = (dir, file) => {
  * Returns `{ scoped: false, reason }` when something changed that cannot be attributed — the caller
  * then runs everything, which is the safe direction to be wrong in.
  */
+/**
+ * Files that cannot change what an island renders, whatever else they change.
+ *
+ * NARROWING MUST NEVER BE SILENT — that rule is why anything unattributable widens the run, and it is
+ * right. But it made the most common edit in an agent's tree the most expensive: `.claude/
+ * settings.local.json` changes every time a permission is granted, belongs to no island, and forced a
+ * hundred-second sweep to prove something about a file the lagoon never loads. Editor and CI
+ * configuration is not a silent narrowing; it is a file that provably cannot reach a render.
+ *
+ * Deliberately short, and deliberately NOT including lockfiles: a dependency version absolutely can
+ * change what renders. If a pattern here is ever wrong, the run gets narrower than the truth, so the
+ * bar for adding one is "there is no path from this file to a rendered pixel".
+ */
+const CANNOT_AFFECT_A_RENDER = [
+  /(^|\/)\.claude\//,
+  /(^|\/)\.vscode\//,
+  /(^|\/)\.idea\//,
+  /(^|\/)\.github\//,
+  /\.md$/,
+];
+
 export function changedScope(base) {
   const files = changedFiles(base);
   if (!files) return { scoped: false, reason: 'not a git repository, so nothing can be attributed' };
@@ -73,6 +94,7 @@ export function changedScope(base) {
   }
 
   for (const file of files) {
+    if (CANNOT_AFFECT_A_RENDER.some((re) => re.test(file))) continue;
     const inIslands = under(paths.islandsDir, file);
     const inUi = under(paths.uiRoot, file);
     const inRegions = under(paths.archipelagosDir, file);
@@ -101,6 +123,14 @@ export function changedScope(base) {
     const owner = byComponent.get(file);
     if (owner) {
       islands.add(owner);
+      continue;
+    }
+    // THE LAGOON'S PER-REGION MODULE belongs to that region and to no other: `regions/<id>.tsx` holds
+    // one region's seed and one region's arrangement. The map that wires them all together
+    // (`lagoon.tsx`) is a different file and still widens, as it should.
+    const inLagoonRegions = under(resolve(paths.lagoonDir, 'src/regions'), file);
+    if (inLagoonRegions && !inLagoonRegions.includes(sep)) {
+      regions.add(inLagoonRegions.replace(/\.tsx?$/, ''));
       continue;
     }
     unattributed.push(file);

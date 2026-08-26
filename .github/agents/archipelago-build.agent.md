@@ -88,11 +88,18 @@ work belongs. `motu archipelago verify <id> --runtime` must pass with:
 ### Which level, when
 
     motu check                              STATIC       every change
-    motu check --runtime --fast --changed   NO BROWSER   the loop (~6s on a 16-island project)
-    motu check --runtime                    the coupling — before handing over
+    motu check --runtime --fast             NO BROWSER   the loop (~6s scoped, 44s whole)
+    motu archipelago verify <id> --runtime  ONE REGION   the region you are building (~25s)
+    motu check --runtime                    EVERYTHING   once, before handing over (~104s)
     motu check --audit                      layout + a11y — before integrating, and in CI
 
 Fan-out agents iterate on the first two. The browser is paid once, by you, at steps 4 and 5.
+
+THE REGION YOU ARE BUILDING IS THE ONE YOU CHECK. `motu archipelago verify <id> --runtime` drives that
+region's flows, mutation and render; `motu check --runtime` drives every island in the repository to
+tell you the same thing. `--changed` reads like the answer and is not: it widens back to everything
+whenever a changed file belongs to no island or region, which a page, a source or a shared evidence
+module always does.
 
 ## 5 — Look at it, then hand over
 

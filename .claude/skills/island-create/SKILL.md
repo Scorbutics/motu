@@ -86,13 +86,20 @@ motu island verify <name> --audit       # before integrating: + responsive + a11
 
 ### Which level, when
 
-    motu check                       STATIC        ~1.4s   every change, in the loop
-    motu island verify <n> --fast    NO BROWSER            while building one island
-    motu check --runtime --fast --changed          ~6s     the loop, whole project
-    motu check --runtime             DOES IT WORK ~104s    before handing work over
-    motu check --audit               IS IT USABLE          before integrating, and in CI
+    motu check                          STATIC        ~1.4s   every change, in the loop
+    motu island verify <n> --fast       NO BROWSER            while building one island
+    motu island verify <n> --runtime    ONE ISLAND    ~15s    the island you are on
+    motu archipelago verify <id> --runtime  ONE REGION ~25s   the region you are on
+    motu check --runtime                EVERYTHING   ~104s    once, before handing work over
+    motu check --audit                  IS IT USABLE          before integrating, and in CI
 
 (seconds measured on a 16-island, 2-region project)
+
+NAME WHAT YOU TOUCHED. The runtime check you run while working is the island or the region you are on,
+not the project: `motu check --runtime` re-drives a browser for every island in the repo to tell you
+about the one you changed. `--changed` is not a substitute — it narrows only while every changed file
+maps to an island or a region, and a session that has touched a page, a source, a lagoon stub or the
+shared evidence gets no scoping from it (it says so, and runs everything).
 
 `--fast` mounts islands under happy-dom in node: no browser at all. It SKIPS a region's flows, mutation
 and render, and says so — those only exist where islands are mounted together. `--audit` adds

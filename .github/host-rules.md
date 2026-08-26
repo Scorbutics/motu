@@ -359,11 +359,18 @@ not the whole project. The full `motu check --runtime` re-drives a browser for e
 repo to tell you about the one you changed; run it ONCE, before handing work over, and after that only
 if you changed something shared.
 
-`--changed` is NOT that scoping, and expecting it to be will cost you the run. It narrows only while
-every changed file maps to an island or a region, and WIDENS BACK TO EVERYTHING the moment one does
-not — a config file, a shared module, a lagoon stub, an editor setting. Measured mid-session here: 18
-changed files, one of them `.claude/settings.local.json`, and the run went full anyway (loudly, which
-is the point). A session that has touched anything but island files gets no scoping from it.
+`--changed` IS NOT THAT SCOPING, and reaching for it instead will cost you the run. It narrows only
+while EVERY changed file maps to an island or a region, and widens back to everything the moment one
+does not — loudly, which is the design: a check that quietly examined less than you think is the worse
+failure. What does not map is most of a real session: the page, the screen that installs a source, the
+app-side region type, `roots/lagoon/src/lagoon.tsx`, a shared evidence module, the generated barrels.
+
+Measured on this project, mid-session: 16 changed files unattributable, so a full run. Files that
+provably cannot reach a render (`.claude/`, `.vscode/`, `.idea/`, `.github/`, `*.md`) no longer widen
+it and the lagoon's per-region module now maps to its region — that took it to 14 unattributable, and
+it STILL ran everything, because `app/dashboard/profile/page.tsx` and four app-side files remained.
+
+So: `--changed` is worth passing, and it is not a plan. The plan is naming the region.
 
 THE LAST THING YOU DO, both of them, with `--changed`. Scoped to one touched island that is 11s and
 15s — cheaper than the `--fast` loop — because `--changed` maps a changed island to the regions that

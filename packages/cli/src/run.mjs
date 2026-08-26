@@ -151,6 +151,9 @@ ${color.bold('island snapshot flags:')}
   --accept [name]      move the accepted pointer to what was last rendered
   --changed [base]     only islands/regions this branch touched — widens back to everything, loudly,
                        when a changed file belongs to no single one
+  ${color.dim('a page, a screen, an app-side source, the lagoon map or a shared evidence module belongs to no')}
+  ${color.dim('island, so a real session usually widens. To check ONE region while you work, name it:')}
+  ${color.dim('  motu archipelago verify <id> --runtime   ·   motu island verify <name> --runtime')}
   --json          machine-readable report
 
 ${color.bold('lagoon group flags:')}

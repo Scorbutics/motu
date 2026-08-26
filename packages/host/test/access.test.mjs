@@ -186,6 +186,22 @@ t('a repo token works as a cookie too', (await get('/acme/other/latest/all', { c
 t('its own accepted set is readable with it',
   (await get('/api/coverage/known?repo=acme/other&region=actions&h=7f46c60a', OTHER)).status === 200);
 
+// THE ACCEPTED SET IS NOT A CORPUS, and they live in the same directory. `<keysHash>.accepted.json`
+// also ends in `.json`, so a bare suffix test read it back as a corpus and served an array of
+// fingerprint ids where the caller expected `{ keys, entries }` — a wrong shape that fails nothing.
+console.log('\nhost access — accepted files are not corpora\n');
+{
+  const r = await get('/api/coverage?repo=acme/other&region=actions');
+  // acme/other has an accepted set (written above) and has never been ingested into.
+  t('a region with only an accepted set has no corpus', r.status === 404, String(r.status));
+  await post('/api/coverage?repo=acme/other&region=actions', CORPUS, {
+    authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
+  const c = await (await get('/api/coverage?repo=acme/other&region=actions', OTHER)).json();
+  t('...and once ingested, the corpus is the corpus', Array.isArray(c.corpus?.entries), JSON.stringify(c.corpus).slice(0, 40));
+  t('...counted once, not twice', c.declarations === 1, String(c.declarations));
+}
+
+
 server.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);

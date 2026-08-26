@@ -729,7 +729,19 @@ export function installRegionCoverage(
   const already = installed.get(regionId);
   if (already) return already;
   const endpoint = coverageConfig.endpoint ?? metaContent('motu-coverage-endpoint');
-  const knownUrl = coverageConfig.knownUrl ?? metaContent('motu-coverage-known');
+  // WHICH REGION, AND WHICH DECLARATION — appended here, because only here are both known.
+  //
+  // `fetchKnown` requests the URL verbatim, and the route it talks to needs `region` and `h` to answer
+  // with anything: the accepted set is per region and per key list, since a fingerprint recorded
+  // against one declaration means nothing under another. Without them every response was `[]`, from
+  // the first day this existed — the endpoint answered, the union was a no-op, and the only visible
+  // symptom was suppression that never seemed to do anything. It read as "nobody has accepted
+  // anything", which was also true, and hid this.
+  const knownBase = coverageConfig.knownUrl ?? metaContent('motu-coverage-known');
+  const knownUrl = knownBase
+    ? `${knownBase}${knownBase.includes('?') ? '&' : '?'}region=${encodeURIComponent(regionId)}` +
+      `&h=${encodeURIComponent(keysHash(declaredRegionKeys(regionId)))}`
+    : undefined;
   const handle = observeRegionCoverage(regionId, {
     enums: opts.enums,
     sink: coverageEgressAllowed(endpoint) ? beaconSink(endpoint!) : undefined,

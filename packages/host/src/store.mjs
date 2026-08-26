@@ -615,7 +615,13 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     if (!existsSync(base)) return [];
     const out = [];
     for (const name of readdirSync(base)) {
-      if (!name.endsWith('.json')) continue;
+      // A CORPUS FILE IS `<keysHash>.json` AND NOTHING ELSE. The accepted set lives in the same
+      // directory as `<keysHash>.accepted.json`, which also ends in `.json` — so a bare suffix test
+      // read it back as a corpus and served an array of fingerprint ids where a caller expected
+      // `{ keys, entries }`. It typechecks nowhere and fails nothing; it just answers the wrong shape.
+      // An exact pattern rather than an exclusion, so the next file added beside these is ignored by
+      // default instead of silently joining the corpus list.
+      if (!/^[A-Za-z0-9_-]+\.json$/.test(name)) continue;
       try {
         out.push(JSON.parse(readFileSync(resolve(base, name), 'utf8')));
       } catch {

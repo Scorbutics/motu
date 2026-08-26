@@ -23,7 +23,7 @@ import {
   type RegionOf,
   type SlotsOf,
 } from '@motu/core';
-import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot, useProvideRegion } from './react-island';
+import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot } from './react-island';
 import type { ElementSpec } from './bootstrap';
 
 export interface CreateRegionOptions {
@@ -47,16 +47,7 @@ export interface CreateRegionOptions {
 
 export interface RegionBinding<TRegion, TSlot extends string> {
   /** Wraps the host's tree: declares the archipelago and puts its store in context. */
-  /**
-   * Wraps the page and puts the region's store in context.
-   *
-   * `region` is the host-fed half of the region as ONE object, applied as one write before paint.
-   * Without it the page feeds the region by passing props to islands, and each island publishes its
-   * own slice from its own effect — so one value computed in one render reaches the store through N
-   * effects, and the store can hold a combination no render produced. Typed against the region, so a
-   * key an island produces is a compile error rather than a laundered write.
-   */
-  Region: (props: { children?: ReactNode; region?: Partial<TRegion> }) => ReactElement;
+  Region: (props: { children?: ReactNode }) => ReactElement;
   /** `<Island slot>` for THIS region — the slot is checked against the ones it declares. */
   Island: (props: {
     slot: TSlot;
@@ -71,18 +62,6 @@ export interface RegionBinding<TRegion, TSlot extends string> {
   seed: <K extends keyof TRegion & string>(key: K, value: TRegion[K]) => void;
   /** Feed a key the region declares as host-owned. */
   provide: <K extends keyof TRegion & string>(key: K, value: TRegion[K]) => void;
-  /**
-   * Feed the whole host-fed half at once, from INSIDE the region — the object form of `provide`.
-   *
-   * Call it where the page computes its region object. `<Region region={…}>` does the same thing from
-   * outside and often cannot be used: a page that also READS region state wraps itself in the Region
-   * and computes the region in the child, so the object does not exist where the provider is rendered.
-   *
-   * One write, before paint. Without it each island publishes its own slice from its own effect, so
-   * one value computed in one render reaches the store through N effects and the store can hold a
-   * combination no render produced.
-   */
-  useProvideRegion: (region: Partial<TRegion>) => void;
   /** The archipelago's id, for the rare call that still needs it. */
   id: string;
 }
@@ -104,11 +83,11 @@ export function createRegion<C extends AnyArchipelagoConfig>(
   // Fixed for the life of the binding, so this is one unconditional hook call, not a conditional one.
   const useHost: () => HostBridge | undefined = opts.useHost ?? (() => undefined);
 
-  function Region({ children, region }: { children?: ReactNode; region?: Partial<RegionOf<C>> }): ReactElement {
+  function Region({ children }: { children?: ReactNode }): ReactElement {
     const host = useHost();
     return createElement(
       ArchipelagoProvider,
-      { config, elements: opts.elements, host, seed: opts.seed, channels: opts.channels, region },
+      { config, elements: opts.elements, host, seed: opts.seed, channels: opts.channels },
       children,
     );
   }
@@ -119,7 +98,6 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     useRegion: () => useRegionSnapshot<RegionOf<C>>(),
     seed: (key, value) => seedArchipelago(config.id, key, value),
     provide: (key, value) => provideToArchipelago(config.id, key, value),
-    useProvideRegion: (region) => useProvideRegion(region as Record<string, unknown>),
     id: config.id,
   };
 }

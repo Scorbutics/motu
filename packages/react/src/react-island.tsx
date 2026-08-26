@@ -61,17 +61,19 @@ interface ArchipelagoValue {
   host: HostBridge | undefined;
   byTag: Map<string, ReactElementSpec>;
   /**
-   * Keys the page supplied as ONE object — via `<Region region={…}>` or `useProvideRegion`.
+   * What the islands want published this commit, flushed by the provider as ONE write.
    *
-   * An island must not also publish these from its own props: the region already wrote them, together,
-   * and a second write per island is exactly the staggering the object form exists to remove.
+   * AN ISLAND MUST NOT WRITE THE STORE DIRECTLY, and that is the whole fix. Each island publishes its
+   * own slice of the page's props from its own effect, so one value computed in one render reached
+   * the store through N writes — and a subscriber told between two of them saw a combination no
+   * render produced. peps' corpus holds `isCurrentWeek:true isOtherWeek:true`, where the second is
+   * DEFINED as `!isCurrentWeek`.
    *
-   * A REF, because the two callers write it at different moments. The provider knows during its own
-   * render; `useProvideRegion` runs in a CHILD's render, which is later. Islands read it in their
-   * effects, after both — so a ref is current by the time it is consulted, and a state update here
-   * would render the whole region twice for a value nothing displays.
+   * React runs effects child-first and parents last, so the provider's own effect is the one moment
+   * after every island has said what it wants and before anything else runs. Nothing is asked of the
+   * page: the staggering disappears from the mechanism rather than being avoided by a caller.
    */
-  regionFedRef: { current: ReadonlySet<string> };
+  pending: Map<string, { value: unknown; source: string }>;
 }
 
 const ArchipelagoContext = createContext<ArchipelagoValue | null>(null);
@@ -115,26 +117,6 @@ export interface ArchipelagoProviderProps {
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store. */
   channels?: Channel[];
-  /**
-   * THE HOST-FED HALF OF THE REGION, AS ONE OBJECT — applied as one write.
-   *
-   * Without it a page feeds the region by passing props to islands, and each island publishes its own
-   * slice from its own `useEffect`. One value computed in one render then reaches the store through N
-   * independent effects, so the store can hold a combination no render ever produced.
-   *
-   * That is not hypothetical. peps' actions page computes
-   *
-   *     const isCurrentWeek = …
-   *     isOtherWeek: selectedWeekIndex !== -1 && !isCurrentWeek
-   *
-   * so `isOtherWeek` is DEFINED as `!isCurrentWeek`. Its production corpus holds a state with both
-   * true — recorded by a fold that samples only at microtask boundaries, so the store really did
-   * settle there, long enough to paint. Two doors, opened in different tasks.
-   *
-   * Passing the object closes the class rather than the instance: the keys land together or not at
-   * all, and no interleaving exists to reason about.
-   */
-  region?: Record<string, unknown>;
   children?: ReactNode;
 }
 
@@ -143,7 +125,7 @@ export interface ArchipelagoProviderProps {
  * it. The store, the slot registry and the host bridge are the SAME ones the custom-element path
  * registers, so the debug overlay, `provide()` and channels behave identically either way.
  */
-export function ArchipelagoProvider({ config, elements, host, seed, channels, region, children }: ArchipelagoProviderProps): ReactElement {
+export function ArchipelagoProvider({ config, elements, host, seed, channels, children }: ArchipelagoProviderProps): ReactElement {
   const value = useMemo<ArchipelagoValue>(() => {
     // The islands' DECLARED shape, for the seam lens. On the custom-element path `defineIsland` does
     // this; the React path defines no elements, so without this call the overlay knew every island's
@@ -170,7 +152,7 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, re
       byTag: new Map(
         elements.filter((e): e is ReactElementSpec => 'component' in e).map((e) => [e.tag, e]),
       ),
-      regionFedRef: { current: new Set<string>() as ReadonlySet<string> },
+      pending: new Map<string, { value: unknown; source: string }>(),
     };
     // Keyed by archipelago id: the registration is global and one-shot, and re-running it on every
     // prop identity change would rebuild the store on each render of the host page.
@@ -189,7 +171,20 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, re
   // ONLY THE HOST-FED KEYS. A key an island produces is not the page's to write, and passing one here
   // would be the laundering the ownership rules exist to stop; `hostFedKeys` is the same derivation
   // the island path uses, so the two cannot disagree about who owns what.
-  value.regionFedRef.current = useAtomicRegionWrite(config, value.store, region);
+  // AFTER EVERY ISLAND, BY CONSTRUCTION. Effects run child-first, parent last, so by the time this
+  // runs each island has enqueued whatever its props changed — and it lands as one notification.
+  useEffect(() => {
+    if (!value.pending.size) return;
+    const entries = [...value.pending];
+    value.pending.clear();
+    value.store.batch(() => {
+      // Attribution stays per key: the host feeding a declared host-fed key is a different fact from
+      // an island publishing its own, and the lens reports them differently.
+      for (const [key, { value: v, source }] of entries) {
+        runWithWriteSource(source, () => value.store.set(key, v));
+      }
+    });
+  });
 
   // `createElement`, with the return type ANNOTATED — not JSX.
   //
@@ -371,10 +366,6 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
         warnUnpublished(slot, key, owner);
         continue;
       }
-      // ALREADY WRITTEN, TOGETHER, BY THE REGION. Publishing it again here would restore exactly the
-      // staggering `<Region region={…}>` exists to remove — same value, one effect later, one key at
-      // a time. The prop still renders this island; it just stops being a second door into the store.
-      if (ctx.regionFedRef.current.has(key)) continue;
       const value = hostedProps[prop];
       if (Object.is(publishedRef.current[key], value)) continue;
       publishedRef.current[key] = value;
@@ -383,7 +374,9 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
       // the island that received it made every fed key read as an island feeding itself — the same
       // mis-attribution that hid the page's coupling in the first place.
       const source = provided.has(key) ? 'host' : slot;
-      runWithWriteSource(source, () => ctx.store.set(key, value));
+      // ENQUEUED, not written. The provider flushes every island's contribution together — see
+      // `pending`. Writing here is what let a subscriber see the region mid-update.
+      ctx.pending.set(key, { value, source });
     }
   });
 
@@ -492,51 +485,4 @@ function IslandWindow({ tag }: { tag?: string }) {
   return null;
 }
 
-/**
- * Apply the host-fed half of a region as ONE write, before paint. Returns the keys it wrote.
- *
- * Shared by `<Region region={…}>` and the exported `useProvide`, because the object is not always
- * available where the provider is rendered — peps' page wraps itself in the Region and computes the
- * region inside the child, which is the normal shape when the page also READS region state.
- */
-function useAtomicRegionWrite(
-  config: AnyArchipelagoConfig,
-  store: Store,
-  region: Record<string, unknown> | undefined,
-): ReadonlySet<string> {
-  // ONLY HOST-FED KEYS. A key an island produces is not the page's to write, and passing one here
-  // would be the laundering the ownership rules exist to stop. Same derivation the island path uses,
-  // so the two cannot disagree about who owns what.
-  const hostFed = useMemo(() => hostFedKeys(config), [config]);
-  const fed = useMemo(() => {
-    if (!region) return new Set<string>();
-    return new Set(Object.keys(region).filter((k) => hostFed.has(k)));
-  }, [region, hostFed]);
-  useLayoutEffect(() => {
-    if (!region) return;
-    const next: Record<string, unknown> = {};
-    for (const key of fed) next[key] = region[key];
-    if (!Object.keys(next).length) return;
-    runWithWriteSource('host', () => store.setAll(next));
-  });
-  return fed;
-}
 
-/**
- * Feed the region from inside it — the object form of `provide`, applied as one write.
- *
- * `<Region region={…}>` is the same thing from outside, and often cannot be used: a page that also
- * READS region state wraps itself in the Region and computes the region in the child, so the object
- * does not exist where the provider is rendered.
- *
- * WHAT IT PREVENTS. Without it a page feeds the region by passing props to islands, and each island
- * publishes its own slice from its own effect — one value computed in one render reaching the store
- * through N effects, so the store can hold a combination no render produced.
- */
-export function useProvideRegion(region: Record<string, unknown>): void {
-  const ctx = useContext(ArchipelagoContext);
-  const fed = useAtomicRegionWrite(ctx?.config as AnyArchipelagoConfig, ctx?.store as Store, ctx ? region : undefined);
-  // Islands read this in their effects to skip a key the region already wrote. Assigned during render
-  // rather than in an effect so it is set before any island effect runs, whichever order they mount in.
-  if (ctx) ctx.regionFedRef.current = fed;
-}

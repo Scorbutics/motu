@@ -16,7 +16,7 @@ GlobalRegistrator.register();
 
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArchipelagoProvider, Island, useProvideRegion } from '../../react/src/react-island';
+import { ArchipelagoProvider, Island } from '../../react/src/react-island';
 import { getArchipelagoStore } from '@motu/core';
 
 let pass = 0, fail = 0;
@@ -44,18 +44,8 @@ const configFor = (id: string) =>
     ],
   }) as never;
 
-/**
- * The shape peps actually has: the Region wraps the page and the region object is computed in the
- * CHILD, because the page also reads region state. The prop cannot reach it from there — only the
- * hook can — so this is the form that has to be tested, not just the tidy one.
- */
-function Feeder({ region, children }: { region: Record<string, unknown>; children?: React.ReactNode }) {
-  useProvideRegion(region);
-  return <>{children}</>;
-}
-
-async function drive(mode: 'per-island' | 'prop' | 'hook') {
-  const config = configFor(`atomic-${mode}`);
+async function drive() {
+  const config = configFor(`atomic-${runId++}`);
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -81,13 +71,11 @@ async function drive(mode: 'per-island' | 'prop' | 'hook') {
     );
     act(() => {
       root.render(
-        <ArchipelagoProvider config={config} elements={elements} {...(mode === 'prop' ? { region } : {})}>
-          {mode === 'hook' ? <Feeder region={region}>{islands}</Feeder> : islands}
-        </ArchipelagoProvider> as never,
+        <ArchipelagoProvider config={config} elements={elements}>{islands}</ArchipelagoProvider> as never,
       );
     });
     if (!store) {
-      store = getArchipelagoStore(`atomic-${mode}`)!;
+      store = getArchipelagoStore(`atomic-${runId - 1}`)!;
       let queued = false;
       store.subscribe(() => raw.push(`${store!.get('isCurrentWeek')}/${store!.get('isOtherWeek')}`));
       store.subscribe(() => {
@@ -114,27 +102,26 @@ async function drive(mode: 'per-island' | 'prop' | 'hook') {
 }
 
 console.log('\natomic region write — a combination no render produced\n');
-const perIsland = await drive('per-island');
-const asOneObject = await drive('prop');
-const viaHook = await drive('hook');
-console.log('  what a subscriber is told, per change:\n');
-console.log(`  per-island props : ${perIsland.raw.join(' | ') || '(nothing)'}`);
-console.log(`  region={…}       : ${asOneObject.raw.join(' | ') || '(nothing)'}`);
-console.log(`  useProvideRegion : ${viaHook.raw.join(' | ') || '(nothing)'}`);
+let runId = 0;
+const run = await drive();
+console.log(`  what a subscriber is told : ${run.raw.join(' | ') || '(nothing)'}`);
+console.log(`  what a coalesced fold sees: ${run.seen.join(' | ') || '(nothing)'}`);
 console.log('');
 const impossible = (s: string[]) => s.filter((x) => x === 'true/true' || x === 'false/false');
-t('per-island publication EXPOSES an impossible pair', impossible(perIsland.raw).length > 0, perIsland.raw.join(' | '));
-t('the region object never does', impossible(asOneObject.raw).length === 0, asOneObject.raw.join(' | '));
-t('nor does the hook form', impossible(viaHook.raw).length === 0, viaHook.raw.join(' | '));
-t('...and both still publish the real states', asOneObject.raw.includes('true/false') && asOneObject.raw.includes('false/true'), asOneObject.raw.join(' | '));
-// A COALESCED subscriber cannot tell them apart HERE, and that is worth asserting rather than
-// leaving as a silence: under `act()` both islands' effects land in one flush, so a fold that samples
-// at microtask boundaries sees one settled state per change either way. peps' corpus is recorded by
-// exactly such a fold — which is why reproducing its both-true state needs the two writes in
-// different TASKS, a scheduling accident a harness collapses. The raw view above is what shows the
-// cause; this line records the limit of the harness so nobody reads more into a green run.
-t('a coalesced subscriber sees the same either way, here', perIsland.seen.length === asOneObject.seen.length,
-  `${perIsland.seen.length} vs ${asOneObject.seen.length}`);
+// THE REGRESSION THIS GUARDS. Before the provider flushed, each island wrote its own key from its own
+// effect and a raw subscriber was told between them:
+//
+//     true/true | true/false | false/false | false/true
+//
+// `true/true` is impossible by construction — `isOtherWeek` is `!isCurrentWeek` — and peps' production
+// corpus holds it. The page was not changed to fix this; the mechanism was.
+t('no subscriber is told an impossible pair', impossible(run.raw).length === 0, run.raw.join(' | '));
+t('one notification per change, not one per key', run.raw.length === 2, `${run.raw.length} notification(s)`);
+t('...and the real states still arrive', run.raw.includes('true/false') && run.raw.includes('false/true'), run.raw.join(' | '));
+// A coalesced fold — which is how peps' corpus is recorded — samples at microtask boundaries and so
+// could never have seen the intermediate here anyway. It is the RAW view above that shows the cause,
+// and this line records that the two now agree.
+t('a coalesced fold agrees', run.seen.length === 2, `${run.seen.length} settled state(s)`);
 
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);
 process.exit(fail ? 1 : 0);

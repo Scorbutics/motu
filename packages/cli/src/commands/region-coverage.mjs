@@ -152,6 +152,11 @@ function skeleton(fingerprint, coveredFp, sampleSeed) {
 }
 
 export async function regionCoverageCommand(argv) {
+  // --json MUST OWN STDOUT. The prose and the payload describe the same findings, so a caller that
+  // parses one while the other is interleaved gets neither — and the first version of this printed
+  // the header and every systemic line before the JSON, which is invalid on the first character.
+  // Errors stay on console.error: stderr is where they cannot corrupt what is being parsed.
+  const say = argv.json ? () => {} : console.log;
   const id = argv._[0];
   if (!id) {
     console.error(color.red('motu region coverage <id> --corpus <file…>'));
@@ -167,10 +172,10 @@ export async function regionCoverageCommand(argv) {
   const enums = declaredEnums(region);
   const flows = await readFlows(id);
 
-  console.log(color.bold(`\nmotu region coverage — ${id}\n`));
+  say(color.bold(`\nmotu region coverage — ${id}\n`));
 
   if (!flows?.length) {
-    console.log(
+    say(
       `  ${color.dim('–')} ${color.dim('coverage'.padEnd(20))} ` +
         color.dim(`no readable flows in ${paths.rel(paths.archipelagoEvidence(id))} — nothing to compare a corpus against`),
     );
@@ -189,20 +194,20 @@ export async function regionCoverageCommand(argv) {
   const asked = [argv.corpus, ...(argv._.slice(1) ?? [])].flat().filter(Boolean);
   const files = asked.length ? asked : configured;
   if (files.length && !asked.length) {
-    console.log(`  ${color.dim('·')} ${color.dim('corpus'.padEnd(20))} ${color.dim(`${files[0]}  (coverage.corpusUrl)`)}`);
+    say(`  ${color.dim('·')} ${color.dim('corpus'.padEnd(20))} ${color.dim(`${files[0]}  (coverage.corpusUrl)`)}`);
   }
   if (!files.length) {
-    console.log(
+    say(
       `  ${color.dim('–')} ${color.dim('coverage'.padEnd(20))} ` +
         color.dim('no --corpus given and no coverage.corpusUrl configured: nothing was compared'),
     );
-    console.log(
+    say(
       color.dim(
         `\n  ${covered.length} state(s) previewed by ${flows.length} flow(s) over ${keys.length} declared key(s).` +
           `\n  Known set (publish this so clients stay quiet about them):\n`,
       ),
     );
-    console.log('  ' + JSON.stringify(knownIds(covered)));
+    say('  ' + JSON.stringify(knownIds(covered)));
     process.exit(2);
   }
 
@@ -301,7 +306,7 @@ export async function regionCoverageCommand(argv) {
   try {
     corpus = mergeCorpora(await Promise.all(files.map(load)));
   } catch (err) {
-    console.log(`  ${color.red('✗')} ${color.dim('corpus'.padEnd(20))} ${color.red(String(err?.message ?? err))}`);
+    say(`  ${color.red('✗')} ${color.dim('corpus'.padEnd(20))} ${color.red(String(err?.message ?? err))}`);
     process.exit(2);
   }
 
@@ -330,7 +335,7 @@ export async function regionCoverageCommand(argv) {
       }
     }
     writeFileSync(out, body + '\n');
-    console.log(
+    say(
       `  ${color.green('✓')} ${color.dim('saved'.padEnd(20))} ` +
         color.dim(`${paths.rel(out)} · ${corpus.entries.length} state(s), no URL and no token in it`),
     );
@@ -351,7 +356,7 @@ export async function regionCoverageCommand(argv) {
     const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
     const repo = paths.publishAs?.repo ?? null;
     if (!base || !hostToken) {
-      console.log(`  ${color.red('✗')} ${color.dim('accept'.padEnd(20))} ${color.red('no lagoon host configured — see ~/.config/motu/host.json')}`);
+      say(`  ${color.red('✗')} ${color.dim('accept'.padEnd(20))} ${color.red('no lagoon host configured — see ~/.config/motu/host.json')}`);
       process.exit(2);
     }
     const hash = corpus.keysHash ?? keysHash(corpus.keys);
@@ -362,13 +367,13 @@ export async function regionCoverageCommand(argv) {
       body: JSON.stringify(toAccept),
     }).catch(() => null);
     if (!res?.ok) {
-      console.log(
+      say(
         `  ${color.red('✗')} ${color.dim('accept'.padEnd(20))} ${color.red(res ? `the host answered ${res.status}` : 'the host is unreachable')}`,
       );
       process.exit(2);
     }
     const body = await res.json();
-    console.log(
+    say(
       `  ${color.green('✓')} ${color.dim('accept'.padEnd(20))} ` +
         color.dim(`${toAccept.length} state(s) accepted · ${body.accepted} in the set for declaration ${hash}`),
     );
@@ -379,7 +384,7 @@ export async function regionCoverageCommand(argv) {
 
   if (report.keysDiffer) {
     const { onlyRecorded, onlyDeclared } = report.keysDiffer;
-    console.log(
+    say(
       `  ${color.red('✗')} ${color.dim('declaration'.padEnd(20))} ` +
         color.red(
           `corpus ${corpus.keysHash ?? keysHash(corpus.keys)} vs code ${keysHash(keys)} — ` +
@@ -392,7 +397,7 @@ export async function regionCoverageCommand(argv) {
   }
 
   for (const s of report.systemic) {
-    console.log(
+    say(
       `  ${color.yellow('!')} ${color.dim('systemic'.padEnd(20))} ` +
         `${color.bold(s.key)}: production is ${color.bold(`[${s.recorded}]`)} and the flows only ever show ` +
         `${color.bold(`[${s.scenarios.join(', ') || 'nothing'}]`)} — ` +
@@ -400,25 +405,69 @@ export async function regionCoverageCommand(argv) {
     );
   }
 
-  if (!report.uncovered.length) {
+  const threshold = argv['fail-above'] != null ? Number(argv['fail-above']) : null;
+
+  // --json: THE SAME FINDINGS, for something that is not a person.
+  //
+  // The prose above is written to be read once and acted on; an agent needs the fingerprint, the
+  // share and the SKELETON as data, because the skeleton is the actionable half — it is the scenario
+  // stub, already typed from the flows' own seed. Printed before the human report rather than
+  // alongside it, so the two cannot disagree about what was found and stdout stays parseable.
+  if (argv.json) {
+    const over = threshold != null ? report.uncovered.filter((u) => u.share * 100 >= threshold) : [];
     console.log(
+      JSON.stringify(
+        {
+          region: id,
+          declaration: corpus.keysHash ?? keysHash(corpus.keys),
+          keys: corpus.keys,
+          recorded: { states: corpus.entries.length, occurrences: total },
+          covered: report.covered,
+          // A key where the two sides are DISJOINT: not a missing scenario but a missing column, and
+          // the thing to fix before writing any of the scenarios below.
+          systemic: report.systemic,
+          uncovered: report.uncovered.map((u) => ({
+            id: u.id,
+            share: u.share,
+            count: corpus.entries.find((e) => fingerprintId(e.fingerprint) === u.id)?.count ?? null,
+            differsBy: u.diff,
+            fingerprint: u.fingerprint,
+            scenario: skeleton(u.fingerprint, covered, sample),
+          })),
+          unreachable: report.unreachable,
+          keysDiffer: report.keysDiffer,
+          // Said in the payload, not only in the prose: a state reached through `emit` is reported as
+          // uncovered even though a flow does exercise it, because only a browser knows the result.
+          caveats: { emitOnlySteps: emits, unreachableIsWeak: true },
+          failAbove: threshold,
+          pass: over.length === 0,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(over.length ? 1 : 0);
+  }
+
+  if (!report.uncovered.length) {
+    say(
       `  ${color.green('✓')} ${color.dim('coverage'.padEnd(20))} ` +
         color.dim(`every recorded state is previewed · ${corpus.entries.length} state(s), ${total} occurrence(s)`),
     );
   } else {
-    console.log(
+    say(
       color.dim(
         `  ${report.uncovered.length} of ${corpus.entries.length} recorded state(s) are previewed by no flow, ` +
           `most-seen first:\n`,
       ),
     );
     for (const u of report.uncovered) {
-      console.log(`  ${color.yellow((u.share * 100).toFixed(1).padStart(5) + '%')}  ${u.diff}`);
-      console.log(color.dim(`         ${skeleton(u.fingerprint, covered, sample)}`));
+      say(`  ${color.yellow((u.share * 100).toFixed(1).padStart(5) + '%')}  ${u.diff}`);
+      say(color.dim(`         ${skeleton(u.fingerprint, covered, sample)}`));
       // The id, so the third answer to an uncovered state is reachable without deriving it by hand.
-      if (argv.ids) console.log(color.dim(`         ${u.id}`));
+      if (argv.ids) say(color.dim(`         ${u.id}`));
     }
-    console.log(
+    say(
       color.dim(
         `\n  Three answers, not one: write a scenario, ACCEPT it (\`--accept <id>\`, and \`--ids\` prints them),` +
           `\n  or fix the application — an error state at 3% is a 3% error rate, not a missing preview.`,
@@ -427,7 +476,7 @@ export async function regionCoverageCommand(argv) {
   }
 
   if (emits) {
-    console.log(
+    say(
       color.dim(
         `\n  ${emits} flow step(s) act through \`emit\`, whose result only a browser can know — a state reached` +
           `\n  that way is reported above as uncovered even though a flow does exercise it.`,
@@ -435,7 +484,7 @@ export async function regionCoverageCommand(argv) {
     );
   }
   if (report.unreachable.length) {
-    console.log(
+    say(
       color.dim(
         `\n  ${report.unreachable.length} previewed state(s) never recorded. Rare, seasonal or aspirational states` +
           `\n  look like this, so it is worth reading rather than acting on.`,
@@ -443,13 +492,13 @@ export async function regionCoverageCommand(argv) {
     );
   }
 
-  const threshold = argv['fail-above'] != null ? Number(argv['fail-above']) : null;
+
   const over = threshold != null ? report.uncovered.filter((u) => u.share * 100 >= threshold) : [];
   if (over.length) {
-    console.log(`\n${color.red(color.bold('FAIL'))}${color.dim(`  ${over.length} uncovered state(s) at or above ${threshold}%`)}`);
+    say(`\n${color.red(color.bold('FAIL'))}${color.dim(`  ${over.length} uncovered state(s) at or above ${threshold}%`)}`);
     process.exit(1);
   }
-  console.log(
+  say(
     `\n${color.green(color.bold('PASS'))}` +
       color.dim(`  ${report.covered} covered, ${report.uncovered.length} to triage${threshold == null ? ' (advisory — pass --fail-above to gate)' : ''}`),
   );

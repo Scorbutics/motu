@@ -62,6 +62,21 @@ await post('/api/group?name=all', JSON.stringify({ all: true }), { authorization
   console.log('\nhost access — booted the way the service boots\n');
   t('a host given its directory by MOTU_HOST_DIR serves requests', health.status === 200, String(health.status));
   t('...including the index', (await fetch(`http://127.0.0.1:${port}/`)).status === 200);
+  // AND THE COVERAGE ROUTES, which the index does not exercise. The first version of this block only
+  // checked /api/health and /, so it caught the access loader taking the raw `dir` and missed the
+  // store doing the same thing three lines later — coverage 500'd while every page worked.
+  // ITS OWN REGION, so this does not perturb the fold arithmetic another case asserts on. Writing
+  // into `actions` made a count of 6 become 9 and failed a test that was correct — shared state
+  // between cases is a way to fail for a reason that has nothing to do with the thing being tested.
+  const bootRegion = 'bootcheck';
+  await fetch(`http://127.0.0.1:${port}/api/coverage?repo=acme/open&region=${bootRegion}`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer ADMIN', 'content-type': 'application/json' },
+    body: CORPUS,
+  });
+  t('...and can ingest a corpus', (await fetch(`http://127.0.0.1:${port}/api/coverage?repo=acme/open&region=${bootRegion}`)).status === 200);
+  t('...and can read the accepted set',
+    (await fetch(`http://127.0.0.1:${port}/api/coverage/known?repo=acme/open&region=${bootRegion}&h=7f46c60a`)).status === 200);
   bare.server.close();
   if (prev === undefined) delete process.env.MOTU_HOST_DIR;
   else process.env.MOTU_HOST_DIR = prev;

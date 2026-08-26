@@ -528,9 +528,13 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   // ones. Kept as files beside the objects rather than in the index, so a corpus cannot bloat the one
   // document every request reads, and so a stale one is a file to delete.
 
+  // `root`, NEVER `dir`. `dir` is openStore's raw parameter and is undefined whenever the directory
+  // came from MOTU_HOST_DIR — which is how the service runs. `resolve(undefined, …)` throws, so these
+  // three lines answered every coverage request with a 500 while the pages carried on working. The
+  // same mistake, in the same shape, as the access loader: only `root` has been resolved.
   /** Where one declaration's corpus lives. Nested so a repo id with an owner segment stays a path. */
   function coveragePath(repo, region, keysHash) {
-    return resolve(dir, 'coverage', repo, region, `${keysHash}.json`);
+    return resolve(root, 'coverage', repo, region, `${keysHash}.json`);
   }
 
   /**
@@ -564,7 +568,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
 
   /** Where a declaration's ACCEPTED set lives, beside the corpus it is about. */
   function acceptedPath(repo, region, keysHash) {
-    return resolve(dir, 'coverage', repo, region, `${keysHash}.accepted.json`);
+    return resolve(root, 'coverage', repo, region, `${keysHash}.accepted.json`);
   }
 
   /**
@@ -607,7 +611,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
    * one is current needs to see that there is more than one.
    */
   function readCoverage(repo, region) {
-    const base = resolve(dir, 'coverage', repo, region);
+    const base = resolve(root, 'coverage', repo, region);
     if (!existsSync(base)) return [];
     const out = [];
     for (const name of readdirSync(base)) {

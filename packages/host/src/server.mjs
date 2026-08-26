@@ -197,7 +197,11 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     // THE ACCESS POLICY, re-read per request so editing it does not need a restart. See access.mjs;
     // absent, every repo is public and the global token admits every write, which is what the host
     // did before any of this existed.
-    const access = loadAccess(dir);
+    // `store.root`, NOT the `dir` parameter. The parameter is undefined whenever the directory comes
+    // from MOTU_HOST_DIR instead of --dir — which is exactly how the systemd unit runs this — and
+    // `resolve(undefined, …)` throws, so EVERY request became a 500. The store already resolved it
+    // through the same precedence; asking it is the only way the two cannot disagree.
+    const access = loadAccess(store.root);
     const bearer = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const adminOk = Boolean(token) && tokenMatches(bearer, token);
     const readSecret = readSecretFrom({ cookieHeader: req.headers.cookie, bearer });

@@ -45,6 +45,25 @@ await post('/api/publish?repo=acme/secret&slug=all&title=S', '<h1>SECRET PAGE</h
 await post('/api/publish?repo=acme/open&slug=all&title=O', '<h1>OPEN PAGE</h1>', { authorization: 'Bearer ADMIN' });
 await post('/api/group?name=all', JSON.stringify({ all: true }), { authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
 
+// THE WAY THE SERVICE ACTUALLY RUNS. The systemd unit passes the directory as MOTU_HOST_DIR, not
+// --dir, so `dir` reaches createLagoonHost as undefined and the policy loader was handed it raw —
+// `resolve(undefined, …)` throws, and EVERY request answered 500 "internal error". Every test here
+// passed a dir explicitly, so none of them could see it. This one boots the way the service does.
+{
+  const prev = process.env.MOTU_HOST_DIR;
+  process.env.MOTU_HOST_DIR = dir;
+  const bare = createLagoonHost({ token: 'ADMIN' });
+  await new Promise((r) => bare.server.listen(0, '127.0.0.1', r));
+  const port = bare.server.address().port;
+  const health = await fetch(`http://127.0.0.1:${port}/api/health`);
+  console.log('\nhost access — booted the way the service boots\n');
+  t('a host given its directory by MOTU_HOST_DIR serves requests', health.status === 200, String(health.status));
+  t('...including the index', (await fetch(`http://127.0.0.1:${port}/`)).status === 200);
+  bare.server.close();
+  if (prev === undefined) delete process.env.MOTU_HOST_DIR;
+  else process.env.MOTU_HOST_DIR = prev;
+}
+
 console.log('\nhost access — a stranger\n');
 t('a public lagoon is served', (await get('/acme/open/latest/all')).status === 200);
 t('a private lagoon is 404, not 403', (await get('/acme/secret/latest/all')).status === 404);

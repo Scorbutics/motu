@@ -11,13 +11,15 @@
 //
 // Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
 // (a browser per island), which belongs in CI or before a release, not in a tight loop.
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { color, paths, hostStrictBoundaries } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
+import { renderCoverageModule, COVERAGE_MODULE } from '../lib/archipelagos.mjs';
 import { integrationResults } from './integration.mjs';
 import { names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
 
@@ -27,6 +29,32 @@ function islands0Drift() {
   const d = contractsDrift(paths.islandsDir, util);
   if (d.missing) return { stale: true, reason: 'contracts.generated.ts is missing' };
   if (d.drifted) return { stale: true, reason: 'a component changed since the contracts were generated' };
+  return { stale: false, reason: null };
+}
+
+/**
+ * Is `coverage.generated.ts` what motu.config.json says it should be?
+ *
+ * The same question `islands0Drift` asks, for the region side. It matters more here than it looks:
+ * the file's whole job is a SIDE EFFECT, so a stale one does not fail to compile, does not fail a
+ * type check, and does not fail to import. It quietly configures the wrong thing — or nothing — and
+ * the only symptom is coverage that never records, which is indistinguishable from a region nobody
+ * has visited.
+ */
+function coverageDrift() {
+  const file = resolve(paths.archipelagosDir, COVERAGE_MODULE);
+  const want = renderCoverageModule(paths.coverage);
+  // ABSENT IS FINE WHEN COVERAGE IS OFF, and demanding it otherwise was wrong. A project that never
+  // enabled coverage has no generated module and no import of one — a perfectly consistent state, and
+  // failing it would make every existing project red until somebody ran a command that changes
+  // nothing. The file becomes required the moment it is switched on, or the moment one exists.
+  if (!existsSync(file)) {
+    return paths.coverage?.enabled
+      ? { stale: true, reason: `${COVERAGE_MODULE} is missing — run \`motu archipelago sync\`` }
+      : { stale: false, reason: null };
+  }
+  if (readFileSync(file, 'utf8') !== want)
+    return { stale: true, reason: `${COVERAGE_MODULE} does not match motu.config.json — run \`motu archipelago sync\`` };
   return { stale: false, reason: null };
 }
 
@@ -43,6 +71,7 @@ export async function checkCommand(argv) {
   // The generated half, first and cheaply: every island's contract is READ from its component, so the
   // only way it can be wrong is by being stale. One comparison answers that for the whole project.
   const drift = islands0Drift();
+  const regionDrift = coverageDrift();
   const allIslands = listIslands(paths.islandsDir);
 
   // `--changed`: verify what this branch touched. Widens back to everything the moment a change
@@ -100,6 +129,7 @@ export async function checkCommand(argv) {
   // to skip it. Only broken wiring makes the rewrite pointless.
   const structureOk =
     !drift.stale &&
+    !regionDrift.stale &&
     islandResults.every((r) => r.errors.length === 0) &&
     regionResults.every((r) => r.errors.length === 0);
   const removal = structureOk ? await runRemovalCheck(argv, { quiet: true }) : null;
@@ -148,6 +178,21 @@ export async function checkCommand(argv) {
     drift.stale
       ? `  ${color.red('✗')} ${color.dim('generated'.padEnd(20))} ${color.red(drift.reason)} — run \`motu island sync\``
       : `  ${color.green('✓')} ${color.dim('generated'.padEnd(20))}${color.dim('every island contract matches its component')}`,
+  );
+  // THE REGION SIDE, which fails silently in a way the island side does not. `coverage.generated.ts`
+  // exists for a side effect, so a stale one still compiles, still type-checks and still imports —
+  // it just configures the wrong thing, and the symptom is coverage that never records, which looks
+  // exactly like a region nobody has visited.
+  console.log(
+    regionDrift.stale
+      ? `  ${color.red('✗')} ${color.dim('region-generated'.padEnd(20))} ${color.red(regionDrift.reason)}`
+      : `  ${color.green('✓')} ${color.dim('region-generated'.padEnd(20))}${color.dim(
+          paths.coverage?.enabled
+            ? 'coverage config matches motu.config.json'
+            : existsSync(resolve(paths.archipelagosDir, COVERAGE_MODULE))
+              ? 'coverage off, and nothing names @motu/coverage'
+              : 'coverage off, and no generated module to keep in step',
+        )}`,
   );
 
   printSweep('motu check — islands', islandResults);

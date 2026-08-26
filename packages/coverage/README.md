@@ -46,12 +46,13 @@ means *"the declared state space is fully previewed"* — never *"the screen is 
 
 ## Turning it on
 
-Nothing in your application calls this package. `motu island sync` writes the switch into the
-generated island registry, and `defineArchipelago` picks each region up as it mounts:
+Nothing in your application calls this package. `motu archipelago sync` writes the switch into a
+generated module beside your archipelago registry, and `defineArchipelago` picks each region up as it
+mounts:
 
 ```jsonc
-// motu.config.json — NO ADDRESSES. This file is read by `island sync` and baked into the generated
-// island registry, which the lagoon imports and publishes as a public page.
+// motu.config.json — NO ADDRESSES. This file is read by `archipelago sync` and baked into a
+// generated module the lagoon imports and publishes as a public page.
 "coverage": {
   "enabled": true,
   "regions": ["actions"],                                     // optional: all regions when absent
@@ -66,6 +67,17 @@ generated island registry, and `defineArchipelago` picks each region up as it mo
 <meta name="motu-coverage-endpoint" content="/api/motu/coverage" />
 <meta name="motu-coverage-known" content="/api/motu/coverage/known" />
 ```
+
+The generated module is `<archipelagos>/coverage.generated.ts`, imported by your archipelago
+registry for its side effect. It is written even when coverage is OFF — as an empty module, so the
+registry's import line never changes and nothing names `@motu/coverage`, which is what keeps the
+package out of a bundle. `motu check` fails when it drifts from the config, because a stale one still
+compiles, still type-checks and still imports; it just configures the wrong thing, and the symptom is
+coverage that never records — indistinguishable from a region nobody visited.
+
+This used to be emitted into the ISLAND registry, because that was the one generated module an
+application is guaranteed to import at startup. `regions: ["actions"]` names regions; it was never
+island-shaped.
 
 `corpusUrl` is the exception that proves the rule: it is read by the CLI on a developer's machine and
 never reaches a browser. `endpoint` and `knownUrl` are NOT config keys — this document described them

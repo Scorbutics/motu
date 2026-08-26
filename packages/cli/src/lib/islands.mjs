@@ -38,7 +38,16 @@ export function elementExportName(file) {
 }
 
 /** Render the registry from what is on disk. */
-export function renderRegistry(islands, islandsDir, isolation, coverage = null) {
+/**
+ * COVERAGE IS NOT HERE ANY MORE, and its absence is the point.
+ *
+ * `configureCoverage({ enabled, regions })` used to be emitted into this file. Nothing about it is
+ * island-shaped — `regions: ["actions"]` names REGIONS — and it lived here only because the island
+ * registry was the one generated module an application is guaranteed to import at startup. That is a
+ * fact about which files happened to exist, not a reason, and it made `motu island sync` responsible
+ * for something outside its own noun. See lib/archipelagos.mjs.
+ */
+export function renderRegistry(islands, islandsDir, isolation) {
   // NO SILENT DEFAULT. Writing `'shadow'` when the caller passed nothing is how this generator put the
   // wrong isolation into a project declaring `light` — the value was missing from the `paths` object,
   // not from the config, and a fallback turned a plumbing bug into a wrong file nobody would question.
@@ -66,7 +75,7 @@ export function renderRegistry(islands, islandsDir, isolation, coverage = null) 
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and \`import.meta.glob\` is Vite-only.
 import type { ElementSpec } from '@motu/react';
-import { setDefaultIsolation } from '@motu/core';${coverage?.enabled ? `\nimport { configureCoverage } from '@motu/coverage';` : ''}
+import { setDefaultIsolation } from '@motu/core';
 ${rows.map((r) => r.import).join('\n')}
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
@@ -81,30 +90,6 @@ ${rows.map((r) => r.import).join('\n')}
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('${isolation}');
-${coverage?.enabled ? `
-// COVERAGE, from motu.config.json.
-//
-// THIS IMPORT IS THE SWITCH. \`@motu/coverage\` is a package of its own precisely so that a project
-// with coverage off never names it — and a module nothing imports is a module no bundler ships. Core
-// only holds a seam (\`offerRegionToCoverage\`) which stays a dead branch until this line fills it.
-//
-// It arrives by IMPORT rather than as a build constant. \`__MOTU_DEBUG__\` exists so the seam lens'
-// whole import tree dead-code-eliminates — the lens must not ship. Coverage is MEANT to ship, so a
-// define would only oblige every host's bundler to declare a global or fail with a ReferenceError.
-// No application file mentions coverage; this generated one does.
-//
-// Which of a region's keys are closed sets is NOT here: that is a fact about the key, declared on the
-// archipelago beside it. Neither are the ADDRESSES — this file is imported by the lagoon, and a
-// published lagoon is a public page, so an endpoint baked here becomes a public string. The page that
-// wants coverage renders them as meta tags instead:
-//
-//   <meta name="motu-coverage-endpoint" content="…" />
-//   <meta name="motu-coverage-known"    content="…" />
-configureCoverage(${JSON.stringify({
-    enabled: true,
-    ...(coverage.regions ? { regions: coverage.regions } : {}),
-  })});
-` : ''}
 export const ELEMENT_REGISTRY: ElementSpec[] = [${rows.map((r) => r.local).join(', ')}];
 
 /**
@@ -119,9 +104,9 @@ ${rows.map((r) => `  '${r.tag}': typeof ${r.local};`).join('\n')}
 }
 
 /** Write the registry for a project. Returns the path written. */
-export function syncRegistry(islandsDir, isolation, coverage = null) {
+export function syncRegistry(islandsDir, isolation) {
   const islands = listIslands(islandsDir);
   const out = resolve(islandsDir, 'registry.ts');
-  writeFileSync(out, renderRegistry(islands, islandsDir, isolation, coverage));
+  writeFileSync(out, renderRegistry(islands, islandsDir, isolation));
   return { path: out, count: islands.length };
 }

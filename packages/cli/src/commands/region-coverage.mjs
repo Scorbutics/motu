@@ -229,6 +229,18 @@ export async function regionCoverageCommand(argv) {
    * "Cannot read properties of undefined (reading 'join')".
    */
   const asCorpus = (body) => {
+    // THE HOST'S OWN READ API, unwrapped. `GET /api/coverage?repo=&region=` answers
+    // `{ repo, region, corpus, declarations }` — the corpus in an envelope that names which repo and
+    // which region it came from, and how many older declarations are being kept beside it. That
+    // envelope is not a corpus, and passing it on reached `corpus.keys.join(...)` on an object with
+    // no `keys` — the exact "Cannot read properties of undefined (reading 'join')" this function was
+    // already written once to prevent, arriving by the other door.
+    //
+    // IT IS THE BETTER SOURCE, which is why this is an unwrap and not a rejection: the host holds the
+    // WHOLE corpus with real `firstAt`/`lastAt`, where a status page is a top-N summary with the
+    // timestamps zeroed. `coverage.corpusUrl` pointed at the host is now the everyday configuration,
+    // and an application needs no read route of its own for the CLI's sake.
+    if (body?.corpus && Array.isArray(body.corpus.entries)) return body.corpus;
     if (!Array.isArray(body?.top)) return body;
     const entries = body.top.map((t) => ({
       fingerprint: Object.fromEntries(
@@ -249,7 +261,12 @@ export async function regionCoverageCommand(argv) {
     }));
     return {
       v: 1,
-      keysHash: body.declarations?.[0] ?? keysHash(Object.keys(entries[0]?.fingerprint ?? {})),
+      // `declaration` IS THE STAMP, `declarations` IS A COUNT. This read `body.declarations?.[0]`,
+      // which is `undefined` against every status route that exists — peps' answers a NUMBER there
+      // (how many key lists the host is keeping) and puts the hash in `declaration`. So the fallback
+      // fired every time and recomputed a hash from the keys of a TRUNCATED top-N, which is only the
+      // host's stamp by luck. Prefer what the route actually says.
+      keysHash: body.declaration ?? keysHash(Object.keys(entries[0]?.fingerprint ?? {})),
       regionId: body.region ?? id,
       keys: Object.keys(entries[0]?.fingerprint ?? {}).sort(),
       entries,

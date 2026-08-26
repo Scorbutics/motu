@@ -19,6 +19,7 @@ import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
 import { fixturesRecordCommand } from './commands/fixtures.mjs';
 import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mjs';
+import { archipelagoSyncCommand } from './commands/archipelago-sync.mjs';
 import { removalCheckCommand } from './commands/removal-check.mjs';
 import { contractCheckCommand } from './commands/contract.mjs';
 import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand } from './commands/lagoon.mjs';
@@ -67,6 +68,7 @@ ${color.bold('Usage:')}
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
+  motu archipelago sync                             regenerate the region-side derived files
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
   motu lagoon eject                                 write the framework's lagoon entries into the project
@@ -226,6 +228,8 @@ async function main() {
     if (sub === 'create') return archipelagoCreateCommand(argv);
     if (sub === 'verify') return archipelagoVerifyCommand(argv);
     if (sub === 'record-frame') return archipelagoRecordFrameCommand(argv);
+    // The region-side counterpart to `island sync`. See the command's own header for why it exists.
+    if (sub === 'sync') return archipelagoSyncCommand(argv);
     console.error(color.red(`unknown: motu archipelago ${sub ?? ''}`));
     console.log(USAGE);
     process.exit(2);

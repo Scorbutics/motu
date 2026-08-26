@@ -132,8 +132,16 @@ if (argv._[0] === 'access') {
 
   if (argv.read) {
     const secret = randomBytes(32).toString('hex');
-    out.readHash = digest(secret).toString('hex');
-    minted.push(['read secret (opens every private lagoon)', secret]);
+    if (repo) {
+      // `--read --repo X` is the NARROW one: it opens that repo and nothing else. This is what an
+      // application holds so it can read back its own accepted set, and what you hand somebody who
+      // should see one project rather than all of them.
+      out.repos[repo] = { ...(out.repos[repo] ?? {}), readHash: digest(secret).toString('hex') };
+      minted.push([`read token for ${repo} (that repo only)`, secret]);
+    } else {
+      out.readHash = digest(secret).toString('hex');
+      minted.push(['read secret (opens EVERY private lagoon — for your browser, not an app)', secret]);
+    }
   }
   if (argv.ingest) {
     if (!repo) {
@@ -153,7 +161,8 @@ if (argv._[0] === 'access') {
   }
   if (!minted.length && !argv.private && !argv.public) {
     console.log('');
-    console.log('  motu-host access --read                      mint the secret that opens private lagoons');
+    console.log('  motu-host access --read                      mint the secret that opens EVERY private lagoon');
+    console.log('  motu-host access --repo <r> --read           mint one that opens only that repo');
     console.log('  motu-host access --repo <r> --ingest         mint a write-only coverage token for one repo');
     console.log('  motu-host access --repo <r> --private        stop serving that repo to strangers');
     console.log('  motu-host access --repo <r> --public         serve it again');

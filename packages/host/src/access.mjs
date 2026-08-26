@@ -84,6 +84,16 @@ export function isPublic(access, repo) {
 export function canRead(access, repo, { adminOk, readSecret }) {
   if (isPublic(access, repo)) return true;
   if (adminOk) return true;
+  // TWO SCOPES, and the narrow one exists because of where these end up.
+  //
+  // The host-wide secret opens EVERY private repo. That is right for a person carrying one cookie,
+  // and wrong for a credential that has to live in an application's production environment: an
+  // adopting app needs to read back its OWN accepted set, and giving it a key to every private
+  // lagoon on the host to do that undoes the reason ingest tokens are scoped at all.
+  //
+  // Checked in this order so a repo token is enough on its own, and the host-wide one still works
+  // everywhere — including on a repo that also has its own.
+  if (secretMatches(readSecret, access.repos?.[repo]?.readHash)) return true;
   return secretMatches(readSecret, access.readHash);
 }
 

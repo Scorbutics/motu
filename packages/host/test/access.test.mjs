@@ -17,6 +17,9 @@ writeFileSync(
     readHash: digest('READSECRET').toString('hex'),
     repos: {
       'acme/secret': { visibility: 'private', ingestHash: digest('ING-SECRET').toString('hex') },
+      // A SECOND private repo with its OWN read token — the case one private repo cannot test:
+      // whether a scoped token stays inside its scope.
+      'acme/other': { visibility: 'private', readHash: digest('READ-OTHER').toString('hex') },
       'acme/open': { ingestHash: digest('ING-OPEN').toString('hex') },
     },
   }),
@@ -151,6 +154,22 @@ t('a private repo answers [] rather than refusing',
   (await get('/api/coverage/known?repo=acme/secret&region=actions&h=7f46c60a')).status === 200);
 t('...and the set is empty for a stranger',
   JSON.parse(await (await get('/api/coverage/known?repo=acme/secret&region=actions&h=7f46c60a')).text()).length === 0);
+
+console.log('\nhost access — a read token scoped to one repo\n');
+await post('/api/publish?repo=acme/other&slug=all&title=O2', '<h1>OTHER PAGE</h1>', { authorization: 'Bearer ADMIN' });
+const OTHER = { authorization: 'Bearer READ-OTHER' };
+t('it opens its own repo', (await (await get('/acme/other/latest/all', OTHER)).text()).includes('OTHER PAGE'));
+// THE WHOLE POINT. This token lives in an application's production environment; if it also opened the
+// neighbouring private repo it would undo the reason ingest tokens are scoped at all.
+t('it does NOT open another private repo', (await get('/acme/secret/latest/all', OTHER)).status === 404);
+t('...nor that repo\'s corpus', (await get('/api/coverage?repo=acme/secret&region=actions', OTHER)).status === 404);
+t('...nor list it on the index', !(await (await get('/', OTHER)).text()).includes('acme/secret'));
+t('but its own repo IS listed', (await (await get('/', OTHER)).text()).includes('acme/other'));
+t('the host-wide secret still opens both',
+  (await get('/acme/other/latest/all', COOKIE)).status === 200 && (await get('/acme/secret/latest/all', COOKIE)).status === 200);
+t('a repo token works as a cookie too', (await get('/acme/other/latest/all', { cookie: 'motu_read=READ-OTHER' })).status === 200);
+t('its own accepted set is readable with it',
+  (await get('/api/coverage/known?repo=acme/other&region=actions&h=7f46c60a', OTHER)).status === 200);
 
 server.close();
 rmSync(dir, { recursive: true, force: true });

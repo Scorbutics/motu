@@ -190,7 +190,28 @@ export async function regionCoverageCommand(argv) {
   // <id>` rather than a URL somebody has to remember. It is the one coverage address allowed in
   // committed config, because it is read HERE — on a developer's machine — and never reaches a
   // browser; the beacon's own addresses stay in the page's meta tags for exactly that reason.
-  const configured = paths.coverage?.corpusUrl ? [paths.coverage.corpusUrl] : [];
+  // THE CONFIGURED URL FOLLOWS THE REGION BEING ASKED ABOUT. It is one string for a project with
+  // several regions, so a `region=` written into it is right for exactly one of them — `motu region
+  // coverage directory` fetched the actions corpus and compared a region to another region's data.
+  //
+  // The declaration guard caught that (`corpus 7f46c60a vs code 3eda0a71`), which is the keysHash
+  // bucketing earning its place: without it the two would have been compared and every state reported
+  // uncovered, with nothing to say why.
+  const configuredUrl = (raw) => {
+    if (!/^https?:\/\//.test(raw)) return raw;
+    try {
+      const u = new URL(raw);
+      // `{region}` for a URL that names it elsewhere — a path segment, say.
+      if (u.href.includes('%7Bregion%7D') || u.href.includes('{region}')) {
+        return decodeURIComponent(u.href).replaceAll('{region}', id);
+      }
+      u.searchParams.set('region', id);
+      return u.href;
+    } catch {
+      return raw;
+    }
+  };
+  const configured = paths.coverage?.corpusUrl ? [configuredUrl(paths.coverage.corpusUrl)] : [];
   const asked = [argv.corpus, ...(argv._.slice(1) ?? [])].flat().filter(Boolean);
   const files = asked.length ? asked : configured;
   if (files.length && !asked.length) {

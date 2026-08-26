@@ -55,7 +55,7 @@ mounts:
 // generated module the lagoon imports and publishes as a public page.
 "coverage": {
   "enabled": true,
-  "regions": ["actions"],                                     // optional: all regions when absent
+  "regions": ["*"],                                           // "*" or absent: every region
   "corpusUrl": "https://your-app/api/motu/coverage/status"    // optional: the CLI's default --corpus
 }
 ```

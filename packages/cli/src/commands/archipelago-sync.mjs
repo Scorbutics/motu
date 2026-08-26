@@ -12,8 +12,9 @@ import { syncArchipelagos } from '../lib/archipelagos.mjs';
 
 export function archipelagoSyncCommand() {
   const { path, enabled, registry } = syncArchipelagos(paths.archipelagosDir, paths.coverage);
+  const regions = paths.coverage?.regions;
   const state = enabled
-    ? `coverage on for ${paths.coverage?.regions ? paths.coverage.regions.join(', ') : 'every region'}`
+    ? `coverage on for ${!regions ? 'every region (no `regions` declared)' : regions.includes('*') ? 'every region (*)' : regions.join(', ')}`
     : 'coverage off — an empty module, so nothing names @motu/coverage';
   console.log(`${paths.rel(path)} — ${state}`);
   if (registry === 'import added') {

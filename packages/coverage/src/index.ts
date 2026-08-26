@@ -725,7 +725,13 @@ export function installRegionCoverage(
   opts: { enums?: readonly string[] } = {},
 ): RegionCoverageHandle | null {
   if (!coverageConfig.enabled) return null;
-  if (coverageConfig.regions && !coverageConfig.regions.includes(regionId)) return null;
+  // `["*"]` IS EVERY REGION, SAID OUT LOUD. Omitting the key means the same thing, and the two are
+  // indistinguishable from a config file — "we want all of them" reads exactly like "somebody forgot
+  // this line". A wildcard is a decision an author can be held to, and it survives a region being
+  // added later, which an explicit list silently excludes.
+  const regions = coverageConfig.regions;
+  const everyRegion = !regions || regions.includes('*');
+  if (!everyRegion && !regions.includes(regionId)) return null;
   const already = installed.get(regionId);
   if (already) return already;
   const endpoint = coverageConfig.endpoint ?? metaContent('motu-coverage-endpoint');

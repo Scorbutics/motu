@@ -173,6 +173,20 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       return void html(res, 502, errorPage(502, 'the live lagoon for this member stopped answering'), NO_STORE);
     }
     const type = upstream.headers.get('content-type') ?? 'text/html; charset=utf-8';
+    // A LIVE PAGE NEEDS THE SAME STAMP A STORED ONE GETS. `withRepoMeta` is what tells a lagoon which
+    // repo it belongs to, so it can ask this host for its own coverage corpus — and it was applied
+    // only on the stored path. A live frame therefore rendered without the one section that made
+    // going live worth doing, and the reason was invisible: the page works, the lens works, and the
+    // coverage section simply is not there.
+    //
+    // Buffered rather than streamed, for HTML only. The document has to be whole before a tag can go
+    // into its head, and it is one self-contained page that `fetch` has buffered anyway. Everything
+    // else — the reload stream above all — keeps streaming, because an SSE response collected before
+    // it is forwarded never arrives.
+    if (type.includes('text/html')) {
+      const body = withRepoMeta(Buffer.from(await upstream.arrayBuffer()), member.repo);
+      return void send(res, upstream.status, type, body, NO_STORE);
+    }
     res.writeHead(upstream.status, {
       'content-type': type,
       'cache-control': 'no-store',
@@ -480,14 +494,40 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     // Parsed FROM THE RIGHT: a repo id may carry an owner segment (`acme/web`), so the last two
     // segments are ref and slug and everything before them is the repo.
     if (segments.length >= 3) {
-      const slug = normalizeSegment(segments[segments.length - 1]);
-      const ref = normalizeSegment(segments[segments.length - 2]);
-      const repo = normalizeRepo(segments.slice(0, -2).join('/'));
+      // The reload stream hangs off the page's own path, so strip it before parsing repo/ref/slug —
+      // otherwise `/<repo>/latest/all/__motu_reload` parses as a repo called `<repo>/latest`.
+      const isReload = segments[segments.length - 1] === '__motu_reload';
+      const parts = isReload ? segments.slice(0, -1) : segments;
+      const slug = normalizeSegment(parts[parts.length - 1]);
+      const ref = normalizeSegment(parts[parts.length - 2]);
+      const repo = normalizeRepo(parts.slice(0, -2).join('/'));
       if (repo && ref && slug) {
         // 404, NOT 403, for a private repo somebody cannot read. A 403 confirms the repo exists,
         // which is the one thing a private host should not tell an unauthenticated stranger — and the
         // name of an unreleased project is often the interesting part.
         if (!readable(repo)) return html(res, 404, errorPage(404, `nothing at ${path}`), NO_STORE);
+
+        // LIVE ON THE CANONICAL URL, not only inside a gallery.
+        //
+        // `latest` already means "always current"; it just meant current as of the last publish. A
+        // project being worked on right now has a dev server that IS the answer, and the only way to
+        // see it was to compose a group and open a frame — so the URL a person actually bookmarks
+        // was the one place liveness did not reach.
+        //
+        // `latest` ONLY. An immutable URL keyed by content must never be live: being able to say
+        // "this exact page, forever" is the entire reason that URL exists, and serving something else
+        // from it would break the one promise it makes.
+        const liveUrl = ref === 'latest' ? live.endpointFor(repo, slug) : null;
+        if (liveUrl) {
+          const rec = store.resolveRef(repo, ref, slug);
+          // The stored record travels with it so `proxyLive` can fall back to the last published
+          // bytes if the dev server has gone away between resolving and asking.
+          const member = { repo, slug, hash: rec?.hash ?? null, title: rec?.title ?? slug };
+          const sub = isReload ? '/__motu_reload' : `/${url.search}`;
+          return void (await proxyLive(liveUrl, sub, req, res, member));
+        }
+        if (isReload) return html(res, 404, errorPage(404, 'nothing is serving this page live'), NO_STORE);
+
         const rec = store.resolveRef(repo, ref, slug);
         if (!rec) return html(res, 404, errorPage(404, `nothing at ${repo}/${ref}/${slug}`), NO_STORE);
         const bytes = store.read(repo, rec.id, rec.hash);

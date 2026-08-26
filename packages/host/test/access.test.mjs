@@ -202,6 +202,40 @@ console.log('\nhost access — accepted files are not corpora\n');
 }
 
 
+// LIVE ON THE CANONICAL URL. `latest` already meant "always current"; it meant current as of the
+// last publish, and liveness reached only a gallery frame — so the URL a person actually bookmarks
+// was the one place it did not work.
+console.log('\nhost access — a lagoon served live\n');
+{
+  const dev = (await import('node:http')).createServer((q, s) => {
+    if (q.url.endsWith('/__motu_reload')) { s.writeHead(200, { 'content-type': 'text/event-stream' }); s.write('retry: 1500\n\n'); return; }
+    const b = '<!doctype html><html><head><title>x</title></head><body>LIVE DEV SERVER</body></html>';
+    s.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': b.length }); s.end(b);
+  });
+  await new Promise((r) => dev.listen(0, '127.0.0.1', r));
+  await post(`/api/live?repo=acme/open&slug=all`, JSON.stringify({ url: `http://127.0.0.1:${dev.address().port}` }),
+    { authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
+
+  t('the canonical URL serves the dev server', (await (await get('/acme/open/latest/all')).text()).includes('LIVE DEV SERVER'));
+  // Without this the live page cannot ask the host for its own coverage — the one section that makes
+  // going live worth doing, missing for a reason nothing shows.
+  t('...stamped with its repo, like a stored one', (await (await get('/acme/open/latest/all')).text()).includes('name="motu-repo"'));
+  const reload = await get('/acme/open/latest/all/__motu_reload');
+  t('...and the reload stream reaches it', (reload.headers.get('content-type') ?? '').includes('text/event-stream'));
+  await reload.body?.cancel();
+
+  // AN IMMUTABLE URL MUST NEVER BE LIVE: "this exact page, forever" is the whole reason it exists.
+  const listing = await (await get('/acme/open')).text();
+  const immutable = /\/acme\/open\/[a-f0-9]{6,}\/all/.exec(listing)?.[0];
+  t('an immutable URL still serves its own bytes', immutable
+    ? !(await (await get(immutable)).text()).includes('LIVE DEV SERVER') : false, immutable ?? 'no immutable url found');
+
+  dev.close();
+  await new Promise((r) => setTimeout(r, 50));
+  t('a dead dev server falls back to the last publish', !(await (await get('/acme/open/latest/all')).text()).includes('LIVE DEV SERVER'));
+}
+
+
 server.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);

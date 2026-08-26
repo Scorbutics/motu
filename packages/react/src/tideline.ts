@@ -79,6 +79,14 @@ export interface TideLineOptions {
   about: string;
   onStation(id: string): void;
   onView(view: TideView): void;
+  /**
+   * Run one of the region's declared FLOWS, or `null` to go back to the state the page seeds.
+   *
+   * The panel could switch between regions and not between the STATES a region has been declared to
+   * reach, so the flows — the states someone wrote down, the ones the checks assert on — were
+   * reachable only by editing a URL. Omit this and the column does not appear.
+   */
+  onFlow?(name: string | null): void;
   /** Wire the palette's lens entry to a debug lens. Omit it and the palette has no lens command. */
   lens?: TideLens;
 }
@@ -86,6 +94,21 @@ export interface TideLineOptions {
 export interface TideLine {
   /** Reflect the mounted state back onto the panel (lit segment + sliding thumb). */
   setActive(stationId: string, view: TideView): void;
+  /**
+   * The flows of whichever region is mounted, and which one is showing.
+   *
+   * Handed in per mount rather than once at construction: they belong to the region, and the panel
+   * outlives every region it shows.
+   */
+  setFlows(flows: TideFlow[], active?: string | null): void;
+  /** Say how the last run went, under the list. */
+  setFlowOutcome(text: string | null, ok?: boolean): void;
+}
+
+/** One declared flow, as the panel lists it. */
+export interface TideFlow {
+  name: string;
+  steps: number;
 }
 
 const CORNER_KEY = 'motu:lagoon:tide-corner';
@@ -821,6 +844,81 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     next?.focus();
   });
 
+  // ── flows ──────────────────────────────────────────────────────────────────────────────────
+  //
+  // WHAT THE REGION HAS BEEN DECLARED TO REACH, listed beside where it is mounted. A region's flows
+  // are its promises written as data — a seed, an island's declared output, and what must be true
+  // afterwards — and until this column existed the only way to LOOK at one was to know the URL. The
+  // checks drove them, a human could not.
+  //
+  // Nothing here scripts anything: a row fires the flow's declared steps through the same seam the
+  // check uses. There is no selector, no typing, no click to simulate.
+  const flowInner = el('div', { class: 'list__inner' });
+  const flowBox = el('div', { class: 'list', role: 'listbox', 'aria-label': 'Flow' }, flowInner);
+  const flowCount = el('span', { class: 'count' }, '0');
+  const flowHead = el('div', { class: 'col__head' }, el('span', { class: 'cap' }, 'Flow'), flowCount);
+  const flowNote = el('p', { class: 'empty' }, 'This region declares no flows.');
+  const flowStatus = el('p', { class: 'hint', hidden: '' }, '');
+  const flowCol = el('div', { class: 'col' }, flowHead, flowBox, flowNote, flowStatus);
+  if (opts.onFlow) bar.appendChild(flowCol);
+
+  let flowRows: { name: string | null; btn: HTMLButtonElement }[] = [];
+
+  function paintFlows(active: string | null | undefined): void {
+    for (const { name, btn } of flowRows) {
+      const on = (name ?? null) === (active ?? null);
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+  }
+
+  function setFlows(flows: TideFlow[], active?: string | null): void {
+    if (!opts.onFlow) return;
+    flowInner.replaceChildren();
+    flowRows = [];
+    flowCount.textContent = `${flows.length}`;
+    flowNote.hidden = flows.length > 0;
+    flowStatus.hidden = true;
+
+    // THE SEEDED STATE IS A STATE, and it needs a way back. Running a flow leaves the region wherever
+    // its last step put it; without this row the only way to see the page as the host establishes it
+    // is to reload, which also throws away the region you had picked.
+    type Row = { name: string | null; label: string; sub: string };
+    const rowsToBuild: Row[] = flows.length
+      ? [
+          { name: null, label: 'As seeded', sub: 'the state the page establishes' } as Row,
+          ...flows.map<Row>((f) => ({
+            name: f.name,
+            label: f.name,
+            sub: `${f.steps} step${f.steps === 1 ? '' : 's'}`,
+          })),
+        ]
+      : [];
+
+    for (const row of rowsToBuild) {
+      const btn = el(
+        'button',
+        { class: 'opt', type: 'button', role: 'option', title: row.sub },
+        el('span', { class: 'lamp' }),
+        row.label,
+      ) as HTMLButtonElement;
+      btn.addEventListener('click', (e) => {
+        splash(e.clientX, e.clientY, accent());
+        paintFlows(row.name);
+        opts.onFlow?.(row.name);
+      });
+      flowInner.appendChild(btn);
+      flowRows.push({ name: row.name, btn });
+    }
+    paintFlows(active ?? null);
+  }
+
+  function setFlowOutcome(text: string | null, ok = true): void {
+    flowStatus.hidden = !text;
+    flowStatus.textContent = text ?? '';
+    flowStatus.style.color = ok ? '' : 'var(--tide-danger, #b91c1c)';
+  }
+
   const viewGroup = segmented('View');
   for (const [view, label] of [
     ['region', 'Region'],
@@ -1341,5 +1439,5 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     window.setTimeout(() => close(0), 3200);
   }
 
-  return { setActive };
+  return { setActive, setFlows, setFlowOutcome };
 }

@@ -20,9 +20,10 @@ import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChrom
 import { defineMotuApp, type ElementSpec } from './bootstrap';
 import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle';
 import { mountFitToggle } from './fit-toggle';
-import { mountTideLine, type TideLens, type TideView } from './tideline';
+import { mountTideLine, type TideFlow, type TideLens, type TideView } from './tideline';
 import { mountReactLagoon } from './lagoon-react-mount';
 import {
+  stateNames,
   pickState,
   publishStates,
   readStateRequest,
@@ -332,6 +333,7 @@ markSandbox();
         view,
       });
       tide.setActive(current, view);
+      tide.setFlows(flowsOf(id), activeFlowName(id));
       applyRequestedFlow(id);
       return;
     }
@@ -344,6 +346,7 @@ markSandbox();
     if (view === 'mountpoints') el.setAttribute('view', 'mountpoints');
     root!.appendChild(el);
     tide.setActive(current, view);
+    tide.setFlows(flowsOf(id), activeFlowName(id));
     applyRequestedFlow(id);
   }
 
@@ -372,6 +375,26 @@ markSandbox();
   const lens = opts.debug === false ? undefined : opts.lens;
   lens?.mount({ chip: false });
 
+  /**
+   * Which row the panel should light, given what the URL asked for.
+   *
+   * RESOLVED, not compared: an address carries the slug (`a-good-password-…`) and the rows carry the
+   * declared name, so comparing the two strings lit nothing when a flow was opened from its own URL —
+   * the state was applied and the panel said no state was.
+   */
+  const activeFlowName = (id: string): string | null => {
+    if (!request.flow || id !== flowRegion) return null;
+    const flow = pickState(opts.evidence?.flows?.[id], request.flow);
+    return flow?.name ?? null;
+  };
+
+  /** The flows the mounted region declares, for the panel to list. */
+  const flowsOf = (id: string): TideFlow[] =>
+    (opts.evidence?.flows?.[id] ?? []).map((f, i) => ({
+      name: f.name ?? `#${i + 1}`,
+      steps: (f.steps ?? []).length,
+    }));
+
   const tide = mountTideLine({
     stations,
     transport: mode,
@@ -382,6 +405,48 @@ markSandbox();
       view = next;
       localStorage.setItem(VIEW_KEY, next);
       mount(current);
+    },
+    // RUNNING A FLOW FROM THE PANEL, and leaving an address behind.
+    //
+    // The URL is rewritten to the one that reaches this state, so what a person is looking at can be
+    // pasted to someone else — the same address `motu lagoon states` prints. Picking "As seeded" is a
+    // remount: a flow leaves the region where its last step put it, and going back to what the page
+    // establishes is a state too.
+    onFlow: (name) => {
+      const url = new URL(location.href);
+      url.searchParams.set('region', current);
+      if (name) url.searchParams.set('flow', name);
+      else url.searchParams.delete('flow');
+      url.searchParams.delete('step');
+      history.replaceState(null, '', url);
+
+      // A RELOAD, and it has to be. Forgetting the region's keys is not the same as starting again: a
+      // source is installed once, with the store, and re-mounting reuses both — so a region whose
+      // source FETCHES came back holding nothing and sat at its pre-answer state ("Vérification du
+      // lien…") for good, which is not a state the page establishes, it is one it passes through. The
+      // address is already in the URL, so a reload loses nothing and restores everything.
+      if (!name) {
+        tide.setFlowOutcome('reloading…');
+        location.reload();
+        return;
+      }
+      const flow = pickState(opts.evidence?.flows?.[current], name);
+      if (!flow) {
+        tide.setFlowOutcome(`no flow "${name}" in ${current}`, false);
+        return;
+      }
+      tide.setFlowOutcome('running…');
+      // FROM THE STATE THE PAGE SEEDS, every time. Flows are sequences and the region keeps what the
+      // last one left; running two in a row without this would show the second one's steps applied on
+      // top of the first one's result, under the second one's name.
+      window.__motuLagoon?.reset?.();
+      void replayFlow(flow, null).then((outcome) => {
+        reportState({ ...outcome, target: `archipelago:${current}` });
+        tide.setFlowOutcome(
+          outcome.ok ? `applied ${outcome.applied}/${outcome.of} step(s)` : (outcome.error ?? 'could not run'),
+          outcome.ok,
+        );
+      });
     },
   });
 

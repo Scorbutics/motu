@@ -867,12 +867,39 @@ export function channelFrom<
     for (const [name, handler] of Object.entries(source.intents ?? {})) {
       answers.set(name, (detail) => (handler as (d: unknown) => void)(detail));
     }
-    if (answers.size) intentAnswers.set(spec.to.id, answers);
+    // MERGED PER REGION, not assigned. A region may declare SEVERAL sources — the login page has one
+    // for signing in and one for asking for a fresh invite link — and each answers its own intents.
+    // Assigning the map meant whichever channel installed last owned every intent in the region and
+    // the other source was simply never called: its keys stayed `undefined`, its flows failed with
+    // "expected …, got undefined", and nothing pointed at the channel that had displaced it.
+    if (answers.size) {
+      const forRegion = intentAnswers.get(spec.to.id) ?? new Map();
+      for (const [name, handler] of answers) {
+        // TWO SOURCES CLAIMING ONE INTENT is the same shape of mistake as two islands producing one
+        // key: "either of these answers it" is not an answer. Loud, once, and never fatal — this runs
+        // in a browser, where throwing would take the page down over a diagnostic.
+        if (DEBUG && forRegion.has(name) && forRegion.get(name) !== handler) {
+          console.error(
+            `motu: intent "${name}" is answered by more than one source in region "${spec.to.id}". ` +
+              `The last channel installed wins, which makes which answer runs an accident of order. ` +
+              `Give the intent to one source, or split it into two intents that say what each does.`,
+          );
+        }
+        forRegion.set(name, handler);
+      }
+      intentAnswers.set(spec.to.id, forRegion);
+    }
 
     return () => {
       unsubscribe();
       unpublish();
-      if (answers.size && intentAnswers.get(spec.to.id) === answers) intentAnswers.delete(spec.to.id);
+      // Remove only what THIS source answered, and only while it is still the answer: a region with a
+      // second source must keep answering after the first is disposed.
+      const forRegion = intentAnswers.get(spec.to.id);
+      if (forRegion) {
+        for (const [name, handler] of answers) if (forRegion.get(name) === handler) forRegion.delete(name);
+        if (!forRegion.size) intentAnswers.delete(spec.to.id);
+      }
       source.dispose?.();
     };
   };

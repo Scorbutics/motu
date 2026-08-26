@@ -259,6 +259,33 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   const motuDir = relative(hostRoot, cfg.root) || 'motu';
   const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(graph, hostRoot, motuDir);
 
+  // WHY A COMPOSITION ROOT DID NOT QUALIFY, computed before anything is rewritten.
+  //
+  // The rule is simple and its consequence is not: a file is deleted whole only if EVERY import it
+  // makes is motu's. One application import — `signIn` from the app's auth client, say — and the file
+  // is stripped instead, which leaves `createRegion(...)` behind with its imports gone and reports as
+  // "the host does not compile without motu" pointing at a line that looks fine. The cause is an
+  // import three lines above, and nothing said so; finding it meant reading motu's source.
+  //
+  // So: any file that composes a region and did NOT qualify gets its disqualifying imports named.
+  const disqualified = [];
+  for (const [p, specs] of graph) {
+    if (motuOnly.has(p)) continue;
+    let text = '';
+    try {
+      text = readFileSync(p, 'utf8');
+    } catch {
+      continue;
+    }
+    if (!/\bcreateRegion\s*\(/.test(text)) continue;
+    const offenders = specs.filter((spec) => {
+      if (INFRA.test(spec) || isMotuSpec(spec)) return false;
+      const target = resolveSpec(p, spec);
+      return !(target && motuOnly.has(target));
+    });
+    if (offenders.length) disqualified.push([p, offenders]);
+  }
+
   // Only the files the surgery can touch get parsed: what motu owns outright, and what mentions it.
   const candidates = [...graph]
     .filter(([p, specs]) => motuOnly.has(p) || specs.some((spec) => isMotuSpec(spec)))
@@ -314,7 +341,20 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
         .filter((t) => t.trim() && !/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(t.trim()));
       const inner = kept.join('').trim();
       const single = kept.length === 1 && (inner.startsWith('<') || inner.startsWith('{'));
-      el.replaceWithText(inner === '' ? 'null' : single ? inner : `<>${inner}</>`);
+      // WHERE THE WRAPPER STOOD DECIDES WHAT REPLACES IT.
+      //
+      // `{expr}` is how a JSX child holds an expression, and it is an OBJECT LITERAL anywhere else. So
+      // unwrapping `return <MotuRegion>{screen}</MotuRegion>` by keeping the child verbatim produced
+      // `return {screen}` — valid TypeScript, a completely different program, and a removal proof that
+      // failed with "type '{ screen: Element }' is not a valid JSX element type". Strip the braces when
+      // the wrapper was NOT itself a JSX child; keep them when it was, or `<div>{x}</div>` unwraps to a
+      // div containing the letter x.
+      const parentKind = el.getParent()?.getKind();
+      const inJsxChild = parentKind === SyntaxKind.JsxElement || parentKind === SyntaxKind.JsxFragment;
+      const braced = single && inner.startsWith('{') && inner.endsWith('}') && !inJsxChild;
+      el.replaceWithText(
+        inner === '' ? 'null' : braced ? inner.slice(1, -1).trim() : single ? inner : `<>${inner}</>`,
+      );
     }
     for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)].reverse()) {
       if (tags.has(rootTagName(el.getTagNameNode().getText()))) el.replaceWithText('null');
@@ -476,6 +516,9 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     stripped: stripped.map((p) => relative(hostRoot, p)),
     ejected: ejected.map(([p, notes]) => ({ file: relative(hostRoot, p), notes })),
     errors: [...surgeryErrors, ...real].slice(0, 15),
+    surgeryErrors,
+    disqualified: disqualified.map(([p, specs]) => ({ file: relative(hostRoot, p), imports: specs })),
+    deletedModules: deleted.map((p) => relative(hostRoot, p)),
     preExisting: preExisting.length,
   };
   // Remember it, so an unchanged repo does not pay for the same proof twice.
@@ -508,7 +551,56 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     return summary;
   }
   console.log(color.red(color.bold('FAIL')) + '  the host does NOT compile without motu:');
-  console.log(real.slice(0, 15).join('\n'));
+
+  // A FILE THE SURGERY COULD NOT REWRITE IS AN UNANSWERED QUESTION, not a verdict about the app — and
+  // it used to be invisible here: these went into `summary.errors` for `motu check` to aggregate and
+  // were never printed by this command, so the same failure reported differently depending on which
+  // entry point you ran. Printed FIRST, because every TypeScript error below may be its consequence:
+  // a file that threw mid-surgery keeps the imports the surgery was about to remove.
+  if (surgeryErrors.length) {
+    console.log(color.yellow('\n  motu could not rewrite these files, so removal was never actually tried on them:'));
+    for (const e of surgeryErrors) console.log(`    ${e}`);
+    console.log(
+      color.dim('    This is an UNANSWERED question, not a verdict about the app: the file was left as it was,\n') +
+        color.dim('    so any error below naming it — a dangling import above all — is a consequence of this and\n') +
+        color.dim('    not a finding of its own. It means the rewriter met a JSX shape it cannot express: what a\n') +
+        color.dim('    wrapper leaves behind has to be ONE expression, and where it stood decides whether that is\n') +
+        color.dim('    `{x}` or `x`. Reduce the wrapper\'s children to a single element or a single `{…}` (lift a\n') +
+        color.dim('    branch into a named value if it helps) and run again — and please report the shape, because\n') +
+        color.dim('    a shape the surgery cannot rewrite is motu\'s bug before it is yours.'),
+    );
+  }
+
+  if (real.length) {
+    console.log(color.dim('\n  what the host said with motu removed:'));
+    console.log(real.slice(0, 15).join('\n'));
+  }
+
+  // A DANGLING IMPORT OF A DELETED FILE has one cause and it is never the line it points at.
+  const danglers = real.filter((l) => summary.deletedModules.some((m) => l.includes(m.replace(/\.tsx?$/, ''))));
+  if (danglers.length) {
+    console.log(
+      color.dim('\n  Those name a file motu DELETED (it was 100% motu). The import should have gone with it,\n') +
+        color.dim('  so this means the surgery on the importing file did not finish — see above.'),
+    );
+  }
+
+  // THE OTHER HALF, and the one that cost the most to find by hand.
+  if (disqualified.length) {
+    console.log(color.yellow('\n  these compose a region but are NOT deletable, because they import the application:'));
+    for (const [p, specs] of disqualified) {
+      console.log(`    ${relative(hostRoot, p)}`);
+      for (const spec of specs) console.log(color.dim(`      ${spec}`));
+    }
+    console.log(
+      color.dim('    A composition root is deleted WHOLE only when every import it makes is motu\'s. One\n') +
+        color.dim('    application import and it is stripped instead, leaving `createRegion(...)` with no imports.\n') +
+        color.dim('    Move what needs the application — a source\'s port, a service, a browser API — into an app\n') +
+        color.dim('    file that renders the real components inside `<R.Island slot="…">`, and keep this file to\n') +
+        color.dim('    the wiring motu owns.'),
+    );
+  }
+
   console.log(color.dim('\n  motu is load-bearing in the app. Either the file is 100% motu (deletable whole),'));
   console.log(color.dim('  or the wrapper must leave valid JSX behind when removed (C2).'));
   return summary;

@@ -141,6 +141,22 @@ function checkRegion(region, sources) {
   for (const [, alias] of code(readFileSync(bindingFile, 'utf8')).matchAll(new RegExp(`const\\s+(\\w+)\\s*=\\s*${binding}\\.Region`, 'g'))) {
     wrappers.push(alias);
   }
+  // THE MEMBER FORM IS NOT THE ONLY ONE, and on a React Server Component host it is not even legal.
+  //
+  // A server component may RENDER a client component; it may not read a property off a client
+  // module's export. So `<Login.Island slot="…">` cannot appear in an RSC page at all — the
+  // composition root has to re-export it (`export const LoginIsland = Login.Island`) and the page
+  // renders that name. This scan knew only the member form, so peps' sign-in page — the project's
+  // first server-component region — reported its one island as never placed while it was placed,
+  // seeded and rendering. Take every name that resolves to the binding's Island, exactly as
+  // `wrappers` above already does for its Region.
+  const islandNames = [`${binding}.Island`];
+  for (const [, alias] of code(readFileSync(bindingFile, 'utf8')).matchAll(
+    new RegExp(`const\\s+(\\w+)\\s*=\\s*${binding}\\.Island\\b`, 'g'),
+  )) {
+    islandNames.push(alias);
+  }
+
   // EVERY source, INCLUDING the one that composed it. This excluded `bindingFile`, on the assumption
   // that a region is composed in one module and rendered from another — true of a Next app, and false
   // of any application small enough to do both in its page. The review console does exactly that:
@@ -165,7 +181,7 @@ function checkRegion(region, sources) {
   //     demanding one would report the app's own design as an error.
   {
   const placed = new Map();
-  const slotRe = new RegExp(`<${binding}\\.Island\\s[^>]*?slot=["'\`]([^"'\`]+)`, 'g');
+  const slotRe = new RegExp(`<(?:${islandNames.map(escapeRe).join('|')})\\s[^>]*?slot=["'\`]([^"'\`]+)`, 'g');
   for (const [file, text] of sources) {
     for (const [, slot] of code(text).matchAll(slotRe)) {
       placed.set(slot, [...(placed.get(slot) ?? []), file]);
@@ -179,7 +195,7 @@ function checkRegion(region, sources) {
   //
   // A WARNING, not an error: conditional placement is often correct (a drawer, a tab, a permission).
   // What is not correct is not knowing.
-  const conditional = conditionallyPlaced(sources, binding, code);
+  const conditional = conditionallyPlaced(sources, islandNames, code);
   for (const [slot, why] of conditional) {
     if (!placedIslands.some((i) => i.slot === slot)) continue;
     add(
@@ -196,7 +212,7 @@ function checkRegion(region, sources) {
   // island's `bind` keys. A prop the page does not pass is a key nothing feeds, and the island runs on
   // its default — placed, composed, read, and quietly empty. The lagoon cannot see this: it seeds the
   // key itself, which is the whole point of a preview and the reason it cannot answer this question.
-  const passed = passedProps(sources, binding, code);
+  const passed = passedProps(sources, islandNames, code);
   for (const island of liveIslands) {
     const bound = Object.entries(island.bind ?? {});
     if (!bound.length) continue;
@@ -411,7 +427,7 @@ function checkRegion(region, sources) {
     );
   }
   for (const slot of unknown) {
-    add('error', 'placed', `<${binding}.Island slot="${slot}"> is placed but the archipelago declares no such slot`);
+    add('error', 'placed', `<${islandNames[0]} slot="${slot}"> is placed but the archipelago declares no such slot`);
   }
   if (!missing.length && !unknown.length && declared.length)
     add('ok', 'placed', `all ${declared.length} source-placed slot(s) placed in the host`);
@@ -557,7 +573,7 @@ function lagoonProps(overridesFile) {
   return out;
 }
 
-function passedProps(sources, binding, code) {
+function passedProps(sources, islandNames, code) {
   const out = new Map();
   for (const [file] of sources) {
     let sf;
@@ -568,7 +584,7 @@ function passedProps(sources, binding, code) {
     }
     for (const el of sf.getDescendantsOfKind(SyntaxKind.JsxElement)) {
       const open = el.getOpeningElement?.();
-      if (open?.getTagNameNode?.().getText() !== `${binding}.Island`) continue;
+      if (!islandNames.includes(open?.getTagNameNode?.().getText())) continue;
       const slot = open
         .getAttributes?.()
         ?.find((a) => (a.getNameNode?.().getText?.() ?? a.getName?.()) === 'slot')
@@ -600,7 +616,12 @@ function passedProps(sources, binding, code) {
  * callback (`.map`, `.filter`). Uses the AST rather than the text, because "is this line inside a
  * conditional" is exactly the question a regex cannot answer.
  */
-function conditionallyPlaced(sources, binding, code) {
+/** A name that goes into a RegExp — `Login.Island` carries a dot that must not match anything. */
+function escapeRe(name) {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function conditionallyPlaced(sources, islandNames, code) {
   const out = new Map();
   for (const [file] of sources) {
     let sf;
@@ -611,7 +632,7 @@ function conditionallyPlaced(sources, binding, code) {
     }
     for (const kind of [SyntaxKind.JsxOpeningElement, SyntaxKind.JsxSelfClosingElement]) {
       for (const el of sf.getDescendantsOfKind(kind)) {
-        if (el.getTagNameNode?.().getText() !== `${binding}.Island`) continue;
+        if (!islandNames.includes(el.getTagNameNode?.().getText())) continue;
         // `getName()` is not the accessor here — on a JsxAttribute the name is a node, and reading it
         // the wrong way returned undefined for EVERY element, so the whole check silently found
         // nothing while looking like it ran.

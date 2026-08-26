@@ -317,16 +317,53 @@ keep both sides), and the archipelago (one entry each, so a line-level merge is 
 lagoon frame, prefer an append-only LOOKUP over a ternary chain: two people extending one chain cannot
 both win, and the loser's island renders someone else's data.
 
+## "motu is load-bearing" names a file, and the cause is above the line it points at
+
+`removal-check` deletes every file that is 100% motu, unwraps its tags everywhere else, and asks
+whether the host still typechecks. When it fails, read it in this order — the report now prints all
+three, so nothing here needs digging:
+
+- **"could not rewrite these files"** — the surgery threw and that file was left ALONE, so it proved
+  nothing and every error naming it is a consequence, not a finding. It means the rewriter met a JSX
+  shape it cannot express. Report the shape: that is motu's bug before it is yours.
+- **"compose a region but are NOT deletable"** — the one that costs an afternoon if it is not said.
+  A composition root is deleted WHOLE only when EVERY import it makes is motu's; one application
+  import and it is stripped instead, leaving `createRegion(...)` with its imports gone and errors on
+  lines that look fine. The report names the offending imports. Whatever needs the application — a
+  source's PORT, a service, a browser API — belongs in an app file that renders the real components
+  inside `<R.Island slot="…">`, not in the composition root.
+- **a dangling import of a deleted module** — never the line it points at. It is the first case,
+  one file earlier.
+
+The shape that satisfies all of this is the one the annuaire page already uses: the region binding and
+its wrapper in `components/motu/`, importing nothing but motu; the port, the source and the real
+components in app files that wrap them in `<R.Island>`. The lagoon installs the same source through
+`channelFrom`, because there is no page there to do it.
+
 ## Three tiers, and which one you are in
 
     motu check                        STATIC        1.4s    every change
+    motu island verify <n> --runtime  ONE ISLAND    ~15s    while you work
+    motu archipelago verify <id> --runtime  ONE REGION ~25s  while you work
     motu check --runtime --fast       NO BROWSER   44.0s    while you work (5.9s with --changed)
     motu check --runtime              DOES IT WORK 103.5s    before handing work over
     motu check --audit                IS IT USABLE          before integrating, and in CI
     motu island snapshot --all --remote      DID IT MOVE    89s    before handing work over
     motu archipelago snapshot --all --remote DID THE PAGE   18s    before handing work over
 
-(the first four measured on a 16-island, 2-region project; the snapshots on a 20-island, 3-region one)
+(measured on a 16-island, 2-region project; the snapshots on a 20-island, 3-region one)
+
+NAME WHAT YOU TOUCHED. While you are working on a region, the runtime check you run is that region and
+its islands — `motu archipelago verify login --runtime`, `motu island verify login-form --runtime` —
+not the whole project. The full `motu check --runtime` re-drives a browser for every island in the
+repo to tell you about the one you changed; run it ONCE, before handing work over, and after that only
+if you changed something shared.
+
+`--changed` is NOT that scoping, and expecting it to be will cost you the run. It narrows only while
+every changed file maps to an island or a region, and WIDENS BACK TO EVERYTHING the moment one does
+not — a config file, a shared module, a lagoon stub, an editor setting. Measured mid-session here: 18
+changed files, one of them `.claude/settings.local.json`, and the run went full anyway (loudly, which
+is the point). A session that has touched anything but island files gets no scoping from it.
 
 THE LAST THING YOU DO, both of them, with `--changed`. Scoped to one touched island that is 11s and
 15s — cheaper than the `--fast` loop — because `--changed` maps a changed island to the regions that

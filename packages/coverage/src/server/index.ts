@@ -132,8 +132,32 @@ export async function handleCoverage(request: Request, opts: CoverageServerOptio
     const body = (await res.json().catch(() => ({}))) as { states?: number };
     return answer(200, { ok: true, states: body.states ?? corpus.entries.length });
   } catch (err) {
-    return answer(502, { ok: false, error: `the motu host is unreachable: ${(err as Error)?.message ?? 'failed'}` });
+    return answer(502, { ok: false, error: `the motu host is unreachable: ${describe(err)}` });
   }
+}
+
+/**
+ * What actually went wrong, rather than "fetch failed".
+ *
+ * `fetch` reports every transport failure with that one string and puts the real reason in `cause` —
+ * so a DNS miss, a refused connection, an expired certificate and an unroutable address are
+ * indistinguishable at the top level. Running through a tunnel makes them all plausible at once, and
+ * the difference decides what to do: ENOTFOUND is a wrong URL, ECONNREFUSED is a host that is down,
+ * ETIMEDOUT or EHOSTUNREACH from a serverless function is usually an address family it cannot route
+ * to, and a certificate error is neither.
+ *
+ * Cost us a round of guessing, which is the only reason it is worth the lines.
+ */
+function describe(err: unknown): string {
+  const parts: string[] = [];
+  let cur: unknown = err;
+  for (let depth = 0; cur && depth < 4; depth++) {
+    const e = cur as { message?: string; code?: string; cause?: unknown };
+    if (e.code) parts.push(e.code);
+    else if (e.message) parts.push(e.message);
+    cur = e.cause;
+  }
+  return parts.length ? parts.join(' → ') : 'failed';
 }
 
 

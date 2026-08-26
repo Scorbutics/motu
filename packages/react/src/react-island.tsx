@@ -26,6 +26,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -59,6 +60,13 @@ interface ArchipelagoValue {
   store: Store;
   host: HostBridge | undefined;
   byTag: Map<string, ReactElementSpec>;
+  /**
+   * Keys the page supplied as ONE object via `<Region region={…}>`.
+   *
+   * An island must not also publish these from its own props: the region already wrote them, together,
+   * and a second write per island is exactly the staggering the object form exists to remove.
+   */
+  regionFed: ReadonlySet<string>;
 }
 
 const ArchipelagoContext = createContext<ArchipelagoValue | null>(null);
@@ -102,6 +110,26 @@ export interface ArchipelagoProviderProps {
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store. */
   channels?: Channel[];
+  /**
+   * THE HOST-FED HALF OF THE REGION, AS ONE OBJECT — applied as one write.
+   *
+   * Without it a page feeds the region by passing props to islands, and each island publishes its own
+   * slice from its own `useEffect`. One value computed in one render then reaches the store through N
+   * independent effects, so the store can hold a combination no render ever produced.
+   *
+   * That is not hypothetical. peps' actions page computes
+   *
+   *     const isCurrentWeek = …
+   *     isOtherWeek: selectedWeekIndex !== -1 && !isCurrentWeek
+   *
+   * so `isOtherWeek` is DEFINED as `!isCurrentWeek`. Its production corpus holds a state with both
+   * true — recorded by a fold that samples only at microtask boundaries, so the store really did
+   * settle there, long enough to paint. Two doors, opened in different tasks.
+   *
+   * Passing the object closes the class rather than the instance: the keys land together or not at
+   * all, and no interleaving exists to reason about.
+   */
+  region?: Record<string, unknown>;
   children?: ReactNode;
 }
 
@@ -110,7 +138,7 @@ export interface ArchipelagoProviderProps {
  * it. The store, the slot registry and the host bridge are the SAME ones the custom-element path
  * registers, so the debug overlay, `provide()` and channels behave identically either way.
  */
-export function ArchipelagoProvider({ config, elements, host, seed, channels, children }: ArchipelagoProviderProps): ReactElement {
+export function ArchipelagoProvider({ config, elements, host, seed, channels, region, children }: ArchipelagoProviderProps): ReactElement {
   const value = useMemo<ArchipelagoValue>(() => {
     // The islands' DECLARED shape, for the seam lens. On the custom-element path `defineIsland` does
     // this; the React path defines no elements, so without this call the overlay knew every island's
@@ -137,11 +165,40 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
       byTag: new Map(
         elements.filter((e): e is ReactElementSpec => 'component' in e).map((e) => [e.tag, e]),
       ),
+      regionFed: new Set<string>(),
     };
     // Keyed by archipelago id: the registration is global and one-shot, and re-running it on every
     // prop identity change would rebuild the store on each render of the host page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.id]);
+
+  // WRITTEN AS ONE CHANGE, BEFORE PAINT.
+  //
+  // `useLayoutEffect`, not `useEffect`: a passive effect runs after the browser may already have
+  // painted, so the store would lag the DOM by a frame on every update. The region is what siblings
+  // read to decide what to show; it should be true by the time anything is shown.
+  //
+  // `setAll` inside a batch, so subscribers are told once. The point is not fewer notifications — it
+  // is that no subscriber can observe the region between two of its own keys.
+  //
+  // ONLY THE HOST-FED KEYS. A key an island produces is not the page's to write, and passing one here
+  // would be the laundering the ownership rules exist to stop; `hostFedKeys` is the same derivation
+  // the island path uses, so the two cannot disagree about who owns what.
+  const hostFed = useMemo(() => hostFedKeys(config), [config]);
+  const regionFed = useMemo(() => {
+    if (!region) return new Set<string>();
+    return new Set(Object.keys(region).filter((k) => hostFed.has(k)));
+  }, [region, hostFed]);
+  useLayoutEffect(() => {
+    if (!region) return;
+    const next: Record<string, unknown> = {};
+    for (const key of regionFed) next[key] = region[key];
+    if (!Object.keys(next).length) return;
+    runWithWriteSource('host', () => value.store.setAll(next));
+  });
+
+  // Handed down so an island skips a key the region already wrote — see `regionFed`.
+  const ctxValue = useMemo<ArchipelagoValue>(() => ({ ...value, regionFed }), [value, regionFed]);
 
   // `createElement`, with the return type ANNOTATED — not JSX.
   //
@@ -153,7 +210,7 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
   // not pick up the workspace's `jsx: react-jsx` emits a classic transform needing `React` in scope —
   // `ReferenceError: React is not defined`, at render, in a package that has no JSX anywhere else.
   // Annotating the return keeps the call plain and satisfies both type versions.
-  return createElement(ArchipelagoContext.Provider, { value }, children);
+  return createElement(ArchipelagoContext.Provider, { value: ctxValue }, children);
 }
 
 /** The archipelago's store, for host code that needs to read or drive it (not for islands). */
@@ -323,6 +380,10 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
         warnUnpublished(slot, key, owner);
         continue;
       }
+      // ALREADY WRITTEN, TOGETHER, BY THE REGION. Publishing it again here would restore exactly the
+      // staggering `<Region region={…}>` exists to remove — same value, one effect later, one key at
+      // a time. The prop still renders this island; it just stops being a second door into the store.
+      if (ctx.regionFed.has(key)) continue;
       const value = hostedProps[prop];
       if (Object.is(publishedRef.current[key], value)) continue;
       publishedRef.current[key] = value;

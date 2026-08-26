@@ -47,7 +47,16 @@ export interface CreateRegionOptions {
 
 export interface RegionBinding<TRegion, TSlot extends string> {
   /** Wraps the host's tree: declares the archipelago and puts its store in context. */
-  Region: (props: { children?: ReactNode }) => ReactElement;
+  /**
+   * Wraps the page and puts the region's store in context.
+   *
+   * `region` is the host-fed half of the region as ONE object, applied as one write before paint.
+   * Without it the page feeds the region by passing props to islands, and each island publishes its
+   * own slice from its own effect — so one value computed in one render reaches the store through N
+   * effects, and the store can hold a combination no render produced. Typed against the region, so a
+   * key an island produces is a compile error rather than a laundered write.
+   */
+  Region: (props: { children?: ReactNode; region?: Partial<TRegion> }) => ReactElement;
   /** `<Island slot>` for THIS region — the slot is checked against the ones it declares. */
   Island: (props: {
     slot: TSlot;
@@ -83,11 +92,11 @@ export function createRegion<C extends AnyArchipelagoConfig>(
   // Fixed for the life of the binding, so this is one unconditional hook call, not a conditional one.
   const useHost: () => HostBridge | undefined = opts.useHost ?? (() => undefined);
 
-  function Region({ children }: { children?: ReactNode }): ReactElement {
+  function Region({ children, region }: { children?: ReactNode; region?: Partial<RegionOf<C>> }): ReactElement {
     const host = useHost();
     return createElement(
       ArchipelagoProvider,
-      { config, elements: opts.elements, host, seed: opts.seed, channels: opts.channels },
+      { config, elements: opts.elements, host, seed: opts.seed, channels: opts.channels, region },
       children,
     );
   }

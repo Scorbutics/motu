@@ -17,6 +17,10 @@
     "./server/next": {
       "types": "./dist/server/next.d.ts",
       "default": "./dist/server/next.js"
+    },
+    "./server/next/known": {
+      "types": "./dist/server/next-known.d.ts",
+      "default": "./dist/server/next-known.js"
     }
   },
   "dependencies": {

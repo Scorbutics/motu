@@ -562,6 +562,44 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     return { states: merged.entries.length, keysHash };
   }
 
+  /** Where a declaration's ACCEPTED set lives, beside the corpus it is about. */
+  function acceptedPath(repo, region, keysHash) {
+    return resolve(dir, 'coverage', repo, region, `${keysHash}.accepted.json`);
+  }
+
+  /**
+   * The fingerprints somebody has looked at and chosen not to preview.
+   *
+   * A SEPARATE FILE FROM THE CORPUS, and separate on purpose. "This happened" and "we decided this
+   * needs no scenario" are different claims by different authors — one is written by browsers, the
+   * other by a person — and folding them into one document would let an ingest write promote its own
+   * states to accepted. The corpus is a worklist; this is the part of it somebody has closed.
+   */
+  function readAccepted(repo, region, keysHash) {
+    const file = acceptedPath(repo, region, keysHash);
+    if (!existsSync(file)) return [];
+    try {
+      const ids = JSON.parse(readFileSync(file, 'utf8'));
+      return Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : [];
+    } catch {
+      // Unreadable means "nobody has accepted anything", which costs one extra beacon and never a
+      // wrong silence — the failure that matters here is claiming a state is known when it is not.
+      return [];
+    }
+  }
+
+  /** Add to the accepted set. Idempotent, and never removes — see `forgetAccepted`. */
+  function acceptCoverage(repo, region, keysHash, ids) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(keysHash))) throw new Error('keysHash must be [A-Za-z0-9_-]');
+    const merged = [...new Set([...readAccepted(repo, region, keysHash), ...ids.filter((i) => typeof i === 'string')])];
+    const file = acceptedPath(repo, region, keysHash);
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    writeFileSync(tmp, JSON.stringify(merged), 'utf8');
+    renameSync(tmp, file);
+    return { accepted: merged.length };
+  }
+
   /**
    * Every declaration's corpus for a region, newest declaration first.
    *
@@ -589,6 +627,8 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     maxBytes,
     mergeCoverage,
     readCoverage,
+    readAccepted,
+    acceptCoverage,
     publish,
     resolveRef,
     read,

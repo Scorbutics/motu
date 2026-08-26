@@ -37,6 +37,14 @@ export interface CoverageServerOptions {
   regions?: readonly string[];
   /** Largest body accepted, in bytes. A corpus is small; this is the flood guard. Default 256 kB. */
   maxBytes?: number;
+  /**
+   * The host's READ secret, for serving the accepted set back. Defaults to `MOTU_HOST_READ_TOKEN`.
+   *
+   * Deliberately not the ingest token: that one is write-only so a credential sitting in an
+   * application's environment cannot read what the host holds for anyone. Unnecessary when the repo
+   * is public on the host.
+   */
+  readToken?: string;
 }
 
 /** What a caller must know without reading the code: the answer is always JSON, never a throw. */
@@ -125,5 +133,58 @@ export async function handleCoverage(request: Request, opts: CoverageServerOptio
     return answer(200, { ok: true, states: body.states ?? corpus.entries.length });
   } catch (err) {
     return answer(502, { ok: false, error: `the motu host is unreachable: ${(err as Error)?.message ?? 'failed'}` });
+  }
+}
+
+
+/**
+ * Serve the accepted set — the states somebody has looked at and chosen not to preview.
+ *
+ * A client unions this with the flow-covered set baked into its bundle and stays silent about
+ * anything in either. That union is what makes the steady state cost NOTHING rather than merely less:
+ * once every state a user reaches is known, the beacon never fires. The baked half only shrinks
+ * traffic on a redeploy; this half is why accepting a state takes effect at once.
+ *
+ * SAME HOP, SAME REASON as the forwarder. The browser asks its own origin; this reads the host with a
+ * credential that never enters a page. The credential is the READ secret, not the ingest token —
+ * ingest is write-only precisely so that a token living in an application's environment cannot read
+ * back what the host holds.
+ *
+ * AN EMPTY SET IS THE SAFE ANSWER TO EVERYTHING, and the only safe one. Failing loudly would turn a
+ * reporting tool's outage into a broken page; claiming a state is known when it is not would silently
+ * delete a finding. At worst this costs one extra beacon; it can never cause a wrong silence.
+ */
+export async function handleKnown(request: Request, opts: CoverageServerOptions = {}): Promise<Response> {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+  const host = (opts.host ?? env.MOTU_HOST_URL ?? '').replace(/\/+$/, '');
+  const repo = opts.repo ?? env.MOTU_COVERAGE_REPO ?? '';
+  const readToken = opts.readToken ?? env.MOTU_HOST_READ_TOKEN ?? '';
+
+  const empty = (cache: string) =>
+    new Response('[]', { status: 200, headers: { 'content-type': 'application/json', 'cache-control': cache } });
+
+  const url = new URL(request.url);
+  const region = url.searchParams.get('region') ?? '';
+  const keysHash = url.searchParams.get('h') ?? '';
+  if (!host || !repo || !region || !keysHash) return empty('no-store');
+  if (opts.regions && !opts.regions.includes(region)) return empty('no-store');
+
+  const target =
+    `${host}/api/coverage/known?repo=${encodeURIComponent(repo)}` +
+    `&region=${encodeURIComponent(region)}&h=${encodeURIComponent(keysHash)}`;
+  try {
+    const res = await fetch(target, { headers: readToken ? { authorization: `Bearer ${readToken}` } : {} });
+    if (!res.ok) return empty('no-store');
+    const ids = (await res.json()) as unknown;
+    if (!Array.isArray(ids)) return empty('no-store');
+    // CACHED, because this is the request that makes the rest cheap and must not become the cost
+    // itself. The set changes when a human accepts something, so minutes of staleness cost one extra
+    // beacon — a generous window that revalidates in the background is the right trade.
+    return new Response(JSON.stringify(ids.filter((i) => typeof i === 'string')), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=300, stale-while-revalidate=3600' },
+    });
+  } catch {
+    return empty('no-store');
   }
 }

@@ -813,6 +813,43 @@ repeats, so `--add a --add b` would silently keep only `b`.
 A member that has published nothing is stored but reported: the group counts the lagoons the view
 actually has, and names the ones missing from it.
 
+### Private repos and scoped credentials
+
+The host started with one global token gating every write and nothing gating reads. `motu-host
+access` adds a policy file (`access.json`, next to the store) for two things that need more than
+that: a repo you don't want strangers browsing, and a coverage corpus forwarded from an adopting
+application's own server, whose credential should not be able to do anything else.
+
+```bash
+motu-host access --read                             # mint the secret that opens every private repo
+motu-host access --repo <owner/name> --ingest        # mint a write-only coverage token for ONE repo
+motu-host access --repo <owner/name> --private       # stop serving that repo to strangers
+motu-host access --repo <owner/name> --public        # serve it again
+motu-host access                                     # no flags: show the current policy
+```
+
+Each secret is **printed once and stored only as a digest** — there is nothing in `access.json` to
+read a credential back from, so losing one means minting a new one. The default, with no
+`access.json` at all, is what the host already did: every repo public, the admin token admits every
+write. Nothing changes until you write a policy down.
+
+**A private repo, opened.** A browser can't set a header when it follows a link, so a private lagoon
+URL is unlocked once with `?k=<the read secret>`; the host sets an HttpOnly cookie and redirects to
+the clean URL, so the secret never sits in the address bar, history, or a `Referer`. **The same secret
+works as a `Bearer` token** for a server reading the corpus back programmatically (`GET
+/api/coverage?repo=…&region=…`) — that's what `motu region coverage <id> --corpus
+<host>/api/coverage?repo=…&region=… --token <the read secret>` (or `$MOTU_COVERAGE_TOKEN`) is for.
+Either way, a private repo answers a stranger with 404, never 403 — a 403 would confirm the repo
+exists, which is the one thing a private host shouldn't tell an unauthenticated caller.
+
+**An ingest token is deliberately narrow.** It grants exactly one repo, exactly the corpus-forwarding
+route — it cannot publish a lagoon, register a live frame, or read anything back. That's the
+credential you put in an adopting application's own server environment (see
+[`@motu/coverage/server`](packages/coverage/README.md)), as `MOTU_COVERAGE_TOKEN` alongside
+`MOTU_HOST_URL` and `MOTU_COVERAGE_REPO` — three variables, not four. There is no separate
+"read" env var an application server needs: the app's coverage route only ever *forwards* a beacon to
+the host (`POST`), it never reads the corpus back, so an ingest token is the only credential it holds.
+
 **Each member renders in its own iframe**, and that is a decision rather than a shortcut. Merging
 pre-built archipelagos from different repositories into one document would put two Reacts in one page
 (the lagoon dedupes onto the host app's copy precisely because that breaks hooks), collide two
@@ -892,9 +929,10 @@ make that claim about members it has not compared: an island with no accepted ba
 
 - **It runs no browser.** Playwright stays on the publishing machine, where it already is. Snapshot
   diffs and `--runtime` findings are produced locally; the host stores pages.
-- **Uploads are authenticated, reads are not.** A URL is *unlisted*, not access-controlled. The lagoon
-  has no backend and no session — but its fixtures were recorded from somewhere, so this posture is
-  right for one person and wrong for a team. Accounts are what gate opening it to external teams.
+- **Reads are unlisted by default, private per repo on request.** A public URL is not
+  access-controlled, just unguessable — the lagoon has no backend and no session. [Marking a repo
+  private](#private-repos-and-scoped-credentials) gates it behind the host's read secret; there is
+  still no per-user account, so that secret opens every private repo, not just one.
 - **It has no live reload.** `serve --watch` injects a reload client; `publish` deliberately does not,
   because a published artifact that dials home is a lie about what the artifact is.
 

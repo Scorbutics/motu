@@ -89,7 +89,12 @@ function send(res, status, type, body, extra = {}) {
 }
 
 const html = (res, status, body, extra) => send(res, status, 'text/html; charset=utf-8', body, extra);
-const json = (res, status, obj) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(obj, null, 2));
+// `extra` matters here, unlike when this only ever answered API calls: the accepted set is fetched by
+// browsers on every page load and is the request that makes the rest cheap, so it must be cacheable.
+// Without this parameter a caller passing headers is silently ignored — which is how it was written
+// first, and the symptom would have been a cache-control header that simply never appeared.
+const json = (res, status, obj, extra) =>
+  send(res, status, 'application/json; charset=utf-8', JSON.stringify(obj, null, 2), extra);
 
 /** Constant-time compare so the token cannot be recovered a byte at a time from response timing. */
 function tokenMatches(given, expected) {
@@ -224,6 +229,25 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (!readable(repo)) return json(res, 404, { error: 'no such repo' });
       return json(res, 200, { repo, shots: store.listShots(repo, url.searchParams.get('island') || null) });
     }
+    // THE ACCEPTED SET — what somebody has looked at and chosen not to preview.
+    //
+    // A client unions this with the flow-covered set baked into its bundle and stays silent about
+    // anything in either. That union is what makes the steady state cost NOTHING rather than merely
+    // less: once every state a user reaches is known, the beacon never fires again. The baked half
+    // only shrinks traffic on a redeploy; this half is why accepting a state takes effect at once.
+    if (path === '/api/coverage/known' && req.method === 'GET') {
+      const repo = normalizeRepo(url.searchParams.get('repo'));
+      const region = normalizeSegment(url.searchParams.get('region') || '');
+      const keysHash = normalizeSegment(url.searchParams.get('h') || '');
+      // AN EMPTY SET IS THE SAFE ANSWER for every kind of no, and the only safe one. Refusing loudly
+      // would turn a reporting tool's outage into a broken page; claiming a state is known when it is
+      // not would silently delete a finding. So: at worst one extra beacon, never a wrong silence.
+      if (!repo || !region || !keysHash || !readable(repo)) return json(res, 200, [], NO_STORE);
+      return json(res, 200, store.readAccepted(repo, region, keysHash), {
+        'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
+      });
+    }
+
     // THE CORPUS, READ BACK. Same gate as the pages: if you may not see this repo's lagoon, you may
     // not see what its region has been through either. A published lagoon calls this on its OWN
     // origin, so the page carries no address and no credential — the reader's cookie is the answer.
@@ -269,6 +293,32 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         if (!adminOk && !canIngest(access, repo, bearer))
           return json(res, 401, { error: 'bad or missing ingest token for this repo' });
         return void (await ingestCoverage(req, res, url, repo));
+      }
+      // ACCEPTING IS A PERSON'S DECISION, so it takes the ADMIN token and not the ingest one.
+      //
+      // The rule this enforces is the one the whole design rests on: nothing promotes a state to
+      // "known" except a flow or a person. An ingest credential that could also accept would let the
+      // reporting path mark its own findings resolved — and a system that can do that reports
+      // nothing, which is indistinguishable from having nothing to report.
+      if (path === '/api/coverage/accept') {
+        if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
+        if (!adminOk) return json(res, 401, { error: 'accepting a state needs the admin token' });
+        const repo = normalizeRepo(url.searchParams.get('repo'));
+        const region = normalizeSegment(url.searchParams.get('region') || '');
+        const keysHash = normalizeSegment(url.searchParams.get('h') || '');
+        if (!repo || !region || !keysHash) return json(res, 400, { error: 'repo, region and h are required' });
+        let ids;
+        try {
+          ids = JSON.parse((await readBody(req, 100_000)).toString('utf8'));
+        } catch {
+          ids = null;
+        }
+        if (!Array.isArray(ids)) return json(res, 400, { error: 'body must be a JSON array of fingerprint ids' });
+        try {
+          return json(res, 200, { ok: true, ...store.acceptCoverage(repo, region, keysHash, ids) });
+        } catch (err) {
+          return json(res, 400, { error: String(err?.message ?? err) });
+        }
       }
       if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
       const auth = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');

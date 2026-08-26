@@ -21,7 +21,7 @@ import {
   knownIds,
   keysHash,
 } from '@motu/coverage';
-import { color, paths } from '../lib/util.mjs';
+import { color, paths, REPO_ROOT } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -336,6 +336,44 @@ export async function regionCoverageCommand(argv) {
     );
   }
 
+  // --accept <id…>: the SECOND of the three answers, and the reason it is its own act.
+  //
+  // "We looked and chose not to preview this" must not be the same state as "nobody looked" — the
+  // same reason accepting a snapshot is a separate command from taking one. It goes to the host under
+  // the ADMIN token, never the ingest one: nothing may promote a state to known except a flow or a
+  // person, and a reporting credential that could also accept would let the tool mark its own
+  // findings resolved.
+  const toAccept = [argv.accept].flat().filter((v) => typeof v === 'string' && v);
+  if (toAccept.length) {
+    const { loadHostConfig, gitIdentity } = await import('../lib/remote.mjs');
+    const cfg = loadHostConfig();
+    const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
+    const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
+    const repo = paths.publishAs?.repo ?? null;
+    if (!base || !hostToken) {
+      console.log(`  ${color.red('✗')} ${color.dim('accept'.padEnd(20))} ${color.red('no lagoon host configured — see ~/.config/motu/host.json')}`);
+      process.exit(2);
+    }
+    const hash = corpus.keysHash ?? keysHash(corpus.keys);
+    const qs = `repo=${encodeURIComponent(repo ?? gitIdentity(REPO_ROOT).repo)}&region=${encodeURIComponent(id)}&h=${encodeURIComponent(hash)}`;
+    const res = await fetch(`${base}/api/coverage/accept?${qs}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${hostToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(toAccept),
+    }).catch(() => null);
+    if (!res?.ok) {
+      console.log(
+        `  ${color.red('✗')} ${color.dim('accept'.padEnd(20))} ${color.red(res ? `the host answered ${res.status}` : 'the host is unreachable')}`,
+      );
+      process.exit(2);
+    }
+    const body = await res.json();
+    console.log(
+      `  ${color.green('✓')} ${color.dim('accept'.padEnd(20))} ` +
+        color.dim(`${toAccept.length} state(s) accepted · ${body.accepted} in the set for declaration ${hash}`),
+    );
+  }
+
   const report = compareCoverage(corpus, covered, keys);
   const total = corpus.entries.reduce((n, e) => n + e.count, 0);
 
@@ -377,7 +415,15 @@ export async function regionCoverageCommand(argv) {
     for (const u of report.uncovered) {
       console.log(`  ${color.yellow((u.share * 100).toFixed(1).padStart(5) + '%')}  ${u.diff}`);
       console.log(color.dim(`         ${skeleton(u.fingerprint, covered, sample)}`));
+      // The id, so the third answer to an uncovered state is reachable without deriving it by hand.
+      if (argv.ids) console.log(color.dim(`         ${u.id}`));
     }
+    console.log(
+      color.dim(
+        `\n  Three answers, not one: write a scenario, ACCEPT it (\`--accept <id>\`, and \`--ids\` prints them),` +
+          `\n  or fix the application — an error state at 3% is a 3% error rate, not a missing preview.`,
+      ),
+    );
   }
 
   if (emits) {

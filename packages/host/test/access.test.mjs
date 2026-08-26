@@ -109,6 +109,30 @@ t('the read secret works as a bearer too', (await get('/api/coverage?repo=acme/s
 // write-only is the whole reason it is a separate credential.
 t('the ingest token still cannot read a corpus', (await get('/api/coverage?repo=acme/secret&region=actions', { authorization: 'Bearer ING-SECRET' })).status === 404);
 
+console.log('\nhost access — the accepted set, and who may add to it\n');
+const known = (h = {}) => get('/api/coverage/known?repo=acme/open&region=actions&h=7f46c60a', h);
+const accept = (tok, ids) =>
+  post('/api/coverage/accept?repo=acme/open&region=actions&h=7f46c60a', JSON.stringify(ids), {
+    authorization: `Bearer ${tok}`, 'content-type': 'application/json' });
+
+t('an empty set is served before anyone accepts', JSON.parse(await (await known()).text()).length === 0);
+t('...and it is cacheable', /max-age=300/.test((await known()).headers.get('cache-control') ?? ''));
+// NOTHING PROMOTES A STATE TO KNOWN EXCEPT A FLOW OR A PERSON. An ingest credential that could also
+// accept would let the reporting path mark its own findings resolved — and a system that can do that
+// reports nothing, which is indistinguishable from having nothing to report.
+t('the ingest token CANNOT accept', (await accept('ING-OPEN', ['busy:true'])).status === 401);
+t('the admin token can', (await accept('ADMIN', ['busy:true', 'busy:false'])).status === 200);
+t('...and known serves it back', JSON.parse(await (await known()).text()).length === 2);
+t('accepting again is idempotent', JSON.parse(await (await (await accept('ADMIN', ['busy:true']), known())).text()).length === 2);
+t('another declaration has its own set',
+  JSON.parse(await (await get('/api/coverage/known?repo=acme/open&region=actions&h=deadbeef')).text()).length === 0);
+// An empty set is the safe answer to every kind of no: at worst one extra beacon, never a wrong
+// silence. Refusing loudly would turn a reporting tool's outage into a broken page.
+t('a private repo answers [] rather than refusing',
+  (await get('/api/coverage/known?repo=acme/secret&region=actions&h=7f46c60a')).status === 200);
+t('...and the set is empty for a stranger',
+  JSON.parse(await (await get('/api/coverage/known?repo=acme/secret&region=actions&h=7f46c60a')).text()).length === 0);
+
 server.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);

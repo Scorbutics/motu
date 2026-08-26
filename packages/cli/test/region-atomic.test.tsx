@@ -16,7 +16,7 @@ GlobalRegistrator.register();
 
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArchipelagoProvider, Island } from '../../react/src/react-island';
+import { ArchipelagoProvider, Island, useProvideRegion } from '../../react/src/react-island';
 import { getArchipelagoStore } from '@motu/core';
 
 let pass = 0, fail = 0;
@@ -31,15 +31,31 @@ const elements = [
 ] as never[];
 
 // A plain config, like model-b's: `archipelago()` is the typed builder and adds nothing this needs.
-const config = {
-  id: 'atomic-test',
-  islands: [
-    { slot: 'week', element: 'x-week', bind: { isCurrentWeek: 'isCurrentWeek' } },
-    { slot: 'challenges', element: 'x-challenges', bind: { isOtherWeek: 'isOtherWeek' } },
-  ],
-} as never;
+//
+// ONE PER RUN. `defineArchipelago` registers a store globally by id and reuses it, so three runs
+// sharing an id share a store — and each run's subscriber keeps recording the next run's writes. The
+// first version of this reported 6 and 4 settled states for the same code that reports 4 and 2.
+const configFor = (id: string) =>
+  ({
+    id,
+    islands: [
+      { slot: 'week', element: 'x-week', bind: { isCurrentWeek: 'isCurrentWeek' } },
+      { slot: 'challenges', element: 'x-challenges', bind: { isOtherWeek: 'isOtherWeek' } },
+    ],
+  }) as never;
 
-async function drive(useRegionProp: boolean) {
+/**
+ * The shape peps actually has: the Region wraps the page and the region object is computed in the
+ * CHILD, because the page also reads region state. The prop cannot reach it from there — only the
+ * hook can — so this is the form that has to be tested, not just the tidy one.
+ */
+function Feeder({ region, children }: { region: Record<string, unknown>; children?: React.ReactNode }) {
+  useProvideRegion(region);
+  return <>{children}</>;
+}
+
+async function drive(mode: 'per-island' | 'prop' | 'hook') {
+  const config = configFor(`atomic-${mode}`);
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -47,22 +63,33 @@ async function drive(useRegionProp: boolean) {
   // Every state the store SETTLES in, sampled the way the coverage fold samples: coalesced to a
   // microtask, so this cannot see a half-applied flush and every entry is a state that persisted.
   const seen: string[] = [];
+  // AND EVERY NOTIFICATION, uncoalesced. This is what a non-React subscriber sees — the seam lens, a
+  // foreign store adapter, anything reading on change rather than on a frame. The coalesced view
+  // above cannot tell the two forms apart under `act()`, because both islands' effects land in one
+  // flush there; this one can, because it is told between them.
+  const raw: string[] = [];
   let store: ReturnType<typeof getArchipelagoStore> | null = null;
 
   const render = (isCurrentWeek: boolean) => {
     // ONE expression, exactly as the page computes it.
     const region = { isCurrentWeek, isOtherWeek: !isCurrentWeek };
+    const islands = (
+      <>
+        <Island slot="week"><Week isCurrentWeek={region.isCurrentWeek} /></Island>
+        <Island slot="challenges"><Challenges isOtherWeek={region.isOtherWeek} /></Island>
+      </>
+    );
     act(() => {
       root.render(
-        <ArchipelagoProvider config={config} elements={elements} {...(useRegionProp ? { region } : {})}>
-          <Island slot="week"><Week isCurrentWeek={region.isCurrentWeek} /></Island>
-          <Island slot="challenges"><Challenges isOtherWeek={region.isOtherWeek} /></Island>
+        <ArchipelagoProvider config={config} elements={elements} {...(mode === 'prop' ? { region } : {})}>
+          {mode === 'hook' ? <Feeder region={region}>{islands}</Feeder> : islands}
         </ArchipelagoProvider> as never,
       );
     });
     if (!store) {
-      store = getArchipelagoStore('atomic-test')!;
+      store = getArchipelagoStore(`atomic-${mode}`)!;
       let queued = false;
+      store.subscribe(() => raw.push(`${store!.get('isCurrentWeek')}/${store!.get('isOtherWeek')}`));
       store.subscribe(() => {
         if (queued) return;
         queued = true;
@@ -74,34 +101,40 @@ async function drive(useRegionProp: boolean) {
   render(false);
   await new Promise((r) => setTimeout(r, 0));
   seen.length = 0;
+  raw.length = 0;
   render(true);
   await new Promise((r) => setTimeout(r, 0));
   render(false);
   await new Promise((r) => setTimeout(r, 0));
-  root.unmount();
+  // Unmount inside `act` too: tearing down is a React update like any other, and React warns about
+  // it — noise in a test that people then stop reading.
+  act(() => root.unmount());
   host.remove();
-  return seen;
+  return { seen, raw };
 }
 
 console.log('\natomic region write — a combination no render produced\n');
-const perIsland = await drive(false);
-const asOneObject = await drive(true);
-console.log(`  per-island props : ${perIsland.join(', ') || '(nothing)'}`);
-console.log(`  region={…}       : ${asOneObject.join(', ') || '(nothing)'}`);
+const perIsland = await drive('per-island');
+const asOneObject = await drive('prop');
+const viaHook = await drive('hook');
+console.log('  what a subscriber is told, per change:\n');
+console.log(`  per-island props : ${perIsland.raw.join(' | ') || '(nothing)'}`);
+console.log(`  region={…}       : ${asOneObject.raw.join(' | ') || '(nothing)'}`);
+console.log(`  useProvideRegion : ${viaHook.raw.join(' | ') || '(nothing)'}`);
 console.log('');
 const impossible = (s: string[]) => s.filter((x) => x === 'true/true' || x === 'false/false');
-t('the region object never publishes an impossible pair', impossible(asOneObject).length === 0, impossible(asOneObject).join(', '));
-t('...and it does publish the real ones', asOneObject.includes('true/false') && asOneObject.includes('false/true'), asOneObject.join(', '));
-// THE MECHANISM, WHICH IS WHAT THIS CAN ACTUALLY PROVE. Two changes should settle the region twice.
-// Per-island publication settles it FOUR times: each island's effect writes its own key, so every
-// change passes through a state where one key has moved and the other has not. Under `act()` those
-// land in the same flush, so the intermediate is consistent here and the pair is never impossible —
-// which is precisely why this test cannot reproduce peps' both-true state. That one needs the two
-// writes in different TASKS, which is a scheduling accident a test harness collapses.
-//
-// So this asserts the cause, not the symptom: the staggering exists, and the object form removes it.
-t('per-island publication settles once per KEY', perIsland.length === 4, `${perIsland.length} settled state(s)`);
-t('...and the region object settles once per CHANGE', asOneObject.length === 2, `${asOneObject.length} settled state(s)`);
+t('per-island publication EXPOSES an impossible pair', impossible(perIsland.raw).length > 0, perIsland.raw.join(' | '));
+t('the region object never does', impossible(asOneObject.raw).length === 0, asOneObject.raw.join(' | '));
+t('nor does the hook form', impossible(viaHook.raw).length === 0, viaHook.raw.join(' | '));
+t('...and both still publish the real states', asOneObject.raw.includes('true/false') && asOneObject.raw.includes('false/true'), asOneObject.raw.join(' | '));
+// A COALESCED subscriber cannot tell them apart HERE, and that is worth asserting rather than
+// leaving as a silence: under `act()` both islands' effects land in one flush, so a fold that samples
+// at microtask boundaries sees one settled state per change either way. peps' corpus is recorded by
+// exactly such a fold — which is why reproducing its both-true state needs the two writes in
+// different TASKS, a scheduling accident a harness collapses. The raw view above is what shows the
+// cause; this line records the limit of the harness so nobody reads more into a green run.
+t('a coalesced subscriber sees the same either way, here', perIsland.seen.length === asOneObject.seen.length,
+  `${perIsland.seen.length} vs ${asOneObject.seen.length}`);
 
 console.log(`\n${fail === 0 ? 'PASS' : `FAIL — ${fail} assertion(s)`}  (${pass} passed)`);
 process.exit(fail ? 1 : 0);

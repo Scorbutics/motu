@@ -1,6 +1,6 @@
 # The lagoon host, with accounts
 
-**Status: phase 0 shipped; phases 1-4 planned.** This is the design record for turning `@motu/host` from a
+**Status: phases 0, 1 and 2 shipped; 2b, 3 and 4 planned.** This is the design record for turning `@motu/host` from a
 personal preview server into something several people can log into and see only what they should.
 
 The rule this document exists to protect is the one the host already keeps: **a lagoon is one
@@ -343,8 +343,8 @@ Each ships independently. Phase 0 exists so nothing breaks while the rest happen
 | | what | notes |
 |---|---|---|
 | **0** | Next app proxies unknown routes to the running host | **done** — `host-app/`, see below |
-| **1** | Next shell + GoTrue + schema; serves **public** lagoons via `store.mjs`; GitHub OAuth; the `signin` region, in motu | the bulk — it is the app skeleton |
-| **2** | private via membership; visibility moves to the DB; retire the host-wide read secret | small |
+| **1** | Next shell + GoTrue + schema; serves **public** lagoons via `store.mjs`; GitHub OAuth; the `signin` region, in motu | **done** — 1b then 1a |
+| **2** | private via membership; visibility moves to the DB; retire the host-wide read secret | **done** — see below |
 | **2b** | coverage corpus into `coverage_states`; `/api/coverage*` reads and writes rows; migrate existing `.json` corpora in; delete the files | small, and independent of auth — could go earlier |
 | **3** | share links | small |
 | **4** | mount `review-console` (2,812 lines, already a motu app — a route, not a port); delete `server.mjs` + `views.mjs` | mounting and deleting |
@@ -390,6 +390,36 @@ the cookie in the wrong process), and an SSE live frame is passed through withou
 `test/publish.integration.test.ts` runs a real host in a temp directory and publishes a real gzip
 stream through the proxy, because the stub can only prove which headers were copied.
 
+## Phase 2, as built — and the answer that was missing
+
+`authorize` is a pure decision over ports (`src/auth/authorize.ts`), called from the phase-0 catch-all
+for paths that parse as records. Everything else still falls through.
+
+**A THIRD OUTCOME: `abstain`.** The plan's list had allow and deny and nothing for "the database has
+never heard of this repo" — and denying that would 404 every lagoon published before `projects` was
+populated, the exact regression phase 0 exists to prevent. So the app steps aside and the host answers
+from `access.json` as it always has. A database OUTAGE takes the same path for the same reason. It is
+a MIGRATION STATE, not a design: the open question below about two sources of truth is precisely this,
+and `abstain` is the thing to count until it is always zero.
+
+**The bytes still come from `store.mjs`.** Its retention bookkeeping must have one owner, so the app
+decides and the host serves — presenting the host's read secret as a bearer once the answer is yes.
+`access.mjs` already offers that transport. The secret therefore stops being something a PERSON is
+handed and becomes a credential for one hop between two processes on one machine, with the host's own
+gate left in place behind the app's. That is what "retire the host-wide read secret" turned out to
+mean.
+
+**A 404 is not achieved by a status code.** The first refusal answered 326 bytes of `text/plain` where
+a genuine miss answers 24,946 of HTML — a 403 wearing a 404, leaking the one fact it was written to
+withhold. It now renders through `views.mjs`'s own `errorPage`, imported rather than copied. The host
+had a smaller version of the same divergence (its refusal printed the request path, its not-found
+printed `repo/ref/slug`, one character apart) and it is fixed there too.
+
+**PostgREST, again.** The first policy stores used `supabase-js`'s `.from()`, which is PostgREST — so
+every record request went to `<app>/rest/v1/projects`, was proxied to the lagoon host, and 404'd. The
+"PostgREST — no" decision above is load-bearing and easy to violate by reaching for the familiar
+client. There is a `pg` pool now.
+
 ## Two constraints that break everything if lost
 
 **`/api/publish` must stay byte-compatible.** `uploadLagoon` in the CLI posts to it, and every
@@ -407,8 +437,11 @@ read everything — which is precisely what `access.mjs` was written to stop:
 
 ## Open
 
-- Whether `visibility` lives in `projects` or stays in `access.json` until phase 2. Two sources of
-  truth for one afternoon is fine; for a month it is not.
+- Two sources of truth for visibility, which phase 2 did not remove — it made the overlap explicit as
+  `abstain`. Every repo without a `projects` row is still answered from `access.json`. Backfill them
+  and the second source stops being consulted; until then, count the abstains.
+- With no stored provider token, `repo_access` refreshes only at sign-in. Fine while sessions are
+  short, and the thing to decide properly if session lifetime grows.
 - Backups become two things — Postgres and the blob directory — and they must be consistent with each
   other, because a restored database referencing evicted blobs is a host full of dead links. Once
   coverage is in Postgres, the database also holds data that cannot be regenerated: a corpus is a

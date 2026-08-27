@@ -20,6 +20,7 @@ import {
   type Channel,
   type HostBridge,
   type MotuFit,
+  slotNameOf,
   type RegionOf,
   type SlotsOf,
 } from '@motu/core';
@@ -122,7 +123,11 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     // `C` is generic, so its optional members are not visible on the parameter's type; the CONFIG
     // interface is where they are declared, and this is the one place that has to read them.
     const declared = config as AnyArchipelagoConfig;
-    const slots = (declared.slots ?? {}) as Record<string, string>;
+    // The page decides exclusivity ITSELF, by passing a node or null — `when`/`unless` is the lagoon's
+    // way of following that decision, and is not consulted here.
+    const slots = Object.fromEntries(
+      Object.entries((declared.slots ?? {}) as Record<string, string | { slot: string }>).map(([p, e]) => [p, slotNameOf(e)]),
+    );
     const hostSlots = (declared.hostSlots ?? {}) as Record<string, unknown>;
     if (!declared.root) {
       throw new Error(

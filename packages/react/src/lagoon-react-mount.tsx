@@ -22,13 +22,15 @@ import {
   resetIslandOutputs,
   runWithWriteSource,
   ensureMountpointStyle,
+  slotNameOf,
+  slotShows,
   type ArchipelagoConfig,
   type Channel,
   type HostBridge,
   type MotuFit,
 } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
-import { ArchipelagoProvider, Island } from './react-island';
+import { ArchipelagoProvider, Island, useRegion } from './react-island';
 import { renderArchipelagoLayout } from './archipelago-layout';
 import type { ElementSpec } from './bootstrap';
 
@@ -129,15 +131,44 @@ declare global {
  * slot (its component's props), never a node, so nothing the lagoon shows can be arrangement nobody
  * ships.
  */
+function RegionRoot({
+  config,
+  islandNode,
+  hostProps,
+}: {
+  config: ArchipelagoConfig;
+  islandNode: (slot: string) => ReactNode;
+  hostProps: Record<string, unknown> | undefined;
+}): ReactNode {
+  // THE LIVE REGION, not the seed it started with. `when`/`unless` was read once at mount against the
+  // initial seed, so a slot the seed hid stayed hidden for the rest of the session — and a FLOW is
+  // exactly the thing that changes that state afterwards. Every login flow that signs in failed with
+  // "no island mounted under slot login-form", because the region had moved and the arrangement had
+  // not. A component, so it re-renders with the store like everything else here does.
+  const region = useRegion<Record<string, unknown>>();
+  return renderRegionRoot(config, islandNode, hostProps, region as Record<string, unknown>) ?? null;
+}
+
 function renderRegionRoot(
   config: ArchipelagoConfig,
   islandNode: (slot: string) => ReactNode,
   hostProps: Record<string, unknown> | undefined,
+  state: Record<string, unknown> | undefined,
 ): ReactNode | undefined {
-  const declared = config as { root?: unknown; slots?: Record<string, string>; hostSlots?: Record<string, unknown> };
+  const declared = config as {
+    root?: unknown;
+    slots?: Record<string, string | { slot: string; when?: string; unless?: string }>;
+    hostSlots?: Record<string, unknown>;
+  };
   if (!declared.root) return undefined;
   const composed: Record<string, unknown> = {};
-  for (const [prop, slot] of Object.entries(declared.slots ?? {})) composed[prop] = islandNode(slot);
+  // A DECLARED SLOT IS NOT ALWAYS SHOWN. Two islands can be alternatives in one position, and the page
+  // says so by passing null for the one that does not apply. Mounting both here previewed a login
+  // screen carrying an expired-link banner AND a sign-in form at once — a state the application cannot
+  // produce, which is exactly the kind of thing a preview exists to not invent.
+  for (const [prop, entry] of Object.entries(declared.slots ?? {})) {
+    composed[prop] = slotShows(entry, state ?? {}) ? islandNode(slotNameOf(entry)) : null;
+  }
   for (const [prop, Component] of Object.entries(declared.hostSlots ?? {})) {
     composed[prop] = createElement(Component as never, ((hostProps ?? {})[prop] ?? {}) as never);
   }
@@ -213,9 +244,11 @@ export function mountReactLagoon(
         // `layout` template (an ocean, whose legacy page cannot hand React anything), then declared
         // order. There is deliberately no hand-written frame in between any more: one existed, it was
         // a second copy of the page, and every copy drifted.
-        (renderRegionRoot(config, islandNode, opts.hostProps) ??
-          renderArchipelagoLayout(config.layout, islandNode) ??
-          islands)
+        ((config as { root?: unknown }).root ? (
+          <RegionRoot config={config} islandNode={islandNode} hostProps={opts.hostProps} />
+        ) : (
+          renderArchipelagoLayout(config.layout, islandNode) ?? islands
+        ))
       )}
     </ArchipelagoProvider>
   );

@@ -142,7 +142,11 @@ function readRoot(text) {
   // One-line and multi-line forms both — see `rootSlotMap` for what matching only one of them cost.
   const slotBlock =
     code.match(/^ {2}slots\s*:\s*\{([^}\n]*)\}/m) ?? code.match(/^ {2}slots\s*:\s*\{([\s\S]*?)^ {2}\},/m);
-  for (const [, prop, slot] of (slotBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*'([^']+)'/g)) rootSlots[prop] = slot;
+  // Both value forms — see `rootSlotMap` for the object one.
+  for (const [, prop, rest] of (slotBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)) {
+    const slot = rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1);
+    if (slot) rootSlots[prop] = slot;
+  }
   const rootHostSlots = {};
   const hostBlock = code.match(/^\s*hostSlots\s*:\s*\{([^}]*)\}/m);
   for (const [, prop, comp] of (hostBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*([A-Za-z_$][\w$]*)/g)) {

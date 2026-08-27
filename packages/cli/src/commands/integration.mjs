@@ -106,7 +106,11 @@ function rootSlotMap(id) {
     // slots the archipelago had never declared.
     text.match(/^ {2}slots\s*:\s*\{([^}\n]*)\}/m) ?? text.match(/^ {2}slots\s*:\s*\{([\s\S]*?)^ {2}\},/m);
   const map = {};
-  for (const [, prop, slot] of (block?.[1] ?? '').matchAll(/(\w+)\s*:\s*'([^']+)'/g)) map[prop] = slot;
+  // Both value forms: `prop: 'slot'` and `prop: { slot: 'slot', when|unless: 'key' }`.
+  for (const [, prop, rest] of (block?.[1] ?? '').matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)) {
+    const slot = rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1);
+    if (slot) map[prop] = slot;
+  }
   return map;
 }
 

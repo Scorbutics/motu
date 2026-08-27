@@ -248,8 +248,22 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * The app's vocabulary on the left, motu's on the right, mapped once. A page that never writes a
    * slot cannot put the wrong island in a prop, and a lagoon that never writes a prop cannot compose
    * the region differently from the page.
+   *
+   * EXCLUSIVE SLOTS take the object form. Two islands can be alternatives in one position — a sign-in
+   * form and the "your link expired" banner — and the page expresses that by passing `null` for the
+   * one that does not apply. The LAGOON has no page to do that, so it mounted both and previewed a
+   * screen the application can never show. `when` / `unless` name the region key that decides, so the
+   * preview makes the same choice the page makes:
+   *
+   *   slots: {
+   *     authError: { slot: 'auth-error', when: 'authError' },
+   *     form:      { slot: 'login-form', unless: 'authError' },
+   *   }
+   *
+   * It is the LAGOON's condition only. The page still decides for itself, by passing a node or null —
+   * declaring it here does not move that decision, it lets the preview follow it.
    */
-  slots?: Record<string, string>;
+  slots?: Record<string, string | { slot: string; when?: string; unless?: string }>;
   /**
    * Root props the HOST fills, and the application component that fills them: prop -> component.
    *
@@ -500,6 +514,24 @@ export interface RegionBrand<TRegion> {
 
 /** The region type carried by a branded config, or an open record when there is none. */
 export type RegionOf<C> = C extends RegionBrand<infer R> ? (unknown extends R ? Record<string, unknown> : R) : Record<string, unknown>;
+
+/** A root slot's name, whichever form it was declared in. */
+export function slotNameOf(entry: string | { slot: string }): string {
+  return typeof entry === 'string' ? entry : entry.slot;
+}
+
+/**
+ * Should the LAGOON mount this root slot, given what the region holds?
+ *
+ * `when`/`unless` name a region key. A slot with neither always mounts, which is every slot that is
+ * not one of an exclusive pair.
+ */
+export function slotShows(entry: string | { slot: string; when?: string; unless?: string }, state: Record<string, unknown>): boolean {
+  if (typeof entry === 'string') return true;
+  if (entry.when && !state[entry.when]) return false;
+  if (entry.unless && state[entry.unless]) return false;
+  return true;
+}
 
 /** Every slot a config declares, as a union — literal only when declared through `archipelago()`. */
 export type SlotsOf<C> = C extends { islands: readonly (infer I)[] } ? (I extends { slot: infer S } ? (S extends string ? S : never) : never) : never;

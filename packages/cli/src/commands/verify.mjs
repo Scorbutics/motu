@@ -2054,7 +2054,11 @@ function islandCompositionCheck(report, id, region, composedBy, sources) {
   // Nested by DECLARATION: motu fills these into the outer island's props, in the page and in the
   // lagoon alike, so a frame that does not name them is composing them all the same.
   const nested = new Set(
-    [...archText.matchAll(/\bslots\s*:\s*\{([^}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/:\s*'([^']+)'/g)].map((x) => x[1])),
+    [...archText.replace(/^ {2}slots\s*:[\s\S]*?^ {2}\},/m, '').matchAll(/\bslots\s*:\s*\{([\s\S]*?)\n\s*\},/g)].flatMap((m) =>
+      [...m[1].matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)].map(([, , rest]) =>
+        rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1),
+      ),
+    ).filter(Boolean),
   );
   const placed = new Set();
   for (const code of composedBy) {
@@ -2387,7 +2391,18 @@ function archipelagoConfigChecks(report, id) {
     // --- composition: a slot filled by another island must be one this region declares -------------
     {
       const declaredSlots = new Set([...code.matchAll(/\bslot:\s*'([^']+)'/g)].map((m) => m[1]));
-      const filled = blocksAfter(code, 'slots:', '{').flatMap((b) => [...b.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]));
+      // Only the SLOT NAME out of each entry. A region-level `slots` may take the object form for an
+      // exclusive pair (`{ slot: 'auth-error', when: 'authError' }`), and taking every quoted string
+      // read `when`'s region key as a slot this region had never declared — an error about a shape
+      // that was correct.
+      // ISLAND-LEVEL ONLY. The region's own `slots` sits at two spaces of indent; a member's nested
+      // map is deeper inside an entry. Counting the region's made every root slot read as an island
+      // nested in another, which is a different claim entirely.
+      const filled = blocksAfter(code.replace(/^ {2}slots\s*:[\s\S]*?^ {2}\},/m, ''), 'slots:', '{').flatMap((b) =>
+        [...b.matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)].map(([, , rest]) =>
+          rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1),
+        ),
+      ).filter(Boolean);
       const missing = [...new Set(filled)].filter((slot) => !declaredSlots.has(slot));
       if (missing.length) {
         report.error(

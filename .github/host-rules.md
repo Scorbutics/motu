@@ -340,6 +340,47 @@ its wrapper in `components/motu/`, importing nothing but motu; the port, the sou
 components in app files that wrap them in `<R.Island>`. The lagoon installs the same source through
 `channelFrom`, because there is no page there to do it.
 
+## A source is REAL in the lagoon; its PORT is the stand-in — and the adapter is yours to prove
+
+Worth being exact about, because it decides how much a green region actually claims.
+
+When a flow runs, the source is the APPLICATION'S OWN OBJECT. Its timeout, its precedence rules, its
+generation guard, its error mapping, its intent dispatch — all of that executes. What is swapped is
+the PORT: production hands it Supabase and the services, the lagoon hands it fixtures. So a region
+flow proves more than "the wiring type-checks"; it proves the page's own logic behaves, against
+answers a human chose.
+
+What it CANNOT prove is the seam on the other side of the port: that the real adapter
+(`currentUser()` returning `{ email, user_metadata }`, `fetchCurrentMember()` returning
+`primarySectorId`) matches what the backend actually sends. Get that shape wrong and every motu check
+stays green while production breaks. The lagoon replaces the host module so completely that nothing
+shows a fetch happened — that is the point of it, and it is the boundary.
+
+So a source that carries logic gets UNIT TESTS, in the host's own runner, over a hand-made port. Not
+because motu asks for a second suite, but because that is the only place the branches no rendered
+state distinguishes can be reached: a lookup that THREW versus one that answered null, a deadline, the
+precedence in a prefill, the slower of two submits not overwriting the faster. `lib/tests/unit/
+actions-week-source.test.ts` is the shape. A flow drives a source through the screen; a unit test
+drives it directly, and you want both for the same reason you want `expectRender` as well as `expect`.
+
+`sources-tested` says so: a region whose declared source no test imports gets a warning naming it. A
+warning, not an error — the rule is new and regions predate it — and only for sources given as an
+OBJECT, because `{ module: '@/lib/…', produces: [...] }` is a claim about somebody else's code rather
+than a unit anyone here wrote.
+
+And the adapter itself — the few lines that turn the backend's shape into the port's — belongs to
+whatever proves this app against a real backend. Where the call goes through one of the app's own
+backend operations, that is ASSAY's ledger: it records the shape of every outbound payload (never the
+values) and fails when it differs from `.assay/operations.json`. That is precisely the other half of
+the port's assumption — the port says what the source expects, the ledger says what the operation
+sends.
+
+Know the one gap that leaves. A client that talks to the database or the auth service DIRECTLY —
+`supabase.auth.getUser()`, a PostgREST read in a service — is not an operation, so it has no
+declaration and neither tool pins its shape. That adapter is the last unproven inch of this design.
+It is a few lines by construction, which is the mitigation; routing the read through an operation is
+the fix when it stops being a few lines.
+
 ## Three tiers, and which one you are in
 
     motu check                        STATIC        1.4s    every change

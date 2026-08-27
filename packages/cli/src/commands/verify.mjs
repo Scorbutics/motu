@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { listIslands } from '../lib/islands.mjs';
@@ -2370,6 +2370,104 @@ function channelSourceCheck(report, id, region) {
 }
 
 /**
+ * A SOURCE THE APPLICATION AUTHORED, and whether anything drives it directly.
+ *
+ * This is the honest edge of what a green region claims. In the lagoon the source is the application's
+ * OWN object — its timeout, its precedence rules, its generation guard, its error mapping all run —
+ * and only its PORT is a stand-in. So a flow proves the page's logic behaves against answers a human
+ * chose. What a flow cannot reach is every branch that no rendered state distinguishes: a lookup that
+ * THREW versus one that answered null, a deadline, the slower of two submits not overwriting the
+ * faster. Those are unit tests over a hand-made port, in the host's own runner, and a source is
+ * framework-free precisely so they are cheap to write.
+ *
+ * A WARNING, and deliberately: the rule is new, plenty of regions predate it, and a check that turns
+ * a project red wholesale teaches people to ignore the report rather than to fix it.
+ *
+ * Only sources given as an OBJECT are asked for: `{ module: '@/lib/…', produces: [...] }` declares
+ * that a host module feeds some keys, which is a claim about somebody else's code, not a unit anyone
+ * here wrote.
+ */
+function sourcesTestedCheck(report, id) {
+  const file = paths.archipelagoFile(id);
+  if (!existsSync(file)) return;
+  const text = stripComments(readFileSync(file, 'utf8'));
+
+  const block = text.match(/\bsources\s*:\s*\{([\s\S]*?)\n\s*\}/);
+  if (!block) return;
+  // `week: weekSource` — an identifier. The object-literal form (`revenue: { module: … }`) has a `{`
+  // where this wants a name, so it simply does not match.
+  const named = [...block[1].matchAll(/(\w+)\s*:\s*([A-Za-z_$][\w$]*)\s*,/g)].map((m) => ({
+    key: m[1],
+    binding: m[2],
+  }));
+  if (!named.length) {
+    report.ok('sources-tested', 'no application-authored source to cover', 0);
+    return;
+  }
+
+  /** Where a binding was imported from, resolved to a host path. */
+  const moduleOf = (binding) => {
+    for (const imp of text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      const imported = imp[1].split(',').map((n) => n.trim().split(/\s+as\s+/).pop().trim());
+      if (imported.includes(binding)) return resolveAppImport(file, imp[2]);
+    }
+    return null;
+  };
+
+  const tests = hostTestFiles();
+  const uncovered = [];
+  for (const { key, binding } of named) {
+    const target = moduleOf(binding);
+    // A source whose module cannot be resolved is one this cannot judge — say nothing rather than
+    // report a project for a path we failed to follow.
+    if (!target) continue;
+    const stem = basename(target);
+    const covered = tests.some((t) => t.text.includes(stem));
+    if (!covered) uncovered.push({ key, stem });
+  }
+
+  if (!uncovered.length) {
+    report.ok('sources-tested', `every declared source is driven by a test`, named.length);
+    return;
+  }
+  report.warn(
+    'sources-tested',
+    `${uncovered.length}/${named.length} source(s) no test drives: ${uncovered.map((u) => u.key).join(', ')} — a flow ` +
+      `drives a source through the SCREEN, so it reaches only the branches a rendered state tells apart. ` +
+      `The rest (a lookup that threw vs one that answered nothing, a deadline, two submits racing) needs a ` +
+      `unit test over a hand-made port. The source is framework-free so that test is cheap.`,
+  );
+}
+
+/** Every test file the host owns, read once. */
+function hostTestFiles() {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = resolve(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+        walk(full);
+      } else if (/\.(test|spec)\.(t|j)sx?$/.test(e.name)) {
+        try {
+          out.push({ file: full, text: readFileSync(full, 'utf8') });
+        } catch {
+          /* unreadable is not a finding about the project */
+        }
+      }
+    }
+  };
+  walk(HOST_ROOT);
+  return out;
+}
+
+/**
  * DID THE COMPONENT ACTUALLY EMIT? The half no CLI check could reach until now.
  *
  * `wiring-live` fires each declared output itself, and a flow's `emit` goes through the same seam, so
@@ -2667,6 +2765,10 @@ export async function runArchipelagoVerify(argv, id) {
   // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
   if (region) channelSourceCheck(report, id, region);
+
+  // The other half of what a source is worth: a flow drives it through the screen, and the branches
+  // no screen tells apart need a test that drives it directly.
+  sourcesTestedCheck(report, id);
 
   // Static, so an uncovered slot shows up in the fast loop rather than behind a browser.
   renderCoverageCheck(report, id);

@@ -1,0 +1,18 @@
+{
+  "app": ".",
+  "host": "next",
+  "hostRoot": "..",
+  "islands": "src/islands",
+  "ui": "src/ui",
+  "archipelagos": "src/archipelagos",
+  "shared": "src/shared",
+  "contract": "contract/src",
+  "lagoon": "roots/lagoon",
+  "appPackage": "motu-host-islands",
+  "tagPrefix": "x-",
+  "isolation": "light",
+  "removable": false,
+  "publishAs": {
+    "repo": "motu-host"
+  }
+}

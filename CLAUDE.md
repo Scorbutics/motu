@@ -109,9 +109,11 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    islands also changed; when none did, the arrangement moved.
  - EVERY DECLARED STATE IS AN ADDRESS — do not hand-drive the store to look at one. `motu lagoon
    states` lists them (`--json`, `--base <url>`): an island's scenario is
-   `/lagoon.html?target=island:<tag>&scenario=<name-or-slug>`, a region's flow is
-   `/?region=<id>&flow=<name>&step=<n>` on the gallery (the entry `serve` and `publish` build), with
-   `step` stopping the replay early so the states BETWEEN the steps are reachable too. That is how you
+   `/?target=island:<tag>&scenario=<name-or-slug>`, a region's flow is
+   `/?region=<id>&flow=<name>&step=<n>`, with `step` stopping the replay early so the states BETWEEN
+   the steps are reachable too. BOTH are the gallery — the entry `serve` and `publish` build and the
+   one a person opens. An island opens ALONE there, through the same one-slot mount `island verify`
+   drives, so a standalone island (in no region) is addressable too. That is how you
    look at the state you are about to change, and how you hand someone a link to it. A name that
    resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
    false` — because being handed the default state while believing it is the one you named is the
@@ -131,6 +133,30 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    you iterate, killed when you stop. A second permanent preview server is what the host replaces.
    Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted — the publish output
    warns about them, and the warning is a finding.
+
+## motu's own surfaces go through motu, and that is not optional
+
+Every screen motu itself ships — the review console, the lagoon host's pages, anything with a UI that
+lives in this repository — is islands and archipelagos, declared, with evidence, checked by
+`motu check`. A UI framework that hand-writes its own screens is testing a claim it never makes.
+
+This is a rule rather than a preference because of what it covers that nothing else does. A host
+adapter's only real consumer is usually somebody else's repository — `@motu/adapter-next` is proved by
+peps, which is not in this repo's CI — so a framework change that breaks it is invisible here until
+someone happens to build that project. An in-tree consumer is the one that cannot drift unnoticed,
+which is the argument `pnpm-workspace.yaml` already makes out loud for the review console. Note that
+the review console is Vite: an adapter is only exercised by a consumer on THAT host.
+
+Declare it with `removable: false` and mean the narrow thing. `removal-check` asks "delete motu, does
+the host still compile?", which is the right question for an app that ADOPTED motu and a meaningless
+one for motu's own surfaces, where motu is load-bearing by choice. It reports a SKIP, never a pass,
+because opting out proves nothing. It is not a hatch for an adopting app that finds removal
+inconvenient — for those the answer stays FAIL.
+
+The screens worth choosing first are the awkward ones. A sign-in region is a form, a pending state, a
+failure arriving from a server, and a success whose consequence is a NAVIGATION rather than a rendered
+key — every place a region model gets strained. When motu is awkward there, that is a finding about
+motu, and using it on our own screens is what makes us the ones who feel it.
 
 ## A UI that lives in the database, not the repository
 

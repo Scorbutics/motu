@@ -1,0 +1,11 @@
+{
+  "about": "The motu-host-islands lagoon: this project's islands rendered against fixtures, with no backend, no session and no host application around them.",
+  "transport": "mock",
+  "defaultTheme": "motu",
+  "mount": "react",
+  "chrome": {
+    "primary": "hsl(var(--primary))",
+    "onPrimary": "hsl(var(--primary-foreground))"
+  },
+  "stations": {}
+}

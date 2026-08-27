@@ -1,6 +1,6 @@
 # The lagoon host, with accounts
 
-**Status: phases 0, 1, 2, 2b and 3 shipped; 4 planned.** This is the design record for turning `@motu/host` from a
+**Status: phases 0-3 shipped. Phase 4 is half done: the console is mounted; `server.mjs` is not deleted, and the reason is below.** This is the design record for turning `@motu/host` from a
 personal preview server into something several people can log into and see only what they should.
 
 The rule this document exists to protect is the one the host already keeps: **a lagoon is one
@@ -347,7 +347,7 @@ Each ships independently. Phase 0 exists so nothing breaks while the rest happen
 | **2** | private via membership; visibility moves to the DB; retire the host-wide read secret | **done** — see below |
 | **2b** | coverage corpus into `coverage_states`; `/api/coverage*` reads and writes rows; migrate existing `.json` corpora in; delete the files | **done** — see below |
 | **3** | share links | **done** — see below |
-| **4** | mount `review-console` (2,812 lines, already a motu app — a route, not a port); delete `server.mjs` + `views.mjs` | mounting and deleting |
+| **4** | mount `review-console` (a route, not a port) — **done**; delete `server.mjs` + `views.mjs` — **not done**, see below | the estimate was wrong |
 
 Phase 1 dominates because it is the skeleton, and it is the phase already done once — it is peps' own
 stack, for the plumbing though not for the screens. Phases 2 and 3 are about a day each **if** phase 1
@@ -481,6 +481,40 @@ did not exist yet, matched nothing, and reported "0 accepted" while looking like
 SUMS, so the script is not idempotent — running it twice doubles the counts — and deleting the file
 is what makes a second run a no-op. That is the honest argument for the flag: not tidiness, the only
 thing that makes re-running safe.
+
+## Phase 4: mounted, not deleted — and why the estimate was wrong
+
+The console is mounted at `/console`, and the plan was right that it is a route rather than a port:
+it stays a Vite app in the workspace, built by its own toolchain, and the app serves what Vite
+produced. A handler rather than `public/`, because Next serves `public/` by exact filename and an SPA
+needs the miss to become `index.html` — otherwise `/console/anything` falls through to the lagoon host
+and 404s on a route the console owns.
+
+**`require.resolve` does not survive a bundler.** Resolving the console's build through its package
+manifest is the obviously correct answer in plain node; Turbopack rewrites `require.resolve` into a
+bundled module ID at build time, so the function returned the number `89066` and every request 500'd
+on `The "path" argument must be of type string`. It does not fail at build time. It is configuration
+with a default now, which is what a deployment needed anyway.
+
+**The deletion is not "mounting and deleting", and this is a correction to the estimate above.**
+`server.mjs` is 759 lines across 22 route branches, and the app owns four of them. What is left is
+the index and per-repo pages, `/g` and `/m` with their live frames, `/shot`, `/api/publish` (24 MB
+gzip, byte-compatible, with retention), `/api/group`, `/api/baseline` ×2, `/api/live` ×2,
+`/api/health`, `/api/repos`, `/api/baselines`, `/api/groups`, and the record route's actual serving —
+which the app currently gates and proxies rather than performs.
+
+Two things make it more than porting:
+
+- **`views.mjs` does not get deleted.** It is the RENDERING, and the app needs it more after the move,
+  not less — it already imports `errorPage` from it so a refusal is byte-identical to a miss. Only
+  its caller changes. The line above should read "delete `server.mjs`; keep `views.mjs`".
+- **`store.mjs` assumes one writer.** Its tmp+rename and its eviction are safe because exactly one
+  process performs them, which is the reason phases 2 and 3 proxy for bytes rather than read the
+  store directly. Moving publish into the app makes the app that process — fine if it is genuinely one
+  process, and a question that has to be ANSWERED rather than assumed before a write path moves.
+
+So the honest shape of the rest of phase 4 is: settle the single-writer question, then move the routes
+in the same per-route way phases 0-3 moved everything else, with the catch-all still behind them.
 
 ## Two constraints that break everything if lost
 

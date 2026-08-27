@@ -166,6 +166,9 @@ importers:
       motu-host-islands:
         specifier: workspace:*
         version: link:motu
+      motu-review:
+        specifier: workspace:*
+        version: link:../review-console
       next:
         specifier: ^16.3.3
         version: 16.3.3(@babel/core@7.29.7)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

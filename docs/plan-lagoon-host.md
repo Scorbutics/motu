@@ -1,6 +1,6 @@
 # The lagoon host, with accounts
 
-**Status: phases 0, 1, 2 and 3 shipped; 2b and 4 planned.** This is the design record for turning `@motu/host` from a
+**Status: phases 0, 1, 2, 2b and 3 shipped; 4 planned.** This is the design record for turning `@motu/host` from a
 personal preview server into something several people can log into and see only what they should.
 
 The rule this document exists to protect is the one the host already keeps: **a lagoon is one
@@ -345,7 +345,7 @@ Each ships independently. Phase 0 exists so nothing breaks while the rest happen
 | **0** | Next app proxies unknown routes to the running host | **done** — `host-app/`, see below |
 | **1** | Next shell + GoTrue + schema; serves **public** lagoons via `store.mjs`; GitHub OAuth; the `signin` region, in motu | **done** — 1b then 1a |
 | **2** | private via membership; visibility moves to the DB; retire the host-wide read secret | **done** — see below |
-| **2b** | coverage corpus into `coverage_states`; `/api/coverage*` reads and writes rows; migrate existing `.json` corpora in; delete the files | small, and independent of auth — could go earlier |
+| **2b** | coverage corpus into `coverage_states`; `/api/coverage*` reads and writes rows; migrate existing `.json` corpora in; delete the files | **done** — see below |
 | **3** | share links | **done** — see below |
 | **4** | mount `review-console` (2,812 lines, already a motu app — a route, not a port); delete `server.mjs` + `views.mjs` | mounting and deleting |
 
@@ -450,6 +450,37 @@ immutable. Resolving the alias would silently turn the second kind into the firs
 Minting is `infra/mint-share-link.mjs`, for the reason `motu-host access` exists: the hashes are not
 hand-writable, and the token is printed once. `--expires` or `--never` is required — a permanent
 bearer credential should have to be said out loud.
+
+## Phase 2b, as built
+
+Row-per-state with the SQL upsert, and the divergence test in the same commit — which is the only
+thing that makes the second copy of the fold allowable at all.
+
+**The test had to be taught to fail.** The first fixture used one shared state whose incoming window
+was both earlier and later than the stored one. That distinguishes `least`/`greatest` from "keep the
+stored value" and NOT from "take the incoming value" — so replacing `least(first_at, …)` with
+`excluded.first_at` left the divergence test GREEN, and was caught two tests later by accident. The
+fixture now carries two shared states with opposite windows (one incoming window strictly inside the
+stored one, one strictly around it), and all five wrong arithmetic choices — either column, either
+direction, plus overwriting the count — were confirmed to fail it, one at a time.
+
+**`/api/coverage*` takes over PER PROJECT**, the same `abstain` shape as `authorize`: a repo with a
+`projects` row is served from rows, one without falls through to the host and its files. The
+credential model is the host's, imported — an ingest token stays scoped to one repo and one act, and
+accepting still takes the admin token, because a reporting path that can mark its own findings
+resolved reports nothing. `accepted_at` is left out of the upsert's update list, which is how that
+survives becoming a column on the row it used to be a separate file from.
+
+**The importer is not a migration file** — it reads the host's store directory, which is not the
+database's business. Two bugs found by testing it rather than by reading it: `readdirSync` yields
+`abc123.accepted.json` BEFORE `abc123.json`, so a single pass applied the accepted set to states that
+did not exist yet, matched nothing, and reported "0 accepted" while looking like it worked; and
+`--delete-after-import` left the accepted file orphaned beside a corpus that was gone.
+
+**It does not delete by default.** A corpus is the one thing here no rebuild recreates. The upsert
+SUMS, so the script is not idempotent — running it twice doubles the counts — and deleting the file
+is what makes a second run a no-op. That is the honest argument for the flag: not tidiness, the only
+thing that makes re-running safe.
 
 ## Two constraints that break everything if lost
 

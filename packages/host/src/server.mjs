@@ -524,7 +524,13 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         // 404, NOT 403, for a private repo somebody cannot read. A 403 confirms the repo exists,
         // which is the one thing a private host should not tell an unauthenticated stranger — and the
         // name of an unreleased project is often the interesting part.
-        if (!readable(repo)) return html(res, 404, errorPage(404, `nothing at ${path}`), NO_STORE);
+        //
+        // AND IT HAS TO SAY WHAT A MISS SAYS. This used to render `nothing at ${path}` — with the
+        // leading slash — while the not-found below renders `nothing at ${repo}/${ref}/${slug}`
+        // without one. One character apart, and enough: a refusal was distinguishable from an absence
+        // by reading the page, so the status code withheld what the body then handed over. The two
+        // are now the same string, which is the property the 404 was chosen for in the first place.
+        if (!readable(repo)) return html(res, 404, errorPage(404, `nothing at ${repo}/${ref}/${slug}`), NO_STORE);
 
         // LIVE ON THE CANONICAL URL, not only inside a gallery.
         //

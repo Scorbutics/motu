@@ -13,7 +13,7 @@ export default {
   // than treating them as prebuilt deps. Peps needs a twenty-entry resolveAlias block for this
   // because it consumes motu as a vendored sibling checkout; in-tree the workspace resolves them and
   // only the compile step is left.
-  transpilePackages: ['motu-host-islands'],
+  transpilePackages: ['motu-host-islands', '@motu/host', '@motu/chrome'],
   // A TRAILING SLASH IS PART OF THE HOST'S ADDRESSES, not a typo to be corrected. `/motu-review/`
   // is a repo's group page and `/motu-review` is not; Next's default is to 308 one to the other
   // BEFORE the route handler runs, so without this the first page anybody clicks from the index

@@ -85,6 +85,22 @@ export type ProxyOptions = {
    * be a second set of those decisions to keep in step.
    */
   rewritePath?: (pathname: string) => string;
+  /**
+   * Headers to SET on the outgoing request, replacing anything the caller sent under the same name.
+   *
+   * One use, and it wants stating plainly: once the app has authorized a private read, it presents
+   * the host's own read secret as a bearer so `store.mjs` will serve the bytes. `access.mjs` offers
+   * exactly this transport — "a server cannot send a cookie it was never given, so an application
+   * reading a corpus back carries a bearer" — and the app is such a server.
+   *
+   * The host-wide secret therefore stops being something a PERSON is ever given. It becomes a
+   * credential for one hop, between two processes on one machine, which is what "retire the host-wide
+   * read secret" means in practice: the host's gate stays as defence in depth behind the app's.
+   *
+   * SET, not append: a browser that sent its own `authorization` must not be able to influence what
+   * the host sees.
+   */
+  setHeaders?: Record<string, string>;
 };
 
 /**
@@ -101,12 +117,15 @@ export async function proxyToHost(request: Request, options: ProxyOptions = {}):
   const pathname = options.rewritePath ? options.rewritePath(incoming.pathname) : incoming.pathname;
   const target = `${origin}${pathname}${incoming.search}`;
 
+  const headers = forwardRequestHeaders(request);
+  for (const [name, value] of Object.entries(options.setHeaders ?? {})) headers.set(name, value);
+
   const hasBody = !BODYLESS.has(request.method.toUpperCase()) && request.body !== null;
   let upstream: Response;
   try {
     upstream = await doFetch(target, {
       method: request.method,
-      headers: forwardRequestHeaders(request),
+      headers,
       body: hasBody ? request.body : undefined,
       // Required by fetch whenever the body is a stream: we are not reading the response before we
       // have finished sending the request.

@@ -1,0 +1,31 @@
+{
+  "name": "@motu/host-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 8817",
+    "build": "next build",
+    "start": "next start --port 8817",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "motu": "node ../packages/cli/src/run.mjs"
+  },
+  "dependencies": {
+    "@motu/adapter-next": "workspace:*",
+    "@motu/core": "workspace:*",
+    "@motu/react": "workspace:*",
+    "@motu/runtime": "workspace:*",
+    "@motu/types": "workspace:*",
+    "motu-host-islands": "workspace:*",
+    "next": "^16.3.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "typescript": "^5.6.3"
+  }
+}

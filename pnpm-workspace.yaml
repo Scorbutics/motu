@@ -8,3 +8,9 @@ packages:
   # packages the same way any adopter does, which makes it the one consumer that cannot drift from
   # them unnoticed — a framework change that breaks a consumer breaks this one in the same commit.
   - 'review-console'
+  # PHASE 0 of the accounts migration: the Next app that sits in front of `@motu/host` and hands it
+  # every route it does not own yet. See docs/plan-lagoon-host.md.
+  - 'host-app'
+  # The host's islands package (`motu-host-islands`). A separate package because the Next app root is
+  # its parent — peps' layout exactly, which is the arrangement known to work with `"host": "next"`.
+  - 'host-app/motu'

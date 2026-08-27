@@ -44,8 +44,14 @@ export function getArchipelago(id: string): ArchipelagoConfig | undefined {
 
 export const BARREL = `// Public surface of the project: the element registry and the archipelago configs + resolver.
 // Composition roots (and the motu lagoon / CLI harness) import everything they need from here.
-export { ELEMENT_REGISTRY } from './islands/registry.js';
-export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry.js';
+//
+// NO \`.js\` ON THESE SPECIFIERS. Turbopack has no \`extensionAlias\`, so \`./islands/registry.js\` is
+// simply an unresolved module and \`next build\` stops on this file. motu's own packages had their
+// \`.js\` specifiers dropped for exactly this reason — \`moduleResolution: "Bundler"\` makes the
+// extension optional, which fixes every bundler instead of one mapping per host — and the fix did
+// not reach the files motu GENERATES. It does now.
+export { ELEMENT_REGISTRY } from './islands/registry';
+export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry';
 `;
 
 /** The app package manifest — the lagoon imports the project by NAME, so the name must resolve. */

@@ -42,6 +42,9 @@ import {
   NEXT_TAILWIND_CONFIG,
 } from '../lib/scaffold.mjs';
 
+/** What a host's Tailwind config can be called. Mirrors @motu/adapter-next's own list. */
+const TAILWIND_CONFIGS = ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.cjs'];
+
 /** This motu checkout (packages/cli/src/commands -> up 4). */
 const MOTU_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -306,14 +309,25 @@ export async function initCommand(argv) {
     // the overrides. That is the working shape, so it is now the shape `init` creates — entries,
     // index.html and the vite config are rendered into `.motu/cache` by `motu lagoon dev|build`,
     // which is where generated code belongs anyway.
-    writeNew(resolve(lagoonDir, 'src/fixtures.ts'), render(LAGOON_FIXTURES, vars), created, skipped);
+    // NEITHER IS `src/fixtures.ts`, for the same reason, and it used to be written here anyway.
+    // The materializer renders it — with `fixturesGlob` AND `flowsGlob`, which only it computes — so
+    // init's copy was a duplicate that also could not parse: `vars` here has no `flowsGlob`, so the
+    // file went out carrying a literal `{{flowsGlob}}` and any project that typechecked its lagoon
+    // directory failed on it. Neither peps nor the review console has the file at all, which is why
+    // nothing noticed. `motu lagoon eject` materializes into the project's own lagoon dir, so the
+    // rendered version is what a project gets the moment it wants one on disk.
     // Declared, not coded: what the lagoon IS lives here; what it DOES lives in @motu/react.
     writeNew(resolve(lagoonDir, 'lagoon.config.json'), render(LAGOON_CONFIG, vars), created, skipped);
     writeNew(resolve(lagoonDir, 'src/lagoon.tsx'), LAGOON_OVERRIDES, created, skipped);
     if (host === 'next') {
       writeNew(resolve(lagoonDir, 'src/next-stubs.tsx'), NEXT_STUBS, created, skipped);
       writeNew(resolve(lagoonDir, 'src/env.ts'), ENV_SHIM, created, skipped);
-      writeNew(resolve(lagoonDir, 'tailwind.config.ts'), render(NEXT_TAILWIND_CONFIG, vars), created, skipped);
+      // ONLY IF THE HOST HAS TAILWIND. This file's whole body is `import hostConfig from
+      // '../../../tailwind.config'`, so writing it for a Next app that styles itself any other way
+      // scaffolds a module that cannot resolve. @motu/adapter-next makes the same check before it
+      // installs the postcss plugin; a Next host is not a Tailwind host.
+      if (TAILWIND_CONFIGS.some((f) => existsSync(resolve(hostRoot, f))))
+        writeNew(resolve(lagoonDir, 'tailwind.config.ts'), render(NEXT_TAILWIND_CONFIG, vars), created, skipped);
     }
   }
 

@@ -55,6 +55,16 @@ export const paths = {
   regionRoot: cfg.regionRoot,
   /** Who this project is on a lagoon host, when the git repository is the wrong answer. */
   publishAs: cfg.publishAs,
+  /**
+   * The npm package name whose barrel exports ELEMENT_REGISTRY.
+   *
+   * The fourth value to be resolved by `loadMotuConfig()` and never surfaced here, after `isolation`,
+   * `coverage` and `regionRoot` — and it failed the same silent way they did. `region init` writes a
+   * composition root that imports the project's islands, read it as `paths.appPackage ?? 'motu-islands'`,
+   * got `undefined`, and generated an import of a package that does not exist for every project whose
+   * appPackage is not literally `motu-islands`. The fallback is what hid it.
+   */
+  appPackage: cfg.appPackage,
   /** The ui/ root itself (uiDir(kebab) is one island's folder inside it). */
   uiRoot: UI_DIR,
   islandDir: (kebab) => resolve(ISLANDS_DIR, kebab),

@@ -6,7 +6,7 @@
 // A project declares only what is genuinely its own — module stand-ins and browser env — in
 // lagoon.config.json.
 import { resolve, dirname } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +27,23 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * host config that `require()`s CJS plugins — hand it a path and that keeps working; hand it an
  * imported object and the ESM bundling that breaks on is back.
  */
+/**
+ * The host's own Tailwind config, if it has one.
+ *
+ * A Next app does not necessarily use Tailwind, and this adapter used to assume it did: the postcss
+ * plugin was installed unconditionally and pointed at `<hostRoot>/tailwind.config`, so a Next host
+ * without one got a lagoon that 500s on the first CSS request with "Cannot find module" naming a
+ * generated file the project never wrote. Found by motu's own lagoon host, which is deliberately
+ * Tailwind-free — peps, the adapter's only other consumer, has Tailwind, so nothing had ever asked.
+ */
+function hostTailwindConfig(paths) {
+  for (const name of ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.cjs']) {
+    const candidate = resolve(paths.hostRoot, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 function generateTailwindConfig(paths) {
   mkdirSync(paths.cacheDir, { recursive: true });
   const out = resolve(paths.cacheDir, 'tailwind.lagoon.config.ts');
@@ -52,7 +69,10 @@ export default {
 }
 
 export async function contribute({ paths, lagoonJson, resolveBuildDep }) {
-  const tailwindcss = await resolveBuildDep('tailwindcss');
+  // Only when the HOST has one. See hostTailwindConfig: assuming it did is what made this adapter
+  // unusable on a Next app that styles itself any other way.
+  const usesTailwind = hostTailwindConfig(paths) !== null;
+  const tailwindcss = usesTailwind ? await resolveBuildDep('tailwindcss') : null;
   const autoprefixer = await resolveBuildDep('autoprefixer');
   const stubs = resolve(HERE, 'lagoon/next-stubs.tsx');
 
@@ -84,7 +104,12 @@ export async function contribute({ paths, lagoonJson, resolveBuildDep }) {
       { find: /^next\/navigation$/, replacement: stubs },
     ],
     css: {
-      postcss: { plugins: [tailwindcss({ config: generateTailwindConfig(paths) }), autoprefixer()] },
+      postcss: {
+        plugins: [
+          ...(usesTailwind ? [tailwindcss({ config: generateTailwindConfig(paths) })] : []),
+          autoprefixer(),
+        ],
+      },
     },
   };
 }

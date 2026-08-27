@@ -152,7 +152,14 @@ export function ${pascal}RegionFrame({ island }: { island: (slot: string) => Rea
   // 4 — the composition root, modelled on the one this project already has.
   const model = precedent();
   const bindingDir = model ? dirname(model.file) : dirname(page);
-  const bindingFile = resolve(bindingDir, `${id}-region.tsx`);
+  // ONE MODULE SPECIFIER, TWO FILES — the collision that only bites the FIRST region in a project,
+  // which is the case this command exists for. With no precedent the binding lands beside the page,
+  // where the region TYPE already lives as `<id>-region.ts`; TypeScript resolves `./<id>-region` to
+  // the `.ts` and the composition root is unreachable, so the screen importing `MotuRegion` fails to
+  // compile with no hint that a second file is involved. A project with a precedent never sees it —
+  // peps' binding sits in `components/motu/` and its type in `app/`.
+  const collides = bindingDir === dirname(typeFile);
+  const bindingFile = resolve(bindingDir, `${id}-${collides ? 'binding' : 'region'}.tsx`);
   const transportLine = model?.text.match(/^\s*transport:.*$/m)?.[0]?.trim() ?? 'transport: undefined, // TODO(motu): the transport this environment uses';
   const useHostLine = model?.text.match(/^\s*useHost:.*$/m)?.[0]?.trim() ?? 'useHost: undefined, // TODO(motu): the host bridge for this stack';
   const modelImports = model
@@ -161,7 +168,10 @@ export function ${pascal}RegionFrame({ island }: { island: (slot: string) => Rea
         .filter((l) => /^import /.test(l) && !/Archipelago|ELEMENT_REGISTRY/.test(l))
         .join('\n')
     : '';
-  if (bindingFile !== typeFile) {
+  // Compared as SPECIFIERS, not as paths: `a-region.ts` and `a-region.tsx` are different paths and
+  // the same module, which is what let the collision above through.
+  const specifierOf = (f) => f.replace(/\.tsx?$/, '');
+  if (specifierOf(bindingFile) !== specifierOf(typeFile)) {
     put(
       bindingFile,
       `'use client';
@@ -174,7 +184,7 @@ export function ${pascal}RegionFrame({ island }: { island: (slot: string) => Rea
 // again: they are environment decisions the project already made, and answering them differently by
 // accident is how two regions end up with two securities.
 ${modelImports}
-import { ELEMENT_REGISTRY, ${archConst} } from '${paths.appPackage ?? 'motu-islands'}';
+import { ELEMENT_REGISTRY, ${archConst} } from '${paths.appPackage}';
 
 export const ${pascal} = createRegion(${archConst}, {
   elements: ELEMENT_REGISTRY,
@@ -194,14 +204,27 @@ export const MotuRegion = ${pascal}.Region;
   if (existsSync(overrides)) {
     let text = readFileSync(overrides, 'utf8');
     const before = text;
+    // ANCHORED, AND NOT INTO A COMMENT. These patterns used to match anywhere, and the scaffold's own
+    // overrides file ships every map COMMENTED OUT as a template — so the first `region init` in a
+    // project spliced its entry into the middle of `// export const seed: … = {`, leaving a bare
+    // `'id': seed, someArchipelago: { … } };` on the next line. A file that cannot parse, written by
+    // the command whose job is to make the region work, and reported as a success.
+    const seedMap = /^export const seed: LagoonOverrides\['seed'\] = \{/m;
+    const layoutMap = /^export const layout: LagoonOverrides\['layout'\] = \{/m;
+    const canSplice = seedMap.test(text) || layoutMap.test(text);
     const importLine = `import { ${pascal}RegionFrame, ${camel}Seed } from './regions/${id}.js';`;
-    if (!text.includes(importLine)) text = text.replace(/^(import [\s\S]*?;\n)(?!import )/m, `$1${importLine}\n`);
-    if (/export const seed: LagoonOverrides\['seed'\] = \{/.test(text) && !new RegExp(`\\b${id}:`).test(text)) {
-      text = text.replace(/export const seed: LagoonOverrides\['seed'\] = \{/, `$&\n  '${id}': ${camel}Seed,`);
+    // The import goes in only if something will USE it. Adding it to a file whose maps are all
+    // commented out left a dangling import of a module nothing referenced, and — because the file had
+    // changed — suppressed the instruction telling the user to wire it up by hand.
+    if (canSplice && !text.includes(importLine)) {
+      text = text.replace(/^(import [\s\S]*?;\n)(?!import )/m, `$1${importLine}\n`);
     }
-    if (/export const layout: LagoonOverrides\['layout'\] = \{/.test(text)) {
+    if (seedMap.test(text) && !new RegExp(`\\b${id}:`).test(text)) {
+      text = text.replace(seedMap, `$&\n  '${id}': ${camel}Seed,`);
+    }
+    if (layoutMap.test(text)) {
       text = text.replace(
-        /export const layout: LagoonOverrides\['layout'\] = \{/,
+        layoutMap,
         `$&\n  '${id}': (island) => <${pascal}RegionFrame island={island} />,`,
       );
     }
@@ -209,7 +232,12 @@ export const MotuRegion = ${pascal}.Region;
       writeFileSync(overrides, text);
       written.push(overrides);
     } else {
-      manual.push(`add \`${id}\` to \`seed\` and \`layout\` in ${relative(process.cwd(), overrides)}`);
+      manual.push(
+        `wire \`${id}\` into ${relative(process.cwd(), overrides)} — its maps are still the scaffold's ` +
+          `commented-out template, so there is nothing to add an entry to. Uncomment \`seed\` and ` +
+          `\`layout\` (or use the \`regions\` array form) and reference \`${camel}Seed\` and ` +
+          `\`${pascal}RegionFrame\` from ./regions/${id}.js`,
+      );
     }
   }
 

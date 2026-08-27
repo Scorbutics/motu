@@ -75,6 +75,16 @@ export type ProxyOptions = {
   /** Injectable so the tests can drive a stub without a socket. */
   fetchImpl?: typeof fetch;
   origin?: string;
+  /**
+   * Rewrite the path on the way out.
+   *
+   * Added for the `/auth/v1` gateway: GoTrue serves `/authorize` and `/token` at its root, and the
+   * plan puts it behind this app at `/auth/v1` so `@supabase/ssr` works against it unchanged. That
+   * is one prefix, not a second proxy — everything else about the hop (streamed bodies, manual
+   * redirects, set-cookie passed through once) is identical, and a second implementation of it would
+   * be a second set of those decisions to keep in step.
+   */
+  rewritePath?: (pathname: string) => string;
 };
 
 /**
@@ -88,7 +98,8 @@ export async function proxyToHost(request: Request, options: ProxyOptions = {}):
   const doFetch = options.fetchImpl ?? fetch;
   const origin = options.origin ?? upstreamOrigin();
   const incoming = new URL(request.url);
-  const target = `${origin}${incoming.pathname}${incoming.search}`;
+  const pathname = options.rewritePath ? options.rewritePath(incoming.pathname) : incoming.pathname;
+  const target = `${origin}${pathname}${incoming.search}`;
 
   const hasBody = !BODYLESS.has(request.method.toUpperCase()) && request.body !== null;
   let upstream: Response;
@@ -106,7 +117,7 @@ export async function proxyToHost(request: Request, options: ProxyOptions = {}):
   } catch (err) {
     // The host is down or restarting. Say so plainly rather than rendering a shell around it — this
     // path is the migration's own failure, not the application's.
-    return new Response(`the lagoon host at ${origin} is not answering\n`, {
+    return new Response(`the upstream at ${origin} is not answering\n`, {
       status: 502,
       headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
     });

@@ -196,6 +196,33 @@ export function publishStates(evidence: LagoonEvidence | undefined): void {
 
 const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Wait until nothing in the region has changed for a beat.
+ *
+ * Compares the values the region HOLDS, not just which keys exist: a source answering replaces a
+ * value under a key that was already there. Bounded, and it returns rather than throws when the
+ * region simply never settles — a region that writes continuously is a finding for the lens, not a
+ * reason to refuse to drive a flow.
+ */
+async function waitForQuiet(stillMs = 200, budgetMs = 2000): Promise<void> {
+  const snapshot = () => {
+    const l = window.__motuLagoon;
+    try {
+      return JSON.stringify((l?.held() ?? []).map((k) => [k, l?.read(k)]));
+    } catch {
+      return ''; // a value that will not serialise tells us nothing; do not stall on it
+    }
+  };
+  const until = Date.now() + budgetMs;
+  let last = snapshot();
+  while (Date.now() < until) {
+    await settle(stillMs);
+    const now = snapshot();
+    if (now === last) return;
+    last = now;
+  }
+}
+
 /** Wait until the region has mounted something, so step 1 does not fire into an empty page. */
 async function waitForRegion(timeoutMs = 10_000): Promise<boolean> {
   const until = Date.now() + timeoutMs;
@@ -226,6 +253,14 @@ export async function replayFlow(flow: RegionScenario, upTo: number | null): Pro
     return { ...base, error: 'this lagoon mounts islands as elements; replaying a flow needs the React mount path' };
   }
   if (!(await waitForRegion())) return { ...base, error: 'the region never mounted, so no step could be applied' };
+  // WAIT FOR THE REGION TO STOP MOVING, and this is not politeness — it is correctness.
+  //
+  // A source starts working when it is installed and publishes when it answers. A flow opened from a
+  // URL used to seed its state into a region whose source had not answered yet, and the answer landed
+  // a moment later and overwrote it: the flow reported "applied 1/1", the panel agreed, and the screen
+  // showed a different state entirely. Found by looking at one — `onboardingState` read `ready` under
+  // a flow that seeds `unavailable`.
+  await waitForQuiet();
 
   // A flow's `seed` is the page ESTABLISHING a starting value, even for a key an island owns — the
   // same distinction the flow runner draws, and for the same reason: applying it as a host write

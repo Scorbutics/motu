@@ -13,6 +13,9 @@ import { sourceFileAt } from './ts-project.mjs';
 const AMBIENT = [/^@\/lib\/contexts\//, /^@\/hooks\//, /^@\/lib\/services\//, /^@\/contexts\//, /^@\/services\//];
 
 /** `onWeekProgress` -> `week-progress`. The author renames it if the region has a better word. */
+/** React's callback convention, and the ONLY test either side of the contract may use. */
+const CALLBACK = /^on[A-Z]/;
+
 export function eventNameFor(prop) {
   return prop
     .replace(/^on/, '')
@@ -113,9 +116,16 @@ function readComponentContractUncached(file, exportName) {
   return {
     component: fn.getName?.() ?? exportName ?? null,
     // `fit` is motu's own injected prop, never part of an island's declared boundary.
-    input: names.filter((n) => !n.startsWith('on') && n !== 'fit'),
+    // ONE RULE FOR BOTH SIDES, and it is React's own: a callback is `on` FOLLOWED BY A CAPITAL.
+    //
+    // These two filters used to disagree — inputs excluded anything starting with `on`, outputs
+    // required `/^on[A-Z]/` — so a prop whose name merely begins with those two letters
+    // (`onboardingState`) was neither. It vanished from the contract silently: not an input, not an
+    // event, and `props-match` then reported it as a callback nobody had mapped. A prop that decides
+    // which of four cards a page renders, dropped because of two letters.
+    input: names.filter((n) => !CALLBACK.test(n) && n !== 'fit'),
     output: names
-      .filter((n) => /^on[A-Z]/.test(n))
+      .filter((n) => CALLBACK.test(n))
       .map((n) => ({ prop: n, event: eventNameFor(n), effectDriven: calledFromEffect(fn, n) })),
     ambient,
   };

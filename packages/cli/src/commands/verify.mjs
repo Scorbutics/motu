@@ -422,7 +422,9 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     }
     for (const cp of compNames) {
       if (cp === 'fit') continue; // framework-injected footprint prop
-      if (cp.startsWith('on')) {
+      // `/^on[A-Z]/`, the same rule the contract reader uses. `startsWith('on')` called
+      // `onboardingState` a callback and asked for an event mapping for a string prop.
+      if (/^on[A-Z]/.test(cp)) {
         if (!eventKeys.includes(cp)) {
           report.warn('props-match', `callback '${cp}' isn't mapped to an event in element.ts (its output is dropped)`);
         }

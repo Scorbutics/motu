@@ -15,6 +15,7 @@ import { integrateCheckCommand } from './commands/integration.mjs';
 import { regionInitCommand } from './commands/region.mjs';
 import { regionCoverageCommand } from './commands/region-coverage.mjs';
 import { archipelagoCreateCommand } from './commands/archipelago.mjs';
+import { archipelagoAdoptRootCommand } from './commands/adopt-root.mjs';
 import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
 import { fixturesRecordCommand } from './commands/fixtures.mjs';
@@ -240,6 +241,8 @@ async function main() {
     // `snapshot` takes an id positional, so re-parse with `rest` shifted.
     if (sub === 'snapshot') return archipelagoSnapshotCommand(parse(rest));
     if (sub === 'create') return archipelagoCreateCommand(argv);
+    // The migration `region-root` points at: derive `root` + `slots` from the frame, hand back the rest.
+    if (sub === 'adopt-root') return archipelagoAdoptRootCommand(parse(rest));
     if (sub === 'verify') return archipelagoVerifyCommand(argv);
     if (sub === 'record-frame') return archipelagoRecordFrameCommand(argv);
     // The region-side counterpart to `island sync`. See the command's own header for why it exists.

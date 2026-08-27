@@ -47,6 +47,12 @@ export const paths = {
    * is whitelisted into a dead end — which is precisely how `hostSources` shipped doing nothing.
    */
   coverage: cfg.coverage,
+  /**
+   * How hard `root` is pushed: 'encouraged' (default) or 'required'. Surfaced HERE and not only in
+   * the config loader for the reason the two comments above already record — a key whitelisted one
+   * layer down and never read up here is whitelisted into a dead end.
+   */
+  regionRoot: cfg.regionRoot,
   /** Who this project is on a lagoon host, when the git repository is the wrong answer. */
   publishAs: cfg.publishAs,
   /** The ui/ root itself (uiDir(kebab) is one island's folder inside it). */

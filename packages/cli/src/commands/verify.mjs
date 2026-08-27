@@ -17,6 +17,7 @@ import { sourceFileAt } from '../lib/ts-project.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
+import { hostSources, conditionallyPlaced } from './integration.mjs';
 import { islandContract, contractsDrift, readGeneratedContracts } from '../lib/contracts.mjs';
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
@@ -1935,6 +1936,322 @@ function registeredTags() {
 }
 
 /** Static checks over an archipelago config file: it's registered, and every island tag it uses exists. */
+/**
+ * The region's lagoon FRAME MODULE — the file holding its `layout` — or null.
+ *
+ * Resolved rather than guessed by filename: `overridesFor(someArchipelago, …)` names the archipelago
+ * it belongs to, so the module is identified by what it POINTS AT, never by a spelling that could
+ * disagree with the registry.
+ */
+function frameModuleFor(id) {
+  for (const f of ['src/lagoon.tsx', 'src/lagoon.ts']) {
+    const overrides = resolve(paths.lagoonDir, f);
+    if (!existsSync(overrides)) continue;
+    const src = readFileSync(overrides, 'utf8');
+    const named = new RegExp(`(^|[\\s{,])['"\`]?${id}['"\`]?\\s*:\\s*([A-Za-z_$][\\w$]*)?`, 'm');
+    const moduleOf = (ident) => {
+      const spec = src.match(new RegExp(`import\\s*\\{[^}]*\\b${ident}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`));
+      if (!spec) return null;
+      const base = resolve(dirname(overrides), spec[1].replace(/\.js$/, ''));
+      return ['.tsx', '.ts', '/index.tsx', '/index.ts', ''].map((e) => base + e).find((c) => existsSync(c)) ?? null;
+    };
+
+    const kindFirst = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\n\};/);
+    const inKindFirst = kindFirst && kindFirst[1].match(named);
+    if (inKindFirst) return { module: inKindFirst[2] ? moduleOf(inKindFirst[2]) : null, declared: true };
+
+    const asRecord = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\n\};/);
+    if (asRecord) {
+      const entry = asRecord[1].match(named);
+      if (!entry) continue;
+      return { module: entry[2] ? moduleOf(entry[2]) : null, declared: true };
+    }
+
+    const asArray = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\n\];/);
+    if (!asArray) continue;
+    let sawSomeModule = false;
+    for (const ident of asArray[1].match(/[A-Za-z_$][\w$]*/g) ?? []) {
+      const module = moduleOf(ident);
+      if (!module) continue;
+      const body = readFileSync(module, 'utf8');
+      // Whose region is this? `overridesFor(<x>Archipelago, …)`, and `<x>Archipelago` imported from
+      // `…/<id>/<id>.archipelago`. Both halves are required: an identifier alone could name any
+      // region whose camel-case happens to collide.
+      const bound = body.match(/overridesFor\(\s*([A-Za-z_$][\w$]*)/);
+      if (!bound) continue;
+      sawSomeModule = true;
+      const from = body.match(new RegExp(`import\\s*\\{[^}]*\\b${bound[1]}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`));
+      if (!from || !new RegExp(`(^|/)${id}\\.archipelago(\\.[jt]sx?)?$`).test(from[1])) continue;
+      return { module, declared: true };
+    }
+    // The array exists and nothing in it could be read: unresolvable, so loud rather than quiet.
+    if (!sawSomeModule) return { module: null, declared: true };
+  }
+  return { module: null, declared: false };
+}
+
+/**
+ * IS THE REGION THE PAGE, OR A DRAWING OF IT?
+ *
+ * The lagoon's whole claim is that what you look at is what ships. A frame that writes its own JSX
+ * breaks that claim silently, and this project proved it: `regions/forgot-password.tsx` rendered
+ * `<h2>On récupère ton accès</h2>` while the page rendered `Mot de passe oublié ?` — a heading that
+ * existed nowhere in the application, previewed for weeks under a green PASS, because every other
+ * check reads motu's own declarations and none of them opens the page.
+ *
+ * So a frame may contain ONLY:
+ *   - components imported from the HOST application (the arrangement it already ships),
+ *   - fragments,
+ *   - `island(slot)` calls.
+ *
+ * An intrinsic element or a literal string is arrangement that exists only here. And a host component
+ * the frame calls must be one the PAGE composing this region actually renders — pointing at a real
+ * component that no page uses is the same lie with better manners.
+ *
+ * The escape hatch costs a sentence, like `rawChannel`: `inventedArrangement('why', <…/>)`. It
+ * downgrades to a warning that prints the reason, so a deliberate stand-in stays findable.
+ */
+/**
+ * DOES THE REGION COMBINE THE SAME ISLANDS THE APPLICATION DOES?
+ *
+ * The arrangement is the page's own business — a lagoon frame is allowed to place things differently,
+ * and forcing one component on every page would mean restructuring pages around motu. What is NOT the
+ * frame's business is WHICH ISLANDS the region is made of. Get that wrong and the region previewed,
+ * flowed and snapshotted is a different region from the one that ships: an island nobody mounts looks
+ * proven, and an island the page mounts is never looked at.
+ *
+ * This is the drift `region-root` cannot see. peps' annuaire frame simply omitted `header`, and its
+ * actions frame omits `ambassador-card` — both under green checks, because every other check reads
+ * motu's declarations and the page's placements separately, and nothing compared the two.
+ *
+ * Decidable without a browser, from three sources:
+ *   - the FRAME's `island(<slot>)` calls,
+ *   - the archipelago's own NESTED slots (`slots: { ambassador: 'ambassador-inline' }`), which motu
+ *     fills itself, so the frame never names them and their absence is not a finding,
+ *   - the HOST's `<X.Island slot="…">` placements.
+ *
+ * A region composed from a declared `root` cannot drift here at all — the page passes props by name
+ * and motu maps them — so it is reported as such rather than compared.
+ */
+function islandCompositionCheck(report, id, region, composedBy, sources) {
+  const archPath = paths.archipelagoFile(id);
+  const archText = existsSync(archPath) ? blankComments(readFileSync(archPath, 'utf8')) : '';
+  if (/^\s*root\s*:/m.test(archText)) {
+    report.skip('island-composition', 'composed from the archipelago’s `root` — one declaration, nothing to compare');
+    return;
+  }
+
+  const { module } = frameModuleFor(id);
+  if (!module) {
+    report.skip('island-composition', 'no region frame — the islands are placed individually across the host');
+    return;
+  }
+
+  const declared = new Set((region?.islands ?? []).map((i) => i.slot).filter(Boolean));
+  const frame = new Set(
+    [...blankComments(readFileSync(module, 'utf8')).matchAll(/\bisland\(\s*['"`]([^'"`]+)['"`]/g)].map((m) => m[1]),
+  );
+  // Nested by DECLARATION: motu fills these into the outer island's props, in the page and in the
+  // lagoon alike, so a frame that does not name them is composing them all the same.
+  const nested = new Set(
+    [...archText.matchAll(/\bslots\s*:\s*\{([^}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/:\s*'([^']+)'/g)].map((x) => x[1])),
+  );
+  const placed = new Set();
+  for (const code of composedBy) {
+    for (const [, slot] of code.matchAll(/<[A-Z][A-Za-z0-9]*\.Island\s[^>]*?slot=["'`]([^"'`]+)/g)) {
+      if (declared.has(slot)) placed.add(slot);
+    }
+  }
+
+  if (!placed.size) {
+    report.skip('island-composition', 'no host file placing this region’s islands could be read');
+    return;
+  }
+
+  const mounts = new Set([...frame, ...nested]);
+  const onlyInFrame = [...mounts].filter((slot) => !placed.has(slot));
+  const onlyInPage = [...placed].filter((slot) => !mounts.has(slot));
+
+  const findings = [];
+  if (onlyInFrame.length) {
+    findings.push(
+      `the region mounts ${onlyInFrame.join(', ')}, which the application never places — previewed, ` +
+        `flowed and pictured, and shipped by nothing`,
+    );
+  }
+  // A slot the page places CONDITIONALLY may legitimately be missing from the frame: the frame shows
+  // one STATE of the page, and peps' `ambassador-card` is the empty-week fallback that the normal week
+  // does not reach. That is a different state, not a different composition — so it is said, not failed.
+  // A slot placed UNCONDITIONALLY and never mounted is the real finding: it ships on every render and
+  // the region has never once looked at it.
+  // The TAG NAMES as the host actually writes them (`<Actions.Island …>`), read from the files that
+  // place them — the binding's name is the page's to choose, so it cannot be derived from the region.
+  const islandNames = [
+    ...new Set(composedBy.flatMap((code) => [...code.matchAll(/<([A-Z][A-Za-z0-9]*\.Island)[\s/>]/g)].map((m) => m[1]))),
+  ];
+  let conditional = new Map();
+  try {
+    conditional = conditionallyPlaced(sources, ['Island', ...islandNames], blankComments) ?? new Map();
+  } catch {
+    conditional = new Map();
+  }
+  const missedAlways = onlyInPage.filter((slot) => !conditional.has(slot));
+  const missedSometimes = onlyInPage.filter((slot) => conditional.has(slot));
+  if (missedAlways.length) {
+    findings.push(
+      `the application always places ${missedAlways.join(', ')}, which the region never mounts — it ` +
+        `ships on every render, and nothing here has ever looked at it`,
+    );
+  }
+  if (findings.length) {
+    report.error('island-composition', `${paths.rel(module)}: ${findings.join('; ')}`);
+    return;
+  }
+  if (missedSometimes.length) {
+    report.warn(
+      'island-composition',
+      `${paths.rel(module)}: the application places ${missedSometimes.join(', ')} in a branch this ` +
+        `region's frame does not show — a different STATE of the same page, so confirm the state the ` +
+        `frame shows is the one worth looking at, and that the other has a scenario or a flow`,
+    );
+    return;
+  }
+  report.ok(
+    'island-composition',
+    `the region is made of the same ${mounts.size} island(s) the application places`,
+    mounts.size,
+  );
+}
+
+function frameIsPageCheck(report, id, region) {
+  // THE ANSWER, when the region has one: `root` names the application's own component and `slots`
+  // maps its props to islands, so the page and the lagoon compose from the SAME declaration and
+  // neither writes the other's half. Nothing is left to compare, because nothing is duplicated.
+  const archText = existsSync(paths.archipelagoFile(id)) ? readFileSync(paths.archipelagoFile(id), 'utf8') : '';
+  const rootDecl = blankComments(archText).match(/^\s*root\s*:\s*([A-Za-z_$][\w$]*)/m);
+  if (rootDecl) {
+    const mapped = [...blankComments(archText).matchAll(/^\s{4}(\w+)\s*:\s*'([^']+)'/gm)];
+    report.ok(
+      'region-root',
+      `composed from the archipelago's own \`root\` (${rootDecl[1]}) — the page and the lagoon share one declaration`,
+      1 + mapped.length,
+    );
+    const { module: leftover } = frameModuleFor(id);
+    if (leftover && /\blayout\s*:/.test(blankComments(readFileSync(leftover, 'utf8')))) {
+      report.error(
+        'region-root',
+        `${paths.rel(leftover)} still declares a \`layout\` while the archipelago declares a \`root\` — ` +
+          `two arrangements for one region, which is the duplication \`root\` exists to remove. Delete the frame`,
+      );
+    }
+    report.skip(
+      'island-composition',
+      'composed from the archipelago\u2019s `root` \u2014 one declaration, so the region cannot be made of ' +
+        'different islands from the page',
+    );
+    return;
+  }
+
+  const { module } = frameModuleFor(id);
+  if (!module) {
+    // A REGION WITH NO ISLANDS HAS NOTHING TO COMPOSE YET. `archipelago create` scaffolds exactly
+    // that, so demanding a root here would open a new project's first `motu check` on an error about
+    // the thing it had just been handed — the same mistake `region-type` already records. The demand
+    // is right the moment the region has a member.
+    const empty = !(region?.islands ?? []).length;
+    report[empty ? 'warn' : 'error'](
+      'region-root',
+      `no \`root\` — declare the application's own component as \`root\` in the archipelago, with ` +
+        `\`slots\` mapping its props to this region's islands. Without it the page and the lagoon each ` +
+        `compose the region their own way, and nothing compares the two`,
+    );
+    return;
+  }
+  const raw = readFileSync(module, 'utf8');
+  const body = blankComments(raw);
+
+  const excused = body.match(/inventedArrangement\(\s*(['"`])([\s\S]*?)\1/);
+
+  // --- 1. what does the frame draw itself? -----------------------------------------------------
+  //
+  // `[^\w$.]` before the `<` is what separates JSX from a TYPE ARGUMENT: `SlotsOf<typeof x>` and
+  // `new Set<string>()` are not elements, and reporting them as invented arrangement would make the
+  // check's first impression a false one.
+  const intrinsic = [...new Set([...body.matchAll(/(?:^|[^\w$.])<([a-z][a-zA-Z0-9-]*)[\s/>]/gm)].map((m) => m[1]))];
+  // Literal text sitting between JSX tags: `>Some words<`. Whitespace and expressions are not text —
+  // and neither is code that happens to sit between a `=>` and the next element, so anything carrying
+  // punctuation only code has is skipped.
+  const literals = [...new Set(
+    [...body.matchAll(/>\s*([^<>{}\s][^<>{};=()]*?)\s*</g)].map((m) => m[1].trim()).filter((t) => /[A-Za-zÀ-ÿ]/.test(t)),
+  )];
+
+  // --- 2. which host components does it call, and does the page render them? -------------------
+  const called = [...new Set([...body.matchAll(/<([A-Z][A-Za-z0-9]*)[\s/>]/g)].map((m) => m[1]))];
+  // The frame's own exported components are not host components — they ARE the frame.
+  const ownExports = new Set([...body.matchAll(/export\s+(?:function|const)\s+([A-Z][A-Za-z0-9]*)/g)].map((m) => m[1]));
+  const hostCalled = called.filter((c) => !ownExports.has(c));
+
+  const sources = hostSources();
+  const islandNames = [...new Set((region?.islands ?? []).map((i) => i.element).filter(Boolean))];
+  // WHERE THIS REGION IS COMPOSED: the files placing its slots, plus one hop up — a page that renders
+  // a screen component which places the islands is composing this region too, and it is usually the
+  // page that holds the layout (peps' `/forgot-password` is exactly that shape).
+  const composing = new Map();
+  const slotRe = /<[A-Z][A-Za-z0-9]*\.Island\s[^>]*?slot=["'`]([^"'`]+)/g;
+  const declaredSlots = new Set((region?.islands ?? []).map((i) => i.slot).filter(Boolean));
+  for (const [file, text] of sources) {
+    const code = blankComments(text);
+    for (const [, slot] of code.matchAll(slotRe)) if (declaredSlots.has(slot)) composing.set(file, code);
+  }
+  for (const [file, code] of [...composing]) {
+    const exported = [...code.matchAll(/export\s+(?:default\s+)?(?:function|const)\s+([A-Za-z0-9_$]*)/g)].map((m) => m[1]).filter(Boolean);
+    for (const [other, text] of sources) {
+      if (composing.has(other)) continue;
+      const oc = blankComments(text);
+      if (exported.some((e) => new RegExp(`<${e}[\\s/>]`).test(oc))) composing.set(other, oc);
+    }
+    void file;
+  }
+  const composedBy = [...composing.values()];
+  islandCompositionCheck(report, id, region, composedBy, sources);
+  const orphan = hostCalled.filter((c) => !composedBy.some((code) => new RegExp(`<${c}[\\s/>]`).test(code)));
+
+  const findings = [];
+  if (intrinsic.length) findings.push(`draws ${intrinsic.length} element(s) of its own (<${intrinsic.join('>, <')}>)`);
+  if (literals.length) {
+    const shown = literals.slice(0, 3).map((t) => `"${t.length > 44 ? t.slice(0, 41) + '…' : t}"`);
+    findings.push(`writes ${literals.length} literal string(s) the page may never say (${shown.join(', ')})`);
+  }
+  if (!composedBy.length && hostCalled.length) {
+    findings.push(`calls ${hostCalled.join(', ')}, and no host file placing this region's slots could be found to compare against`);
+  } else if (orphan.length) {
+    findings.push(`calls ${orphan.join(', ')}, which no file composing this region renders`);
+  }
+
+  const where = paths.rel(module);
+  if (!findings.length) {
+    // A CLEAN FRAME IS A LEGITIMATE WAY TO COMPOSE A REGION, and saying otherwise is how a tool
+    // prices itself out of being adopted: moving a page to `root` is a real refactor of the host's
+    // own JSX, and a project cannot do ten of them before its first green run.
+    //
+    // What IS true is that a frame is a SECOND description of the page, safe only as far as the checks
+    // comparing it reach — `island-composition` compares which islands, nothing compares the
+    // arrangement. So the line names `root` without failing on it, and a project that has finished
+    // migrating sets `"regionRoot": "required"` and the frame becomes an error from then on.
+    const stronger =
+      `composed by a hand-written frame in ${where}, and it holds the page's own components ` +
+      `(${hostCalled.length ? hostCalled.join(', ') : 'islands only'}). Declaring \`root\` + \`slots\` on the ` +
+      `archipelago instead leaves ONE description — the page and the lagoon compose from the same map, ` +
+      `so they cannot differ`;
+    if (paths.regionRoot === 'required') report.error('region-root', `${stronger}. This project sets \`regionRoot: "required"\``);
+    else report.ok('region-root', stronger, hostCalled.length + composedBy.length);
+    return;
+  }
+  const detail = `${where}: ${findings.join('; ')} — a frame may hold only the application's own components, fragments and island(slot). What you look at in the lagoon is otherwise a drawing of the page, not the page`;
+  if (excused) report.warn('region-root', `${detail}. Excused: "${excused[2].trim()}"`);
+  else report.error('region-root', detail);
+}
+
 function archipelagoConfigChecks(report, id) {
   const archPath = paths.archipelagoFile(id);
   if (!existsSync(archPath)) {
@@ -2242,17 +2559,18 @@ function archipelagoConfigChecks(report, id) {
   // Two places it can live, and checking only the first is what made removing a duplicated template
   // silently disable the whole-region render — the check that catches slot/config drift:
   //   1. a `layout:` template in the archipelago config (the ocean's answer), or
-  //   2. the region named in the lagoon overrides' `layout` map, i.e. the APPLICATION's own layout
-  //      component, which is the right answer under a React host and the one that cannot drift.
+  //   2. the region's lagoon frame, i.e. the APPLICATION's own layout component, which is the right
+  //      answer under a React host and the one that cannot drift.
   // Genuinely layout-less still means "islands placed individually across the host", and still skips.
+  // `root:` — the region declares the APPLICATION's own component, which the lagoon composes from the
+  // same `slots` the page uses. The strongest form, and the one with no second copy anywhere.
+  if (/^\s*root\s*:/m.test(text)) return true;
   if (/\blayout\s*:/.test(text)) return true;
-  for (const f of ['src/lagoon.tsx', 'src/lagoon.ts']) {
-    const overrides = resolve(paths.lagoonDir, f);
-    if (!existsSync(overrides)) continue;
-    const src = readFileSync(overrides, 'utf8');
-    const map = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\n\};/);
-    if (map && new RegExp(`(^|[\\s{,])['"\`]?${id}['"\`]?\\s*:`, 'm').test(map[1])) return true;
-  }
+  const frame = frameModuleFor(id);
+  // Declared but unresolvable: assume it HAS an arrangement, so the render check runs and fails loudly
+  // if it does not. The opposite default is how this went quiet in the first place.
+  if (frame.declared && !frame.module) return true;
+  if (frame.module && /\blayout\s*:/.test(readFileSync(frame.module, 'utf8'))) return true;
   return false;
 }
 
@@ -2765,6 +3083,9 @@ export async function runArchipelagoVerify(argv, id) {
   // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
   if (region) channelSourceCheck(report, id, region);
+
+  // Is what the lagoon draws the page's own code, or a second copy of it?
+  frameIsPageCheck(report, id, region);
 
   // The other half of what a source is worth: a flow drives it through the screen, and the branches
   // no screen tells apart need a test that drives it directly.

@@ -32,7 +32,7 @@ function archConst(id) {
  * using it, it is motu talking to itself. Same walk as removal-check — the host's own top-level
  * folders, no node_modules, no dotfiles.
  */
-function hostSources() {
+export function hostSources() {
   const files = new Map();
   // The directories motu writes into. Everything else under the host root is the application's.
   const motuOwned = [paths.islandsDir, paths.archipelagosDir, paths.uiRoot, paths.lagoonDir].filter(Boolean);
@@ -67,6 +67,49 @@ function hostSources() {
 const code = blankComments;
 
 /** Every store key an island produces (the `writes` values, both shapes). */
+/** Where a JSX opening tag ends, from its `<` — so an attribute scan stops at the element it is on. */
+function closingOf(text, from) {
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+    else if (ch === '>' && depth === 0) return i - from + 1;
+  }
+  return text.length - from;
+}
+
+/**
+ * The archipelago's prop -> slot map, when it declares a `root`; null when it does not.
+ *
+ * Read from the file's text like everything else here: this module never imports an archipelago, and
+ * a `root` is a component reference, so importing one would drag the application's UI into the CLI.
+ */
+function rootSlotMap(id) {
+  const file = paths.archipelagoFile(id);
+  if (!existsSync(file)) return null;
+  const text = blankComments(readFileSync(file, 'utf8'));
+  if (!/^\s*root\s*:/m.test(text)) return null;
+  // Both shapes: `slots: { a: 'x' }` on one line, and the multi-line form closing with `},`. Matching
+  // only the second returned an EMPTY map for a small region, and an empty map reads as "this root
+  // fills no slots" — so every prop the page passed came back as a slot the archipelago never
+  // declared. Wrong, and loud, which is the only reason it was found.
+  const block =
+    // TOP-LEVEL ONLY (two spaces of indent), one-line form first. An island may declare its OWN
+    // `slots` for nesting — actions' week navigator does, on one line — so an unanchored match read a
+    // member's nested map as the region's. And the multi-line pattern is lazy but unanchored at its
+    // start, so on a one-line map it ran on to the next `},` and swallowed the island entries below,
+    // reading their `bind` pairs as slot mappings. The multi-line pattern is lazy but unanchored
+    // at its start, so on a one-line `slots: { card: 'x' },` it ran on to the next line beginning with
+    // `},` — swallowing the island entries below and reading their `bind` pairs as slot mappings. The
+    // page's own props then matched those invented names, and five props of one card were reported as
+    // slots the archipelago had never declared.
+    text.match(/^ {2}slots\s*:\s*\{([^}\n]*)\}/m) ?? text.match(/^ {2}slots\s*:\s*\{([\s\S]*?)^ {2}\},/m);
+  const map = {};
+  for (const [, prop, slot] of (block?.[1] ?? '').matchAll(/(\w+)\s*:\s*'([^']+)'/g)) map[prop] = slot;
+  return map;
+}
+
 function producedKeys(region) {
   const keys = new Set();
   for (const island of region.islands) {
@@ -187,6 +230,56 @@ function checkRegion(region, sources) {
       placed.set(slot, [...(placed.get(slot) ?? []), file]);
     }
   }
+
+  // A ROOT REGION places its islands BY PROP NAME. `<X.Root results={…} />` is the page saying it
+  // wants the island the archipelago maps to `results`, and it never writes the slot — that is the
+  // point of `root`, and it is why the scan above finds nothing on such a page.
+  //
+  // Whether a prop is passed is the whole check here, because `Root` deliberately does NOT fill in a
+  // slot the page left out. Filling it in would turn a forgotten prop into a page that quietly
+  // renders something different from the region everyone previewed; leaving it out and saying so
+  // puts the decision in front of a human. (The lagoon mounts every declared slot regardless — there
+  // is no page there to have an opinion.)
+  const rootSlots = rootSlotMap(region.id);
+  if (rootSlots) {
+    const rootNames = [`${binding}.Root`];
+    for (const [, alias] of code(readFileSync(bindingFile, 'utf8')).matchAll(
+      new RegExp(`const\\s+(\\w+)\\s*=\\s*${binding}\\.Root\\b`, 'g'),
+    )) {
+      rootNames.push(alias);
+    }
+    let rootRendered = false;
+    for (const [file, text] of sources) {
+      const t = code(text);
+      for (const name of rootNames) {
+        const at = t.indexOf(`<${name}`);
+        if (at === -1) continue;
+        rootRendered = true;
+        // The element's own attribute region: up to the matching `/>` or `>`, whichever ends it.
+        const tag = t.slice(at, at + Math.max(0, closingOf(t, at)));
+        // A SPREAD is still the page passing props — `{...(cond ? { hero } : { hero, frozenBanner })}`
+        // is how a page keeps a whole branch in one expression, and reading only `prop=` reported four
+        // of the ambassador region's slots as never placed on a page that places all four.
+        const spreads = [...tag.matchAll(/\{\.\.\.([\s\S]*?)\}\s*(?=\s[\w{]|\/?>)/g)].map((m) => m[1]).join(' ');
+        for (const [prop, slot] of Object.entries(rootSlots)) {
+          // `children` is not an attribute: `<X.Root><Form/></X.Root>` passes it by nesting, which is
+          // the natural shape for a region whose root takes one child.
+          const asChild = prop === 'children' && !tag.trimEnd().endsWith('/>');
+          if (asChild || new RegExp(`(^|\\s)${prop}\\s*=`).test(tag) || new RegExp(`(^|[\\s,{])${prop}\\s*[,:}]`).test(spreads)) {
+            placed.set(slot, [...(placed.get(slot) ?? []), file]);
+          }
+        }
+      }
+    }
+    if (rootRendered) add('ok', 'root', `<${rootNames[0]}> composes the region from its declared slots`);
+    else
+      add(
+        'error',
+        'root',
+        `the archipelago declares a \`root\` and nothing renders <${rootNames.join('> or <')}> — ` +
+          `the region has one description and the page is not using it`,
+      );
+  }
   // PLACED IS NOT THE SAME AS RENDERED, and the regex above cannot tell them apart. A slot written
   // inside `{isOpen && …}`, a ternary, or a `.map()` callback reads as placed and may never appear —
   // this region once carried an island that was declared for months and rendered by nothing, while
@@ -212,7 +305,7 @@ function checkRegion(region, sources) {
   // island's `bind` keys. A prop the page does not pass is a key nothing feeds, and the island runs on
   // its default — placed, composed, read, and quietly empty. The lagoon cannot see this: it seeds the
   // key itself, which is the whole point of a preview and the reason it cannot answer this question.
-  const passed = passedProps(sources, islandNames, code);
+  const passed = passedProps(sources, islandNames, code, rootSlotMap(region.id));
   for (const island of liveIslands) {
     const bound = Object.entries(island.bind ?? {});
     if (!bound.length) continue;
@@ -573,7 +666,7 @@ function lagoonProps(overridesFile) {
   return out;
 }
 
-function passedProps(sources, islandNames, code) {
+function passedProps(sources, islandNames, code, rootSlots) {
   const out = new Map();
   for (const [file] of sources) {
     let sf;
@@ -607,8 +700,51 @@ function passedProps(sources, islandNames, code) {
       }
       out.set(slot, props);
     }
+
+    // THE ROOT FORM. `<X.Root header={<C a={1}/>} />` is the page passing that island's props too —
+    // it just names the PROP instead of the slot, which is the whole point of `root`. Reading only
+    // the `<X.Island>` form reported two of the actions region's keys as never established the moment
+    // that page stopped writing slots, when the page was passing them exactly as before.
+    for (const el of [
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+    ]) {
+      if (el.getTagNameNode?.().getText().split('.').pop() !== 'Root') continue;
+      for (const attr of el.getAttributes?.() ?? []) {
+        const prop = attr.getNameNode?.().getText?.();
+        const slot = prop ? rootSlots?.[prop] : null;
+        if (!slot) continue;
+        const props = new Set(out.get(slot) ?? []);
+        for (const target of rootSlotElements(attr.getInitializer?.()?.getExpression?.())) {
+          for (const a of target.getAttributes?.() ?? []) {
+            const name = a.getNameNode?.().getText?.() ?? a.getName?.();
+            if (name) props.add(name);
+          }
+        }
+        out.set(slot, props);
+      }
+    }
   }
   return out;
+}
+
+/** What stands in a root slot: the element, or each branch of a conditional / `&&`. Never a descendant. */
+function rootSlotElements(expr) {
+  if (!expr) return [];
+  switch (expr.getKind()) {
+    case SyntaxKind.JsxSelfClosingElement:
+      return [expr];
+    case SyntaxKind.JsxElement:
+      return [expr.getOpeningElement()];
+    case SyntaxKind.ParenthesizedExpression:
+      return rootSlotElements(expr.getExpression());
+    case SyntaxKind.ConditionalExpression:
+      return [...rootSlotElements(expr.getWhenTrue()), ...rootSlotElements(expr.getWhenFalse())];
+    case SyntaxKind.BinaryExpression:
+      return expr.getOperatorToken().getText() === '&&' ? rootSlotElements(expr.getRight()) : [];
+    default:
+      return [];
+  }
 }
 
 /**
@@ -621,7 +757,7 @@ function escapeRe(name) {
   return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function conditionallyPlaced(sources, islandNames, code) {
+export function conditionallyPlaced(sources, islandNames, code) {
   const out = new Map();
   for (const [file] of sources) {
     let sf;

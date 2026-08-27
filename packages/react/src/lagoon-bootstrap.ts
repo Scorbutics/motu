@@ -11,6 +11,8 @@ import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { mountReactLagoon } from './lagoon-react-mount';
+import { regionOverrides } from './lagoon-overrides';
+import type { LagoonOverrides } from './lagoon-gallery';
 import {
   pickState,
   publishStates,
@@ -57,24 +59,7 @@ export interface LagoonBootstrapOptions {
    * "renders in the lagoon" sounds like. The region is resolved from the target, including for an
    * island target (the region that declares it).
    */
-  overrides?: {
-    seed?: Record<string, Record<string, unknown>>;
-    channels?: Record<string, DeclaredChannel[]>;
-    layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
-    providers?: Record<string, (children: ReactNode, slot: string) => ReactNode>;
-    /**
-     * What the PAGE passes on an island element — the lagoon's stand-in for a prop that is not
-     * region state (a URL builder, a formatter). Honoured by the gallery since it existed; absent
-     * from this type, and therefore silently dropped here, which is why an island whose picture
-     * needs one rendered a blank frame in every check while the gallery showed it.
-     */
-    props?: Record<string, Record<string, Record<string, unknown>>>;
-    /**
-     * The project's boot hook. Same reason as `props`: the gallery calls it, the type here did not
-     * name it, so it was never called on the entry every check drives.
-     */
-    setup?: () => void;
-  };
+  overrides?: LagoonOverrides;
   /** Every archipelago, so an `island:` target can find the region that declares it. */
   archipelagos?: Record<string, { islands: { slot?: string; element: string; bind?: Record<string, string> }[] }>;
   /**
@@ -237,7 +222,7 @@ function propsFor(
   regionId: string | undefined,
   opts: LagoonBootstrapOptions,
 ): Record<string, Record<string, unknown>> | undefined {
-  const bySlot = regionId ? opts.overrides?.props?.[regionId] : undefined;
+  const bySlot = regionOverrides(opts.overrides, regionId).props;
   if (!bySlot) return undefined;
   if (target.kind === 'archipelago') return bySlot;
   const slot = opts.archipelagos?.[regionId!]?.islands?.find((i) => i.element === target.tag)?.slot;
@@ -409,13 +394,14 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   // `?seed=off` is set by `motu island verify`. A human opening the lagoon still gets the seeded view.
   const seedOff =
     typeof location !== 'undefined' && new URLSearchParams(location.search).get('seed') === 'off';
-  const regionSeed = seedOff && target.kind === 'island' ? undefined : regionId ? opts.overrides?.seed?.[regionId] : undefined;
+  const forRegion = regionOverrides(opts.overrides, regionId);
+  const regionSeed = seedOff && target.kind === 'island' ? undefined : forRegion.seed;
   // A NAMED SCENARIO WINS over both the region's seed and `?seed=off`: it is the most specific thing
   // anyone can ask for, and being handed defaults instead is the failure the refusal above exists for,
   // one layer down.
   if (wanted) reportState(wanted.outcome);
   const seed = wanted ? wanted.seed : translateRegionSeed(opts.seed ?? regionSeed, target, regionId, opts);
-  const channels = opts.channels ?? (regionId ? opts.overrides?.channels?.[regionId] : undefined);
+  const channels = opts.channels ?? forRegion.channels;
 
   if (opts.mount === 'react') {
     const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed });
@@ -426,10 +412,11 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
       channels,
       // Only for a whole-region target: a single-island target is mounted through a synthesised
       // one-slot config, and the app's layout would place slots that mount does not have.
-      layout: target.kind === 'archipelago' && regionId ? opts.overrides?.layout?.[regionId] : undefined,
+      layout: target.kind === 'archipelago' ? forRegion.layout : undefined,
       // NOT gated on the view the way `layout` is: providers are what an island cannot render
       // without, so a single-slot mount needs them exactly as much as the region does.
-      providers: regionId ? opts.overrides?.providers?.[regionId] : undefined,
+      providers: forRegion.providers,
+      hostProps: forRegion.hostProps,
       // Per-slot props the page supplies and the region does not carry — re-keyed for a lone island.
       props: propsFor(target, regionId, opts),
       fit: target.kind === 'island' ? target.fit : undefined,

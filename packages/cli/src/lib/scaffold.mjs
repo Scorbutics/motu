@@ -336,10 +336,16 @@ import type { LagoonOverrides } from '@motu/react';
 // navigating by itself.
 // export const host: LagoonOverrides['host'] = { navigate: (p) => {}, action: (n, d) => {} };
 
-// Inbound channels per archipelago id — host signals mirrored into the store.
-// export const channels: LagoonOverrides['channels'] = { someArchipelago: [] };
+// Everything about one region, in ONE entry: its seed, its arrangement, its inbound channels, the
+// providers its islands cannot render without, and the props the page passes on an island element.
+// Keep each region's own seed and frame in a module beside it and reference them here, so adding a
+// region touches this file on one line.
+// export const regions: LagoonOverrides['regions'] = {
+//   someArchipelago: { seed: { criteria: {} }, layout: (island) => <SomePageFrame island={island} /> },
+// };
 
-// Initial store contents per archipelago id, so bound islands render meaningfully on first paint.
+// The same fields may also be given kind-first, keyed by archipelago id — the older shape, still
+// honoured. Where both name a field for one region, \`regions\` wins.
 // export const seed: LagoonOverrides['seed'] = { someArchipelago: { criteria: {} } };
 
 // Runs before anything mounts — e.g. standing up a fake host for a foreign-framework island.

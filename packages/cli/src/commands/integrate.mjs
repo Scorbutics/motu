@@ -11,6 +11,17 @@ import { existsSync } from 'node:fs';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
 import { paths, names, color, FMT, islandComponentPath } from '../lib/util.mjs';
 
+/** `received-summary` -> `receivedSummary`: a slot is kebab, a component prop is not. */
+function camel(kebab) {
+  return kebab.split(/[-_]/).map((w, i) => (i === 0 ? w : w[0].toUpperCase() + w.slice(1))).join('');
+}
+
+/** The binding name a page would use for this region — `actions` -> `Actions`. */
+function archConstName(id) {
+  const c = camel(id);
+  return c[0].toUpperCase() + c.slice(1);
+}
+
 /** Find the archipelago object literal (`{ id: '<id>', islands: [...] }`) for the given id. */
 function findArchipelago(sf, archId) {
   for (const obj of sf.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
@@ -82,11 +93,44 @@ export async function integrateCommand(argv) {
       // on: { 'some-event': (detail, { store }) => store.set('someStoreKey', detail) },
     }`);
 
+  // WHERE THIS ISLAND IS GOING TO BE PLACED, and the answer depends on how the region composes.
+  //
+  // A region that declares a `root` places its islands BY PROP: the archipelago maps a prop of the
+  // application's own component to a slot, and the page passes that prop. Adding a member without
+  // both halves leaves an island that is declared and never placed — `integrate check` says so, but
+  // only later, and the command that created the situation is the one that should say it now.
+  //
+  // The slot is ADDED to `slots` here (it is derivable — one line, keyed by the slot's own name), and
+  // what cannot be derived is said out loud: the root component needs a prop, and the page needs to
+  // pass it.
+  let placementNote;
+  const rootProp = arch.getProperty('root')?.asKind(SyntaxKind.PropertyAssignment);
+  if (rootProp) {
+    const rootName = rootProp.getInitializer()?.getText() ?? 'the root';
+    const propName = camel(slot);
+    const slotsProp = arch.getProperty('slots')?.asKind(SyntaxKind.PropertyAssignment);
+    const slotsObj = slotsProp?.getInitializer()?.asKind(SyntaxKind.ObjectLiteralExpression);
+    if (slotsObj) {
+      if (!slotsObj.getProperty(propName)) slotsObj.addPropertyAssignment({ name: propName, initializer: `'${slot}'` });
+      placementNote =
+        color.green(`✓ mapped ${propName} -> '${slot}' in \`slots\``) +
+        color.dim(`\n    now give ${rootName} a \`${propName}\` prop, and pass it from the page:`) +
+        color.dim(`\n      <${archConstName(archId)}.Root ${propName}={<YourComponent … />} … />`);
+    } else {
+      placementNote =
+        color.yellow(`! '${archId}' declares a root but no \`slots\` map`) +
+        color.dim(`\n    add:  slots: { ${propName}: '${slot}' }   then give ${rootName} a \`${propName}\` prop`);
+    }
+  }
+
   // Layout marker: inject when the layout is an inline string; otherwise tell the user where to add it.
   let layoutNote;
   const layoutProp = arch.getProperty('layout')?.asKind(SyntaxKind.PropertyAssignment);
   const marker = `<motu-island slot="${slot}" theme="motu" fit="native"></motu-island>`;
-  if (layoutProp) {
+  if (rootProp) {
+    // A root region has no `layout` template and needs none: the arrangement is the app's component.
+    layoutNote = null;
+  } else if (layoutProp) {
     const init = layoutProp.getInitializer();
     const kind = init?.getKind();
     if (kind === SyntaxKind.StringLiteral || kind === SyntaxKind.NoSubstitutionTemplateLiteral) {
@@ -109,7 +153,8 @@ export async function integrateCommand(argv) {
 
   console.log(color.green(`✓ integrated ${color.bold(tag)} into archipelago ${color.bold(archId)} (slot '${slot}')`));
   console.log('  ' + color.dim(`${paths.rel(archPath)}   (islands[] + IslandSpec)`));
-  console.log('  ' + layoutNote);
+  if (placementNote) console.log('  ' + placementNote);
+  if (layoutNote) console.log('  ' + layoutNote);
   console.log('');
   console.log('Next: fill the TODO(motu:wiring) bindings/handlers, then ' + color.bold(`motu island verify ${kebab}`));
 }

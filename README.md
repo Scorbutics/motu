@@ -1,16 +1,82 @@
 # motu
 
-motu is a closed verification loop for building UI against a legacy application that has no loop
-of its own. A new component is built and tested in isolation — no legacy app running, no session,
-against recorded fixtures — and only integrated into the legacy page once it passes there. Applied
-to a Jakarta EE + AngularJS app, the same loop happens to let you migrate the UI incrementally,
-reusing the legacy backend's database, business logic and authorization without reimplementing any
-of them. Incremental migration is the consequence of the loop, not the point of it. Proven against
-a real Jakarta EE + AngularJS ocean app (`~/dev/ocean`).
+motu is a workshop for an application's **screens**, not its components.
 
-motu is built agents-first. Generating a React component is cheap; what's scarce is a fast,
-deterministic loop an agent can close on its own, without a human eyeballing whether it broke the
-host. Every constraint below exists to keep an island's output mechanically verifiable.
+You get a browsable, addressable view of every state a screen can be in. Because those states are
+DECLARED rather than scripted, they double as a deterministic integration suite — and the same
+declarations make cross-component ownership a build error instead of a bug.
+
+Three payoffs, in the order they arrive:
+
+1. **See the screen.** Every declared state is an address (`motu lagoon states`), rendered with no
+   backend, no session and no login — the real components, still interactive, publishable as a page
+   that opens on a phone. This is what pays on day one, and it is what has caught the bugs no check
+   could: a fixture inventing a vocabulary the application does not use, an island stylesheet that
+   was bundled and never applied. Both passed every automated check; both died the moment an AGENT
+   opened the page and read it — see the two tiers below.
+2. **The states are the suite.** A region's couplings are declared as flows — `seed`, an island's
+   declared `emit`, and what another island must then render. That is a real browser, real
+   components, the page's own layout, at about the cost of a unit test. See *The integration suite,
+   as data instead of a script*.
+3. **Ownership is declared.** One producer per region key, checked statically in about a second. An
+   island that writes a key it does not own fails in the branch that wrote it — which is also what
+   makes several agents on one screen safe, with no new mechanism.
+
+**What it deliberately cannot do: script.** A flow drives a region through declared outputs. It
+cannot type, click or tab, and it never touches a selector. That is the constraint that buys the
+determinism — and it puts a component's *internal* interaction logic (type an invalid value, watch
+validation fire) permanently out of scope. That stays a Testing Library test, and anything the
+backend mediates stays an end-to-end one. motu shrinks that suite to the tests that were worth a
+browser; it does not remove it.
+
+**It is deliberately invasive.** motu changes the application — a source file, a region type, props
+with real defaults, ownership written down. That is not a tax the framework charges for its features;
+it IS the feature. Every declaration is a seam a check can attach to, which is why `tsc` catches motu
+drift at all, and why the checks can be mechanical rather than heuristic. `removal-check` is what keeps
+the deal honest: it deletes every motu file, unwraps every tag, and proves the application still
+typechecks without it.
+
+**Where it pays.** The threshold is per-SCREEN, not per-app: a screen where several components share
+state, touched by more than one person, in a codebase that will outlive the current roadmap. An app
+of any size can have one such screen and eleven that get nothing. What gets nothing: a design-system
+repo (no regions, no shared page state — Storybook is strictly better there), and prop-drilled trees
+with no coupling pain. A product still in discovery uses the loop rather than the suite — build the
+screen out of the app, publish the link, show it, then integrate — and should not pay for a whole
+page's ownership survey until the page is worth keeping.
+
+**React today.** The host adapters are React (`@motu/react`, `@motu/adapter-next`); the AngularJS
+adapter is for the *ocean* side, not a modern Angular host. Nothing in the design is React-specific —
+Vue and Angular hosts are adapter work — but until that adapter exists, this reads as a React tool.
+
+**Built agents-first — and that is now the bet.** Generating a React component is cheap; what is
+scarce is a loop an agent can close on its own. The failure mode that matters is not a weak model, it
+is SELF-CONSISTENCY: a capable agent produces a screen and evidence for it that agree perfectly with
+each other and describe an application that does not exist. A better model makes that artifact more
+convincing, not less. Both catches above were exactly this. So motu verifies in two tiers, and they
+catch different things:
+
+- **Assertions catch DRIFT** — an artifact contradicting what it declares. `tsc` is the first and
+  cheapest of them: motu's declarations are typed against the application's OWN types, so a rename in
+  the codebase lands on the region and fails there, before any motu check runs. Then the static
+  checks (~1.4s), then the runtime lane.
+- **Perception catches INVENTION** — an artifact that contradicts nothing, passes everything, and is
+  simply not this application. Nothing mechanical reaches it, because every mechanical check compares
+  the artifact to itself. Rendering is what forces a comparison with the world.
+
+Which is why a run with `new` shots reports `LOOK` rather than `PASS`: tier one saying it has nothing
+to offer and routing the question to something that can perceive. That reader should be a FRESH agent,
+handed the state's URL and the application's vocabulary and NOT the diff, the plan or the transcript —
+the agent that built the region holds the invention in context as a premise, and is the one reader
+who cannot see it.
+
+**Where it came from.** motu began as a closed verification loop for building UI against a legacy
+application that has no loop of its own: build the component in isolation — no legacy app running, no
+session, against recorded fixtures — and integrate it only once it passes there. Applied to a Jakarta
+EE + AngularJS app (`~/dev/ocean`, where it is proven), that same loop lets you migrate the UI
+incrementally, reusing the legacy backend's database, business logic and authorization without
+reimplementing any of them. Incremental migration was always the consequence of the loop rather than
+the point of it — and so, it turns out, was the legacy application. The loop is worth closing around
+a screen whether or not anything is being migrated into it.
 
 ## Terminology
 
@@ -77,13 +143,85 @@ cannot be diffed against the original, and the moment the lagoon has a backend i
 one-cause failures, speed, and the artifact with nothing behind it. What is left is a worse local
 environment.
 
-So motu does not compete with integration tests. It makes them unnecessary for the FIRST class of bug.
+So motu does not compete with integration tests over the whole system. It does replace most of the
+suite, because most of that suite was never asking a system question — see below.
+
+## The integration suite, as data instead of a script
+
+A region's couplings are declared in `<id>.evidence.ts` as **flows**, and a flow is a value:
+
+```ts
+{
+  name: 'picking a shot is what the viewer is for',
+  seed: SEED,                                    // the state the page establishes, all of it
+  steps: [
+    { expectRender: { 'diff-viewer': 'Pick a shot' } },
+    { emit: { slot: 'shot-list', event: 'shot-selected', detail: SELECTED },
+      expectRender: { 'diff-viewer': 'compact-rows@mobile' } },
+  ],
+}
+```
+
+`motu archipelago verify <id> --runtime` runs it. That is a real browser, real components, the page's
+own layout — the things an integration test is for — and it costs about what a unit test costs. Three
+properties do it, and each one is a class of flakiness that has nowhere to occur:
+
+- **Data-driven, not scripted.** There are no selectors, no page objects, no waits, no `await
+  page.click`. A step names a SLOT and a DECLARED event, and asserts on what a slot renders. The
+  vocabulary is the archipelago's — so a flow cannot drift from the region independently of it, and a
+  renamed slot or a removed output fails the flow instead of silently matching nothing. Nothing in a
+  flow can reach past the declaration into the DOM; if you find yourself wanting a selector, you have
+  left the harness and are writing a browser test.
+- **Stateless.** Every flow opens on its own `seed`. There is no database, no login, no fixtures
+  loaded in an order, no cleanup, no leakage between scenarios and no leakage between runs — the seed
+  IS the precondition, written where the assertion is. Two flows cannot interfere because neither one
+  has anywhere to leave residue. Determinism is a property of the shape here, not of anyone's
+  discipline about teardown.
+- **One page, re-aimed.** The runtime lane boots ONE lagoon page for a whole run and feeds each
+  scenario into it. A scenario costs a store write, not a page load plus a login plus a fixture reset.
+  Measured on peps: the first island pays the Vite boot, every scenario after it is under a second.
+
+### What keeps it from being theatre
+
+Cheap tests that cannot fail are worse than no tests, so the shape is checked as well as run:
+
+- `flow-mutation` re-runs each assertion-bearing step with its stimulus changed. If the assertion
+  still holds, it was asserting a constant and the step is an error. It also rejects, statically, a
+  step whose `expect` names only keys that same step `provide`d — that asserts the lagoon stored what
+  it was handed.
+- `render-coverage` names the slots no flow ever looks at. A slot accidentally wired to a neighbour's
+  data passes everything else.
+- `data-flow` fails an island whose scenarios render identically — two seeds that produce one screen
+  are one seed.
+
+The honest limit is the one above: a stub's invented vocabulary survives both mutation rules, because
+an assertion on text you wrote into a stub is perfectly sensitive to its stimulus. That is why an
+island on a host that owns the component IS that component, with no wrapper.
+
+### What it does not replace
+
+Anything mediated by the backend: island A on one page changing what island B shows on another,
+because the database is the thing carrying the change. Authorization. Migrations. The real
+integration suite keeps those, and it is a much smaller suite than the one it replaces — what leaves
+it is the large majority that was really asking "when the region holds THIS state, does the screen
+show the right thing, and does acting on it move the state", which is a question about one page and
+needs no server to answer.
+
+### The suite is also the review surface
+
+Because every declared state is an ADDRESS (`motu lagoon states`, `/?region=<id>&flow=<name>&step=<n>`),
+the flows are simultaneously the test suite and a browsable index of the app's screens — including the
+states between the steps. A scripted suite tells you it is green; this one you can read. That is worth
+saying out loud, because it inverts the usual economics: the pressure to write another flow comes from
+wanting to SEE a state, and the coverage is the side effect.
 
 ## What motu is for in a healthy project
 
-Not a test runner — a **boundary instrument**. A component's inputs, outputs, ambient needs and
-couplings are declared and mechanically checked, and the lagoon is the PROOF OBLIGATION that keeps the
-declarations honest: a component that cannot render alone against fixtures has a wrong boundary.
+Not a test runner — a **boundary instrument** that happens to yield a suite. A component's inputs,
+outputs, ambient needs and couplings are declared and mechanically checked, and the lagoon is the
+PROOF OBLIGATION that keeps the declarations honest: a component that cannot render alone against
+fixtures has a wrong boundary. The integration coverage above falls out of that — the flows are the
+declarations executed, which is why they are data and why they cost nothing to keep.
 
 That forcing function is the point. Declarations without one rot — this repo has watched scaffolded
 fixture files sit empty for months, and a `legacy` field be declared on every island while nothing read
@@ -166,8 +304,11 @@ failing silently at runtime.
 ## What motu is not
 
 motu is not a micro-frontend framework, not an orchestrator, and not a way to split a healthy
-application into independently deployed pieces. It is a transitional tool with an explicit end
-state: the ocean recedes, the mainland is what's left, and motu's wrappers come off. Honest
+application into independently deployed pieces. Against an ocean it is a TRANSITIONAL tool with an
+explicit end state: the ocean recedes, the mainland is what's left, and motu's wrappers come off.
+On a healthy codebase there is no ocean to recede and it is not transitional — but the exit stays a
+requirement rather than a courtesy, which is what `removal-check` enforces: a boundary instrument you
+cannot remove has stopped describing the app and started being part of it. Honest
 limits: CSS isolation is containable (shadow DOM, scoped stylesheets) but not solved — the lagoon
 cannot reproduce legacy stylesheet collisions, AngularJS digest timing, or session expiry, so a
 small integration suite alongside the lagoon remains necessary. The archipelago — the shared store

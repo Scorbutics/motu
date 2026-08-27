@@ -26,14 +26,33 @@ function archNames(input) {
 }
 
 function archipelagoSource(id, constName) {
-  return `// The ${id} page. Add islands with \`motu island integrate <name> --archipelago ${id}\`.
+  // The BINDING's name, PascalCase — a component identifier and a JSX tag, so the archipelago's
+  // camelCase const name cannot stand in for it.
+  const base = constName.replace(/Archipelago$/, '');
+  const Base = base[0].toUpperCase() + base.slice(1);
+  return `// The ${id} region. Add islands with \`motu island integrate <name> --archipelago ${id}\`.
+//
+// DECLARE THE ROOT FIRST. An archipelago is the scope of one root component — usually a page, and it
+// does not have to be. Naming it here is what leaves ONE description of how this region composes:
+// the page renders \`<${Base}.Root prop={…} />\` using its own prop names and never
+// writes a slot, and the lagoon renders the same component from the same map. Skip it and the two
+// sides each compose the region their own way, with nothing comparing them — which is a drift that
+// ships green.
 
 import type { ArchipelagoConfig } from '@motu/core';
+// import { ${Base}Layout } from '@/app/${id}/${id}-layout';
 
 export const ${constName}: ArchipelagoConfig = {
   id: '${id}',
+  // The APPLICATION's own layout component, imported — not a copy of it, and not a template.
+  // root: ${Base}Layout,
+  // Which of the root's props an island fills: the app's vocabulary on the left, motu's on the right.
+  // slots: { results: '${id}-results' },
+  // Props the HOST fills, and the app component that fills them — region UI that reads no region key
+  // and writes none. A COMPONENT, never a hole: the lagoon then supplies only its props, as data.
+  // hostSlots: { header: ${Base}Header },
   islands: [],
-  // layout: \`<div class="gm-arch"></div>\`, // arrange <motu-island slot="…"> markers as you integrate
+  // layout: \`<div class="gm-arch"></div>\`, // an OCEAN's answer: a legacy page cannot hand React anything
 };
 `;
 }

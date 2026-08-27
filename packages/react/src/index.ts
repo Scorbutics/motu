@@ -10,10 +10,12 @@ export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCo
 export { bootstrapLagoon } from './lagoon-bootstrap';
 export { ArchipelagoProvider, Island, useMotuStore, useRegionValue, useRegion } from './react-island';
 export { createRegion } from './create-region';
-export type { CreateRegionOptions, RegionBinding } from './create-region';
+export type { CreateRegionOptions, RegionBinding, RootPropsOf } from './create-region';
 export { mountReactLagoon } from './lagoon-react-mount';
 export type { ArchipelagoProviderProps, IslandProps } from './react-island';
 export { startLagoon } from './lagoon-gallery';
+export { regionOverrides, overridesFor, inventedArrangement } from './lagoon-overrides';
+export type { RegionOverrides, RegionOverrideMaps, BoundRegionOverrides } from './lagoon-overrides';
 export type {
   LagoonConfig,
   LagoonOverrides,

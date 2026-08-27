@@ -34,7 +34,7 @@ export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedEx
 export type { HostCall } from './provenance';
 export { checkCatalogue } from './catalogue';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue';
-export { channelFrom, rawChannel, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago';
+export { channelFrom, rawChannel, channelRegionId, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago';
 export type {
   HostBridge,
   IslandContext,

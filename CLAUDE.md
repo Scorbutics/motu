@@ -19,6 +19,22 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    the screen, and only then accept. Twice this has caught what no check could: a fixture inventing a
    vocabulary the application does not use, and an island stylesheet that was bundled and never
    applied. Both passed every check; both were found by opening the page.
+ - WHO LOOKS IS PART OF THE CHECK, and it is not you. The look is an AGENT's — a rendered state read
+   by something that can perceive it — but the agent that BUILT the region is the worst possible
+   reader of it. Both catches above were an INVENTION rather than a drift, and an invention sits in
+   its author's context as a PREMISE: a fixture's vocabulary looks right to whoever chose it, every
+   time. So spawn a FRESH agent for the final look, and hand it exactly three things — the state's
+   URL (`motu lagoon states`), where the application's own vocabulary lives (the types, the modules
+   the region names), and the question. Do NOT hand it the diff, the plan, the transcript or your
+   reasoning: those are the contamination you are spending a subagent to avoid. Ask it: *does this
+   screen belong to THIS application — does anything render a word, a state or a shape the app never
+   uses?* One subagent, and it is the only check in the set that can catch something invented whole.
+   Two tiers, and they catch different things: ASSERTIONS catch drift — an artifact contradicting
+   what it declares, which is why `tsc` is the first and cheapest of them, the app's own types
+   failing the moment a rename lands on a region that no longer matches. PERCEPTION catches
+   invention — an artifact that contradicts nothing, passes everything, and describes an application
+   that does not exist. No mechanical check reaches the second, because every mechanical check
+   compares the artifact to itself; rendering is what forces it to be compared to the world.
  - CHANGED UI starts with the scenario that shows the state you are about to change. Then change it,
    look at it, and keep the scenario as the regression. A scenario set whose members render identically
    fails `data-flow` — that check exists because fake evidence is worse than none.

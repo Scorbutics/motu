@@ -22,6 +22,7 @@ import { resolveTransportMode, mountTransportToggle, type TransportMode } from '
 import { mountFitToggle } from './fit-toggle';
 import { mountTideLine, type TideFlow, type TideLens, type TideView } from './tideline';
 import { mountReactLagoon } from './lagoon-react-mount';
+import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
 import {
   stateNames,
   pickState,
@@ -61,50 +62,9 @@ export interface LagoonConfig {
 }
 
 /** `lagoon.ts` — the escape hatch for what a JSON declaration cannot hold: functions and objects. */
-export interface LagoonOverrides {
-  /**
-   * Per region: the environment its islands cannot render without, installed in EVERY view.
-   *
-   * Distinct from `layout`, which is the ARRANGEMENT and only the region view renders. See
-   * `mountReactLagoon`'s `providers` for the failure that made the distinction necessary.
-   */
-  providers?: Record<string, (children: ReactNode, slot: string) => ReactNode>;
+export interface LagoonOverrides extends RegionOverrideMaps {
   /** Outward seam. Defaults to logging intents, which is what you want with no router present. */
   host?: HostBridge;
-  /** Inbound channels per archipelago id — host signals mirrored into the store. */
-  channels?: Record<string, DeclaredChannel[]>;
-  /** Initial store contents per archipelago id, so bound islands render meaningfully. */
-  seed?: Record<string, Record<string, unknown>>;
-  /**
-   * Per region, per slot: the props the PAGE passes on the island element itself.
-   *
-   * The page has always been able to write `<R.Island slot="diff-viewer" props={{ shotUrl }} />` for
-   * what is not region state — where the host lives, a formatter, a URL builder — and the lagoon had
-   * no counterpart at all. So the island rendered here without them and nothing said so: they are not
-   * bound keys, so `fed` does not look, and a flow asserting the island's TEXT passes while the part
-   * that needs the prop is blank. Measured on the review console: the diff viewer's <img> had
-   * `src=""` and `naturalWidth: 0` — the whole point of the island — with every check green.
-   *
-   * DATA, like `seed`, and a stand-in is expected: the lagoon's `shotUrl` should return a fixture
-   * image, not reach the real host.
-   */
-  props?: Record<string, Record<string, Record<string, unknown>>>;
-  /**
-   * The region's ARRANGEMENT, per archipelago id — rendered by calling the APPLICATION's own layout
-   * component with islands in its slots.
-   *
-   * The alternative is an archipelago-level `layout` template, which is a second copy of an
-   * arrangement the host page already expresses — the same restate-instead-of-reference mistake the
-   * region contract type exists to prevent, and it drifts the same way. A React host has a real
-   * component for this; point at it:
-   *
-   *   layout: { actions: (island) => <ActionsLayout notice={island('activity-notice')} … /> }
-   *
-   * `island(slot)` renders the island registered for that slot. A slot the layout does not place
-   * simply does not appear — which is how the lagoon shows a region whose page also holds non-island
-   * content. Absent => the archipelago's `layout` template, then declared order.
-   */
-  layout?: Record<string, (island: (slot: string) => ReactNode) => ReactNode>;
   /** Run before anything mounts — e.g. standing up a fake host for a foreign-framework island. */
   setup?: () => void;
   /**
@@ -264,7 +224,7 @@ markSandbox();
       archipelagos: stations.flatMap(({ id }) => {
         const config = opts.archipelagos[id];
         return config
-          ? [{ config, options: { host, seed: overrides.seed?.[id], channels: overrides.channels?.[id] } }]
+          ? [{ config, options: { host, seed: regionOverrides(overrides, id).seed, channels: regionOverrides(overrides, id).channels } }]
           : [];
       }),
     });
@@ -325,11 +285,7 @@ markSandbox();
       mountReactLagoon(root, opts.archipelagos[id]!, {
         elements: opts.elements,
         host,
-        seed: overrides.seed?.[id],
-        channels: overrides.channels?.[id],
-        layout: overrides.layout?.[id],
-        providers: overrides.providers?.[id],
-        props: overrides.props?.[id],
+        ...regionOverrides(overrides, id),
         view,
       });
       tide.setActive(current, view);

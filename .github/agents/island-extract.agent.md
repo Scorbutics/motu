@@ -139,8 +139,9 @@ exactly one right home:
 
 - what the component **cannot render without** → `providers` in the lagoon overrides, installed in
   EVERY view, per island;
-- the **arrangement** of a region → `layout`, which points at the application's own layout component
-  and is region-view only;
+- the **arrangement** of a region → the archipelago's `root` where the region has one, otherwise
+  `layout` in the overrides, which points at the application's own layout component and is region-view
+  only (see "Two ways a region composes" below — an extraction normally uses `layout`);
 - the **data** — a widget row, props, a record → `seed`;
 - anything that **reacts** — the stand-in for the page's fetch → a `channel`, installed in every view,
   so the checks that drive the region see the same answers a human does.
@@ -262,12 +263,47 @@ code on the way — a default, a class, a token — and that lands on islands yo
 Then the host's OWN build or typecheck (`pnpm typecheck` in this monorepo). motu checks its own
 declarations; only the app's build can tell you the app still compiles.
 
+## Two ways a region composes, and which one an extraction uses
+
+A region's arrangement lives in ONE of two places, and both are supported:
+
+- **`root` on the archipelago** — the application's own layout component, with `slots` mapping its
+  props to this region's islands. The page renders `<X.Root results={…} />` using its own prop names
+  and never writes a slot; the lagoon renders the SAME component from the SAME map. There is no second
+  description, so the two cannot differ. Safe by construction.
+- **A hand-written lagoon frame** (`layout` in the overrides) — a second description of the page,
+  checked but not eliminated: `island-composition` compares WHICH islands the region is made of
+  against what the page places, and `frame-is-page` refuses arrangement the frame invented. Nothing
+  compares the ARRANGEMENT itself.
+
+**An extraction uses the frame, and that is correct rather than a concession.** You are working on a
+page that already exists and already expresses its own arrangement in JSX. Moving it to `root` is a
+region-level refactor of the host's own code; doing it in the same step as pulling out one island
+couples two changes and hides the risky one. Extract the island, look at it in the lagoon, then decide
+about the region.
+
+`motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
+restructure, so the safe shape is free there.
+
+**If the region ALREADY declares a `root`**, `motu island integrate` adds the slot to `slots` for you
+and prints the two things it cannot derive — the prop to add to the root component, and the line the
+page must pass. Do both, or the island is declared and never placed.
+
+`region-root` reports which shape a region is in on every run. A project that has finished migrating
+sets `"regionRoot": "required"` in `motu.config.json`, and a frame becomes an error from then on.
+
+
 ## Guardrails
 
 - **On a React host, never copy the component.** `--from` exists so the island points at what the app
   owns. A `ui/` copy forks it, and nothing checks that the two still agree.
 - **Do not write a wrapper to install providers or draw chrome.** Providers go in the lagoon override,
-  arrangement in `layout`, data in `seed`. A wrapper is motu-only code in the app's repository.
+  arrangement in the region's `root` or its `layout`, data in `seed`. A wrapper is motu-only code in
+  the app's repository.
+- **Never invent arrangement in a frame.** A frame may hold only the application's own components,
+  fragments and `island(slot)`. `frame-is-page` fails on an intrinsic element or a literal string,
+  because a frame that draws its own version of the page drifts from it — peps shipped a lagoon saying
+  "On récupère ton accès" over a page saying "Mot de passe oublié ?" for weeks, entirely green.
 - Never add runtime module loading, federation, per-island versioning, or island-to-island imports
   (see README "Non-goals"). Islands coordinate only through the archipelago store and DOM events.
 - Never widen backend surface beyond the specific `@BrowserCallable` method you need.

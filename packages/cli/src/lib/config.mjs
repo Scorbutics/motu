@@ -122,6 +122,18 @@ export function loadMotuConfig() {
      */
     hostSources: Array.isArray(cfg.hostSources) ? cfg.hostSources : undefined,
     /**
+     * HOW HARD `root` IS PUSHED — 'encouraged' (the default) or 'required'.
+     *
+     * A region composes either from its archipelago's `root`, which is safe by construction, or from
+     * a hand-written lagoon frame, which is a second description of the page and is only as safe as
+     * the checks comparing it. Both work. The difference is a real refactor of the host's pages, and
+     * a tool that fails a project on its first day for not having done it is a tool nobody adopts.
+     *
+     * So the default SAYS SO and passes; a project that has finished migrating sets 'required' and
+     * the frame becomes an error, which is what stops the old shape creeping back in.
+     */
+    regionRoot: cfg.regionRoot === 'required' ? 'required' : 'encouraged',
+    /**
      * WHICH STATES A REGION ACTUALLY REACHES — the coverage fold, and the one part of motu designed
      * to run in production.
      *

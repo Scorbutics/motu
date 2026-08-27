@@ -44,6 +44,9 @@ export function readRegions(archipelagosDir) {
       membership: text.match(/\bmembership:\s*'(placed|catalogue)'/)?.[1] ?? 'placed',
       islands: readIslands(text),
       sources: readSources(text, file),
+      // The region's ROOT and how its props map — what an ejected page needs to keep composing the
+      // same arrangement once `<X.Root>` is gone.
+      ...readRoot(text),
       // The APP's own region type, and where it comes from. Generated state is typed with it —
       // `useState<ActionsRegion['weekMissions']>()` — so an ejected page keeps the exact types it had,
       // from a declaration that is the app's and survives motu's removal.
@@ -51,6 +54,101 @@ export function readRegions(archipelagosDir) {
     });
   }
   return regions;
+}
+
+/**
+ * WHICH REGION a `<X.Root …>` composes, from the props it passes.
+ *
+ * The binding is named by the page (`Directory`, `Actions`, anything), so the tag cannot say it. What
+ * can is the prop set: a root's props are that region's own vocabulary, and a page passing four of
+ * the annuaire's is composing the annuaire.
+ *
+ * SCORED, not "the first region with a prop in common" — which is what this was, and it broke the
+ * moment a second region declared a root: both peps' regions have a `header`, so the annuaire's page
+ * matched the actions region, was typed with `ActionsRegion`, and had its host-slot prop rewritten
+ * with the wrong mapping. Two type errors in a page that had not changed.
+ */
+export function regionOfRoot(el, regions) {
+  const passed = new Set(
+    (el.getAttributes?.() ?? []).map((a) => a.getNameNode?.().getText?.()).filter(Boolean),
+  );
+  let best = null;
+  let bestScore = 0;
+  for (const region of regions) {
+    if (!region.root) continue;
+    const names = [...Object.keys(region.rootSlots ?? {}), ...Object.keys(region.rootHostSlots ?? {})];
+    const score = names.filter((n) => passed.has(n)).length;
+    if (score > bestScore) {
+      best = region;
+      bestScore = score;
+    } else if (score === bestScore && score > 0) {
+      best = null; // ambiguous: two regions match equally well, so say nothing rather than guess
+    }
+  }
+  return best;
+}
+
+/**
+ * What actually STANDS IN a root slot, from the expression the page passed for it.
+ *
+ * Only the branch results — the element itself, or each side of a conditional / `&&` guard. NOT every
+ * JSX descendant: `weekNav={<WeekNavigator ambassador={<X.Island>…</X.Island>} …/>}` contains four
+ * more elements, and wiring them all put the week navigator's `onChange` on the ambassador strip, the
+ * summary button and everything inside them. The generated page still compiled, which is the whole
+ * reason this needed looking at rather than trusting.
+ */
+function slotElements(expr) {
+  if (!expr) return [];
+  switch (expr.getKind()) {
+    case SyntaxKind.JsxSelfClosingElement:
+      return [expr];
+    case SyntaxKind.JsxElement:
+      return [expr.getOpeningElement()];
+    case SyntaxKind.ParenthesizedExpression:
+      return slotElements(expr.getExpression());
+    case SyntaxKind.ConditionalExpression:
+      return [...slotElements(expr.getWhenTrue()), ...slotElements(expr.getWhenFalse())];
+    case SyntaxKind.BinaryExpression:
+      // `cond && <C/>` — the element is the right-hand side; the left is the test.
+      return expr.getOperatorToken().getText() === '&&' ? slotElements(expr.getRight()) : [];
+    case SyntaxKind.JsxFragment:
+      return expr
+        .getJsxChildren()
+        .flatMap((c) => (c.getKind() === SyntaxKind.JsxElement ? [c.getOpeningElement()] : c.getKind() === SyntaxKind.JsxSelfClosingElement ? [c] : []));
+    default:
+      return [];
+  }
+}
+
+/**
+ * The region's `root`, its `slots` and its `hostSlots`, with the module each component comes from.
+ *
+ * `removal-check` needs all of it: `<Directory.Root search={…} header={{ member }} />` has to become
+ * `<DirectoryLayout search={…} header={<DirectoryHeader member={member} />} />`, with both imports
+ * added — and every prop mapped in `slots` has to keep the wiring the region was holding for it.
+ *
+ * Read from TEXT, like the rest of this module. A `root` is a component reference, so importing the
+ * archipelago to read it would pull the application's UI into the CLI.
+ */
+function readRoot(text) {
+  const code = blankComments(text);
+  const root = code.match(/^\s*root\s*:\s*([A-Za-z_$][\w$]*)\s*,/m)?.[1] ?? null;
+  if (!root) return { root: null, rootFrom: null, rootSlots: {}, rootHostSlots: {} };
+  const importOf = (name) =>
+    [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)].find(([, names]) =>
+      new RegExp(`(^|[\\s,])${name}([\\s,]|$)`).test(names),
+    )?.[2] ?? null;
+  const rootSlots = {};
+  // One-line and multi-line forms both — see `rootSlotMap` for what matching only one of them cost.
+  const slotBlock =
+    code.match(/^ {2}slots\s*:\s*\{([^}\n]*)\}/m) ?? code.match(/^ {2}slots\s*:\s*\{([\s\S]*?)^ {2}\},/m);
+  for (const [, prop, slot] of (slotBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*'([^']+)'/g)) rootSlots[prop] = slot;
+  const rootHostSlots = {};
+  const hostBlock = code.match(/^\s*hostSlots\s*:\s*\{([^}]*)\}/m);
+  for (const [, prop, comp] of (hostBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*([A-Za-z_$][\w$]*)/g)) {
+    rootHostSlots[prop] = { component: comp, from: importOf(comp) };
+  }
+  return { root, rootFrom: importOf(root), rootSlots, rootHostSlots };
 }
 
 /**
@@ -262,7 +360,20 @@ export function ejectFile(sf, regions, outputs) {
       .map((el) => jsxStringProp(el.getOpeningElement(), 'slot'))
       .filter(Boolean),
   );
-  const mine = regions.filter((r) => r.islands.some((i) => usedSlots.has(i.slot)));
+  // A ROOT REGION places nothing by slot — that is the point of it — so the page names PROPS instead.
+  // Without this the file matched no region and fell back to "the first typed one", which typed the
+  // annuaire's state with the actions region's shape and failed the removal proof on a page that was
+  // otherwise correct.
+  const rootRegions = new Set(
+    [
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+    ]
+      .filter((el) => el.getTagNameNode().getText().split('.').pop() === 'Root')
+      .map((el) => regionOfRoot(el, regions))
+      .filter(Boolean),
+  );
+  const mine = regions.filter((r) => r.islands.some((i) => usedSlots.has(i.slot)) || rootRegions.has(r));
   const typed = (mine.length ? mine : regions).find((r) => r.regionType && r.regionTypeFrom) ?? null;
   // A key with no fallback in the host's read has no value until its producer fires, so the generated
   // state is `T | undefined` — the same thing `useRegionValue` returned.
@@ -334,15 +445,14 @@ export function ejectFile(sf, regions, outputs) {
   }
 
   // 3. The producer's output prop gets the wiring the archipelago's `writes` mapping described.
-  for (const island of sf.getDescendantsOfKind(SyntaxKind.JsxElement)) {
-    // `<Island>` or a binding's `<Actions.Island>`.
-    if (island.getOpeningElement().getTagNameNode().getText().split('.').pop() !== 'Island') continue;
-    const slot = jsxStringProp(island.getOpeningElement(), 'slot');
-    const spec = regions.flatMap((r) => r.islands).find((i) => i.slot === slot);
-    if (!spec) continue;
-    const child = island.getJsxChildren().find((c) => c.getKind() === SyntaxKind.JsxSelfClosingElement || c.getKind() === SyntaxKind.JsxElement);
-    if (!child) continue;
-    const opening = child.getKind() === SyntaxKind.JsxElement ? child.getOpeningElement() : child;
+  //
+  // The producer is reached two ways, and BOTH have to be walked. `<X.Island slot="s"><C/></X.Island>`
+  // is the page composing it directly; `<X.Root s={<C/>} />` is the page naming a prop and the region
+  // deciding which island wraps it. Handling only the first is not a smaller check, it is a silent
+  // one: the annuaire ejected `query` and `filters` as state and generated NOTHING to set them, so
+  // the rewritten page compiled — which is all the removal proof asserts — with a search box and a
+  // filter panel that could no longer change anything.
+  const wireInto = (opening, spec, label) => {
     for (const [event, target] of Object.entries(spec.writes ?? {})) {
       const callbackProp = Object.entries(outputs[spec.element] ?? {}).find(([, e]) => e === event)?.[0];
       if (!callbackProp) continue;
@@ -366,7 +476,38 @@ export function ejectFile(sf, regions, outputs) {
       const handler = `(d) => { ${previous ? `(${previous})(d); ` : ''}${body}; }`;
       if (existing) existing.replaceWithText(`${callbackProp}={${handler}}`);
       else opening.addAttribute({ name: callbackProp, initializer: `{${handler}}` });
-      notes.push(`${slot}.${callbackProp} -> ${wired.map(([key]) => key).join(', ')}${previous ? ' (kept the page\'s own handler)' : ''}`);
+      notes.push(`${label}.${callbackProp} -> ${wired.map(([key]) => key).join(', ')}${previous ? ' (kept the page\'s own handler)' : ''}`);
+    }
+  };
+
+  for (const island of sf.getDescendantsOfKind(SyntaxKind.JsxElement)) {
+    // `<Island>` or a binding's `<Actions.Island>`.
+    if (island.getOpeningElement().getTagNameNode().getText().split('.').pop() !== 'Island') continue;
+    const slot = jsxStringProp(island.getOpeningElement(), 'slot');
+    const spec = regions.flatMap((r) => r.islands).find((i) => i.slot === slot);
+    if (!spec) continue;
+    const child = island.getJsxChildren().find((c) => c.getKind() === SyntaxKind.JsxSelfClosingElement || c.getKind() === SyntaxKind.JsxElement);
+    if (!child) continue;
+    wireInto(child.getKind() === SyntaxKind.JsxElement ? child.getOpeningElement() : child, spec, slot);
+  }
+
+  // The root form: the prop names the slot, and the component to wire is whatever JSX the page put in
+  // it. A conditional prop (`notice={cond ? <A/> : null}`) holds it one level down, so every element
+  // inside the attribute is wired — each of them stands in that slot when its branch is the one taken.
+  for (const el of [
+    ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+    ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+  ]) {
+    if (el.getTagNameNode().getText().split('.').pop() !== 'Root') continue;
+    const region = regionOfRoot(el, regions);
+    if (region) {
+      for (const [prop, slot] of Object.entries(region.rootSlots ?? {})) {
+        const spec = region.islands.find((i) => i.slot === slot);
+        if (!spec?.writes) continue;
+        const expr = el.getAttribute?.(prop)?.getInitializer?.()?.getExpression?.();
+        if (!expr) continue;
+        for (const target of slotElements(expr)) wireInto(target, spec, `${slot} (via ${prop})`);
+      }
     }
   }
 

@@ -18,7 +18,7 @@ import { Project, SyntaxKind } from 'ts-morph';
 import { paths, color } from '../lib/util.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
 import { listIslands } from '../lib/islands.mjs';
-import { ejectFile, readOutputs, readRegions } from '../lib/eject.mjs';
+import { ejectFile, readOutputs, readRegions, regionOfRoot } from '../lib/eject.mjs';
 
 /** The host's own typecheck, run the way the host would run it. */
 function hostTypecheck(hostRoot) {
@@ -138,6 +138,55 @@ const MOTU_TYPES_ONLY = /^@motu\/types(\/|$)/;
  * So: a tag is unwrappable when it was imported from a motu specifier, or from a file that is itself
  * motu-only. Unwrapping keeps the children — that is the whole C2 property.
  */
+/**
+ * `<X.Root a={<A/>} header={{ member }} />` -> `<RootComponent a={<A/>} header={<Header member={member} />} />`.
+ *
+ * The region's whole composition is declared, so this is a rename plus two import lines rather than a
+ * reconstruction: every prop the page passes is already the page's own JSX, and the archipelago says
+ * which of them an island was wrapping (nothing to unwrap — the island wrapper is motu's, the child is
+ * the app's) and which is a host component given as data.
+ */
+function rewriteRegionRoots(sf, regions, tags, filePath) {
+  const rooted = regions.filter((r) => r.root);
+  if (!rooted.length) return;
+  const needed = new Map();
+  for (const el of [
+    ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+    ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+  ].reverse()) {
+    const tag = el.getTagNameNode().getText();
+    if (tag.split('.').pop() !== 'Root') continue;
+    if (!tags.has(rootTagName(tag))) continue;
+    const region = regionOfRoot(el, rooted) ?? (rooted.length === 1 ? rooted[0] : null);
+    if (!region) continue;
+
+    // A host-slot prop carries the component's PROPS; it has to become the element again.
+    for (const [prop, spec] of Object.entries(region.rootHostSlots ?? {})) {
+      const attr = el.getAttribute?.(prop);
+      const expr = attr?.getInitializer?.()?.getExpression?.();
+      if (!expr || !spec.component) continue;
+      const text = expr.getText().trim();
+      const inner = text.startsWith('{') && text.endsWith('}') ? text.slice(1, -1).trim() : null;
+      // `{{ member }}` is an object literal of props; spreading it keeps whatever shape it had,
+      // including a shorthand, without this having to parse the properties.
+      attr.replaceWithText(`${prop}={<${spec.component} {...${inner === null ? text : `{${inner}}`}} />}`);
+      needed.set(spec.component, spec.from);
+    }
+
+    el.getTagNameNode().replaceWithText(region.root);
+    // A paired `<X.Root>…</X.Root>` closes with the same name.
+    const closing = el.getParent?.()?.getClosingElement?.();
+    if (closing) closing.getTagNameNode().replaceWithText(region.root);
+    needed.set(region.root, region.rootFrom);
+  }
+  for (const [name, from] of needed) {
+    if (!from) continue;
+    if (sf.getImportDeclarations().some((i) => (i.getNamedImports?.() ?? []).some((n) => n.getName() === name))) continue;
+    sf.addImportDeclaration({ moduleSpecifier: from, namedImports: [name] });
+  }
+  void filePath;
+}
+
 function unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec) {
   const names = new Set();
   for (const imp of sf.getImportDeclarations()) {
@@ -325,6 +374,14 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     // reads and seeds become plain state, and the producer's output prop is wired to its setters.
     const notes = ejectFile(sf, regions, outputs);
     if (notes.length) ejected.push([p, notes]);
+    // A ROOT REGION IS REWRITTEN, NOT UNWRAPPED. `<Directory.Root …/>` is self-closing, so the
+    // generic pass below would replace it with `null` and take the whole page with it — which is
+    // exactly what it did, and the removal proof failed on a page that was perfectly fine.
+    //
+    // What it becomes is the application's own component with the same props: the island props
+    // already hold the page's own JSX, and a host-slot prop holds that component's props, so it
+    // grows back into an element. Both imports are added; motu's go with the rest.
+    rewriteRegionRoots(sf, regions, tags, p);
     // Form 2: unwrap motu's JSX, keep the children, drop the imports.
     for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxElement)].reverse()) {
       // `<Actions.Island>` — a region binding namespaces its surface, so the tag is qualified and the

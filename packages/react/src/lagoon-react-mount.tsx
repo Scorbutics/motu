@@ -8,7 +8,7 @@
 //
 // So the React host's lagoon renders through the same `<ArchipelagoProvider>` / `<Island>` its pages
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
-import type { ReactNode } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   applyOutput,
@@ -57,6 +57,8 @@ export interface ReactLagoonOptions {
   layout?: (island: (slot: string) => ReactNode) => ReactNode;
   /** Per slot: the props the page passes on the island element — see `LagoonOverrides.props`. */
   props?: Record<string, Record<string, unknown>>;
+  /** Per HOST slot: the props for the component the archipelago names in `hostSlots`. Data only. */
+  hostProps?: Record<string, unknown>;
   /**
    * The ENVIRONMENT the islands need, installed in EVERY view.
    *
@@ -118,6 +120,37 @@ declare global {
 }
 
 /** Render every slot of `config` into `mountEl`, in one React tree. */
+
+/**
+ * The region as the APPLICATION composes it: its `root`, with an island in every prop the archipelago
+ * maps and the declared component in every host-filled one.
+ *
+ * The lagoon writes no JSX of its own here — that is the whole point. `props` supplies DATA for a host
+ * slot (its component's props), never a node, so nothing the lagoon shows can be arrangement nobody
+ * ships.
+ */
+function renderRegionRoot(
+  config: ArchipelagoConfig,
+  islandNode: (slot: string) => ReactNode,
+  hostProps: Record<string, unknown> | undefined,
+): ReactNode | undefined {
+  const declared = config as { root?: unknown; slots?: Record<string, string>; hostSlots?: Record<string, unknown> };
+  if (!declared.root) return undefined;
+  const composed: Record<string, unknown> = {};
+  for (const [prop, slot] of Object.entries(declared.slots ?? {})) composed[prop] = islandNode(slot);
+  for (const [prop, Component] of Object.entries(declared.hostSlots ?? {})) {
+    composed[prop] = createElement(Component as never, ((hostProps ?? {})[prop] ?? {}) as never);
+  }
+  // Anything else the lagoon was given is a PLAIN prop of the root — the page passes one too (a
+  // greeting, a required-referrals count). Without this the region rendered those holes empty and
+  // looked like a page with a missing word in its header.
+  for (const [prop, value] of Object.entries(hostProps ?? {})) {
+    if (prop in composed) continue;
+    composed[prop] = value;
+  }
+  return createElement(declared.root as never, composed as never);
+}
+
 export function mountReactLagoon(
   mountEl: HTMLElement | null,
   config: ArchipelagoConfig,
@@ -175,10 +208,14 @@ export function mountReactLagoon(
       {opts.view === 'mountpoints' ? (
         <div className="motu-gallery">{islands}</div>
       ) : (
-        // Preference order, most faithful first: the APP's own layout component (one arrangement,
-        // shared with the page), then the archipelago's `layout` template (an ocean, whose legacy page
-        // cannot hand React anything), then declared order.
-        (opts.layout?.(islandNode) ?? renderArchipelagoLayout(config.layout, islandNode) ?? islands)
+        // Preference order, most faithful first: the archipelago's ROOT — the application's own
+        // component, the same one the page renders, composed from the same `slots` — then its
+        // `layout` template (an ocean, whose legacy page cannot hand React anything), then declared
+        // order. There is deliberately no hand-written frame in between any more: one existed, it was
+        // a second copy of the page, and every copy drifted.
+        (renderRegionRoot(config, islandNode, opts.hostProps) ??
+          renderArchipelagoLayout(config.layout, islandNode) ??
+          islands)
       )}
     </ArchipelagoProvider>
   );

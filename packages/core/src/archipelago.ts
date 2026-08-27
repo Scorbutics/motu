@@ -226,6 +226,43 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    */
   coverage?: { enums?: readonly (keyof TRegion & string)[] };
   /**
+   * THE REGION'S ROOT COMPONENT — the application's own, imported.
+   *
+   * An archipelago is the scope of one root component. Usually that is a page; it does not have to be
+   * (a root can arrange part of one), and nothing here assumes otherwise.
+   *
+   * This is where the region's ARRANGEMENT is declared, and declaring it here is what leaves only one
+   * copy of it. Before, the prop -> island mapping was written twice — once in the page's JSX and once
+   * in a hand-written lagoon frame — with nothing comparing them. The frame drifted every time: peps'
+   * lagoon showed a `/forgot-password` heading that existed nowhere in the application, and its
+   * annuaire rendered with no header at all, both under a green PASS.
+   *
+   * With a root declared, neither side composes. The page renders `<X.Root prop={…} />` using the
+   * APPLICATION's own prop names and never writes a slot; the lagoon renders the same component with
+   * islands in the same props and writes no JSX at all.
+   */
+  root?: unknown;
+  /**
+   * Which of the root's props an ISLAND fills: prop name -> slot.
+   *
+   * The app's vocabulary on the left, motu's on the right, mapped once. A page that never writes a
+   * slot cannot put the wrong island in a prop, and a lagoon that never writes a prop cannot compose
+   * the region differently from the page.
+   */
+  slots?: Record<string, string>;
+  /**
+   * Root props the HOST fills, and the application component that fills them: prop -> component.
+   *
+   * For region UI that reads no region key and writes none — peps' annuaire header is a title, a link
+   * and two buttons acting on the member, none of it region state. Islanding it would invent an island
+   * that binds nothing, so it is declared host-filled instead.
+   *
+   * A COMPONENT, never a hole. `hostSlots: ['header']` with nothing behind it blesses exactly the bug
+   * this replaces — the lagoon rendering nothing there and calling it correct. Naming the component
+   * means the preview shows the real one and only its PROPS are supplied as data.
+   */
+  hostSlots?: Record<string, unknown>;
+  /**
    * The "new design" layout: HTML arranging the island slots (e.g. hero + toolbar + results). It is
    * rendered natively by <motu-archipelago name="id"> in the standalone app, and swapped in as a
    * whole region when previewing inside the legacy app. Shared so both stay in lock-step.
@@ -744,6 +781,7 @@ type SourceProduces<A, Id extends keyof SourcesOf<A>> = SourcesOf<A>[Id] extends
   : never;
 
 declare const CHANNEL_FROM: unique symbol;
+declare const CHANNEL_REGION: unique symbol;
 /**
  * A channel motu can vouch for.
  *
@@ -751,7 +789,26 @@ declare const CHANNEL_FROM: unique symbol;
  * produces one. That is the difference between a convention and a rule: an agent that hand-writes
  * `({ store }) => { … }` does not get a warning, it gets a type error.
  */
-export type DeclaredChannel = Channel & { readonly [CHANNEL_FROM]: true };
+export type DeclaredChannel<Id extends string = string> = Channel & {
+  readonly [CHANNEL_FROM]: true;
+  /**
+   * WHICH REGION this channel feeds, carried in the type.
+   *
+   * `channelFrom` has always known it — `spec.to.id` — and threw it away, so a channel could be filed
+   * under any region and the lagoon would install a stand-in that answers questions nobody in that
+   * region asks. Phantom and optional: covariant, so a `DeclaredChannel<'actions'>` is still a
+   * `DeclaredChannel`, and `rawChannel` (which genuinely belongs to no archipelago) still type-checks.
+   */
+  readonly [CHANNEL_REGION]?: Id;
+};
+
+/** The region a `channelFrom` was built against, at runtime — for the check the type cannot make. */
+export const CHANNEL_REGION_ID = Symbol.for('motu.channel.region');
+
+/** The region id stamped on a channel by `channelFrom`, or undefined for a `rawChannel`. */
+export function channelRegionId(channel: DeclaredChannel): string | undefined {
+  return (channel as unknown as Record<symbol, string | undefined>)[CHANNEL_REGION_ID];
+}
 
 /**
  * The escape hatch, and it costs a sentence.
@@ -812,7 +869,7 @@ export function channelFrom<
   /** The arguments the source takes: data, and nothing else. */
   args: SourcesOf<A>[Id] extends { create: (...args: infer P) => unknown } ? P : never;
   channelName?: string;
-}): DeclaredChannel {
+}): DeclaredChannel<A['id']> {
   const declared = (spec.to.sources as Record<string, { create?: (...a: unknown[]) => SourceLike; produces: readonly string[] }> | undefined)?.[
     spec.id
   ];
@@ -904,7 +961,10 @@ export function channelFrom<
     };
   };
   if (spec.channelName) (channel as { channelName?: string }).channelName = spec.channelName;
-  return channel as DeclaredChannel;
+  // The same fact the type now carries, readable at runtime — so `overridesFor` can refuse a channel
+  // filed under the wrong region even where the ids are not literal enough for the compiler to see it.
+  (channel as unknown as Record<symbol, string>)[CHANNEL_REGION_ID] = spec.to.id;
+  return channel as DeclaredChannel<A['id']>;
 }
 
 /** Observe outbound host intents (navigate/action) crossing the boundary (debug only). */

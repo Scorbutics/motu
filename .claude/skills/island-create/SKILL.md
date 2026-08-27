@@ -148,10 +148,50 @@ any `.motu/snapshots/*.diff.png` before accepting, and accept with
 `motu island snapshot --accept <name>` only when the change is what you intended. On a region diff with
 no member island changed, the ARRANGEMENT moved — check the frame before blaming yourself.
 
+**The final look is a FRESH agent's.** You built this island, so you are the one reader who cannot see
+an invention in it — a fixture's vocabulary, a label nobody uses, a state the app never enters. It is
+in your context as a premise. Spawn a subagent and hand it THREE things and nothing else: the state
+URLs (`motu lagoon states --json`), where the application's own vocabulary lives (the island's types,
+the modules it names), and the question — *does this belong to THIS application? Does anything render a
+word, a state or a shape the app never uses?* Do NOT pass the diff, the plan, the transcript or your
+reasoning; that contamination is the whole reason to spend a subagent. Its answer is a finding: every
+check before it compares the island to what the island declares, and this is the only one that compares
+it to the app.
+
 ### 7 — Wait for human validation
 Do NOT consider the island done until a human validates it on the real page. Present: the verify PASS,
 the integration concerns from step 3, and the ocean-suite result. Stop and hand off — the human is the
 final gate.
+
+## Two ways a region composes, and which one an extraction uses
+
+A region's arrangement lives in ONE of two places, and both are supported:
+
+- **`root` on the archipelago** — the application's own layout component, with `slots` mapping its
+  props to this region's islands. The page renders `<X.Root results={…} />` using its own prop names
+  and never writes a slot; the lagoon renders the SAME component from the SAME map. There is no second
+  description, so the two cannot differ. Safe by construction.
+- **A hand-written lagoon frame** (`layout` in the overrides) — a second description of the page,
+  checked but not eliminated: `island-composition` compares WHICH islands the region is made of
+  against what the page places, and `frame-is-page` refuses arrangement the frame invented. Nothing
+  compares the ARRANGEMENT itself.
+
+**An extraction uses the frame, and that is correct rather than a concession.** You are working on a
+page that already exists and already expresses its own arrangement in JSX. Moving it to `root` is a
+region-level refactor of the host's own code; doing it in the same step as pulling out one island
+couples two changes and hides the risky one. Extract the island, look at it in the lagoon, then decide
+about the region.
+
+`motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
+restructure, so the safe shape is free there.
+
+**If the region ALREADY declares a `root`**, `motu island integrate` adds the slot to `slots` for you
+and prints the two things it cannot derive — the prop to add to the root component, and the line the
+page must pass. Do both, or the island is declared and never placed.
+
+`region-root` reports which shape a region is in on every run. A project that has finished migrating
+sets `"regionRoot": "required"` in `motu.config.json`, and a frame becomes an error from then on.
+
 
 ## Guardrails
 - No island-to-island imports, no runtime module loading/federation, no per-island versioning (README

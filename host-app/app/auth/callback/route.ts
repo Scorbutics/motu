@@ -5,7 +5,7 @@
 // token once — see src/auth/repo-access.ts for why the ANSWER is kept and the token is not.
 //
 // It issues HTTP redirects rather than rendering, so nobody sees an intermediate page.
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createClient } from '@/src/supabase/server'
 import { isSafeReturn } from '@/app/signin/signin-source'
 import { recordAccessAtSignIn } from '@/src/auth/repo-access'
@@ -14,24 +14,45 @@ import { postgresAccessStore } from '@/src/auth/access-store'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+/**
+ * A RELATIVE REDIRECT, and that is the whole point of it.
+ *
+ * This used to build an absolute URL from `new URL(request.url).origin`, which is the request's own
+ * view of where it arrived — and behind a proxy that view is the INTERNAL address. Through the
+ * Tailscale funnel it read `https://localhost:8817`: the scheme forwarded, the host did not, so
+ * every sign-in ended on a URL outside the tunnel that resolves to the visitor's own machine. It
+ * was visible in the phase-1a verification output and read past, because the PATH was right.
+ *
+ * A relative `Location` is resolved by the browser against the URL it actually used, so it cannot get
+ * the origin wrong — there is no origin to get wrong. `unlock` in the catch-all was already doing
+ * this, for the same reason, which is what made the difference obvious once it was looked at.
+ *
+ * Safe as a relative target because every value that reaches it has been through `isSafeReturn`:
+ * it starts with `/` and not `//`, so it cannot be read as protocol-relative and leave the host.
+ */
+function seeOther(location: string) {
+  return new Response(null, {
+    status: 302,
+    headers: { location, 'cache-control': 'no-store' },
+  })
+}
+
 /** Back to the sign-in screen, carrying what went wrong in the words we were given. */
-function refuse(origin: string, reason: string) {
-  const url = new URL('/signin', origin)
-  url.searchParams.set('error_description', reason)
-  return NextResponse.redirect(url)
+function refuse(reason: string) {
+  return seeOther(`/signin?error_description=${encodeURIComponent(reason)}`)
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
 
   // GoTrue redirects here with error params when the provider refused or a code expired. Passed
   // through verbatim: the sign-in screen renders the provider's own sentence, and a paraphrase here
   // would be a second copy of a vocabulary we do not own.
   const bounced = searchParams.get('error_description') || searchParams.get('error')
-  if (bounced) return refuse(origin, bounced)
+  if (bounced) return refuse(bounced)
 
   const code = searchParams.get('code')
-  if (!code) return NextResponse.redirect(new URL('/signin', origin))
+  if (!code) return seeOther('/signin')
 
   // WHERE THEY WERE GOING, re-checked here and not trusted from the round-trip. It survived a trip
   // through GitHub as a query parameter, so it is exactly as attacker-controlled as it was on the way
@@ -41,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient()
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-  if (error) return refuse(origin, error.message)
+  if (error) return refuse(error.message)
 
   // THE ONE MOMENT THE PROVIDER TOKEN EXISTS. GoTrue returns it on this exchange and does not keep
   // it; neither do we. It is spent here, turned into rows, and goes out of scope with this request.
@@ -60,5 +81,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(new URL(destination, origin))
+  return seeOther(destination)
 }

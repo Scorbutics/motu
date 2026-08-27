@@ -6,6 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { authorize, refusalMessage, type AuthorizeDeps, type Project } from '../src/auth/authorize.ts';
+import type { ShareLink } from '../src/auth/share-links.ts';
+import { tokenHash } from '../src/auth/share-links.ts';
 import type { AccessStore, CachedAnswer } from '../src/auth/repo-access.ts';
 import { FRESH_FOR_MS } from '../src/auth/repo-access.ts';
 import { parseRecordPath } from '../src/host/records.ts';
@@ -20,6 +22,7 @@ function deps(opts: {
   projects?: Project[];
   members?: Array<[string, string]>;
   access?: Record<string, CachedAnswer>;
+  links?: Record<string, ShareLink>;
 } = {}): AuthorizeDeps {
   const projects = opts.projects ?? [PUBLIC, PRIVATE];
   const members = new Set((opts.members ?? []).map(([u, o]) => `${u}:${o}`));
@@ -33,6 +36,9 @@ function deps(opts: {
     projects: { async byRepo(repo) { return projects.find((p) => p.repo === repo) ?? null; } },
     memberships: { async isMember(u, o) { return members.has(`${u}:${o}`); } },
     access,
+    // Keyed by the DIGEST, exactly as the real store is — so a test that hands `authorize` a token
+    // exercises the hashing rather than working around it.
+    shareLinks: { async byTokenHash(h) { return opts.links?.[h] ?? null; } },
     now: NOW,
   };
 }
@@ -51,12 +57,12 @@ test('a public project is readable by a stranger, and costs nothing else to deci
   const d = deps();
   d.memberships = { async isMember() { throw new Error('membership must not be consulted'); } };
   d.access = { async get() { throw new Error('repo access must not be consulted'); }, async put() {} };
-  assert.deepEqual(await authorize(null, 'acme/open', d), { outcome: 'allow', because: 'public' });
+  assert.deepEqual(await authorize({ viewer: null, shareToken: null }, { repo: 'acme/open', ref: 'latest', slug: 'all' }, d), { outcome: 'allow', because: 'public' });
 });
 
 test('a member of the org reads a private project', async () => {
   const d = deps({ members: [['u1', ORG]] });
-  assert.deepEqual(await authorize({ userId: 'u1' }, 'acme/secret', d), {
+  assert.deepEqual(await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d), {
     outcome: 'allow',
     because: 'membership',
   });
@@ -64,7 +70,7 @@ test('a member of the org reads a private project', async () => {
 
 test('GitHub saying yes is enough on its own — nobody has to maintain a list', async () => {
   const d = deps({ access: { 'u1:acme/secret': fresh(true) } });
-  assert.deepEqual(await authorize({ userId: 'u1' }, 'acme/secret', d), {
+  assert.deepEqual(await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d), {
     outcome: 'allow',
     because: 'repo-access',
   });
@@ -73,13 +79,13 @@ test('GitHub saying yes is enough on its own — nobody has to maintain a list',
 test('a stale grant still opens a private lagoon', async () => {
   // The outage rule, reaching all the way through `authorize` rather than only through `decide`.
   const d = deps({ access: { 'u1:acme/secret': stale(true) } });
-  assert.equal((await authorize({ userId: 'u1' }, 'acme/secret', d)).outcome, 'allow');
+  assert.equal((await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d)).outcome, 'allow');
 });
 
 // --- the ways out --------------------------------------------------------------------------------
 
 test('a stranger is refused a private project', async () => {
-  assert.deepEqual(await authorize(null, 'acme/secret', deps()), {
+  assert.deepEqual(await authorize({ viewer: null, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, deps()), {
     outcome: 'deny',
     because: 'no-session',
   });
@@ -89,7 +95,7 @@ test('a signed-in stranger is refused, and it is not the same refusal', async ()
   // Same answer to them, different fact for us: `never-asked` means no cached answer exists at all,
   // which is a reason to look at the callback logs rather than a working gate.
   const d = deps();
-  assert.deepEqual(await authorize({ userId: 'nobody' }, 'acme/secret', d), {
+  assert.deepEqual(await authorize({ viewer: { userId: 'nobody' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d), {
     outcome: 'deny',
     because: 'never-asked',
   });
@@ -97,7 +103,7 @@ test('a signed-in stranger is refused, and it is not the same refusal', async ()
 
 test('GitHub saying no is a refusal, distinct from never having asked', async () => {
   const d = deps({ access: { 'u1:acme/secret': fresh(false) } });
-  assert.deepEqual(await authorize({ userId: 'u1' }, 'acme/secret', d), {
+  assert.deepEqual(await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d), {
     outcome: 'deny',
     because: 'refused',
   });
@@ -107,12 +113,12 @@ test('membership in ANOTHER org does not open this project', async () => {
   // The case a `isMember(userId)` lookup that forgot the org would get wrong, handing every private
   // project to anybody who belongs to any org at all.
   const d = deps({ members: [['u1', 'some-other-org']] });
-  assert.equal((await authorize({ userId: 'u1' }, 'acme/secret', d)).outcome, 'deny');
+  assert.equal((await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d)).outcome, 'deny');
 });
 
 test('repo access to ANOTHER repo does not open this one', async () => {
   const d = deps({ access: { 'u1:acme/open': fresh(true) } });
-  assert.equal((await authorize({ userId: 'u1' }, 'acme/secret', d)).outcome, 'deny');
+  assert.equal((await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/secret', ref: 'latest', slug: 'all' }, d)).outcome, 'deny');
 });
 
 // --- the third answer ----------------------------------------------------------------------------
@@ -120,7 +126,7 @@ test('repo access to ANOTHER repo does not open this one', async () => {
 test('a repo the database has never heard of is an ABSTAIN, not a denial', async () => {
   // What keeps phase 2 from being a migration that has to be perfect on the first try: every lagoon
   // published before `projects` was populated keeps working, answered by the host from access.json.
-  assert.deepEqual(await authorize(null, 'acme/never-seen', deps()), {
+  assert.deepEqual(await authorize({ viewer: null, shareToken: null }, { repo: 'acme/never-seen', ref: 'latest', slug: 'all' }, deps()), {
     outcome: 'abstain',
     because: 'unknown-project',
   });
@@ -130,7 +136,7 @@ test('abstain does not depend on who is asking', async () => {
   // It is a statement about the DATABASE, not about the viewer. If it ever started varying by session
   // it would be a decision wearing the costume of an absence.
   const d = deps({ members: [['u1', ORG]], access: { 'u1:acme/never-seen': fresh(true) } });
-  assert.equal((await authorize({ userId: 'u1' }, 'acme/never-seen', d)).outcome, 'abstain');
+  assert.equal((await authorize({ viewer: { userId: 'u1' }, shareToken: null }, { repo: 'acme/never-seen', ref: 'latest', slug: 'all' }, d)).outcome, 'abstain');
 });
 
 // --- what counts as a record at all ---------------------------------------------------------------
@@ -201,4 +207,114 @@ test('a refusal says what an absence says, down to the leading slash', async () 
   const message = refusalMessage({ repo: 'acme/secret', ref: 'latest', slug: 'all' });
   assert.equal(message, 'nothing at acme/secret/latest/all');
   assert.ok(!message.includes(' /'), 'no leading slash — that is the whole tell');
+});
+
+// --- share links -----------------------------------------------------------------------------------
+//
+// What a link opens, and — more importantly — what it does not.
+
+const LINK_TOKEN = 'share-token-not-a-secret';
+const link = (over: Partial<ShareLink> = {}): ShareLink => ({
+  projectId: 'p2',
+  sha: null,
+  slug: null,
+  expiresAt: null,
+  revokedAt: null,
+  ...over,
+});
+const withLink = (l: ShareLink, over = {}) => deps({ links: { [tokenHash(LINK_TOKEN)]: l }, ...over });
+const asker = (shareToken: string | null = null, viewer: { userId: string } | null = null) => ({
+  viewer,
+  shareToken,
+});
+const RECORD = { repo: 'acme/secret', ref: 'latest', slug: 'all' };
+
+test('a link opens a private record WITH NO SESSION — that is what it is for', async () => {
+  assert.deepEqual(await authorize(asker(LINK_TOKEN), RECORD, withLink(link())), {
+    outcome: 'allow',
+    because: 'share-link',
+  });
+});
+
+test('a link is hashed, so the token itself is never what is stored', async () => {
+  // The store is keyed by digest in the fixture exactly as in Postgres. Handing `authorize` the raw
+  // token and having it find the row is the hashing being exercised rather than worked around.
+  const d = deps({ links: { [LINK_TOKEN]: link() } }); // keyed by the RAW token — wrong on purpose
+  assert.equal((await authorize(asker(LINK_TOKEN), RECORD, d)).outcome, 'deny');
+});
+
+test('a revoked link is dead', async () => {
+  const d = withLink(link({ revokedAt: new Date(NOW.getTime() - 1000) }));
+  assert.equal((await authorize(asker(LINK_TOKEN), RECORD, d)).outcome, 'deny');
+});
+
+test('an expired link is dead, and the boundary is exclusive', async () => {
+  const dead = withLink(link({ expiresAt: NOW }));
+  assert.equal((await authorize(asker(LINK_TOKEN), RECORD, dead)).outcome, 'deny', 'expiring now is expired');
+  const alive = withLink(link({ expiresAt: new Date(NOW.getTime() + 1000) }));
+  assert.equal((await authorize(asker(LINK_TOKEN), RECORD, alive)).outcome, 'allow');
+});
+
+test('a link scoped to a record does not open the record next to it', async () => {
+  // The property the whole feature exists for: "the link I sent still resolves" WITHOUT handing over
+  // the repo. If this ever passes, a share link is a project key.
+  const d = withLink(link({ sha: 'abc123', slug: 'cart' }));
+  assert.equal(
+    (await authorize(asker(LINK_TOKEN), { repo: 'acme/secret', ref: 'abc123', slug: 'cart' }, d)).outcome,
+    'allow',
+  );
+  assert.equal(
+    (await authorize(asker(LINK_TOKEN), { repo: 'acme/secret', ref: 'abc123', slug: 'checkout' }, d)).outcome,
+    'deny',
+    'another slug in the same build',
+  );
+  assert.equal(
+    (await authorize(asker(LINK_TOKEN), { repo: 'acme/secret', ref: 'def456', slug: 'cart' }, d)).outcome,
+    'deny',
+    'the same slug in another build',
+  );
+});
+
+test('null is a wildcard on each axis independently', async () => {
+  const buildWide = withLink(link({ sha: 'abc123', slug: null }));
+  assert.equal(
+    (await authorize(asker(LINK_TOKEN), { repo: 'acme/secret', ref: 'abc123', slug: 'anything' }, buildWide)).outcome,
+    'allow',
+  );
+  assert.equal(
+    (await authorize(asker(LINK_TOKEN), { repo: 'acme/secret', ref: 'other', slug: 'anything' }, buildWide)).outcome,
+    'deny',
+  );
+});
+
+test('`latest` is not the sha it points at', async () => {
+  // Two different intentions: a link to `latest` follows the alias, a link to a sha is immutable.
+  // Resolving the alias here would silently turn the second kind into the first.
+  const d = withLink(link({ sha: 'abc123' }));
+  assert.equal((await authorize(asker(LINK_TOKEN), RECORD, d)).outcome, 'deny');
+});
+
+test('a link for ANOTHER project does not open this one', async () => {
+  const d = withLink(link({ projectId: 'p1' }));
+  assert.equal((await authorize(asker(LINK_TOKEN), RECORD, d)).outcome, 'deny');
+});
+
+test('a dead link does not take away what a session already gave', async () => {
+  // Somebody with real access may follow a stale link to their own project. Denying on the bad token
+  // would make the link subtract from what they already had.
+  const d = withLink(link({ revokedAt: NOW }), { members: [['u1', ORG]] });
+  assert.deepEqual(await authorize(asker(LINK_TOKEN, { userId: 'u1' }), RECORD, d), {
+    outcome: 'allow',
+    because: 'membership',
+  });
+});
+
+test('a link does not make a project the database has never heard of readable', async () => {
+  // Abstain is a statement about the database. A link cannot conjure a project row, and if it could
+  // it would be a way past a gate that was never consulted.
+  const d = withLink(link());
+  assert.equal(
+    (await authorize(asker(LINK_TOKEN), { repo: 'acme/never-seen', ref: 'latest', slug: 'all' }, d)).outcome,
+    'abstain',
+  );
 });

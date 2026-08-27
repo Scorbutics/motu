@@ -1,6 +1,6 @@
 # The lagoon host, with accounts
 
-**Status: phases 0, 1 and 2 shipped; 2b, 3 and 4 planned.** This is the design record for turning `@motu/host` from a
+**Status: phases 0, 1, 2 and 3 shipped; 2b and 4 planned.** This is the design record for turning `@motu/host` from a
 personal preview server into something several people can log into and see only what they should.
 
 The rule this document exists to protect is the one the host already keeps: **a lagoon is one
@@ -346,7 +346,7 @@ Each ships independently. Phase 0 exists so nothing breaks while the rest happen
 | **1** | Next shell + GoTrue + schema; serves **public** lagoons via `store.mjs`; GitHub OAuth; the `signin` region, in motu | **done** — 1b then 1a |
 | **2** | private via membership; visibility moves to the DB; retire the host-wide read secret | **done** — see below |
 | **2b** | coverage corpus into `coverage_states`; `/api/coverage*` reads and writes rows; migrate existing `.json` corpora in; delete the files | small, and independent of auth — could go earlier |
-| **3** | share links | small |
+| **3** | share links | **done** — see below |
 | **4** | mount `review-console` (2,812 lines, already a motu app — a route, not a port); delete `server.mjs` + `views.mjs` | mounting and deleting |
 
 Phase 1 dominates because it is the skeleton, and it is the phase already done once — it is peps' own
@@ -419,6 +419,37 @@ printed `repo/ref/slug`, one character apart) and it is fixed there too.
 every record request went to `<app>/rest/v1/projects`, was proxied to the lagoon host, and 404'd. The
 "PostgREST — no" decision above is load-bearing and easy to violate by reaching for the familiar
 client. There is a `pg` pool now.
+
+## Phase 3, as built
+
+`authorize` rule 3, and the `?k=` exchange. `src/auth/share-links.ts` is the rules as pure functions
+over a row; the database's only job is to find it.
+
+**Checked BEFORE the session rules.** Somebody following a link may also be signed in as somebody with
+no access, and the link is what they are presenting. But a bad link FALLS THROUGH rather than denying:
+a person with real access following a stale link to their own project must not have the link subtract
+from what their session already gave them.
+
+**A lookup, not a compare.** Ingest tokens in `access.mjs` need a constant-time compare because the
+host holds one expected hash and tests a candidate against it. Here the digest IS the lookup key —
+nothing is compared against a secret, and fetching every row so `secretMatches` could run over them
+would be slower and no safer. `digest` itself is imported from `access.mjs`, not re-derived.
+
+**The cookie is path-scoped to the project**, which is what "scoped to that project" means in the only
+vocabulary a browser has — and it is what lets somebody hold several links at once, since two cookies
+of one name under different paths are two cookies. Its `Max-Age` is bounded by the link's expiry:
+not for safety (`authorize` re-checks the row every request) but so the credential disappears at the
+same moment the link does.
+
+**A bad token redirects exactly like a good one, with no cookie.** Answering it differently would say
+"that link is wrong AND this record exists" to anybody who guesses.
+
+**`latest` is not the sha it points at.** A link to `latest` follows the alias; a link to a sha is
+immutable. Resolving the alias would silently turn the second kind into the first.
+
+Minting is `infra/mint-share-link.mjs`, for the reason `motu-host access` exists: the hashes are not
+hand-writable, and the token is printed once. `--expires` or `--never` is required — a permanent
+bearer credential should have to be said out loud.
 
 ## Two constraints that break everything if lost
 

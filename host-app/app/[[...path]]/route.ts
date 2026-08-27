@@ -19,6 +19,8 @@ import { parseRecordPath } from '@/src/host/records';
 import { authorize, refusalMessage, refusalStatus } from '@/src/auth/authorize';
 import { postgresProjectStore, postgresMembershipStore } from '@/src/auth/stores';
 import { postgresAccessStore } from '@/src/auth/access-store';
+import { postgresShareLinkStore } from '@/src/auth/share-link-store';
+import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
 
@@ -56,6 +58,78 @@ function notFound(record: { repo: string; ref: string; slug: string }) {
   });
 }
 
+/**
+ * The cookie a share link becomes.
+ *
+ * PATH-SCOPED TO THE PROJECT, which is what "scoped to that project" means in the only vocabulary a
+ * browser has. It is also what lets somebody hold several links at once: two cookies of the same name
+ * under different paths are two cookies, so a link to `acme/web` does not evict a link to `acme/api`.
+ *
+ * Cookie path matching is by whole segments, so `/acme/secret` covers `/acme/secret/latest/all` and
+ * does NOT leak to `/acme/secretive`.
+ */
+const SHARE_COOKIE = 'motu_share';
+
+/** One cookie out of a Cookie header. The host has the same helper; this is the app's side of it. */
+function cookieValue(header: string | null, name: string): string | null {
+  for (const part of (header ?? '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Turn `?k=<token>` into a cookie, and get the token out of the URL.
+ *
+ * The redirect is the point, and `access.mjs` records why: a browser following a link cannot set a
+ * header, so the secret arrives once in the query string — where it then sits in the address bar, in
+ * history, and in any Referer the page later sends. One 302 later it is an httpOnly cookie and none
+ * of those have it.
+ *
+ * IT REDIRECTS EVEN WHEN THE LINK IS NO GOOD, with no cookie attached. Answering a bad token
+ * differently would say "that link is wrong AND this record exists" to anybody who guesses one — and
+ * the whole design of the refusal is that a stranger cannot tell those apart. After the redirect the
+ * request is an ordinary one and gets the ordinary answer, which for a private record is a 404
+ * byte-identical to a miss.
+ */
+async function unlock(request: Request, url: URL, record: { repo: string; ref: string; slug: string }) {
+  const clean = new URL(url.href);
+  clean.searchParams.delete('k');
+  const location = clean.pathname + clean.search + clean.hash;
+  const headers = new Headers({ location, 'cache-control': 'no-store' });
+
+  const token = url.searchParams.get('k') ?? '';
+  try {
+    const project = await postgresProjectStore().byRepo(record.repo);
+    if (project) {
+      const link = await postgresShareLinkStore().byTokenHash(tokenHash(token));
+      const now = new Date();
+      if (link && grants(link, project.id, record, now)) {
+        // SCOPED TO THE PROJECT'S PATH, not to `/`. A link to one repo must not become a credential
+        // the browser offers on every request to this host.
+        const maxAge = cookieMaxAgeSeconds(link, now);
+        headers.append(
+          'set-cookie',
+          `${SHARE_COOKIE}=${encodeURIComponent(token)}; Path=/${record.repo}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
+        );
+      }
+    }
+  } catch (err) {
+    // Same reasoning as `authorize`'s catch: a database outage is not a verdict. No cookie is set, so
+    // the redirected request is answered by whatever the host would have said.
+    console.error(`[unlock] could not resolve a share link for ${record.repo}:`, (err as Error)?.message ?? err);
+  }
+
+  return new Response(null, { status: 302, headers });
+}
+
 /** Whoever is asking, or null. Never throws: an unreadable session is nobody, not an error. */
 async function viewerOf() {
   try {
@@ -80,18 +154,28 @@ function hostCredential(): Record<string, string> {
 }
 
 const handler = async (request: Request) => {
-  const { pathname } = new URL(request.url);
+  const url = new URL(request.url);
+  const pathname = url.pathname;
   const record = parseRecordPath(pathname);
 
-  // NOT A RECORD: the app has no opinion. Unchanged from phase 0.
+  // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
+  // page or the index is still the HOST's read secret and still handled there.
   if (!record) return proxyToHost(request);
+
+  // A SHARE LINK ARRIVES AS `?k=`, and on a record path the app must answer it rather than let it
+  // through: the host has its own `?k=` handler for its own secret, and forwarding one would set the
+  // wrong cookie for the wrong credential. See `unlock` for what it does with it.
+  if (url.searchParams.has('k')) return unlock(request, url, record);
+
+  const shareToken = cookieValue(request.headers.get('cookie'), SHARE_COOKIE);
 
   let decision;
   try {
-    decision = await authorize(await viewerOf(), record.repo, {
+    decision = await authorize({ viewer: await viewerOf(), shareToken }, record, {
       projects: postgresProjectStore(),
       memberships: postgresMembershipStore(),
       access: postgresAccessStore(),
+      shareLinks: postgresShareLinkStore(),
     });
   } catch (err) {
     // THE DATABASE IS DOWN, AND THAT IS NOT A VERDICT. Failing closed here would 404 every public

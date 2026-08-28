@@ -50,6 +50,12 @@ export function IndexLayout({
         blurb="Every declared state, published and addressable."
       >
         {readout}
+        {/* THE CONSOLE, NAMED. It is also in the palette as an action, and a palette entry is not
+            discoverable — ⌘K only helps somebody who already suspects the thing exists. This is the
+            one other place on this host worth going, so it gets a word in the bar. */}
+        <a className="motu-back" href="/console">
+          Baseline review
+        </a>
         {account}
       </Bay>
       {/* The filter rides in the gap the masthead's bottom padding leaves under the waterline. */}

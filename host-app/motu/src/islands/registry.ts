@@ -4,14 +4,19 @@
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
 import type { ElementSpec } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
+import { element as acceptBarElement } from './accept-bar.island';
 import { element as corpusFilterElement } from './corpus-filter.island';
 import { element as corpusStatesElement } from './corpus-states.island';
+import { element as diffViewerElement } from './diff-viewer.island';
 import { element as githubSignInElement } from './github-sign-in.island';
 import { element as lagoonFilterElement } from './lagoon-filter.island';
 import { element as lagoonGroupsElement } from './lagoon-groups.island';
 import { element as lagoonPaletteElement } from './lagoon-palette.island';
 import { element as lagoonReposElement } from './lagoon-repos.island';
 import { element as lagoonStatsElement } from './lagoon-stats.island';
+import { element as repoPickerElement } from './repo-picker.island';
+import { element as shotListElement } from './shot-list.island';
+import { element as statusSummaryElement } from './status-summary.island';
 import { element as viewerBadgeElement } from './viewer-badge.island';
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
@@ -26,7 +31,7 @@ import { element as viewerBadgeElement } from './viewer-badge.island';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusStatesElement, githubSignInElement, lagoonFilterElement, lagoonGroupsElement, lagoonPaletteElement, lagoonReposElement, lagoonStatsElement, viewerBadgeElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [acceptBarElement, corpusFilterElement, corpusStatesElement, diffViewerElement, githubSignInElement, lagoonFilterElement, lagoonGroupsElement, lagoonPaletteElement, lagoonReposElement, lagoonStatsElement, repoPickerElement, shotListElement, statusSummaryElement, viewerBadgeElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -34,13 +39,18 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusState
  * the same information in a form the compiler can look up by tag.
  */
 export interface ElementTypes {
+  'x-accept-bar': typeof acceptBarElement;
   'x-corpus-filter': typeof corpusFilterElement;
   'x-corpus-states': typeof corpusStatesElement;
+  'x-diff-viewer': typeof diffViewerElement;
   'x-github-sign-in': typeof githubSignInElement;
   'x-lagoon-filter': typeof lagoonFilterElement;
   'x-lagoon-groups': typeof lagoonGroupsElement;
   'x-lagoon-palette': typeof lagoonPaletteElement;
   'x-lagoon-repos': typeof lagoonReposElement;
   'x-lagoon-stats': typeof lagoonStatsElement;
+  'x-repo-picker': typeof repoPickerElement;
+  'x-shot-list': typeof shotListElement;
+  'x-status-summary': typeof statusSummaryElement;
   'x-viewer-badge': typeof viewerBadgeElement;
 }

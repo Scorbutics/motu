@@ -17,7 +17,18 @@ import { motuSplashFrom } from "@motu/chrome/splash"
 import type { LagoonGroup, LagoonRepo } from "@/app/index-region"
 
 /** What a palette entry is. `kind` is the app's own vocabulary, printed on the right of the row. */
-type Entry = { id: string; label: string; kind: "group" | "repo" | "lagoon"; href: string }
+type Entry = { id: string; label: string; kind: "group" | "repo" | "lagoon" | "action"; href: string }
+
+/**
+ * The places on this host that are not a lagoon.
+ *
+ * `action` is the fourth kind, and the only entries here that are not derived from what the host
+ * holds — which is exactly why they belong in a palette: the review console has no row on the front
+ * page to find it by, so without this the only way in is knowing the URL.
+ */
+const ACTIONS: Entry[] = [
+  { id: "a:console", label: "Baseline review", kind: "action", href: "/console" },
+]
 
 export interface LagoonPaletteProps {
   repos?: LagoonRepo[]
@@ -57,7 +68,7 @@ function fuzzy(needle: string, haystack: string): { first: number; spread: numbe
 const score = (m: { first: number; spread: number }) => -(m.first * 3 + m.spread)
 
 function entriesFrom(groups: LagoonGroup[], repos: LagoonRepo[]): Entry[] {
-  const out: Entry[] = []
+  const out: Entry[] = [...ACTIONS]
   for (const g of groups) out.push({ id: `g:${g.name}`, label: g.name, kind: "group", href: `/g/${g.name}` })
   for (const r of repos) {
     out.push({ id: `r:${r.repo}`, label: r.repo, kind: "repo", href: `/${r.repo}/` })

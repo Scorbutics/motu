@@ -8,17 +8,27 @@
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
+import type { AcceptBar as C_accept_bar } from '@/components/review/accept-bar/AcceptBar';
 import type { CorpusFilter as C_corpus_filter } from '@/components/corpus/corpus-filter';
 import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus-states';
+import type { DiffViewer as C_diff_viewer } from '@/components/review/diff-viewer/DiffViewer';
 import type { GithubSignIn as C_github_sign_in } from '@/components/auth/github-sign-in';
 import type { LagoonFilter as C_lagoon_filter } from '@/components/lagoon/lagoon-filter';
 import type { LagoonGroups as C_lagoon_groups } from '@/components/lagoon/lagoon-groups';
 import type { LagoonPalette as C_lagoon_palette } from '@/components/lagoon/lagoon-palette';
 import type { LagoonRepos as C_lagoon_repos } from '@/components/lagoon/lagoon-repos';
 import type { LagoonStats as C_lagoon_stats } from '@/components/lagoon/lagoon-stats';
+import type { RepoPicker as C_repo_picker } from '@/components/review/repo-picker/RepoPicker';
+import type { ShotList as C_shot_list } from '@/components/review/shot-list/ShotList';
+import type { StatusSummary as C_status_summary } from '@/components/review/status-summary/StatusSummary';
 import type { ViewerBadge as C_viewer_badge } from '@/components/lagoon/viewer-badge';
 
 export const CONTRACTS = {
+  'x-accept-bar': {
+    input: ['repo', 'shot', 'busy', 'shots'],
+    output: { onAcceptRequested: 'accept-requested' },
+    ambient: [],
+  },
   'x-corpus-filter': {
     input: ['value', 'unacceptedCount'],
     output: { onFilterChange: 'filter-change' },
@@ -27,6 +37,11 @@ export const CONTRACTS = {
   'x-corpus-states': {
     input: ['states', 'filter', 'regionId'],
     output: {  },
+    ambient: [],
+  },
+  'x-diff-viewer': {
+    input: ['shot', 'mode', 'shots', 'shotUrl'],
+    output: { onViewChanged: 'view-changed' },
     ambient: [],
   },
   'x-github-sign-in': {
@@ -56,6 +71,21 @@ export const CONTRACTS = {
   },
   'x-lagoon-stats': {
     input: ['stats'],
+    output: {  },
+    ambient: [],
+  },
+  'x-repo-picker': {
+    input: ['repos', 'value', 'shots'],
+    output: { onRepoSelected: 'repo-selected' },
+    ambient: [],
+  },
+  'x-shot-list': {
+    input: ['shots', 'selected', 'busy'],
+    output: { onShotSelected: 'shot-selected' },
+    ambient: [],
+  },
+  'x-status-summary': {
+    input: ['shots'],
     output: {  },
     ambient: [],
   },
@@ -90,10 +120,14 @@ type ContractFitsComponent<C, T extends Tag> = [
       keyof PropsOf<C>
     >];
 
+const _accept_bar: ContractFitsComponent<typeof C_accept_bar, 'x-accept-bar'> = true;
+void _accept_bar;
 const _corpus_filter: ContractFitsComponent<typeof C_corpus_filter, 'x-corpus-filter'> = true;
 void _corpus_filter;
 const _corpus_states: ContractFitsComponent<typeof C_corpus_states, 'x-corpus-states'> = true;
 void _corpus_states;
+const _diff_viewer: ContractFitsComponent<typeof C_diff_viewer, 'x-diff-viewer'> = true;
+void _diff_viewer;
 const _github_sign_in: ContractFitsComponent<typeof C_github_sign_in, 'x-github-sign-in'> = true;
 void _github_sign_in;
 const _lagoon_filter: ContractFitsComponent<typeof C_lagoon_filter, 'x-lagoon-filter'> = true;
@@ -106,6 +140,12 @@ const _lagoon_repos: ContractFitsComponent<typeof C_lagoon_repos, 'x-lagoon-repo
 void _lagoon_repos;
 const _lagoon_stats: ContractFitsComponent<typeof C_lagoon_stats, 'x-lagoon-stats'> = true;
 void _lagoon_stats;
+const _repo_picker: ContractFitsComponent<typeof C_repo_picker, 'x-repo-picker'> = true;
+void _repo_picker;
+const _shot_list: ContractFitsComponent<typeof C_shot_list, 'x-shot-list'> = true;
+void _shot_list;
+const _status_summary: ContractFitsComponent<typeof C_status_summary, 'x-status-summary'> = true;
+void _status_summary;
 const _viewer_badge: ContractFitsComponent<typeof C_viewer_badge, 'x-viewer-badge'> = true;
 void _viewer_badge;
 

@@ -11,3 +11,4 @@ export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry';
 export { corpusArchipelago } from './archipelagos/corpus/corpus.archipelago';
 export { signinArchipelago } from './archipelagos/signin/signin.archipelago';
 export { indexArchipelago } from './archipelagos/index/index.archipelago';
+export { reviewArchipelago } from './archipelagos/review/review.archipelago';

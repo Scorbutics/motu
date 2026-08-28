@@ -174,6 +174,72 @@ export function motuKitCss(scope = ':root') {
   white-space: nowrap;
 }
 .motu-pill[data-mono] { font-family: var(--mono); }
+
+/* --- THE DOCK'S OWN THREE ---------------------------------------------------------------------
+   The tide line invented these and kept them private behind #tide .grp / .opt / .kbd, so nothing
+   else could use them and the kit grew lookalikes instead. They are here now because they are
+   components, not dock trim: a segmented control, a rail option and a key cap are what any motu
+   surface reaches for next. The dock's own three duplicates — .cap, .lamp, .chip — are NOT moved,
+   because .motu-cap, .motu-dot and .motu-pill already ARE them; that half of the job is deletion.
+
+   Their colours were literals in that file (#5c6b63, #22302c, #a39a8a). They read the ink tokens
+   here, which is the whole reason a component belongs in the kit rather than beside its one caller. */
+
+/* SEGMENTED: the lit pill SLIDES between options instead of blinking on — the one bit of state on the
+   dock that moves, and the reason it reads as water rather than as a toolbar. The thumb is positioned
+   by the caller (left/width), because only the caller knows where the active option sits. */
+.motu-segmented {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px; border-radius: ${MOTU_RADIUS.pill};
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.motu-segmented__thumb {
+  position: absolute; top: 3px; bottom: 3px;
+  border-radius: ${MOTU_RADIUS.pill};
+  background: var(--tide-accent);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--tide-accent) 45%, transparent);
+  transition: left ${MOTU_MOTION.slide}, width ${MOTU_MOTION.slide}, background 200ms;
+  pointer-events: none;
+}
+.motu-segmented > button {
+  position: relative; appearance: none; border: 0; background: transparent;
+  color: var(--ink-muted); font: 600 12px/1 var(--sans);
+  padding: 6px 12px; border-radius: ${MOTU_RADIUS.pill};
+  cursor: pointer; white-space: nowrap;
+  transition: color 160ms;
+}
+.motu-segmented > button:hover { color: var(--ink); }
+.motu-segmented > button[aria-current="true"] { color: ${MOTU_CHROME.onPrimary}; }
+
+/* OPT: one option in a rail. It slides toward the pointer rather than merely tinting, which is what
+   makes a list of them feel like something floating. */
+.motu-opt {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px 10px 7px 15px;
+  border: 0; border-radius: 9px; background: transparent;
+  color: var(--ink-muted); font: 600 12.5px/1.2 var(--sans);
+  text-align: left; cursor: pointer;
+  transition: background 160ms, color 160ms, transform 160ms;
+}
+.motu-opt:hover { background: color-mix(in srgb, var(--tide-accent) 7%, transparent); color: var(--ink); transform: translateX(2px); }
+.motu-opt[aria-current="true"] {
+  background: color-mix(in srgb, var(--tide-accent) 10%, transparent);
+  color: var(--motu-primary-deep, ${MOTU_CHROME.primaryDeep});
+  font-weight: 700;
+}
+.motu-opt[hidden] { display: none; }
+
+/* KBD: a key cap. A shortcut is a thing you press, so it is drawn as one. */
+.motu-kbd {
+  appearance: none; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  background: color-mix(in srgb, #fff 70%, transparent);
+  color: var(--ink-muted); font: 500 11px/1 var(--sans);
+  padding: 6px 10px; border-radius: 8px; cursor: pointer;
+  transition: color 160ms, border-color 160ms;
+}
+.motu-kbd:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
 /* THE TEXT IS A DEEPER SHADE OF ITS OWN VERDICT.
    A tinted pill puts the verdict colour on a 12% wash of itself, which is a low-contrast pairing by
    construction: --ok on its own tint measures about 4.3:1 at 10.5px, and axe is right to call that

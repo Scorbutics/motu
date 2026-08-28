@@ -108,6 +108,14 @@ export const MOTU_RADIUS = {
 export const MOTU_MOTION = {
   swimIn: '260ms cubic-bezier(.2,.9,.3,1)',
   pop: '220ms cubic-bezier(.22,1.2,.36,1)',
+  /**
+   * A lit thing moving from one place to another, overshooting slightly as water does.
+   *
+   * Named because the tide line already used this exact curve for its segmented control's thumb and
+   * for re-docking, spelled out as a literal in both — the third motion in the language, and the only
+   * one that was not written down. A component that slides should not have to invent its own easing.
+   */
+  slide: '260ms cubic-bezier(.34,1.4,.5,1)',
 };
 
 /**

@@ -3,7 +3,7 @@
 //
 // Every prop optional with a default, because an island must render from its defaults alone — and the
 // default here is the empty host, which is a real state somebody sees on day one.
-import { Panel, Cap, Row, Grow, Sub } from "@motu/chrome/react"
+import { Panel, PanelHead, PanelBody, Row, Grow, Sub } from "@motu/chrome/react"
 import type { LagoonGroup } from "@/app/index-region"
 
 export interface LagoonGroupsProps {
@@ -16,8 +16,13 @@ export function LagoonGroups({ groups = [] }: LagoonGroupsProps) {
   // should be a list of what exists.
   if (!groups.length) return null
   return (
-    <Panel>
-      <Cap>Composed</Cap>
+    // THE KIT'S OWN COMPOSITION: a `window` panel is a head plus a scrolling body, and the body is
+    // what supplies the padding. A bare <Panel> with a <Cap> inside renders the caption flush against
+    // the sheet's edge, which its `overflow: hidden` then clips — the first letter of "Composed"
+    // was simply gone, and no check can see that.
+    <Panel shape="window">
+      <PanelHead title="Composed" />
+      <PanelBody>
       {groups.map((g) => (
         // `as="a"`, not a div. Chrome's own note: a clickable div is how both applications ended up
         // with rows a keyboard could not reach, so the element is what makes it interactive.
@@ -32,6 +37,7 @@ export function LagoonGroups({ groups = [] }: LagoonGroupsProps) {
           </Grow>
         </Row>
       ))}
+      </PanelBody>
     </Panel>
   )
 }

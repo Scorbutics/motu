@@ -51,8 +51,24 @@ export function motuPill(text, state = 'on') {
   return `<span class="motu-pill" data-state="${escapeHtml(state)}">${escapeHtml(text)}</span>`;
 }
 
-const PAGE_CSS = `
+/**
+ * The centred column, and NOTHING about the shape of what sits in it.
+ *
+ * Split out of `PAGE_CSS` because the rest of that block overrides the KIT's defaults to suit the
+ * server's HTML — a server row stacks a label over a sub, the kit's rows do not — and handing those
+ * overrides to the React kit makes it fight itself. It rendered with the panel captions clipped off
+ * the left edge, which is what you get for reusing "the page's CSS" without reading which half of the
+ * page it is about.
+ *
+ * A React consumer wants this and `motuChromeCss()`. `motuPage` wants both, which is why PAGE_CSS
+ * still exists below and still contains this.
+ */
+export const PAGE_SHELL_CSS = `
 main { max-width: 940px; margin: 0 auto; padding: 26px 20px 48px; display: flex; flex-direction: column; gap: 18px; }
+`;
+
+/** The shell PLUS the server-row overrides — what `motuPage` renders, and only it. */
+export const PAGE_CSS = `${PAGE_SHELL_CSS}
 .motu-panel { padding: 14px 16px; }
 .panel-cap { margin: 0 0 10px 2px; }
 .motu-empty { color: var(--ink-muted); margin: 4px 2px; font-size: 12.5px; }

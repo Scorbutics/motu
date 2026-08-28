@@ -17,3 +17,20 @@ export * from './tokens.mjs'
 export * from './css.mjs'
 export * from './html.mjs'
 export * from './kit.mjs'
+
+/**
+ * The page shell's own CSS — the centred column and the server-row shape.
+ *
+ * Declared here because the barrel already re-exports `html.mjs` at runtime; this file is
+ * hand-written, so a new export is only visible to tsc once it is named. The lagoon host's Next app
+ * inlines this beside `motuChromeCss()` to render the same page shell `motuPage` produces.
+ */
+export const PAGE_CSS: string;
+
+/**
+ * The centred column alone, with none of the server-row overrides `PAGE_CSS` also carries.
+ *
+ * What a React consumer wants beside `motuChromeCss()`: the kit styles its own components, and the
+ * server-shape rules in PAGE_CSS actively fight it — captions clipped off the panel's left edge.
+ */
+export const PAGE_SHELL_CSS: string;

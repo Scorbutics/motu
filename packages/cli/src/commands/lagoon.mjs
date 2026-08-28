@@ -455,6 +455,17 @@ export function lagoonServeCommand(argv) {
     // protocol-relative URL naming a host called __motu_reload. The reload client learned that one.
     liveUrl = liveUrlRaw.replace(/\/+$/, '');
   }
+  // PUSH INSTEAD OF BEING PULLED. `--live-url` tells the host where to come and fetch this; this
+  // sends the artifact instead, over the same outbound connection the announcement already uses. It
+  // is the option for a machine nothing can reach — no tunnel, no tailnet, no LAN route — and it
+  // works because a lagoon is ONE self-contained file, so there is nothing else a viewer can ask for.
+  const pushing = argv['live-push'] === true;
+  if (pushing && liveUrl) {
+    console.error(color.red('✗ --live-push and --live-url are two answers to the same question.'));
+    console.error(color.dim('  --live-url: the host fetches from you (it must be able to reach you).'));
+    console.error(color.dim('  --live-push: you send it to the host (nothing has to reach you).'));
+    process.exit(1);
+  }
   if (liveUrl && !lan) {
     // Announcing an address the host can reach while listening only on loopback means the host will
     // arrive and find nothing. The two flags belong together, and the pair is easy to half-remember.
@@ -463,6 +474,18 @@ export function lagoonServeCommand(argv) {
     console.error(color.dim('  Add --host to accept connections from outside this machine.'));
     process.exit(1);
   }
+
+  /**
+   * Tell the host we are going, if we ever told it we were here.
+   *
+   * HOISTED TO ONE PLACE because there were TWO SIGINT handlers and they raced: `registerLive`
+   * registered one that awaited a network round trip, and the server's own registered one that closed
+   * the socket and called `process.exit(0)`. Exit won essentially always, so Ctrl-C — the way every
+   * person actually stops this — left the member registered and the badge lit until the 90s TTL ran
+   * out. It looked like it worked because a SIGTERM (`pkill`) hits only the first handler, and that
+   * is what I happened to test with.
+   */
+  let sayGoodbye = async () => {};
 
   const watching = argv.watch === true;
   if (watching && argv.build === false) {
@@ -548,6 +571,67 @@ export function lagoonServeCommand(argv) {
 
   if (watching) startWatching();
   if (watching) registerLive();
+  /**
+   * Send the built artifact to the host, as the current draft for this lagoon.
+   *
+   * BEST EFFORT, like the announcement, and for the same reason: a preview must not fail because a
+   * host is down. But a REFUSAL is said once — the announcement taught that lesson by swallowing one
+   * for twenty-six seconds while the gallery quietly showed the last published build.
+   *
+   * NOT AWAITED by the rebuild, so a slow link never delays the local reload. The pushes are
+   * SERIALISED though: two saves a second apart must not race and leave the older bytes as the draft,
+   * which is a bug that would show up as "it reloaded and nothing changed" once in a while.
+   */
+  // DECLARED ABOVE THE FIRST CALL, and that is not stylistic. `function pushDraft` hoists and these
+  // do not, so the startup push below — which used to sit above this block — threw
+  // "Cannot access 'pushInFlight' before initialization" and took the whole server down with it.
+  let pushInFlight = null;
+  let pushQueued = false;
+  let pushRefused = false;
+  function pushDraft() {
+    if (!pushing) return;
+    if (pushInFlight) {
+      pushQueued = true;
+      return;
+    }
+    const cfg = loadHostConfig();
+    const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
+    const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
+    if (!base || !hostToken) return;
+    const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
+    const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
+    // SNAPSHOT THE BYTES. `body` is reassigned by every rebuild, so reading it after the await would
+    // sometimes send a newer artifact under an older push's completion — harmless here, and exactly
+    // the kind of thing that makes a race impossible to reason about later.
+    const bytes = body;
+    pushInFlight = fetch(`${base}/api/live/draft?${qs}`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/html; charset=utf-8', authorization: `Bearer ${hostToken}` },
+      body: bytes,
+    })
+      .then(async (res) => {
+        if (!res.ok && !pushRefused) {
+          pushRefused = true;
+          const why = await res.json().catch(() => null);
+          console.error(color.red(`  ✗ the host refused this draft: ${why?.error ?? res.status}`));
+        }
+      })
+      .catch(() => {
+        /* the host is unreachable; the local preview is unaffected and the next save tries again */
+      })
+      .finally(() => {
+        pushInFlight = null;
+        if (pushQueued) {
+          pushQueued = false;
+          pushDraft();
+        }
+      });
+  }
+
+  // The first draft goes up immediately: the artifact is already built by the time we get here, and
+  // waiting for the first SAVE would leave the host showing the last published build until somebody
+  // typed — which is the exact confusion this feature exists to remove.
+  if (watching && pushing) pushDraft();
 
   /**
    * Tell the lagoon host this member is being served live, and keep telling it.
@@ -572,16 +656,27 @@ export function lagoonServeCommand(argv) {
     // published motu-review:all.)
     const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
     const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
-    const call = (path, body) =>
-      fetch(`${base}${path}?${qs}`, {
+    const call = (path, body, extra) => {
+      const search = new URLSearchParams(qs);
+      for (const [k, v] of Object.entries(extra ?? {})) search.set(k, v);
+      return fetch(`${base}${path}?${search}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${hostToken}` },
         ...(body ? { body: JSON.stringify(body) } : {}),
       }).catch(() => null);
+    };
 
     let announced = false;
     let refused = false;
     const beat = async () => {
+      // PUSHING REPLACES ANNOUNCING. Doing both registered the member TWICE — once as a URL to come
+      // and fetch, once as bytes already held — for one lagoon a viewer cannot tell apart. When we
+      // are pushing, this loop is only a HEARTBEAT: it stops the draft expiring during a long think,
+      // and the bytes themselves go up on save.
+      if (pushing) {
+        await call('/api/live/draft', null, { touch: '1' });
+        return;
+      }
       const announceUrl = liveUrl || `http://127.0.0.1:${port}`;
       const res = await call('/api/live', { url: announceUrl });
       // A REFUSAL IS SAID ONCE, and until now it was said never. The announcement is best-effort by
@@ -611,15 +706,15 @@ export function lagoonServeCommand(argv) {
     timer.unref?.();
 
     let leaving = false;
-    const leave = async () => {
+    sayGoodbye = async () => {
       if (leaving) return;
       leaving = true;
       clearInterval(timer);
-      await call('/api/live/off');
-      process.exit(0);
+      // A DEADLINE, because shutting down must not hang on a host that has gone away. Two seconds is
+      // long enough for a round trip to a machine on the same network and short enough that nobody
+      // reaches for a second Ctrl-C, which would skip this entirely.
+      await Promise.race([call('/api/live/off'), new Promise((r) => setTimeout(r, 2000))]);
     };
-    process.on('SIGINT', leave);
-    process.on('SIGTERM', leave);
   }
 
   /**
@@ -650,6 +745,10 @@ export function lagoonServeCommand(argv) {
             (viewers.size ? color.dim(` · reloading ${viewers.size} viewer(s)`) : ''),
         );
         for (const res of viewers) res.write('data: reload\n\n');
+        // AND THE HOST, if we are pushing. After the local viewers, because a rebuild that reaches
+        // the browser on this machine and fails to reach the host is a better outcome than the
+        // reverse — and because `pushDraft` is fire-and-forget and must not delay either.
+        pushDraft();
       } catch (err) {
         console.error(color.red(`✗ rebuild failed — still serving the last good page`));
         console.error(color.dim(`  ${err.message.split('\n')[0]}`));
@@ -696,11 +795,23 @@ export function lagoonServeCommand(argv) {
     console.log('');
   }
 
-  process.on('SIGINT', () => {
+  // ONE SHUTDOWN, in order: tell the host first, then drop the viewers and close. The other way
+  // round is what was happening by accident, and it meant the host kept serving a lagoon whose
+  // process had exited — proxying to a port nothing was listening on, or holding a draft nobody
+  // would refresh — for up to ninety seconds.
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
     console.log('');
+    await sayGoodbye();
     for (const res of viewers) res.end();
     server.close(() => process.exit(0));
-  });
+    // If the server has open connections that will not close, do not hang for ever on the way out.
+    setTimeout(() => process.exit(0), 1500).unref?.();
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
   return 0;
 }
 

@@ -15,6 +15,14 @@ function startHost(env) {
   });
   return child;
 }
+const post = async (path, init = {}) => {
+  const res = await fetch(`http://127.0.0.1:8931${path}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, ...(init.headers ?? {}) },
+    body: init.body,
+  });
+  return res;
+};
 const announce = async (url) => {
   const res = await fetch('http://127.0.0.1:8931/api/live?repo=a/b&slug=all', {
     method: 'POST',
@@ -48,4 +56,40 @@ test('with no allowlist the rule is exactly what it was', async (t) => {
   await new Promise((r) => setTimeout(r, 900));
   assert.equal(await announce('http://127.0.0.1:8901'), 200);
   assert.equal(await announce('https://box.tailnet.ts.net:8901'), 400, 'unset means loopback only');
+});
+
+test('a pushed draft is held, served and cleared', async (t) => {
+  const child = startHost({});
+  t.after(() => child.kill());
+  await new Promise((r) => setTimeout(r, 900));
+
+  const qs = 'repo=a/b&slug=all';
+  // A DRAFT NEEDS BYTES. An empty push is a mistake, not an erasure — `/api/live/off` is erasure.
+  assert.equal((await post(`/api/live/draft?${qs}`, { body: '' })).status, 400);
+
+  const page = '<!doctype html><html><body>draft one</body></html>';
+  const first = await post(`/api/live/draft?${qs}`, {
+    headers: { 'content-type': 'text/html' },
+    body: page,
+  });
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).bytes, page.length);
+
+  // IT IS LISTED AS A DRAFT, with no url — a viewer cannot tell push from pull and neither can the
+  // listing's consumer, except by that one field.
+  const listed = await (await fetch('http://127.0.0.1:8931/api/live')).json();
+  assert.equal(listed.live.length, 1);
+  assert.equal(listed.live[0].draft, true);
+  assert.equal(listed.live[0].url, undefined);
+
+  // A TOUCH KEEPS IT ALIVE WITHOUT RE-SENDING IT. Half a megabyte every thirty seconds to say
+  // "still here" is the thing this exists to avoid.
+  assert.equal((await post(`/api/live/draft?${qs}&touch=1`)).status, 200);
+  // ...and a touch for a draft that was never sent is a 404, not a silent success: it would otherwise
+  // report a live lagoon that has no bytes behind it.
+  assert.equal((await post('/api/live/draft?repo=c/d&slug=all&touch=1')).status, 404);
+
+  // ONE STOP CLEARS BOTH KINDS, because to a viewer they were the same thing.
+  assert.equal((await post(`/api/live/off?${qs}`)).status, 200);
+  assert.deepEqual((await (await fetch('http://127.0.0.1:8931/api/live')).json()).live, []);
 });

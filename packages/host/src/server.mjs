@@ -79,6 +79,98 @@ function liveRegistry(ttlMs = 90_000) {
   };
 }
 
+/**
+ * DRAFTS: a live lagoon for a machine this host cannot reach.
+ *
+ * The other kind of live is a PULL — the dev server announces a URL and this host fetches it, which
+ * needs host -> dev reachability and is what `liveRegistry` above is for. This is the push: the dev
+ * machine sends the built artifact after every save, over the same outbound connection it already
+ * uses to announce itself, and the host serves those bytes. Nothing has to be able to reach the
+ * laptop, which is the whole point — a tunnel, a tailnet or a LAN route stops being a requirement.
+ *
+ * IT ONLY WORKS BECAUSE A LAGOON IS ONE SELF-CONTAINED FILE. Assets are inlined and `publish` refuses
+ * to ship a page still pointing at /assets/, so there is nothing else for a viewer to ask for. Push
+ * and proxy are therefore indistinguishable from the outside — which would be false for an ordinary
+ * dev server, where you would lose asset granularity, HMR and any route the page calls.
+ *
+ * IN MEMORY, NOT IN THE STORE, and that is the decision worth defending. A draft is replaced every
+ * few seconds and means nothing an hour later; putting it in the blob store would mean a record per
+ * save, a retention cap churning against real history, and a GC liveness rule to teach about a thing
+ * that is not an artifact. Held here it costs a few hundred kB, expires like the live registry, and a
+ * host restart forgets it — which is correct, because the next save re-sends it within seconds.
+ *
+ * BOUNDED, because anyone with the upload token can push. A cap on the number of drafts and on each
+ * one's size turns "memory grows until the host dies" into "the oldest draft is dropped".
+ */
+function draftRegistry(ttlMs = 90_000, maxDrafts = 32) {
+  const entries = new Map(); // "repo/slug" -> { body, type, at }
+  const key = (repo, slug) => `${repo}/${slug}`;
+  const fresh = (e) => e && Date.now() - e.at <= ttlMs;
+  return {
+    set(repo, slug, body) {
+      // Insertion order is Map order, so the first key is the least recently REPLACED. Dropping it is
+      // the honest eviction: a draft nobody has refreshed is a dev server that stopped.
+      if (!entries.has(key(repo, slug)) && entries.size >= maxDrafts) {
+        const oldest = entries.keys().next().value;
+        if (oldest !== undefined) entries.delete(oldest);
+      }
+      entries.set(key(repo, slug), { body, at: Date.now() });
+    },
+    clear(repo, slug) {
+      return entries.delete(key(repo, slug));
+    },
+    /** The bytes being drafted for this lagoon, or null. Expiry is checked on read, like `live`. */
+    bytesFor(repo, slug) {
+      const e = entries.get(key(repo, slug));
+      if (!fresh(e)) {
+        entries.delete(key(repo, slug));
+        return null;
+      }
+      return e.body;
+    },
+    list() {
+      const now = Date.now();
+      return [...entries]
+        .filter(([, e]) => fresh(e))
+        .map(([k, e]) => ({ member: k, bytes: e.body.length, ageMs: now - e.at }));
+    },
+  };
+}
+
+/**
+ * WHO IS WATCHING WHAT, so a new draft can tell them.
+ *
+ * When a lagoon is PROXIED, the reload channel belongs to the dev server and this host only forwards
+ * it. When it is PUSHED there is no dev server on the other end of the request, so the host has to
+ * own the channel itself: viewers hold an SSE open, and the arrival of a draft is the event.
+ *
+ * The client is unchanged — it is the same relative `__motu_reload` the CLI injects, which is what
+ * makes the two kinds of live interchangeable to a browser.
+ */
+function reloadChannels() {
+  const waiting = new Map(); // "repo/slug" -> Set<res>
+  const key = (repo, slug) => `${repo}/${slug}`;
+  return {
+    open(repo, slug, res) {
+      const k = key(repo, slug);
+      if (!waiting.has(k)) waiting.set(k, new Set());
+      waiting.get(k).add(res);
+      // A DISCONNECT IS THE NORMAL CASE, not an error: viewers close tabs. Without this the set grows
+      // for the life of the process and every draft writes to sockets nobody is reading.
+      res.on('close', () => {
+        waiting.get(k)?.delete(res);
+        if (waiting.get(k)?.size === 0) waiting.delete(k);
+      });
+    },
+    fire(repo, slug) {
+      const set = waiting.get(key(repo, slug));
+      if (!set) return 0;
+      for (const res of set) res.write('data: reload\n\n');
+      return set.size;
+    },
+  };
+}
+
 const MAX_WIRE = 24 * 1024 * 1024;
 const MAX_DECOMPRESSED = 64 * 1024 * 1024;
 
@@ -150,6 +242,8 @@ const NO_STORE = { 'cache-control': 'no-store' };
 export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DEFAULT_MAX_BYTES, token = null } = {}) {
   const store = openStore({ dir, maxRecords, maxBytes });
   const live = liveRegistry();
+  const drafts = draftRegistry();
+  const reload = reloadChannels();
 
   /**
    * Hand a request to whatever dev server is serving this member, and hand its answer straight back.
@@ -293,7 +387,11 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     // GUARDED BY METHOD, unlike its neighbours, because this path also takes a POST. Without the guard
     // the read branch answered the registration too — a cheerful 200 with an empty list, so the CLI
     // reported itself live and the host had never heard of it.
-    if (path === '/api/live' && req.method === 'GET') return json(res, 200, { live: live.list() });
+    if (path === '/api/live' && req.method === 'GET')
+      // ONE LIST, TWO MECHANISMS. A viewer cannot tell a pushed lagoon from a proxied one and neither
+      // should anything downstream: the app draws the same badge from this, and `url` is simply absent
+      // for a draft because there is nowhere to fetch it from.
+      return json(res, 200, { live: [...live.list(), ...drafts.list().map((d) => ({ ...d, draft: true }))] });
 
     if (req.method === 'POST') {
       // INGEST IS ITS OWN DOOR, checked before the admin gate and never falling through to it.
@@ -364,11 +462,45 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (path === '/api/group') return void (await group(req, res, url));
       if (path === '/api/baseline') return void (await baseline(req, res, url));
       if (path === '/api/baseline/accept') return void (await acceptBaseline(req, res, url));
+      if (path === '/api/live/draft') {
+        const repo = normalizeRepo(url.searchParams.get('repo'));
+        const slug = normalizeSegment(url.searchParams.get('slug'));
+        if (!repo || !slug) return json(res, 400, { error: 'repo and slug are required' });
+        // A TOUCH IS A HEARTBEAT, not a push. A draft expires the way a live URL does, and re-sending
+        // half a megabyte every thirty seconds to say "still here" would be absurd — so the beat that
+        // keeps a PULLED member alive has a pushed equivalent that carries no bytes.
+        //
+        // 404 when there is nothing to keep alive, rather than a silent success: the alternative is a
+        // registry reporting a live lagoon with no bytes behind it, which serves a 404 to whoever
+        // follows the badge.
+        if (url.searchParams.get('touch') === '1') {
+          const held = drafts.bytesFor(repo, slug);
+          if (!held) return json(res, 404, { error: 'no draft to keep alive — send one first' });
+          drafts.set(repo, slug, held);
+          return json(res, 200, { ok: true, member: `${repo}/${slug}`, touched: true, ttlMs: 90_000 });
+        }
+        // The same wire limit publishing uses. A lagoon is one file and a large one is ~1 MB; the cap
+        // is here so a token holder cannot push the host's memory over instead of a page.
+        const body = await readBody(req, 8 * 1024 * 1024);
+        if (!body?.length) return json(res, 400, { error: 'a draft needs a body' });
+        drafts.set(repo, slug, body);
+        // TELL THE PEOPLE LOOKING. This is the half a proxied live lagoon gets for free, because
+        // there the dev server owns the channel; pushed, the arrival of the bytes IS the event.
+        const told = reload.fire(repo, slug);
+        return json(res, 200, { ok: true, member: `${repo}/${slug}`, bytes: body.length, reloaded: told, ttlMs: 90_000 });
+      }
       if (path === '/api/live' || path === '/api/live/off') {
         const repo = normalizeRepo(url.searchParams.get('repo'));
         const slug = normalizeSegment(url.searchParams.get('slug'));
         if (!repo || !slug) return json(res, 400, { error: 'repo and slug are required' });
-        if (path === '/api/live/off') return json(res, 200, { ok: true, cleared: live.clear(repo, slug) });
+        if (path === '/api/live/off') {
+          // BOTH KINDS. `--live-push` and `--live-url` are two ways to be the same thing to a viewer,
+          // so stopping is one act: leaving a draft behind after the announcement went would keep the
+          // badge on and serve bytes from a process that has exited.
+          const cleared = live.clear(repo, slug);
+          const draftCleared = drafts.clear(repo, slug);
+          return json(res, 200, { ok: true, cleared: cleared || draftCleared });
+        }
         let where;
         try {
           where = JSON.parse((await readBody(req, 4096)).toString('utf8'))?.url;
@@ -580,6 +712,30 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         // `latest` ONLY. An immutable URL keyed by content must never be live: being able to say
         // "this exact page, forever" is the entire reason that URL exists, and serving something else
         // from it would break the one promise it makes.
+        // A PUSHED DRAFT WINS OVER A PULLED ONE, and over the store. Precedence rather than exclusion
+        // because both can briefly be true — a dev server that announced a URL and then switched to
+        // pushing keeps its registry entry until the TTL runs out — and the draft is the newer fact.
+        //
+        // `latest` ONLY, exactly as below: an immutable URL keyed by content must never be live.
+        const draft = ref === 'latest' ? drafts.bytesFor(repo, slug) : null;
+        if (draft) {
+          if (isReload) {
+            // THE HOST OWNS THIS CHANNEL when it is serving bytes rather than forwarding a request.
+            // Headers first and flushed, or the browser holds the connection as pending and the
+            // EventSource never reaches `open` — which looks exactly like a server that never reloads.
+            res.writeHead(200, {
+              'content-type': 'text/event-stream',
+              'cache-control': 'no-store',
+              connection: 'keep-alive',
+              'x-accel-buffering': 'no',
+            });
+            res.write(': open\n\n');
+            reload.open(repo, slug, res);
+            return; // held open on purpose; `reloadChannels` drops it when the socket closes
+          }
+          return html(res, 200, withRepoMeta(wrapFragment(draft, { title: slug }), repo), NO_STORE);
+        }
+
         const liveUrl = ref === 'latest' ? live.endpointFor(repo, slug) : null;
         if (liveUrl) {
           const rec = store.resolveRef(repo, ref, slug);

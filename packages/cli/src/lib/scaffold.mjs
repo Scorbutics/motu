@@ -80,13 +80,33 @@ export const SHARED_STYLES = `/* Styles for every motu island. In shadow isolati
    in light DOM. One sheet, both modes.
 
    Colours come from --x-* tokens (host-overridable) with --_* locals holding the fallback, so a host
-   can reskin islands without either side reopening isolation. */
+   can reskin islands without either side reopening isolation.
+
+   THE LOCALS ARE ALSO DECLARED ON :root, AND THAT IS NOT BELT-AND-BRACES.
+   \`.motu-root\` is added by packages/core/src/island.ts when an island mounts AS A CUSTOM ELEMENT.
+   Two very common surfaces never do that: a React host that renders the component directly inside its
+   region's wrap form, and the lagoon's own view. On both, the whole block below is inert and every
+   --_* resolves to nothing — which silently drops border, background and every colour while leaving
+   padding and font working, so it renders a plausible, WRONG screen that no check can see. It was
+   found by opening the page, which is the only thing that finds it.
+
+   A project styling its islands with Tailwind never notices, because it never asks these locals for
+   anything. One that uses this sheet as written hits it on its first island.
+
+   Splitting the rule is what makes it safe: the LOCALS go global — they are only fallback
+   definitions, and any :host / .motu-root still overrides them — while the presentational rules stay
+   scoped, because \`display: block\` and a font on :root would restyle the whole document. */
+:root,
 :where(:host, .motu-root) {
   --_text: var(--x-color-text, inherit);
   --_muted: var(--x-color-muted, #6b7280);
   --_border: var(--x-border, #e5e7eb);
   --_radius: var(--x-radius, 6px);
   --_surface: var(--x-color-surface, #ffffff);
+}
+
+/* SCOPED, unlike the locals above: these would restyle the document from :root. */
+:where(:host, .motu-root) {
   display: block;
   color: var(--_text);
   font-family: var(--x-font, inherit);

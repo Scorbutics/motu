@@ -5,7 +5,7 @@
 // row is read beside the thing it describes, and this one is read on its own, on the surface a person
 // landed on. `scale="page"` is that end: two lines, a card, a 21px name. The first version used the
 // chrome row and the page read as a settings list.
-import { ListItem, Row, Gauge, Grow, TitleLine, Name, Kind, Sub, Trail, Enter, Dot, Empty } from "@motu/chrome/react"
+import { ListItem, Row, Gauge, Grow, TitleLine, Name, Kind, Pill, Sub, Trail, Enter, Dot, Empty } from "@motu/chrome/react"
 import { RailedList } from "@/components/lagoon/railed-list"
 import type { LagoonRepo } from "@/app/index-region"
 import type { LagoonShow } from "@/components/lagoon/lagoon-filter"
@@ -61,8 +61,20 @@ export function LagoonRepos({ repos, cap = 1000, query = "", show = "all" }: Lag
                 <Dot tone={r.records ? "ok" : "neutral"} />
                 <Name>{r.repo}</Name>
                 <Kind>repo</Kind>
+                {/* LIVE IS A STATE, not a kind — so it is a Pill beside the tag rather than another
+                    tag. It breathes because that is the difference between "this is a build" and
+                    "this is somebody's editor", and it is the one animation in the kit that never
+                    stops, spent on the one state where stillness would be a lie. */}
+                {r.live?.length ? (
+                  <Pill tone="ok" fill className="motu-breathe" title={`served live: ${r.live.join(", ")}`}>
+                    live
+                  </Pill>
+                ) : null}
               </TitleLine>
-              <Sub>{`${r.slugs.length} lagoon${r.slugs.length === 1 ? "" : "s"}`}</Sub>
+              <Sub>
+                {`${r.slugs.length} lagoon${r.slugs.length === 1 ? "" : "s"}`}
+                {r.live?.length ? ` · ${r.live.join(", ")} updating as it is edited` : ""}
+              </Sub>
             </Grow>
             <Trail wrap>
               {/* GROUPED, like the readout above it. The bay says `1,000/repo` and this said

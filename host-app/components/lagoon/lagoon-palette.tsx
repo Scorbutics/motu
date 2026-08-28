@@ -17,7 +17,14 @@ import { motuSplashFrom } from "@motu/chrome/splash"
 import type { LagoonGroup, LagoonRepo } from "@/app/index-region"
 
 /** What a palette entry is. `kind` is the app's own vocabulary, printed on the right of the row. */
-type Entry = { id: string; label: string; kind: "group" | "repo" | "lagoon" | "action"; href: string }
+type Entry = {
+  id: string
+  label: string
+  kind: "group" | "repo" | "lagoon" | "action"
+  href: string
+  /** Somebody is serving this one right now. Shown, and ranked ahead of everything else. */
+  live?: boolean
+}
 
 /**
  * The places on this host that are not a lagoon.
@@ -81,6 +88,7 @@ function entriesFrom(groups: LagoonGroup[], repos: LagoonRepo[]): Entry[] {
         label: `${r.repo} · ${slug}`,
         kind: "lagoon",
         href: `/${r.repo}/latest/${slug}`,
+        live: r.live?.includes(slug) ?? false,
       })
     }
   }
@@ -143,7 +151,10 @@ export function LagoonPalette({
   const shown = all
     .map((e) => ({ e, m: fuzzy(needle, e.label) }))
     .filter((x): x is { e: Entry; m: { first: number; spread: number } } => x.m !== null)
-    .sort((a, b) => score(b.m) - score(a.m))
+    // LIVE FIRST, then the fuzzy rank. What somebody is editing right now is what they are most
+    // likely reaching for, and it is the entry whose content will differ from the last time they
+    // looked — which is the only entry in this list that can surprise them.
+    .sort((a, b) => Number(b.e.live ?? false) - Number(a.e.live ?? false) || score(b.m) - score(a.m))
     .map((x) => x.e)
 
   // NO SILENT CAP. Eight rows fit; more than that and the palette said nothing about the rest, so
@@ -186,6 +197,7 @@ export function LagoonPalette({
                     row is, which is the only thing there was to say. */}
                 <a className="motu-opt" data-entry href={e.href} onClick={motuSplashFrom}>
                   <span className="motu-grow motu-ellipsis">{e.label}</span>
+                  {e.live ? <span className="motu-opt__live motu-breathe">live</span> : null}
                   <span className="motu-opt__kind">{e.kind}</span>
                 </a>
               </li>

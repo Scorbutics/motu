@@ -27,6 +27,18 @@ export const GROUPS: LagoonGroup[] = [
   { name: 'everything', members: [...REPOS.map((r) => ({ repo: r.repo }))] },
 ]
 
+/**
+ * THE SAME HOST, with somebody working on one of them.
+ *
+ * Its own fixture because liveness is a fact with a clock on it: it is true only while a
+ * `motu lagoon serve --watch` is running on somebody's machine, so the state is unreachable by
+ * looking at a host unless you happen to look during the minutes it holds. A scenario is the only
+ * way anyone sees the badge, the ranking it causes in the palette, or what the row says underneath.
+ */
+export const REPOS_WITH_LIVE: LagoonRepo[] = REPOS.map((r) =>
+  r.repo === 'Scorbutics/motu-host-app' ? { ...r, live: ['all'] } : r,
+)
+
 /** One repository, which is what the singular in "1 lagoon · 1 record" is for. */
 export const ONE_REPO: LagoonRepo[] = [{ repo: 'Scorbutics/motu-host-app', slugs: ['all'], records: 1 }]
 

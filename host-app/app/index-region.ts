@@ -19,6 +19,19 @@ export type LagoonRepo = {
   repo: string
   slugs: string[]
   records: number
+  /**
+   * The slugs somebody is serving LIVE right now, from a `motu lagoon serve --watch` on their machine.
+   *
+   * A FACT WITH A CLOCK ON IT, which makes it unlike everything else in this type. Every other value
+   * here describes what the host holds; this one describes what a process somewhere is doing this
+   * minute, and it stops being true when that process stops. It is read per request and never cached,
+   * because a stale "live" is worse than no badge at all — it promises a page that updates and
+   * delivers one that does not.
+   *
+   * Absent rather than empty when nothing is live, so a host that cannot reach the registry and a
+   * host where nothing is running are the same answer: no badge.
+   */
+  live?: string[]
 }
 
 export type IndexRegion = {

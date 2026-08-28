@@ -5,7 +5,7 @@
 // unreachable on any host that has ever been published to — which is every host anybody develops
 // against. Nothing but a scenario can put it on screen.
 import type { Scenario } from '@motu/runtime/mock';
-import { REPOS, ONE_REPO, FILTERED_REPOS, CAP } from '../shared/index-evidence.js';
+import { REPOS, REPOS_WITH_LIVE, ONE_REPO, FILTERED_REPOS, CAP } from '../shared/index-evidence.js';
 
 export const fixtures = [];
 export const roles: string[] = [];
@@ -30,6 +30,13 @@ export const scenarios: Scenario[] = [
     // it is only wrong on the smallest host anybody has.
     name: 'one repository, singular everywhere',
     seed: { repos: ONE_REPO, cap: CAP },
+  },
+  {
+    // SOMEBODY IS WORKING ON ONE OF THEM. The badge, and the line under the name that says what it
+    // means — a state that exists only while a dev server is running, and therefore only exists on
+    // screen here.
+    name: 'one of them is being served live',
+    seed: { repos: REPOS_WITH_LIVE, cap: CAP },
   },
   {
     // A VIEWER WHO MAY SEE SOME OF IT. Two of five, filtered upstream by `authorize`. This is the

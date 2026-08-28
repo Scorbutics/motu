@@ -535,6 +535,22 @@ export function motuKitCss(scope = ':root') {
   color: ${MOTU_CHROME.primaryDeep};
   text-decoration: none;
 }
+/* LIVE, in a palette row. Smaller than a pill and louder than the kind beside it, because it is the
+   one thing in this list that is true only right now. */
+.motu-opt__live {
+  font: 700 9px/1 var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: ${MOTU_RADIUS.pill};
+  /* THE ACCENT, not the shallows. --w-shallow with deep ink measures 3.9:1, and 9px tracked uppercase
+     is the smallest text in the kit — axe called it, correctly. This is also the pairing the composed
+     rail's live badge already uses, so the two places that say "live" now say it the same way. */
+  background: var(--tide-accent);
+  color: ${MOTU_CHROME.onPrimary};
+  white-space: nowrap;
+}
+
 /* What KIND of thing an entry is, hard right and quiet: it disambiguates two rows with the same
    name, and is never the thing you are reading. */
 .motu-opt__kind {
@@ -683,8 +699,10 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
 .motu-row[data-scale="page"] .motu-name {
   /* SHRINKS AND WRAPS ITS OWN TEXT rather than moving to the next line whole. The title line wraps,
      which is right for the kind tag and the live pill after it — but a long name that cannot fit
-     beside a 7px lamp was pushing itself down and leaving the lamp alone on a line above it. */
-  flex: 1 1 auto;
+     beside a 7px lamp was pushing itself down and leaving the lamp alone on a line above it.
+     0 1 and not 1 1: it may shrink and must not GROW, or it takes the whole line and shoves the
+     tags that belong beside it out to the far edge of the row. */
+  flex: 0 1 auto;
   min-width: 0;
   font: 500 21px/1.15 var(--sans);
   letter-spacing: -.022em;

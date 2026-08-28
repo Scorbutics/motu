@@ -7,6 +7,7 @@ import { store } from '@/src/host/store';
 import { visibilityFor } from '@/src/host/visibility';
 import { createClient } from '@/src/supabase/server';
 import { viewerFrom } from '@/src/auth/viewer';
+import { liveMap } from '@/src/host/live';
 import { IndexScreen } from '@/app/index-screen';
 import type { LagoonGroup, LagoonRepo } from '@/app/index-region';
 
@@ -37,7 +38,16 @@ export default async function IndexPage() {
 
   const allRepos = s.listRepos() as LagoonRepo[];
   const keep = await Promise.all(allRepos.map((r) => visible(r.repo)));
-  const repos = allRepos.filter((_, i) => keep[i]);
+  // WHAT IS BEING SERVED RIGHT NOW, asked once for the whole page rather than once per row. A miss
+  // means no badge — see `LagoonRepo.live`; a host that cannot reach the registry and a host with
+  // nothing running give the same answer, which is the honest one.
+  const live = await liveMap();
+  const repos = allRepos
+    .filter((_, i) => keep[i])
+    .map((r) => {
+      const serving = r.slugs.filter((slug) => live.has(`${r.repo}/${slug}`));
+      return serving.length ? { ...r, live: serving } : r;
+    });
 
   // A GROUP'S SUMMARY NAMES ITS MEMBERS, so filtering the repo list alone is not enough — and a group
   // left with nothing readable is DROPPED rather than shown empty, because "a gallery you may not

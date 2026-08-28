@@ -4,7 +4,7 @@
 // its long list or its ranking unless they go looking, and "go looking" is not a thing a check does.
 // Seeded open, each state is an address.
 import type { Scenario } from '@motu/runtime/mock';
-import { REPOS, GROUPS } from '../shared/index-evidence.js';
+import { REPOS, REPOS_WITH_LIVE, GROUPS } from '../shared/index-evidence.js';
 
 export const fixtures = [];
 export const roles: string[] = [];
@@ -40,6 +40,13 @@ export const scenarios: Scenario[] = [
     // reads as broken rather than as a miss.
     name: 'nothing matches',
     seed: { repos: REPOS, groups: GROUPS, open: true, query: 'qqzz' },
+  },
+  {
+    // LIVE RANKS FIRST. With nothing typed the palette is the host in its arrival order; a lagoon
+    // somebody is editing jumps the queue, because it is the one entry whose content will differ
+    // from the last time they looked. Only a scenario can show that ordering.
+    name: 'a live lagoon comes first',
+    seed: { repos: REPOS_WITH_LIVE, groups: GROUPS, open: true },
   },
   {
     // A HOST WITH NOTHING ON IT, palette open. The state that breaks, and the one `input-coverage`

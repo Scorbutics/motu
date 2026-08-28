@@ -11,6 +11,7 @@
 // is the leak.
 import { store, access, normalizeRepo, normalizeSegment } from './store.ts'
 import type { RecordPath } from './records.ts'
+import { liveMap, liveFor, proxyLive } from './live.ts'
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { repoIndexPage, errorPage } from '@motu/host/src/views.mjs'
 import { canRead } from '@motu/host/src/access.mjs'
@@ -125,11 +126,33 @@ export async function repoListing(segments: string[], visible: Visible) {
  * writer. With `server.mjs` gone the app is that writer, so it can read the bytes directly and the
  * hop — along with the whole `motu_read` cookie-shadowing problem that hop created — goes away.
  */
-export function record(rec: RecordPath) {
+export async function record(rec: RecordPath, request: Request, url: URL) {
   const s = store()
   const found = s.resolveRef(rec.repo, rec.ref, rec.slug) as
     | { id: number; hash: string; title?: string; mutable?: boolean }
     | null
+
+  // LIVE FIRST, and only for `latest`. The project somebody is working on right now has a dev server
+  // that IS the answer. This route is not the one serving records yet — the catch-all still gates and
+  // proxies them, and the host answers — so this is here BEFORE it is needed rather than after: the
+  // switch that starts calling this function must not be the change that quietly stops hot reload.
+  // See `live.ts`.
+  const serving = liveFor(await liveMap(), rec.repo, rec.ref, rec.slug)
+  if (serving) {
+    const sub = rec.isReload ? '/__motu_reload' : `/${url.search}`
+    return proxyLive(serving, sub, request, {
+      repo: rec.repo,
+      slug: rec.slug,
+      hash: found?.hash ?? null,
+      title: found?.title ?? rec.slug,
+      // Read LAZILY: the fallback is only paid for when the dev server has actually gone.
+      bytes: () => (found ? (s.read(rec.repo, found.id, found.hash) as Buffer | null) : null),
+    })
+  }
+  // NOTHING IS SERVING IT. A reload channel with no live server is a 404 rather than a page: the
+  // client asked for a stream, and handing it a document would have it parse HTML as events for ever.
+  if (rec.isReload) return html(404, errorPage(404, 'nothing is serving this page live'))
+
   if (!found) return html(404, errorPage(404, `nothing at ${rec.repo}/${rec.ref}/${rec.slug}`))
   const bytes = s.read(rec.repo, found.id, found.hash) as Buffer | null
   // A record whose blob has been swept is GONE rather than missing — 410, because the URL was valid

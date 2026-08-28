@@ -1,0 +1,47 @@
+// The front page's invented data, in ONE place.
+//
+// Typed against the APP's own types with `import type`, which erases at runtime so the loaders that
+// read evidence files are unaffected — and a renamed field then fails the build here instead of
+// quietly previewing last month's shape.
+import type { LagoonGroup, LagoonRepo } from '../../../app/index-region'
+
+/** What this host actually holds, so the preview is not a fiction about a fictional host. */
+export const REPOS: LagoonRepo[] = [
+  { repo: 'Scorbutics/peps_ta_boite_app', slugs: ['all'], records: 24 },
+  { repo: 'twentyhq/twenty', slugs: ['all'], records: 3 },
+  { repo: 'motu-review', slugs: ['all'], records: 12 },
+  { repo: 'Scorbutics/motu-demo-app', slugs: ['all'], records: 1 },
+  { repo: 'Scorbutics/motu-host-app', slugs: ['all'], records: 1 },
+]
+
+export const GROUPS: LagoonGroup[] = [
+  {
+    name: 'product',
+    members: [
+      { repo: 'twentyhq/twenty' },
+      { repo: 'motu-review' },
+      { repo: 'Scorbutics/motu-demo-app' },
+      { repo: 'Scorbutics/motu-host-app' },
+    ],
+  },
+  { name: 'everything', members: [...REPOS.map((r) => ({ repo: r.repo }))] },
+]
+
+/** One repository, which is what the singular in "1 lagoon · 1 record" is for. */
+export const ONE_REPO: LagoonRepo[] = [{ repo: 'Scorbutics/motu-host-app', slugs: ['all'], records: 1 }]
+
+/**
+ * WHAT A RESTRICTED VIEWER SEES, and the reason this island exists at all.
+ *
+ * Filtered UPSTREAM by `authorize` — the island is never told what was removed, and cannot be, which
+ * is why "did the filter run" is not a question it can answer about itself. What it CAN do is render
+ * this list, and a scenario pinning it is the only place the shape of a partly-filtered host is
+ * addressable at all.
+ */
+export const FILTERED_REPOS: LagoonRepo[] = [
+  { repo: 'motu-review', slugs: ['all'], records: 12 },
+  { repo: 'Scorbutics/motu-demo-app', slugs: ['all'], records: 1 },
+]
+
+/** The host total from `/api/health` while this was written — 76.3 MB on the page. */
+export const STATS = { blobs: 346, bytes: 80031207, maxRecords: 1000 }

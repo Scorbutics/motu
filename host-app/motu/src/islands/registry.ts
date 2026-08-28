@@ -7,6 +7,8 @@ import { setDefaultIsolation } from '@motu/core';
 import { element as corpusFilterElement } from './corpus-filter.island';
 import { element as corpusStatesElement } from './corpus-states.island';
 import { element as githubSignInElement } from './github-sign-in.island';
+import { element as lagoonGroupsElement } from './lagoon-groups.island';
+import { element as lagoonReposElement } from './lagoon-repos.island';
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
 //
@@ -20,7 +22,7 @@ import { element as githubSignInElement } from './github-sign-in.island';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusStatesElement, githubSignInElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusStatesElement, githubSignInElement, lagoonGroupsElement, lagoonReposElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -31,4 +33,6 @@ export interface ElementTypes {
   'x-corpus-filter': typeof corpusFilterElement;
   'x-corpus-states': typeof corpusStatesElement;
   'x-github-sign-in': typeof githubSignInElement;
+  'x-lagoon-groups': typeof lagoonGroupsElement;
+  'x-lagoon-repos': typeof lagoonReposElement;
 }

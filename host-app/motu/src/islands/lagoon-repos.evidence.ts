@@ -1,0 +1,37 @@
+// Lagoon EVIDENCE for lagoon-repos — every shape the repositories card takes.
+//
+// The state worth pinning hardest is the FIRST one: an empty host. It is what a person sees on the
+// day they stand one up, it is the only place on the page that tells them what to do next, and it is
+// unreachable on any host that has ever been published to — which is every host anybody develops
+// against. Nothing but a scenario can put it on screen.
+import type { Scenario } from '@motu/runtime/mock';
+import { REPOS, ONE_REPO, FILTERED_REPOS } from '../shared/index-evidence.js';
+
+export const fixtures = [];
+export const roles: string[] = [];
+
+export const scenarios: Scenario[] = [
+  {
+    // `seed: {}` MEANS the empty state — the lanes reset between scenarios, so this is the component's
+    // own defaults and not whichever scenario ran before it.
+    name: 'a host with nothing published',
+    seed: {},
+  },
+  {
+    name: 'the host as it stands',
+    seed: { repos: REPOS },
+  },
+  {
+    // The singular. "1 lagoon · 1 record" is a different sentence from "1 lagoons · 1 records", and
+    // it is only wrong on the smallest host anybody has.
+    name: 'one repository, singular everywhere',
+    seed: { repos: ONE_REPO },
+  },
+  {
+    // A VIEWER WHO MAY SEE SOME OF IT. Two of five, filtered upstream by `authorize`. This is the
+    // state the whole region exists for: rendering a partial list is correct, and rendering the full
+    // one to this viewer is the leak.
+    name: 'a viewer who may see two of five',
+    seed: { repos: FILTERED_REPOS },
+  },
+];

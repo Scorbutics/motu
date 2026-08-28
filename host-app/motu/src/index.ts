@@ -10,3 +10,4 @@ export { ELEMENT_REGISTRY } from './islands/registry';
 export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry';
 export { corpusArchipelago } from './archipelagos/corpus/corpus.archipelago';
 export { signinArchipelago } from './archipelagos/signin/signin.archipelago';
+export { indexArchipelago } from './archipelagos/index/index.archipelago';

@@ -6,10 +6,12 @@ import './coverage.generated';
 
 import type { ArchipelagoConfig } from '@motu/core';
 import { corpusArchipelago } from './corpus/corpus.archipelago';
+import { indexArchipelago } from './index/index.archipelago';
 import { signinArchipelago } from './signin/signin.archipelago';
 
 export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   [corpusArchipelago.id]: corpusArchipelago,
+  [indexArchipelago.id]: indexArchipelago,
   [signinArchipelago.id]: signinArchipelago,
 };
 

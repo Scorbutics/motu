@@ -179,15 +179,25 @@ function resolveStations(
  * `PAGE_SHELL_CSS` is the shell alone — deliberately not `PAGE_CSS`, which also carries overrides
  * written for the host's server-rendered row shape and fights the React kit.
  *
- * SCOPED TO `#lagoon-root` and injected with the lowest precedence: a region whose own root declares
- * its arrangement (`main { … }` in the project's sheet, say) still wins, because that sheet is
- * injected after this one. This only supplies a shell where a project has not.
+ * THE MOUNTPOINTS VIEW ONLY, and that qualifier is the whole correction. This was scoped to
+ * `#lagoon-root` unconditionally, with a comment claiming a project that declares its own
+ * arrangement still wins because its sheet is injected later. That is true of rules on the SAME
+ * element and false of the one that mattered: a `max-width` on the CONTAINER cannot be overridden by
+ * the child, whatever the child's stylesheet says. So every region rendered in a centred 940px
+ * column — and a page designed to fill the screen, like an auth split with `flex h-svh` and two
+ * half-width panels, was squeezed into 940px with the rest of the surface left blank. It looked
+ * exactly like the lagoon shrinking somebody's page, because it was.
+ *
+ * The gutters were added for islands rendered BARE — placed individually with no page around them,
+ * which is what `mountpoints` shows and is genuinely missing a shell. A REGION renders the
+ * archipelago's own `root`: the application's real arrangement, which already decides its own width.
+ * Supplying a column there is not a fallback, it is an override.
  */
 function installLagoonShell(): void {
   if (typeof document === 'undefined' || document.getElementById('motu-lagoon-shell')) return;
   const style = document.createElement('style');
   style.id = 'motu-lagoon-shell';
-  style.textContent = `#lagoon-root{${PAGE_SHELL_CSS.replace(/^\s*main\s*\{|\}\s*$/g, '').trim()}}`;
+  style.textContent = `#lagoon-root:has(> motu-archipelago[view="mountpoints"]){${PAGE_SHELL_CSS.replace(/^\s*main\s*\{|\}\s*$/g, '').trim()}}`;
   // After the chrome sheet, before the project's: `installMotuChrome` prepends, and the project's own
   // stylesheet is added later by the entry, so this lands between them.
   document.head.prepend(style);

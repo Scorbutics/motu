@@ -228,6 +228,16 @@ const handler = async (request: Request) => {
   }
 
   const record = parseRecordPath(pathname);
+  /**
+   * Take `__motu_frame` back off before the hop.
+   *
+   * ONE FUNCTION FOR EVERY PROXY PATH, because there is more than one and the first version only
+   * covered the last of them: the ABSTAIN branch returns earlier, and on this host every repo
+   * abstains, so nearly every frame asked the host for an address it has never heard of and got a
+   * 404 for a page that exists.
+   */
+  const bareRewrite = (p: string) =>
+    record?.bare ? p.replace(/\/__motu_frame(?=(\/__motu_reload)?$)/, '') : p;
 
   // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
   // page or the index is still the HOST's read secret and still handled there.
@@ -310,7 +320,11 @@ const handler = async (request: Request) => {
   // ABSTAIN: no `projects` row, so the host decides as it always has. No credential is added, which
   // is what makes this genuinely "step aside" rather than "allow" — a private repo the app has never
   // heard of is still refused by the host.
-  if (decision.outcome === 'abstain') return proxyToHost(request);
+  // THE SAME REWRITE ON EVERY PROXY PATH. `__motu_frame` is the app's own address and the host has
+  // never heard of it, so any hop that forgets to take it off gets a 404 for a page that exists —
+  // which is exactly what this branch did. Every repo on this host abstains today, so that was every
+  // frame except the ones whose repo happened to be answered by another branch.
+  if (decision.outcome === 'abstain') return proxyToHost(request, { rewritePath: bareRewrite });
 
   // ALLOWED. `public` needs no credential — the host will serve it to anyone, and adding a bearer
   // there would mean the host's gate was never exercised on the path where it agrees with us.
@@ -335,10 +349,7 @@ const handler = async (request: Request) => {
       : { ...hostCredential(), cookie: withoutCookie(request.headers.get('cookie'), 'motu_read') };
   // THE BYTES. `__motu_frame` is the app's own address and the host has never heard of it, so it
   // comes back off before the hop — the host answers the page exactly as it did, live or stored.
-  const response = await proxyToHost(request, {
-    setHeaders: cred,
-    rewritePath: (p) => (record.bare ? p.replace(/\/__motu_frame(?=(\/__motu_reload)?$)/, '') : p),
-  });
+  const response = await proxyToHost(request, { setHeaders: cred, rewritePath: bareRewrite });
 
   // NEVER BEHIND A SHARED CACHE. This response was computed for one viewer; `private, no-store` is
   // what stops a proxy between here and them handing it to the next person. Set for the allowed path

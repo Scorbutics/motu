@@ -674,7 +674,14 @@ export function lagoonServeCommand(argv) {
       // are pushing, this loop is only a HEARTBEAT: it stops the draft expiring during a long think,
       // and the bytes themselves go up on save.
       if (pushing) {
-        await call('/api/live/draft', null, { touch: '1' });
+        const beatRes = await call('/api/live/draft', null, { touch: '1' });
+        // A 404 MEANS THE HOST NO LONGER HOLDS IT, and the heartbeat cannot revive what is not there.
+        // Drafts live in the host's memory, so a host restart — or the 32-draft cap evicting the
+        // least recently refreshed — forgets one while the dev server it belongs to is still running
+        // happily. Without this the lagoon goes dark until somebody saves a file, and nothing says
+        // why: the CLI is fine, the host is fine, and the page quietly serves the last publish.
+        // Re-send the bytes we already have, which is exactly what a save would have done.
+        if (beatRes?.status === 404) pushDraft();
         return;
       }
       const announceUrl = liveUrl || `http://127.0.0.1:${port}`;

@@ -93,3 +93,27 @@ test('a pushed draft is held, served and cleared', async (t) => {
   assert.equal((await post(`/api/live/off?${qs}`)).status, 200);
   assert.deepEqual((await (await fetch('http://127.0.0.1:8931/api/live')).json()).live, []);
 });
+
+test('a touch tells a live server its draft is gone, so it can send it again', async (t) => {
+  const child = startHost({});
+  t.after(() => child.kill());
+  await new Promise((r) => setTimeout(r, 900));
+
+  const qs = 'repo=a/b&slug=all';
+  await post(`/api/live/draft?${qs}`, { headers: { 'content-type': 'text/html' }, body: '<html>one</html>' });
+  assert.equal((await post(`/api/live/draft?${qs}&touch=1`)).status, 200, 'held: a touch keeps it');
+
+  // WHAT A HOST RESTART LOOKS LIKE from the CLI's side. Drafts live in memory, so a restart — or the
+  // 32-draft cap evicting the least recently refreshed — forgets one while the dev server it belongs
+  // to is still running. The 404 is the only signal that happens, and the CLI re-pushes on it.
+  // Without that the lagoon goes dark until somebody saves a file, and nothing says why.
+  await post(`/api/live/off?${qs}`);
+  assert.equal((await post(`/api/live/draft?${qs}&touch=1`)).status, 404, 'gone: a touch must SAY so');
+
+  // ...and sending it again restores it, which is what the CLI does with that 404.
+  assert.equal(
+    (await post(`/api/live/draft?${qs}`, { headers: { 'content-type': 'text/html' }, body: '<html>two</html>' })).status,
+    200,
+  );
+  assert.equal((await post(`/api/live/draft?${qs}&touch=1`)).status, 200, 'held again');
+});

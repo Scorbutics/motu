@@ -716,6 +716,25 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
   color: var(--ink);
 }
 
+/* THE MARK, AS THE WAY HOME. On the front page the mark IS the product; anywhere deeper it is also
+   the way back to it, which is the habit every application on the web already teaches. One class, so
+   that is true on the pages node renders and the ones React does — and a real hit target around a
+   30px image, because a logo you have to aim at is not an affordance. */
+.motu-home {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 10px;
+  transition: background 160ms, transform 160ms;
+}
+.motu-home:hover, .motu-home:focus-visible {
+  background: rgba(255, 255, 255, .16);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.motu-home:focus-visible { outline: 2px solid rgba(255, 255, 255, .7); outline-offset: 1px; }
+
 /* A WAY BACK, where a masthead's mark would be. Reads as the wordmark's sibling — same row, same
    weight class — because on a page you arrived at, leaving is the primary navigation. */
 .motu-back {

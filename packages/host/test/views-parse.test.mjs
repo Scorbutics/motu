@@ -24,6 +24,13 @@ test('every page this host renders builds a document', async () => {
   // kit's ring rather than a second keyframe of the same name.
   assert.match(composed, /class="motu-bay compact" data-shape="masthead"/);
   assert.match(composed, /class="live-dot motu-breathe"/);
+  // A WAY HOME from the deepest surface this host has. Twice: the rail's bay on a wide screen, and
+  // the topbar, which is the only chrome below 760px.
+  assert.equal(
+    (composed.match(/class="motu-home" href="\/"/g) ?? []).length,
+    2,
+    'the composed view needs a way back to the index at both widths',
+  );
   // ONCE, not never: the kit defines it and this page loads the kit. A second definition is what the
   // browser silently prefers, for every element in the document, and is what was here.
   assert.equal(

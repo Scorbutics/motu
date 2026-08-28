@@ -27,6 +27,7 @@ import {
   motuChromeCss,
   motuPage,
   motuBay,
+  motuMark,
   motuPanel,
   motuRow,
   motuRailedList,
@@ -147,6 +148,9 @@ main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; bor
    view exists to SHOW the lagoons, so the switcher becomes a bar you can read in one line and a sheet
    you pull up when you actually want to switch. Desktop is unchanged: a 268px rail beside a wide
    stage costs nothing there and is faster than any sheet. */
+/* THE MARK AT RAIL SIZE. The masthead's is 30px against a 46px heading; the rail's band is 16px of
+   padding around a 13.5px title, so the same square would be the tallest thing in it. */
+aside .motu-home .motu-mark { width: 22px; height: 22px; border-radius: 6px; }
 .topbar { display: none; }
 .scrim { display: none; }
 @media (max-width: 760px) {
@@ -161,6 +165,7 @@ main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; bor
     color: var(--motu-on-primary);
     border-bottom: 1px solid var(--line);
   }
+  .topbar .motu-home .motu-mark { width: 24px; height: 24px; border-radius: 6px; }
   .topbar .who { min-width: 0; flex: 1; line-height: 1.25; }
   .topbar .who strong { display: block; font: 700 14px/1.25 inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar .who span { display: block; font: 500 11.5px/1.3 inherit; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -258,6 +263,7 @@ export function composedPage({ id, group, members, live = false }) {
 <body>
 <div class="wrap">
   <header class="topbar">
+    <a class="motu-home" href="/" aria-label="All repositories">${motuMark()}</a>
     <div class="who">
       <strong id="tb-title">${escapeHtml(members[0]?.title || members[0]?.slug || group)}</strong>
       <span id="tb-sub">${escapeHtml(group)} · ${members.length} lagoon${members.length === 1 ? '' : 's'}</span>
@@ -276,6 +282,11 @@ export function composedPage({ id, group, members, live = false }) {
       // INSIDE the bay, not above it. As a sibling it sat on the sheet's own light surface, so the
       // water started an inch down and the sheet read as two stacked headers.
       lead: '<div class="bay-lead grab" id="grab" aria-hidden="true"><i></i></div>',
+      // THE WAY OUT. A composed view is the deepest surface this host has — a lagoon, inside a
+      // gallery, inside a group — and until now the only way back to the index was the browser's own
+      // back button, which is not a way back when somebody arrived here from a shared link. The mark
+      // is where it already is on the front page, and it goes where a mark goes.
+      leading: `<a class="motu-home" href="/" aria-label="All repositories">${motuMark()}</a>`,
     })}
     <div class="rail">${rail}</div>
     <footer class="motu-cap">${

@@ -37,7 +37,7 @@ export const CONTRACTS = {
     ambient: [],
   },
   'x-lagoon-repos': {
-    input: ['repos'],
+    input: ['repos', 'cap'],
     output: {  },
     ambient: [],
   },

@@ -1,12 +1,12 @@
 "use client"
 // The bay's readout: what this host holds in total.
 //
-// AN ISLAND, though I first called it chrome. The rule is "what the region SHOWS or ACTS ON is an
-// island; what merely ARRANGES it is not", and this shows data — I argued it was arrangement because
-// it names no repository, which is not the test. A fresh reader found the consequence before the
-// reasoning: with `stats` unreachable from the region, the layout fell back to a default and rendered
-// `0 objects · 0 kB` above five repositories holding 41 records. `store.stats()` cannot produce that.
-// The invented state was the price of the wrong call.
+// A METER, not a sentence. `351 objects · 77.9 MB · cap 1000/repo` is three separate facts run
+// together in prose, which is the shape a footnote takes; every reference design gives its numbers a
+// LABEL over a VALUE and tabular figures, so they line up and can be compared at a glance. The kit's
+// `Meter` is exactly that — dt/dd pairs, uppercase labels, `font-variant-numeric: tabular-nums` — and
+// the first version reimplemented none of it as one template string.
+import { Meter } from "@motu/chrome/react"
 import { size } from "@/src/host/format"
 
 export interface LagoonStatsProps {
@@ -20,7 +20,15 @@ export interface LagoonStatsProps {
 
 export function LagoonStats({ stats = null }: LagoonStatsProps) {
   if (!stats) return null
+  // `items`, not children — the kit builds the dt/dd pairs itself, which is what keeps every meter on
+  // every motu surface the same object rather than three hand-assembled definition lists.
   return (
-    <>{`${stats.blobs} object${stats.blobs === 1 ? "" : "s"} · ${size(stats.bytes)} · cap ${stats.maxRecords}/repo`}</>
+    <Meter
+      items={[
+        { label: "Objects", value: stats.blobs.toLocaleString("en") },
+        { label: "Size", value: size(stats.bytes) },
+        { label: "Cap", value: `${stats.maxRecords.toLocaleString("en")}/repo` },
+      ]}
+    />
   )
 }

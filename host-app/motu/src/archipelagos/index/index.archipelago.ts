@@ -47,7 +47,7 @@ export const indexArchipelago = archipelago<IndexRegion, 'x-lagoon-groups' | 'x-
     {
       slot: 'repositories',
       element: 'x-lagoon-repos',
-      bind: [{ repos: 'repos' }],
+      bind: [{ repos: 'repos', cap: 'cap' }],
     },
   ],
 });

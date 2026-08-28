@@ -2,7 +2,7 @@
 import { overridesFor } from '@motu/react';
 import type { LagoonOverrides } from '@motu/react';
 import { indexArchipelago } from '../../../../src/archipelagos/index/index.archipelago.js';
-import { REPOS, GROUPS, STATS } from '../../../../src/shared/index-evidence.js';
+import { REPOS, GROUPS, STATS, CAP } from '../../../../src/shared/index-evidence.js';
 
 /**
  * Seeded to the host AS IT STANDS rather than to the empty state.
@@ -15,6 +15,7 @@ export const indexSeed: NonNullable<LagoonOverrides['seed']>[string] = {
   groups: GROUPS,
   repos: REPOS,
   stats: STATS,
+  cap: CAP,
 };
 
 export const indexRegion = overridesFor(indexArchipelago, { seed: indexSeed });

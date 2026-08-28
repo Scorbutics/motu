@@ -45,3 +45,6 @@ export const FILTERED_REPOS: LagoonRepo[] = [
 
 /** The host total from `/api/health` while this was written — 76.3 MB on the page. */
 export const STATS = { blobs: 346, bytes: 80031207, maxRecords: 1000 }
+
+/** The host's per-repo record cap, which is what each row's fill is drawn against. */
+export const CAP = 1000

@@ -5,7 +5,7 @@
 // unreachable on any host that has ever been published to — which is every host anybody develops
 // against. Nothing but a scenario can put it on screen.
 import type { Scenario } from '@motu/runtime/mock';
-import { REPOS, ONE_REPO, FILTERED_REPOS } from '../shared/index-evidence.js';
+import { REPOS, ONE_REPO, FILTERED_REPOS, CAP } from '../shared/index-evidence.js';
 
 export const fixtures = [];
 export const roles: string[] = [];
@@ -19,23 +19,23 @@ export const scenarios: Scenario[] = [
     // second is what a real host with nothing published sends, and `input-coverage` is right to
     // count them apart.
     name: 'a host with nothing published',
-    seed: { repos: [] },
+    seed: { repos: [], cap: CAP },
   },
   {
     name: 'the host as it stands',
-    seed: { repos: REPOS },
+    seed: { repos: REPOS, cap: CAP },
   },
   {
     // The singular. "1 lagoon · 1 record" is a different sentence from "1 lagoons · 1 records", and
     // it is only wrong on the smallest host anybody has.
     name: 'one repository, singular everywhere',
-    seed: { repos: ONE_REPO },
+    seed: { repos: ONE_REPO, cap: CAP },
   },
   {
     // A VIEWER WHO MAY SEE SOME OF IT. Two of five, filtered upstream by `authorize`. This is the
     // state the whole region exists for: rendering a partial list is correct, and rendering the full
     // one to this viewer is the leak.
     name: 'a viewer who may see two of five',
-    seed: { repos: FILTERED_REPOS },
+    seed: { repos: FILTERED_REPOS, cap: CAP },
   },
 ];

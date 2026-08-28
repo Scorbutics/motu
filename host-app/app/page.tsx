@@ -46,5 +46,6 @@ export default async function IndexPage() {
     if (members.length) groups.push({ ...g, members });
   }
 
-  return <IndexScreen groups={groups} repos={repos} stats={s.stats() as never} />;
+  const stats = s.stats() as { blobs: number; bytes: number; maxRecords: number };
+  return <IndexScreen groups={groups} repos={repos} stats={stats} cap={stats.maxRecords} />;
 }

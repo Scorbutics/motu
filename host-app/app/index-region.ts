@@ -32,6 +32,16 @@ export type IndexRegion = {
 
   /** What the host holds in total. Chrome, not a listing — it names no repository. */
   stats: { blobs: number; bytes: number; maxRecords: number }
+
+  /**
+   * The per-repo record cap, as its own key.
+   *
+   * It lives inside `stats` too, and it is declared separately because a DIFFERENT island needs it:
+   * the repositories list draws each row's fill against it. Reaching into `stats` from there would
+   * make one island depend on the shape of another's input — `props-match` caught the first attempt,
+   * where `cap` was a prop nothing could ever set and every row silently used a hardcoded 1000.
+   */
+  cap: number
 }
 
 /**

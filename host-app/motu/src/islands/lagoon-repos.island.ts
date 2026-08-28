@@ -12,6 +12,7 @@ export const element = islandElement({
     contract: {
       input: [
         'repos',
+        'cap',
       ],
     },
   },

@@ -160,6 +160,16 @@ export function motuKitCss(scope = ':root') {
 .motu-row .motu-ellipsis, .motu-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* --- LIST: rows that assemble rather than appear ------------------------------------------------ */
+/* --- TILE STRIP: a short, bounded set read across rather than down ------------------------------
+   The shape both reference designs use for a handful of things — the time tiles, the day strip. A
+   stack of full-width rows says "this list continues"; a strip says "this is all of them", which is
+   the truth for a set of two or three. Wraps rather than scrolls, because a hidden tile in a set this
+   small is worse than a second line. */
+.motu-tile-strip {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.motu-tile-strip > * { flex: 1 1 190px; width: auto; }
+
 .motu-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .motu-list > * { animation: motu-swim ${MOTU_MOTION.swimIn} both; animation-delay: calc(var(--i, 0) * 45ms); }
 @keyframes motu-swim { from { opacity: 0; transform: translateX(-8px); } }
@@ -373,6 +383,18 @@ export function motuKitCss(scope = ':root') {
   opacity: .3; transition: opacity 160ms ease, width 160ms cubic-bezier(.2,.9,.3,1);
 }
 .motu-row[data-interactive]:hover .motu-gauge { opacity: .65; }
+/* A GAUGE THAT CARRIES A QUANTITY, not only a state.
+   It was depth: three opacities for idle / hover / current. Every reference design shows a ratio as a
+   FILLED TRACK, and motu had numbers with no way to draw them — a repo at 24 of 1000 records and one
+   at 998 rendered identically. Give it --fill and the track lights from the bottom to that share;
+   leave it out and nothing changes, so every existing caller is untouched. */
+.motu-gauge[style*="--fill"] {
+  opacity: 1;
+  background:
+    linear-gradient(180deg, transparent 0%, transparent calc(100% - var(--fill, 0%)),
+      var(--w-mid) calc(100% - var(--fill, 0%)), var(--w-deep) 100%),
+    color-mix(in srgb, var(--ink) 8%, transparent);
+}
 .motu-row[aria-current="true"] .motu-gauge, .motu-row[data-selected] .motu-gauge { opacity: 1; width: 6px; }
 
 /* --- FIELD: a labelled value ---------------------------------------------------------------------- */

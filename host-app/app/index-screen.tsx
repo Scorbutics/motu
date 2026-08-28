@@ -11,13 +11,13 @@ import { LagoonRepos } from "@/components/lagoon/lagoon-repos"
 import { LagoonStats } from "@/components/lagoon/lagoon-stats"
 import type { IndexRegion } from "@/app/index-region"
 
-export function IndexScreen({ groups, repos, stats }: IndexRegion) {
+export function IndexScreen({ groups, repos, stats, cap }: IndexRegion) {
   return (
     <MotuRegion>
       <Index.Root
         readout={<LagoonStats stats={stats} />}
         composed={<LagoonGroups groups={groups} />}
-        repositories={<LagoonRepos repos={repos} />}
+        repositories={<LagoonRepos repos={repos} cap={cap} />}
       />
     </MotuRegion>
   )

@@ -11,6 +11,7 @@
 // both of motu's React surfaces already have one.
 import { useCallback, useState, type ReactNode, type SyntheticEvent } from "react"
 import { Railed, Rail, List } from "@motu/chrome/react"
+import { motuSplashFrom } from "@motu/chrome/splash"
 
 /** Where the rail is, or null for "nowhere" — which is how it parks rather than sitting on row one. */
 type At = { top: number; height: number } | null
@@ -39,10 +40,37 @@ export function RailedList({ children }: { children?: ReactNode }) {
 
   const park = useCallback(() => setAt(null), [])
 
+  // WATER WHERE THEY TOUCHED IT. The dock's own splash, now the kit's — a row opening a page is the
+  // one moment on this screen where something leaves, and the ripple is what says the click landed
+  // before the navigation has anything to show. It is delegated like `aim`, so a row does not have to
+  // know it exists, and it is a no-op under `prefers-reduced-motion`.
+  const splash = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest("li > a")) motuSplashFrom(event)
+  }, [])
+
+  // ↑↓ MOVE FOCUS, and that is the whole of the keyboard support this list needs. Every row is an
+  // anchor, so the row a person is ON is the focused one and ↵ is the browser's own activation —
+  // there is no cursor index to keep in step with what the keyboard did, and none to disagree with
+  // what the mouse did either. `aim` is already wired to focus, so the rail follows for free.
+  //
+  // WITHIN THIS LIST, deliberately. The page shows groups and repositories as two of these, and
+  // wrapping from the end of one into the start of the other would need a cursor that spans both —
+  // which is region state with no single owner. Tab already crosses them; ↑↓ walks the one you are in.
+  const walk = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+    const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("li > a"))
+    if (!rows.length) return
+    event.preventDefault()
+    const at = rows.indexOf(document.activeElement as HTMLElement)
+    const next = event.key === "ArrowDown" ? at + 1 : at - 1
+    // From nowhere, ↓ enters at the top and ↑ at the bottom, which is what a person means by both.
+    rows[at < 0 ? (event.key === "ArrowDown" ? 0 : rows.length - 1) : (next + rows.length) % rows.length]?.focus()
+  }, [])
+
   return (
     // `onFocus`/`onBlur` rather than the capture-phase pair: React's synthetic focus events already
     // bubble, which is exactly what a keyboard user needs here and what the native ones do not do.
-    <Railed onMouseOver={aim} onFocus={aim} onMouseLeave={park} onBlur={park}>
+    <Railed onMouseOver={aim} onFocus={aim} onMouseLeave={park} onBlur={park} onKeyDown={walk} onClick={splash}>
       <Rail top={at?.top} height={at?.height} />
       <List>{children}</List>
     </Railed>

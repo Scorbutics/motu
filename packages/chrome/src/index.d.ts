@@ -17,6 +17,7 @@ export * from './tokens.mjs'
 export * from './css.mjs'
 export * from './html.mjs'
 export * from './kit.mjs'
+export * from './splash.mjs'
 
 /**
  * The page shell's own CSS — the centred column and the server-row shape.

@@ -13,6 +13,7 @@
 // mechanisms for what focus already does.
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Kbd } from "@motu/chrome/react"
+import { motuSplashFrom } from "@motu/chrome/splash"
 import type { LagoonGroup, LagoonRepo } from "@/app/index-region"
 
 /** What a palette entry is. `kind` is the app's own vocabulary, printed on the right of the row. */
@@ -161,7 +162,7 @@ export function LagoonPalette({
           <ul className="motu-palette__list">
             {shown.map((e, i) => (
               <li key={e.id} style={{ ["--i" as string]: i }}>
-                <a className="motu-opt" data-entry href={e.href}>
+                <a className="motu-opt" data-entry href={e.href} onClick={motuSplashFrom}>
                   <span className="motu-dot" data-tone={e.kind === "lagoon" ? "ok" : "pending"} />
                   <span className="motu-grow motu-ellipsis">{e.label}</span>
                   <span className="motu-opt__kind">{e.kind}</span>

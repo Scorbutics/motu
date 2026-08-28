@@ -7,3 +7,4 @@ export * from './tokens.mjs';
 export * from './kit.mjs';
 export * from './css.mjs';
 export * from './html.mjs';
+export * from './splash.mjs';

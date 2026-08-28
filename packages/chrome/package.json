@@ -13,6 +13,7 @@
     "./html": "./src/html.mjs",
     "./kit": "./src/kit.mjs",
     "./mark": "./src/mark.mjs",
+    "./splash": "./src/splash.mjs",
     "./react": {
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"

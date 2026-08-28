@@ -128,6 +128,12 @@ export function motuWaterCss() {
 /* On the SHALLOW end of the ramp the water is light, so the readout needs more than the .78 a deep
    ground would carry. */
 .motu-bay .bay-meta { color: rgba(255,255,255,.92); text-shadow: 0 1px 2px rgba(11,111,104,.35); }
+/* IT WRAPS. .bay-inner has wrapped since it was written, so the meta block moves to its own line
+   when the title crowds it — but the meta itself was a nowrap flex row, so once it held more than a
+   readout (a link, an account badge) it simply ran off the side. And the bay CLIPS: overflow:
+   hidden is what keeps the crest inside it, so the overflow was not even scrollable. Two links and
+   an identity, silently gone on a phone. */
+.motu-bay .bay-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
 
 /* A sheen sweeping the water — what it does when something actually changed. Motion only; a page
    that never changes never animates it. */
@@ -256,9 +262,14 @@ export function motuWaterCss() {
 /* The readout at masthead scale: further apart, and quiet enough that the headline below it is what
    the eye lands on. */
 .motu-bay[data-shape="masthead"] .bay-meta {
-  display: flex; align-items: center; gap: 18px;
   color: rgba(242, 251, 250, .78);
   text-shadow: none;
+}
+/* NARROW: the meta stops pretending to be hard-right. There is no right to be hard against once it
+   has wrapped under the title, and a wrapped row that still tries to end-align reads as ragged. */
+@media (max-width: 720px) {
+  .motu-bay .bay-inner { align-items: flex-start; }
+  .motu-bay .bay-meta { justify-content: flex-start; gap: 8px 14px; width: 100%; }
 }
 
 .motu-bay__headline {

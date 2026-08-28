@@ -453,8 +453,11 @@ export function motuKitCss(scope = ':root') {
 
 /* --- METER: a run of counts, read at a glance ------------------------------------------------------
    The number that decides whether to open a screen at all should not require reading a list. */
-.motu-meter { display: flex; gap: 14px; margin: 0; }
-.motu-meter > div { display: flex; align-items: baseline; gap: 5px; }
+.motu-meter { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; }
+/* A PAIR NEVER SPLITS. The label and its value are one fact; letting the line break between them —
+   or inside 1,000/repo — turned the cap into two lines reading "1,000/" and "repo", which is not a
+   number anybody can scan. The meter wraps BETWEEN pairs instead, which is what wrapping is for. */
+.motu-meter > div { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .motu-meter dt { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
 .motu-meter dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -678,6 +681,11 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
 .motu-row[data-scale="page"] .motu-grow { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
 .motu-row[data-scale="page"] .motu-title-line { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
 .motu-row[data-scale="page"] .motu-name {
+  /* SHRINKS AND WRAPS ITS OWN TEXT rather than moving to the next line whole. The title line wraps,
+     which is right for the kind tag and the live pill after it — but a long name that cannot fit
+     beside a 7px lamp was pushing itself down and leaving the lamp alone on a line above it. */
+  flex: 1 1 auto;
+  min-width: 0;
   font: 500 21px/1.15 var(--sans);
   letter-spacing: -.022em;
 }
@@ -845,6 +853,22 @@ a.motu-open:hover, .motu-row[data-interactive]:hover .motu-open {
 .motu-row[data-interactive]:hover .motu-enter,
 .motu-row:focus-visible .motu-enter,
 .motu-row[aria-current="true"] .motu-enter { opacity: 1; }
+
+/* THE ROW STOPS BEING TWO COLUMNS. At page scale a row is content on the left and a figure hard
+   right, which needs width for both; on a phone the figure's column was taking enough that a group's
+   member list wrapped to four lines beside three words. Below this the figure goes UNDER the content,
+   left-aligned with it, and the row is one column that reads top to bottom. */
+@media (max-width: 560px) {
+  .motu-row[data-scale="page"] {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .motu-row[data-scale="page"] .motu-trail {
+    align-self: start;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
 
 /* A KIND, as a tag: uppercase mono, tracked wide. Distinct from .motu-pill, which carries a STATE. */
 .motu-kind {

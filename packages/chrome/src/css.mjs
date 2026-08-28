@@ -150,6 +150,13 @@ export function motuWaterCss() {
    untouched. A separate .motu-masthead would have been a second bay to keep in step, which is the
    drift this package exists to stop.
 */
+/* A COMPACT MASTHEAD. The composed view's rail is headed by a band 16px tall — far too short for a
+   waterline, and still the place a person first sees which gallery they are in, so it takes the
+   deeper ramp and its light and leaves the waves to the pages that have room. The waves are omitted
+   in the MARKUP (motuBay, Bay) rather than hidden here: an element that paints nothing is a thing to
+   explain later. */
+.motu-bay.compact[data-shape="masthead"] { padding: 16px 18px; }
+
 .motu-bay[data-shape="masthead"] {
   /* The ramp, extended: the icon's deep blue at the top corner, through the bay's own two stops. 140
      degrees rather than 160 so the blue end sits behind the mark. */
@@ -160,6 +167,7 @@ export function motuWaterCss() {
 /* THE CREST, REUSED AS FOAM. The same three radial gradients as .motu-bay::after — it is already the
    right shape — moved up above the waves and given a slow breath, because a masthead stays on screen
    long enough for a motionless highlight to read as a rendering artefact. */
+.motu-bay.compact[data-shape="masthead"]::after { bottom: -10px; height: 20px; }
 .motu-bay[data-shape="masthead"]::after {
   bottom: 48px;
   height: 30px;
@@ -240,7 +248,7 @@ export function motuWaterCss() {
    makes of it. */
 .motu-bay[data-shape="masthead"] .bay-inner,
 .motu-bay[data-shape="masthead"] .bay-title { align-items: center; }
-.motu-bay[data-shape="masthead"] .bay-title .bay-name {
+.motu-bay[data-shape="masthead"]:not(.compact) .bay-title .bay-name {
   font: 700 20px/1 ${MOTU_TYPE.family};
   letter-spacing: -.02em;
 }

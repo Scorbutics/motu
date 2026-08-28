@@ -532,7 +532,7 @@ export function Bay({ title, titleAs: TitleAs = 'strong', subtitle, compact, lea
       {/* LAST, and empty. The waterline is the masthead's bottom EDGE — it must paint over the
           gradient and under nothing, and it carries no content, so a trailing aria-hidden span is
           the honest markup rather than a wrapper around the page. */}
-      {masthead && <span className="motu-bay__waves" aria-hidden="true" />}
+      {masthead && !compact && <span className="motu-bay__waves" aria-hidden="true" />}
     </header>
   );
 }

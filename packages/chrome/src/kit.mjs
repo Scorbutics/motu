@@ -623,6 +623,60 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
   color: var(--ink);
 }
 
+/* A WAY BACK, where a masthead's mark would be. Reads as the wordmark's sibling — same row, same
+   weight class — because on a page you arrived at, leaving is the primary navigation. */
+.motu-back {
+  font: 500 12.5px/1 var(--mono);
+  letter-spacing: .02em;
+  color: rgba(242, 251, 250, .82);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.motu-back:hover { color: ${MOTU_CHROME.onPrimary}; text-decoration: none; }
+
+/* The right-hand half of a caption row: what the section holds, beside what it is called. */
+.motu-cap-trail { margin-left: auto; font-weight: 500; letter-spacing: .04em; opacity: .8; }
+.motu-cap:has(.motu-cap-trail) { display: flex; align-items: baseline; gap: 10px; }
+
+/* THE ACTION at the end of a page-scale row: the one thing on the row that is a verb.
+   Filled, unlike .motu-btn's default ghost, because a row is already clickable — this is the
+   affordance that says which PART of it is the point. */
+.motu-open {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 13px 20px; border-radius: 10px;
+  background: var(--w-deep); color: ${MOTU_CHROME.onPrimary};
+  font: 600 13px/1 var(--sans);
+  white-space: nowrap;
+  transition: background 160ms, transform 160ms;
+}
+a.motu-open:hover, .motu-row[data-interactive]:hover .motu-open {
+  background: var(--w-shallow);
+  color: ${MOTU_CHROME.primaryDeep};
+  text-decoration: none;
+}
+
+/* AN UNCARDED PAGE ROW. History is a long tail read by scanning, and a card per entry turns fifty
+   rows into fifty objects; without one they are a list, and the card appears under the cursor. */
+.motu-row[data-scale="page"]:not([data-surface="card"]) { padding: 11px 20px; }
+.motu-row[data-scale="page"]:not([data-surface="card"]) .motu-name { font-size: 15px; }
+.motu-row[data-scale="page"][data-interactive]:not([data-surface="card"]):hover {
+  background: ${MOTU_SURFACE.card};
+  box-shadow: 0 6px 18px rgba(11, 111, 104, .10);
+}
+/* ON A FLAT ROW THE GAUGE STANDS UP AGAIN. Along the bottom of a card it is that card's waterline;
+   along the bottom of an uncarded row it is a rule BETWEEN two rows, which is a divider and reads as
+   one — eight of them turned the history into a table. Back to the vertical pill it is at chrome
+   scale, on the left edge where it marks the row rather than separating it. */
+.motu-row[data-scale="page"]:not([data-surface="card"]) .motu-gauge {
+  left: 0; right: auto; top: 6px; bottom: 6px;
+  width: 3px; height: auto;
+  border-radius: ${MOTU_RADIUS.pill};
+  background: linear-gradient(180deg, var(--w-shallow), var(--w-deep));
+}
+/* THE TAIL FADES. --age is the row's distance from the newest, so the gauge beside an old record is
+   quieter than the one beside the current: the list carries its own recency without a date being read. */
+.motu-row[data-scale="page"] .motu-gauge[style*="--age"] { opacity: calc(1 - min(var(--age) * .08, .72)); }
+
 /* THE ENTER MARK: the sand. One warm note in a cold ramp, which is what makes it read as an
    affordance rather than as more water. Hidden until the row is current — an arrow on every row is
    decoration, an arrow on ONE row is an instruction. */
@@ -649,12 +703,21 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
 }
 .motu-kind[data-tone="sand"] { background: color-mix(in srgb, ${MOTU_CHROME.sand} 34%, transparent); color: ${MOTU_CHROME.onSand}; }
 
-/* BREATHING: for a pill whose fact is that something is happening RIGHT NOW. The only animation in
-   the kit that never stops, and it is spent on the one state where stillness would be a lie. */
-.motu-breathe { animation: motu-breathe 2.4s ease-in-out infinite; }
+/* BREATHING: for a badge whose fact is that something is happening RIGHT NOW. The only animation in
+   the kit that never stops, and it is spent on the one state where stillness would be a lie.
+
+   A RING, not a fade. The composed view invented this first — its live dot pulsed a box-shadow — and
+   defined @keyframes motu-breathe a second time in its own stylesheet, under the same name as this
+   one. Two definitions of one keyframe in one document is not a conflict the browser reports: the
+   later wins, for every element on the page. So the ring is the kit's now, and the composed view
+   spends the class instead of redeclaring it. */
+.motu-breathe {
+  animation: motu-breathe 2.4s ease-in-out infinite;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--w-shallow) 55%, transparent);
+}
 @keyframes motu-breathe {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: .82; transform: scale(.97); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--w-shallow) 55%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--w-shallow) 0%, transparent); }
 }
 
 /* A SHEEN over the row that was just chosen — one sweep, the bay's own gesture at row size. */

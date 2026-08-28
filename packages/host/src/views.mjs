@@ -23,7 +23,15 @@
 // target and never what `motu island verify` drives — verify keeps driving lagoon.html directly, one
 // document, no frames. Compose islands at runtime for production and this stops being a gallery and
 // starts being federation.
-import { motuChromeCss, motuPage, motuBay, motuPanel, motuRow, escapeHtml } from '@motu/chrome';
+import {
+  motuChromeCss,
+  motuPage,
+  motuBay,
+  motuPanel,
+  motuRow,
+  motuRailedList,
+  escapeHtml,
+} from '@motu/chrome';
 
 /** kB / MB, whichever reads. Sizes here are artifact sizes, and 431 kB is more useful than 0.4 MB. */
 function size(bytes) {
@@ -108,17 +116,14 @@ button.member[aria-current="true"]::after {
 /* LIVE is a state, not a decoration: this member is being served by a dev server right now, so what is
    in the frame can change under you. It breathes, because that is the difference between "this is a
    build" and "this is someone's editor". */
+/* The ring itself is .motu-breathe in the kit, which this element also carries. What stays here is
+   only where it SITS in a member row — a second @keyframes motu-breathe lived here and silently
+   outranked the kit's for every element in any document that loaded both. */
 button.member .live-dot {
   float: right; margin-left: 8px;
   font-style: normal; font-weight: 800; font-size: 9px; letter-spacing: .1em;
   text-transform: uppercase; color: var(--motu-on-primary);
   background: var(--tide-accent); border-radius: 999px; padding: 3px 8px;
-  box-shadow: 0 0 0 0 rgba(53,194,179,.65);
-  animation: motu-breathe 2.4s ease-in-out infinite;
-}
-@keyframes motu-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(53,194,179,.55); }
-  50%      { box-shadow: 0 0 0 6px rgba(53,194,179,0); }
 }
 /* The repo caption gets the water too, so the eye groups by project before it reads a word. */
 .rail .motu-cap { display: flex; align-items: center; gap: 7px; }
@@ -130,7 +135,7 @@ button.member .live-dot {
   button.member, button.member .gauge { transition: none; }
   button.member[aria-current="true"] { transform: none; }
   button.member[aria-current="true"]::after { display: none; }
-  button.member .live-dot { animation: none; }
+  button.member .live-dot { animation: none; box-shadow: none; }
 }
 aside footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line); word-break: break-all; }
 main.stage { flex: 1; position: relative; background: #fff; }
@@ -229,7 +234,7 @@ export function composedPage({ id, group, members, live = false }) {
               `<button class="member" data-i="${m.i}" aria-current="${m.i === 0}" data-live="${m.live ? 'true' : 'false'}">` +
               `<span class="gauge" aria-hidden="true"></span>` +
               `<span class="body"><span class="name">${escapeHtml(m.title || m.slug)}` +
-              (m.live ? `<em class="live-dot" title="served live by motu lagoon serve --watch">live</em>` : '') +
+              (m.live ? `<em class="live-dot motu-breathe" title="served live by motu lagoon serve --watch">live</em>` : '') +
               `</span><span class="tags"><em class="tag">${escapeHtml(m.slug)}</em>` +
               (m.sha
                 ? `<em class="tag mono">${escapeHtml(m.sha.slice(0, 7))}</em>`
@@ -265,6 +270,9 @@ export function composedPage({ id, group, members, live = false }) {
       title: group,
       subtitle: `${members.length} lagoon${members.length === 1 ? '' : 's'}`,
       compact: true,
+      // THE SAME WATER THE INDEX OPENS WITH, at rail size. A person reaches this view FROM that page,
+      // and a different gradient at the top of the sheet reads as a different place.
+      shape: 'masthead',
       // INSIDE the bay, not above it. As a sibling it sat on the sheet's own light surface, so the
       // water started an inch down and the sheet read as two stacked headers.
       lead: '<div class="bay-lead grab" id="grab" aria-hidden="true"><i></i></div>',
@@ -411,31 +419,74 @@ export function repoIndexPage({ repo, aliases, history }) {
     .filter((x) => x.rec)
     .sort((a, b) => a.slug.localeCompare(b.slug));
 
-  const latestRows = current.map(({ slug, rec }) =>
+  // THE SUB LINE IS UNCHANGED — slug, the sha as its own permalink, the branch, when. It is the one
+  // line on this page that is not decoration: the sha link is how somebody pins the version they are
+  // looking at, and the design brief says "exactly what repoIndexPage emits today" for that reason.
+  const subFor = (slug, rec) =>
+    `${escapeHtml(slug)} · <a href="/${escapeHtml(repo)}/${escapeHtml(rec.sha)}/${escapeHtml(slug)}">${escapeHtml(rec.sha.slice(0, 7))}</a>` +
+    `${rec.branch ? ` · ${escapeHtml(rec.branch)}` : ''} · ${when(rec.publishedAt)}`;
+
+  // NOT A LINK ROW, and that is forced rather than chosen. The sub line contains the sha PERMALINK,
+  // and an <a> inside an <a> is invalid HTML: the browser closes the outer anchor at the inner one,
+  // so the sub and the action fell out of the card and rendered underneath it. This has been the
+  // markup since the page was written; a flat row hid it, and a card made it visible in one look.
+  //
+  // So the row carries the two links it has — the sha, and `Open →` — and is not itself one. Which is
+  // also what the design draws: a card with an explicit action, not a card that is entirely a target.
+  const latestRows = current.map(({ slug, rec }, i) =>
     motuRow({
-      href: `/${repo}/latest/${slug}`,
       label: rec.title || slug,
-      sub:
-        `${escapeHtml(slug)} · <a href="/${escapeHtml(repo)}/${escapeHtml(rec.sha)}/${escapeHtml(slug)}">${escapeHtml(rec.sha.slice(0, 7))}</a>` +
-        `${rec.branch ? ` · ${escapeHtml(rec.branch)}` : ''} · ${when(rec.publishedAt)}`,
+      scale: 'page',
+      tone: 'ok',
+      index: i,
+      sub: subFor(slug, rec),
+      trailing: `<a class="motu-open" href="/${escapeHtml(repo)}/latest/${escapeHtml(slug)}">Open →</a>`,
     }),
   );
 
   const past = history.slice(0, 50);
-  const historyRows = past.map((r) =>
+  // HISTORY IS THE SAME ROW WITHOUT THE CARD, and that is a deliberate reading of the brief rather
+  // than the geometry it describes. The mockup gives history its own four-column grid with a vertical
+  // gauge; a third row geometry in a kit that already has two is the drift this package exists to
+  // stop, so the recency the gauge was carrying is carried by --age on the row's own gauge instead.
+  const historyRows = past.map((r, i) =>
     motuRow({
       href: `/${repo}/${r.sha}/${r.slug}`,
       label: r.slug,
+      scale: 'page',
+      surface: 'flat',
+      index: i,
+      age: i,
       sub: `${escapeHtml(r.sha.slice(0, 7))}${r.branch ? ` · ${escapeHtml(r.branch)}` : ''} · ${when(r.publishedAt)}`,
     }),
   );
 
+  const [owner, name] = repo.includes('/') ? [repo.slice(0, repo.indexOf('/')), repo.slice(repo.indexOf('/') + 1)] : ['', repo];
+  const records = history.length;
   return motuPage({
     title: repo,
-    bay: motuBay({ title: repo, subtitle: 'lagoons', meta: `<a style="color:inherit" href="/">all repositories</a>` }),
+    column: 'page',
+    bay: motuBay({
+      shape: 'masthead',
+      // WHERE THE WORDMARK SITS ON THE FRONT PAGE, a way back. This page is reached FROM the index,
+      // and the mark that identifies the product there is less useful here than the way out.
+      leading: '<a class="motu-back" href="/">← all repositories</a>',
+      title: owner ? `${escapeHtml(owner)}/` : '',
+      titleRaw: true,
+      headline: name,
+      meta:
+        `<span class="motu-sand">${records}</span> record${records === 1 ? '' : 's'}` +
+        ` · ${current.length} lagoon${current.length === 1 ? '' : 's'}`,
+    }),
     body:
-      motuPanel({ caption: 'Latest', rows: latestRows, empty: 'No lagoons published for this repository.' }) +
-      (historyRows.length ? motuPanel({ caption: `History · newest ${past.length}`, rows: historyRows }) : ''),
+      `<section><div class="motu-cap panel-cap">Latest</div>${
+        latestRows.length
+          ? motuRailedList(latestRows)
+          : '<p class="motu-empty">No lagoons published for this repository.</p>'
+      }</section>` +
+      (historyRows.length
+        ? `<section><div class="motu-cap panel-cap">History<span class="motu-cap-trail">newest ${past.length} of ${history.length}</span></div>${motuRailedList(historyRows)}</section>`
+        : ''),
   });
 }
 

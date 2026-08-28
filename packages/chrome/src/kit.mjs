@@ -232,9 +232,12 @@ export function motuKitCss(scope = ':root') {
   transition: left ${MOTU_MOTION.slide}, width ${MOTU_MOTION.slide}, background 200ms;
   pointer-events: none;
 }
+/* ONE STEP DARKER THAN A LABEL ON THE PAGE, because this one is not on the page: the track behind it
+   is a tinted capsule, so the same ink measures lower here than it does anywhere else --ink-muted is
+   used. Darkening the token was still right (it was under AA on white too) and it was not enough. */
 .motu-segmented > button {
   position: relative; appearance: none; border: 0; background: transparent;
-  color: var(--ink-muted); font: 600 12px/1 var(--sans);
+  color: var(--ink-soft); font: 600 12px/1 var(--sans);
   padding: 6px 12px; border-radius: ${MOTU_RADIUS.pill};
   cursor: pointer; white-space: nowrap;
   transition: color 160ms;
@@ -246,6 +249,7 @@ export function motuKitCss(scope = ':root') {
    already inside. Adapting to the container is what CSS is for. */
 .motu-segmented > .motu-opt {
   width: auto; text-align: center; gap: 0;
+  color: var(--ink-soft);
   padding: 7px 14px; border-radius: ${MOTU_RADIUS.pill};
   background: transparent;
 }
@@ -454,6 +458,83 @@ export function motuKitCss(scope = ':root') {
 .motu-meter dt { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
 .motu-meter dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 
+/* --- THE PALETTE: everything, one keystroke away -------------------------------------------------
+   The one surface in the kit that covers the page. The scrim blurs rather than only darkening,
+   because what is behind a palette is context and not content — legible enough to know where you
+   are, unreadable enough that you stop reading it. */
+.motu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  padding-top: 14vh;
+  background: rgba(20, 32, 28, .30);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.motu-palette {
+  width: min(540px, calc(100vw - 32px));
+  align-self: flex-start;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: ${MOTU_SURFACE.card};
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(4, 33, 29, .32);
+  overflow: hidden;
+  animation: motu-pop ${MOTU_MOTION.pop} both;
+}
+@keyframes motu-pop { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+.motu-palette__field {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  outline: none;
+  padding: 16px 18px;
+  font: 500 15px/1.2 var(--sans);
+  color: var(--ink);
+  background: none;
+}
+.motu-palette__field::placeholder { color: var(--ink-faint); }
+.motu-palette__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.motu-palette__list > li { animation: motu-swim ${MOTU_MOTION.swimIn} both; animation-delay: calc(var(--i, 0) * 22ms); }
+.motu-palette__empty { margin: 0; padding: 18px; color: var(--ink-soft); font-size: 13px; }
+.motu-palette__foot {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--w-shallow) 5%, ${MOTU_SURFACE.card});
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+}
+/* THE SELECTION IS THE FOCUS. Every entry is an anchor and ↑↓ moves focus between them, so the lit
+   row is :focus — there is no selected index to keep in step with what the keyboard did. */
+/* CONTENT CONTRAST, not chrome contrast. .motu-opt is --ink-muted because it was born on the dock,
+   where an option is a control beside the thing it acts on; here the options ARE the content, on a
+   white card, and axe measures that pairing at 4.4:1 — a serious failure at 12.5px. Worth recording
+   as a token-level fact rather than only a local fix: --ink-muted does not clear AA on white for
+   small text, and anything that puts it there has to say otherwise, as this does. */
+.motu-palette .motu-opt { color: var(--ink); text-decoration: none; }
+.motu-palette .motu-kbd { color: var(--ink); }
+.motu-palette .motu-opt:focus, .motu-palette .motu-opt:hover {
+  outline: none;
+  background: color-mix(in srgb, var(--tide-accent) 9%, transparent);
+  color: ${MOTU_CHROME.primaryDeep};
+  text-decoration: none;
+}
+/* What KIND of thing an entry is, hard right and quiet: it disambiguates two rows with the same
+   name, and is never the thing you are reading. */
+.motu-opt__kind {
+  margin-left: auto;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  /* --ink-soft, for the same reason the entry beside it is --ink: on the palette's white card
+     --ink-faint measures under 3:1, and 10px tracked uppercase is the least legible text motu sets. */
+  color: var(--ink-soft);
+}
+
 /* --- THE PAGE SCALE ------------------------------------------------------------------------------
    Everything above is CHROME scale: a lens row, a console row, a dock option — dense, because those
    surfaces are read beside the thing they describe. A page a person LANDS on is read on its own, and
@@ -544,7 +625,10 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
   font: 600 10px/1 var(--mono);
   letter-spacing: .09em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  /* --ink-soft. The third place in this design where --ink-faint landed on a light ground and axe
+     called it: the search hint, the palette's kind column, and this. The pattern is the token, not
+     the rules — --ink-faint is for a tinted panel, and every one of these sits on white or near it. */
+  color: var(--ink-soft);
   min-width: 44px;
 }
 

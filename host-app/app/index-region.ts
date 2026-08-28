@@ -65,6 +65,19 @@ export type IndexRegion = {
    * lens could no longer show which one actually moved.
    */
   show: LagoonShow
+
+  /**
+   * Whether the ⌘K palette is showing.
+   *
+   * ISLAND-OWNED, by the palette, and a REGION key rather than the component's own `useState` for one
+   * reason: it makes the palette an address. "Open, with `motu` typed" is a URL in the lagoon and a
+   * seed in a flow, and neither is reachable for state a component keeps to itself. That is the same
+   * argument `filter` makes in the corpus region, applied to a surface nobody can see by default.
+   */
+  paletteOpen: boolean
+
+  /** What has been typed into the palette. Island-owned, by the same island, for the same reason. */
+  paletteQuery: string
 }
 
 /**
@@ -73,4 +86,4 @@ export type IndexRegion = {
  * `ProducedKeysAre` in the archipelago makes it a compile error for this to drift from what the
  * islands actually declare in `writes`.
  */
-export type ProducedIndexKeys = "query" | "show"
+export type ProducedIndexKeys = "query" | "show" | "paletteOpen" | "paletteQuery"

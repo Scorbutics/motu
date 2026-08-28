@@ -26,11 +26,13 @@ export function IndexLayout({
   filter,
   composed,
   repositories,
+  palette,
 }: {
   readout?: ReactNode
   filter?: ReactNode
   composed?: ReactNode
   repositories?: ReactNode
+  palette?: ReactNode
 }) {
   return (
     <>
@@ -56,6 +58,9 @@ export function IndexLayout({
         {composed}
         {repositories}
       </Page>
+      {/* LAST, AND OUTSIDE THE COLUMN. The palette covers the page; nesting it in the content column
+          would put a fixed overlay inside a stacking context that has nothing to do with it. */}
+      {palette}
     </>
   )
 }

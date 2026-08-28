@@ -13,6 +13,7 @@ import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus
 import type { GithubSignIn as C_github_sign_in } from '@/components/auth/github-sign-in';
 import type { LagoonFilter as C_lagoon_filter } from '@/components/lagoon/lagoon-filter';
 import type { LagoonGroups as C_lagoon_groups } from '@/components/lagoon/lagoon-groups';
+import type { LagoonPalette as C_lagoon_palette } from '@/components/lagoon/lagoon-palette';
 import type { LagoonRepos as C_lagoon_repos } from '@/components/lagoon/lagoon-repos';
 import type { LagoonStats as C_lagoon_stats } from '@/components/lagoon/lagoon-stats';
 
@@ -40,6 +41,11 @@ export const CONTRACTS = {
   'x-lagoon-groups': {
     input: ['groups', 'query', 'show'],
     output: {  },
+    ambient: [],
+  },
+  'x-lagoon-palette': {
+    input: ['repos', 'groups', 'open', 'query'],
+    output: { onOpenChange: 'open-change', onQueryChange: 'query-change' },
     ambient: [],
   },
   'x-lagoon-repos': {
@@ -88,6 +94,8 @@ const _lagoon_filter: ContractFitsComponent<typeof C_lagoon_filter, 'x-lagoon-fi
 void _lagoon_filter;
 const _lagoon_groups: ContractFitsComponent<typeof C_lagoon_groups, 'x-lagoon-groups'> = true;
 void _lagoon_groups;
+const _lagoon_palette: ContractFitsComponent<typeof C_lagoon_palette, 'x-lagoon-palette'> = true;
+void _lagoon_palette;
 const _lagoon_repos: ContractFitsComponent<typeof C_lagoon_repos, 'x-lagoon-repos'> = true;
 void _lagoon_repos;
 const _lagoon_stats: ContractFitsComponent<typeof C_lagoon_stats, 'x-lagoon-stats'> = true;

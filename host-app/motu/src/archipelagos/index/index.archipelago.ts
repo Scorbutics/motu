@@ -23,7 +23,7 @@ import type { IndexRegion, ProducedIndexKeys } from '@/app/index-region';
 
 export const indexArchipelago = archipelago<
   IndexRegion,
-  'x-lagoon-filter' | 'x-lagoon-groups' | 'x-lagoon-repos' | 'x-lagoon-stats'
+  'x-lagoon-filter' | 'x-lagoon-groups' | 'x-lagoon-palette' | 'x-lagoon-repos' | 'x-lagoon-stats'
 >()({
   id: 'index',
   root: IndexLayout,
@@ -32,6 +32,7 @@ export const indexArchipelago = archipelago<
   slots: {
     readout: { slot: 'readout' },
     filter: { slot: 'filter' },
+    palette: { slot: 'palette' },
     composed: { slot: 'composed' },
     repositories: { slot: 'repositories' },
   },
@@ -51,6 +52,15 @@ export const indexArchipelago = archipelago<
       element: 'x-lagoon-filter',
       bind: ['query', 'show'],
       writes: { 'query-changed': 'query', 'show-changed': 'show' },
+    },
+    {
+      // ⌘K. The region's second producer, and the only island that reads BOTH listings — it searches
+      // what the viewer may see, which is why it takes the same already-filtered lists the page shows
+      // rather than a query of its own.
+      slot: 'palette',
+      element: 'x-lagoon-palette',
+      bind: [{ repos: 'repos', groups: 'groups', open: 'paletteOpen', query: 'paletteQuery' }],
+      writes: { 'palette-open': 'paletteOpen', 'palette-query': 'paletteQuery' },
     },
     {
       slot: 'composed',

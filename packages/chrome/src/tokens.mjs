@@ -89,7 +89,19 @@ export const MOTU_SURFACE = {
 /** Ink. The warm greys are the tide line's; a neutral grey here reads as a different family. */
 export const MOTU_INK = {
   body: '#22302c',
-  muted: '#6b7d78',
+  /**
+   * A sub, a unit, a label beside a value.
+   *
+   * DARKENED from #6b7d78, which measures 4.27:1 on white — under AA for the 10–12.5px this token is
+   * almost always set at. Three independent axe failures in one design named it: the segmented
+   * control's inactive options, a palette entry's kind column, and the shelf label above a filter.
+   * The pattern was the token, not the rules. Same family, same relationship to `body`; readable.
+   *
+   * This is the second time a token here has been darkened for exactly this — see `caption` below,
+   * which records the first. The lesson both carry: these greys were chosen against the tinted panel
+   * they were born on, and every surface added since has been white or near it.
+   */
+  muted: '#5f716c',
   /**
    * Captions and unit labels — warm, deliberately not a cool grey.
    *

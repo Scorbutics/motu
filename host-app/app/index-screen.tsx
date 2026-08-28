@@ -10,6 +10,7 @@ import { LagoonGroups } from "@/components/lagoon/lagoon-groups"
 import { LagoonRepos } from "@/components/lagoon/lagoon-repos"
 import { LagoonStats } from "@/components/lagoon/lagoon-stats"
 import { LagoonFilter } from "@/components/lagoon/lagoon-filter"
+import { LagoonPalette } from "@/components/lagoon/lagoon-palette"
 import type { IndexRegion, ProducedIndexKeys } from "@/app/index-region"
 
 /**
@@ -27,6 +28,7 @@ export function IndexScreen({ groups, repos, stats, cap }: Omit<IndexRegion, Pro
         filter={<LagoonFilter />}
         composed={<LagoonGroups groups={groups} />}
         repositories={<LagoonRepos repos={repos} cap={cap} />}
+        palette={<LagoonPalette repos={repos} groups={groups} />}
       />
     </MotuRegion>
   )

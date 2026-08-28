@@ -9,6 +9,7 @@ import { element as corpusStatesElement } from './corpus-states.island';
 import { element as githubSignInElement } from './github-sign-in.island';
 import { element as lagoonFilterElement } from './lagoon-filter.island';
 import { element as lagoonGroupsElement } from './lagoon-groups.island';
+import { element as lagoonPaletteElement } from './lagoon-palette.island';
 import { element as lagoonReposElement } from './lagoon-repos.island';
 import { element as lagoonStatsElement } from './lagoon-stats.island';
 
@@ -24,7 +25,7 @@ import { element as lagoonStatsElement } from './lagoon-stats.island';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusStatesElement, githubSignInElement, lagoonFilterElement, lagoonGroupsElement, lagoonReposElement, lagoonStatsElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusStatesElement, githubSignInElement, lagoonFilterElement, lagoonGroupsElement, lagoonPaletteElement, lagoonReposElement, lagoonStatsElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -37,6 +38,7 @@ export interface ElementTypes {
   'x-github-sign-in': typeof githubSignInElement;
   'x-lagoon-filter': typeof lagoonFilterElement;
   'x-lagoon-groups': typeof lagoonGroupsElement;
+  'x-lagoon-palette': typeof lagoonPaletteElement;
   'x-lagoon-repos': typeof lagoonReposElement;
   'x-lagoon-stats': typeof lagoonStatsElement;
 }

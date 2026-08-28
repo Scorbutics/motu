@@ -11,6 +11,7 @@ import { islandElement } from '@motu/react';
 import type { CorpusFilter as C_corpus_filter } from '@/components/corpus/corpus-filter';
 import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus-states';
 import type { GithubSignIn as C_github_sign_in } from '@/components/auth/github-sign-in';
+import type { LagoonFilter as C_lagoon_filter } from '@/components/lagoon/lagoon-filter';
 import type { LagoonGroups as C_lagoon_groups } from '@/components/lagoon/lagoon-groups';
 import type { LagoonRepos as C_lagoon_repos } from '@/components/lagoon/lagoon-repos';
 import type { LagoonStats as C_lagoon_stats } from '@/components/lagoon/lagoon-stats';
@@ -31,13 +32,18 @@ export const CONTRACTS = {
     output: { onSignIn: 'sign-in' },
     ambient: [],
   },
+  'x-lagoon-filter': {
+    input: ['query', 'show'],
+    output: { onQueryChange: 'query-change', onShowChange: 'show-change' },
+    ambient: [],
+  },
   'x-lagoon-groups': {
-    input: ['groups'],
+    input: ['groups', 'query', 'show'],
     output: {  },
     ambient: [],
   },
   'x-lagoon-repos': {
-    input: ['repos', 'cap'],
+    input: ['repos', 'cap', 'query', 'show'],
     output: {  },
     ambient: [],
   },
@@ -78,6 +84,8 @@ const _corpus_states: ContractFitsComponent<typeof C_corpus_states, 'x-corpus-st
 void _corpus_states;
 const _github_sign_in: ContractFitsComponent<typeof C_github_sign_in, 'x-github-sign-in'> = true;
 void _github_sign_in;
+const _lagoon_filter: ContractFitsComponent<typeof C_lagoon_filter, 'x-lagoon-filter'> = true;
+void _lagoon_filter;
 const _lagoon_groups: ContractFitsComponent<typeof C_lagoon_groups, 'x-lagoon-groups'> = true;
 void _lagoon_groups;
 const _lagoon_repos: ContractFitsComponent<typeof C_lagoon_repos, 'x-lagoon-repos'> = true;

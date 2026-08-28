@@ -12,6 +12,7 @@
     "./css": "./src/css.mjs",
     "./html": "./src/html.mjs",
     "./kit": "./src/kit.mjs",
+    "./mark": "./src/mark.mjs",
     "./react": {
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
@@ -36,5 +37,8 @@
     "react-dom": {
       "optional": true
     }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
   }
 }

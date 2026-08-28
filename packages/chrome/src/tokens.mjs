@@ -34,6 +34,13 @@ export const MOTU_CHROME = {
   caution: 'var(--motu-caution, #b45309)',
   /** Off. */
   idle: 'var(--motu-idle, #1e293b)',
+  /**
+   * The icon's sand. A COUNT, the palette's ↵ marker, an avatar — the one warm note in a cold ramp,
+   * which is what makes a number read as a number rather than as more water.
+   */
+  sand: 'var(--motu-sand, #e3c893)',
+  /** Text on sand. Deep enough to clear AA at the sizes sand is used for. */
+  onSand: 'var(--motu-on-sand, #0b3d5c)',
 };
 
 /**
@@ -42,7 +49,12 @@ export const MOTU_CHROME = {
  * transport of its own, so it paints `mock` — the calm water — and means it.
  */
 export const MOTU_WATER = {
-  mock: { deep: '#0b6f68', mid: '#12988f', shallow: '#35c2b3', accent: '#0f766e' },
+  /**
+   * `abyss` and `foam` come from `assets/motu-icon.svg` — the mark's own deep blue and light water —
+   * so the chrome and the icon finally agree instead of being two blues that nearly match. The rest
+   * of the ramp is unchanged; these extend it at both ends rather than replacing anything.
+   */
+  mock: { deep: '#0b6f68', mid: '#12988f', shallow: '#35c2b3', accent: '#0f766e', abyss: '#0f5b8a', foam: '#5cc0e8' },
   http: { deep: '#076b7f', mid: '#0fa4b4', shallow: '#3fd0d8', accent: '#0e8a92' },
   legacy: { deep: '#a4530a', mid: '#d97706', shallow: '#fbbf24', accent: '#b45309' },
 };
@@ -55,6 +67,15 @@ export const MOTU_WATER = {
 export const MOTU_SURFACE = {
   /** The page behind everything: the palest shallow water. */
   page: '#eef8f6',
+  /**
+   * A lighter ground for the pages that are mostly white cards.
+   *
+   * `page` is right behind panels that are themselves tinted; behind a column of white rows it reads
+   * as a green cast on white. Both are motu's water — this one is further up the beach.
+   */
+  pageLight: '#f2f9f8',
+  /** A card at rest. Opaque, unlike `row`, which is a row lifted off a tinted panel. */
+  card: '#ffffff',
   /** A panel floating on it. */
   panel: 'linear-gradient(180deg, rgba(247, 253, 252, .94), rgba(232, 248, 246, .92))',
   /** A panel's flat equivalent, where a gradient would band across a tall element. */
@@ -106,7 +127,7 @@ export const MOTU_RADIUS = {
 
 /** The motion the tide line uses when something assembles rather than appears. */
 export const MOTU_MOTION = {
-  swimIn: '260ms cubic-bezier(.2,.9,.3,1)',
+  swimIn: '320ms cubic-bezier(.2,.9,.3,1)',
   pop: '220ms cubic-bezier(.22,1.2,.36,1)',
   /**
    * A lit thing moving from one place to another, overshooting slightly as water does.
@@ -116,6 +137,13 @@ export const MOTU_MOTION = {
    * one that was not written down. A component that slides should not have to invent its own easing.
    */
   slide: '260ms cubic-bezier(.34,1.4,.5,1)',
+  /**
+   * `slide`, for something that also CHANGES SIZE as it moves — a rail spanning the row it points at.
+   *
+   * Slightly longer and slightly springier than `slide`, because two properties animating together
+   * read as sluggish at the same timing that looks crisp on one.
+   */
+  rail: '300ms cubic-bezier(.34,1.45,.5,1)',
 };
 
 /**

@@ -1,53 +1,76 @@
 "use client"
-// The REPOSITORIES card: everything published here that this viewer may see.
+// The REPOSITORIES list: everything this host holds that this viewer may see.
 //
-// COMPOSED FROM THE KIT'S OWN SHAPES rather than a bare row with everything crammed into one sub-line.
-// The reference designs all use the same anatomy for a list entry — an indicator at the leading edge,
-// a title over a quieter sub, and a VALUE trailing at the far edge — and the kit already had every
-// piece of it. The first version used none of them:
-//
-//   Row data-surface="card"  the outlined card row, instead of a hairline separator
-//   Row data-interactive     the kit's own hover slide, instead of a rule I wrote again
-//   Gauge                    the leading depth bar, which here carries a real ratio (see below)
-//   Grow / Trail             a growing middle and a value at the end, instead of one long sub
-//   List                     rows that assemble, staggered by --i, instead of appearing at once
-import { Panel, PanelHead, PanelBody, List, ListItem, Row, Gauge, Grow, Sub, Trail, Empty } from "@motu/chrome/react"
+// PAGE SCALE, not chrome scale. The kit's row has two ends for the same reason its bay does — a lens
+// row is read beside the thing it describes, and this one is read on its own, on the surface a person
+// landed on. `scale="page"` is that end: two lines, a card, a 21px name. The first version used the
+// chrome row and the page read as a settings list.
+import { ListItem, Row, Gauge, Grow, TitleLine, Name, Kind, Sub, Trail, Enter, Dot, Empty } from "@motu/chrome/react"
+import { RailedList } from "@/components/lagoon/railed-list"
 import type { LagoonRepo } from "@/app/index-region"
+import type { LagoonShow } from "@/components/lagoon/lagoon-filter"
 
 export interface LagoonReposProps {
   repos?: LagoonRepo[]
-  /** The host's per-repo record cap, which is what makes each row's fill mean something. */
+  /**
+   * The per-repo record cap, which the fill is drawn against.
+   *
+   * ITS OWN PROP rather than a reach into `stats`, because that reach would make this island depend
+   * on the shape of another's input — `props-match` caught the first attempt, where `cap` was a prop
+   * nothing could set and every row silently used a hardcoded 1000.
+   */
   cap?: number
+  /** What the reader typed. Matched against the repo's own name — the only text a row carries. */
+  query?: string
+  /** Which kinds are listed. This island renders nothing at all when it is not one of them. */
+  show?: LagoonShow
 }
 
-export function LagoonRepos({ repos = [], cap = 1000 }: LagoonReposProps) {
+export function LagoonRepos({ repos, cap = 1000, query = "", show = "all" }: LagoonReposProps) {
+  if (show === "groups") return null
+  // NULL IS NOT ABSENT, and a default only answers the second. A region key can hold null — a cleared
+  // key, a host that answered nothing, the value `flow-mutation` sends — and `repos.length` on null
+  // throws, which unmounts the region rather than rendering an empty one. That crash was invisible
+  // where it happened: it took down the whole root, so the NEXT mutant reported "no island mounted"
+  // and the check blamed a step in a different scenario.
+  const all = repos ?? []
+  // `?? ""` AND a default, which are not the same guard. The default answers an ABSENT prop; this
+  // answers a region key holding null, which is what a cleared key looks like and what `flow-mutation`
+  // sends. Without it the island threw on `null.trim()`, unmounted, and the mutant "broke the region"
+  // instead of failing its assertion — an unproven step, reported as one.
+  const needle = (query ?? "").trim().toLowerCase()
+  const shown = needle ? all.filter((r) => r.repo.toLowerCase().includes(needle)) : all
+  // TWO EMPTIES, NOT ONE. "nothing here" and "nothing matches" are different facts, and collapsing
+  // them tells a reader who mistyped that the host is empty.
+  if (!all.length) {
+    return <Empty>Nothing published yet — run motu lagoon publish --remote from a project.</Empty>
+  }
+  if (!shown.length) return <Empty>{`No repository matches “${(query ?? "").trim()}”.`}</Empty>
   return (
-    <Panel shape="window">
-      <PanelHead title="Repositories" />
-      <PanelBody>
-        {repos.length ? (
-          <List>
-            {repos.map((r, i) => (
-              <ListItem key={r.repo} index={i}>
-                <Row as="a" href={`/${r.repo}/`} data-surface="card" data-interactive>
-                  {/* THE GAUGE CARRIES THE CAP, and that is the point of using it rather than drawing a
-                      decorative bar. The host keeps at most `cap` records per repo and evicts by last
-                      access; a repo at 24 of 1000 and one at 998 are in very different situations, and
-                      the front page knew both numbers and printed neither as a quantity. */}
-                  <Gauge style={{ ["--fill" as string]: `${Math.min(100, (r.records / cap) * 100)}%` }} />
-                  <Grow>
-                    {r.repo}
-                    <Sub>{`${r.slugs.length} lagoon${r.slugs.length === 1 ? "" : "s"}`}</Sub>
-                  </Grow>
-                  <Trail>{`${r.records} / ${cap}`}</Trail>
-                </Row>
-              </ListItem>
-            ))}
-          </List>
-        ) : (
-          <Empty>Nothing published yet — run motu lagoon publish --remote from a project.</Empty>
-        )}
-      </PanelBody>
-    </Panel>
+    <RailedList>
+      {shown.map((r, i) => (
+        <ListItem key={r.repo} index={i}>
+          <Row as="a" scale="page" surface="card" href={`/${r.repo}/`}>
+            {/* The gauge is how full this repo is against the cap — the one number on the row that is
+                a RATIO, so it is drawn rather than written. */}
+            <Gauge style={{ ["--fill" as string]: `${Math.min(100, (r.records / cap) * 100)}%` }} />
+            <Grow wrap>
+              <TitleLine>
+                {/* A repo that holds records is live water; one that holds none is not broken, it is
+                    empty — which is `neutral`, not `warn`. */}
+                <Dot tone={r.records ? "ok" : "neutral"} />
+                <Name>{r.repo}</Name>
+                <Kind>repo</Kind>
+              </TitleLine>
+              <Sub>{`${r.slugs.length} lagoon${r.slugs.length === 1 ? "" : "s"}`}</Sub>
+            </Grow>
+            <Trail wrap>
+              {`${r.records} / ${cap}`}
+              <Enter />
+            </Trail>
+          </Row>
+        </ListItem>
+      ))}
+    </RailedList>
   )
 }

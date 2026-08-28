@@ -17,6 +17,9 @@ export const element = islandElement({
     contract: {
       input: [
         'groups',
+        // WHAT THE FILTER DECIDED. Read, never written: this island narrows itself and emits nothing.
+        'query',
+        'show',
       ],
     },
   },

@@ -56,6 +56,21 @@ export function motuRootVars(state = 'mock', scope = ':root') {
  * host inlines everything it serves and an asset would be one more thing that can fail to inline —
  * the failure mode `publish` already refuses.
  */
+/**
+ * One wave tile, as an inlined SVG background.
+ *
+ * encodeURIComponent rather than a hand-escaped string: a data URI with a raw # in it truncates at
+ * that character and the rule silently paints NOTHING — the class of failure that survives review.
+ * Passing the fill through means a layer can be a token, including var(--surface-page), so the front
+ * wave is whatever the page's ground actually is.
+ */
+function wave(path, fill) {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 90" preserveAspectRatio="none">' +
+    '<path d="' + path + '" fill="' + fill + '"/></svg>';
+  return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+}
+
 export function motuWaterCss() {
   return `
 .motu-bay {
@@ -125,6 +140,140 @@ export function motuWaterCss() {
   animation: motu-sheen 4.2s ease-in-out .6s 1;
 }
 @keyframes motu-sheen { to { transform: translateX(100%); } }
+
+/* ------------------------------------------------------------------------------------------------
+   THE MASTHEAD: the same bay, given the height to be a page's opening rather than a screen's header.
+
+   compact and masthead are the two ends of ONE component, not two components. Everything below only
+   ADDS to .motu-bay — the gradient is the same ramp reaching one stop further into the icon's own
+   blue, the foam is literally the crest above with a longer body and a loop, and the title row is
+   untouched. A separate .motu-masthead would have been a second bay to keep in step, which is the
+   drift this package exists to stop.
+*/
+.motu-bay[data-shape="masthead"] {
+  /* The ramp, extended: the icon's deep blue at the top corner, through the bay's own two stops. 140
+     degrees rather than 160 so the blue end sits behind the mark. */
+  background: linear-gradient(140deg, ${MOTU_WATER.mock.abyss} 0%, var(--w-deep) 58%, var(--w-mid) 100%);
+  padding: 22px 40px 74px;
+  border-radius: 0;
+}
+/* THE CREST, REUSED AS FOAM. The same three radial gradients as .motu-bay::after — it is already the
+   right shape — moved up above the waves and given a slow breath, because a masthead stays on screen
+   long enough for a motionless highlight to read as a rendering artefact. */
+.motu-bay[data-shape="masthead"]::after {
+  bottom: 48px;
+  height: 30px;
+  /* HALF THE CREST'S STRENGTH. On a screen header the crest sits AT the panel edge, where a hard
+     highlight is the point; here it floats in open water above the waves, and at full opacity its
+     ellipse read as a horizontal stripe across the whole band rather than as light on water. */
+  opacity: .5;
+  animation: motu-foam 7s ease-in-out infinite;
+}
+/* The opacities here are the SOFTENED ones, not the crest's: a keyframe setting opacity: 1 would
+   silently undo the rule above for all but one instant of every cycle. */
+@keyframes motu-foam {
+  0%, 100% { transform: translateY(0) scaleX(1); opacity: .5; }
+  50% { transform: translateY(-3px) scaleX(1.04); opacity: .34; }
+}
+/* The sheen LOOPS here rather than sweeping once. On a screen header one sweep says "this changed";
+   on a masthead nothing changed, and the light is only the water being water. */
+.motu-bay[data-shape="masthead"] .sheen {
+  background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.26) 50%, transparent 65%);
+  animation: motu-sheen-loop 11s ease-in-out .6s infinite;
+}
+/* Most of the 11s is the REST. A sweep every 11 seconds reads as weather; a sweep that TAKES 11
+   seconds reads as a progress bar. */
+@keyframes motu-sheen-loop {
+  0% { transform: translateX(-100%); }
+  32%, 100% { transform: translateX(100%); }
+}
+
+/* THE WATERLINE. Two wave layers drifting at different speeds, which is the whole trick: one wave is
+   a decoration, two at different speeds is parallax and reads as depth.
+
+   CSS BACKGROUNDS, NOT SVG ELEMENTS, for the same reason the crest above is a gradient — the host
+   inlines everything it serves, and a wave that lives in the stylesheet cannot fail to inline. Each
+   tile starts and ends at the same y, so repeat-x is seamless and the drift is one tile of
+   background-position-x: no transform, no doubled markup, no 200%-wide element to overflow. */
+.motu-bay__waves {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 78px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.motu-bay__waves::before, .motu-bay__waves::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat-x;
+  background-position: 0 bottom;
+  background-size: 600px 100%;
+}
+/* BACK: the icon's foam blue, translucent, slower. */
+.motu-bay__waves::before {
+  background-image: ${wave('M0 46 C 180 12, 300 76, 480 52 C 660 28, 780 78, 960 56 C 1100 40, 1150 52, 1200 46 L1200 90 L0 90 Z', 'rgba(92,192,232,.30)')};
+  animation: motu-drift 26s linear infinite;
+}
+/* FRONT: the page's own ground, which is what makes the band END rather than fade — the waves are the
+   masthead's bottom edge, not a picture of one.
+
+   THE LITERAL, NOT var(--surface-page), and this is not a style choice. An SVG inside a data URI is
+   an ISOLATED DOCUMENT: it has no access to the custom properties of the page embedding it, so the
+   variable resolved to nothing and the fill fell back to black — a black waterline across the whole
+   masthead, which is what the first render of this shipped. The consequence is real and worth stating:
+   a host that re-themes --surface-page gets a stripe of motu's ground here, and closing that would
+   mean an inline <svg> element and the doubled markup this shape exists to avoid. */
+.motu-bay__waves::after {
+  background-image: ${wave('M0 62 C 200 34, 320 84, 520 66 C 720 48, 840 88, 1020 70 C 1120 61, 1160 66, 1200 62 L1200 90 L0 90 Z', MOTU_SURFACE.page)};
+  animation: motu-drift 17s linear infinite;
+}
+@keyframes motu-drift { to { background-position-x: -600px; } }
+
+/* The masthead's own headline block, below the title row. THIS is the page's h1; the bay's title
+   stays the product mark beside it. */
+/* THE BRAND ROW. A masthead's title row carries a 30px mark, so it centres rather than sitting on a
+   baseline — the compact bay has no mark and stays as it was. And the mark IS the product name here,
+   so the title reads as a wordmark (sans, tight) rather than as the mono readout a screen header
+   makes of it. */
+.motu-bay[data-shape="masthead"] .bay-inner,
+.motu-bay[data-shape="masthead"] .bay-title { align-items: center; }
+.motu-bay[data-shape="masthead"] .bay-title .bay-name {
+  font: 700 20px/1 ${MOTU_TYPE.family};
+  letter-spacing: -.02em;
+}
+.motu-bay[data-shape="masthead"] .bay-title span { font-size: 12px; }
+/* The readout at masthead scale: further apart, and quiet enough that the headline below it is what
+   the eye lands on. */
+.motu-bay[data-shape="masthead"] .bay-meta {
+  display: flex; align-items: center; gap: 18px;
+  color: rgba(242, 251, 250, .78);
+  text-shadow: none;
+}
+
+.motu-bay__headline {
+  position: relative;
+  z-index: 1;
+  padding-top: 34px;
+  max-width: 900px;
+}
+.motu-bay__headline > h1 {
+  margin: 0 0 10px;
+  font: 600 46px/1.02 ${MOTU_TYPE.family};
+  letter-spacing: -.038em;
+}
+.motu-bay__headline > p {
+  margin: 0;
+  max-width: 520px;
+  font: 400 15px/1.5 ${MOTU_TYPE.family};
+  color: rgba(242, 251, 250, .72);
+}
+@media (max-width: 720px) {
+  .motu-bay[data-shape="masthead"] { padding: 18px 20px 66px; }
+  .motu-bay__headline > h1 { font-size: 32px; }
+}
 `;
 }
 

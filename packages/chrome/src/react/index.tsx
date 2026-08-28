@@ -156,6 +156,13 @@ interface RowCommon {
   mono?: boolean;
   /** The current one. Rendered as `aria-current`, so assistive tech reads the selection too. */
   current?: boolean;
+  /**
+   * `chrome` (the default) is a row read BESIDE the thing it describes — a lens call, a console shot.
+   * `page` is a row read on its own, on a surface a person landed on: two lines, card-sized padding,
+   * a 21px name. One component with two scales rather than two components, for the same reason the
+   * bay has `compact` and `masthead` instead of a second header.
+   */
+  scale?: 'chrome' | 'page';
   children?: ReactNode;
 }
 
@@ -172,13 +179,14 @@ export type RowProps =
  * how both applications ended up with rows a keyboard could not reach.
  */
 export function Row(props: RowProps) {
-  const { as = 'div', surface = 'flat', mono, current, className, children, ...rest } = props as RowCommon & {
+  const { as = 'div', surface = 'flat', mono, current, scale, className, children, ...rest } = props as RowCommon & {
     as?: 'div' | 'button' | 'a';
     className?: string;
   } & Record<string, unknown>;
   const interactive = as !== 'div';
   const shared = {
     className: cx('motu-row', className),
+    'data-scale': scale === 'page' ? 'page' : undefined,
     'data-surface': surface === 'card' ? 'card' : undefined,
     'data-mono': mono ? '' : undefined,
     'data-interactive': interactive ? '' : undefined,
@@ -190,19 +198,31 @@ export function Row(props: RowProps) {
   return <div {...(shared as HTMLAttributes<HTMLDivElement>)}>{children}</div>;
 }
 
+interface CellProps extends HTMLAttributes<HTMLSpanElement> {
+  /**
+   * Let the content wrap instead of truncating.
+   *
+   * Truncation is right at chrome scale, where a row is one line and a second one would break the
+   * grid. A page-scale row is deliberately TWO lines — a name and what it is made of — and the
+   * ellipsis rule (`nowrap` + `overflow: hidden`) silently collapses that to one. So the default
+   * stays truncation and the second line is asked for.
+   */
+  wrap?: boolean;
+}
+
 /** The cell that takes the remaining width and truncates rather than pushing its neighbours out. */
-export function Grow({ className, children, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+export function Grow({ wrap, className, children, ...rest }: CellProps) {
   return (
-    <span className={cx('motu-grow', 'motu-ellipsis', className)} {...rest}>
+    <span className={cx('motu-grow', !wrap && 'motu-ellipsis', className)} {...rest}>
       {children}
     </span>
   );
 }
 
 /** The faint bit at the end of a row: a count, an age, a status word. */
-export function Trail({ className, children, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+export function Trail({ wrap, className, children, ...rest }: CellProps) {
   return (
-    <span className={cx('motu-trail', 'motu-ellipsis', className)} {...rest}>
+    <span className={cx('motu-trail', !wrap && 'motu-ellipsis', className)} {...rest}>
       {children}
     </span>
   );
@@ -463,6 +483,18 @@ export interface BayProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   lead?: ReactNode;
   /** One sweep of light, for when something actually changed. */
   sheen?: boolean;
+  /**
+   * `masthead` is the tall end of the same component: a page's opening rather than a screen's header.
+   * It brings the deeper gradient, a looping sheen, the drifting waterline and room for a headline.
+   *
+   * Mutually exclusive with `compact` in practice, and not enforced — the CSS resolves it (masthead
+   * sets its own padding last) and a runtime guard on a styling combination nobody writes is noise.
+   */
+  shape?: 'masthead';
+  /** The page's real heading, under the title row. Only a masthead has room for one. */
+  headline?: ReactNode;
+  /** A sentence under the headline: what this page is, in the product's own words. */
+  blurb?: ReactNode;
   /** Hard right of the title, on the water: a readout, a control. */
   children?: ReactNode;
 }
@@ -474,10 +506,14 @@ export interface BayProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
  * two pieces of motu chrome a person sees at once — a published page and the console that reviews
  * it — must not read as two products. The console drew this gradient by hand before the kit existed.
  */
-export function Bay({ title, titleAs: TitleAs = 'strong', subtitle, compact, lead, leading, sheen, className, children, ...rest }: BayProps) {
+export function Bay({ title, titleAs: TitleAs = 'strong', subtitle, compact, lead, leading, sheen, shape, headline, blurb, className, children, ...rest }: BayProps) {
+  const masthead = shape === 'masthead';
   return (
-    <header className={cx('motu-bay', compact && 'compact', className)} {...rest}>
-      {sheen && <span className="sheen" aria-hidden="true" />}
+    <header className={cx('motu-bay', compact && 'compact', className)} data-shape={masthead ? 'masthead' : undefined} {...rest}>
+      {/* A masthead's sheen is ambient rather than an event, so it is always on: the `sheen` prop
+          means "something changed", and asking a page to pass it forever would make the two meanings
+          one flag. The CSS gives the masthead its own looping animation for the same element. */}
+      {(sheen || masthead) && <span className="sheen" aria-hidden="true" />}
       {lead != null && <div className="bay-lead">{lead}</div>}
       <div className="bay-inner">
         <div className="bay-title">
@@ -487,6 +523,218 @@ export function Bay({ title, titleAs: TitleAs = 'strong', subtitle, compact, lea
         </div>
         {children != null && <div className="bay-meta">{children}</div>}
       </div>
+      {masthead && (headline != null || blurb != null) && (
+        <div className="motu-bay__headline">
+          {headline != null && <h1>{headline}</h1>}
+          {blurb != null && <p>{blurb}</p>}
+        </div>
+      )}
+      {/* LAST, and empty. The waterline is the masthead's bottom EDGE — it must paint over the
+          gradient and under nothing, and it carries no content, so a trailing aria-hidden span is
+          the honest markup rather than a wrapper around the page. */}
+      {masthead && <span className="motu-bay__waves" aria-hidden="true" />}
     </header>
   );
+}
+
+// --- Page scale ------------------------------------------------------------------------------
+//
+// The shapes a surface a person LANDS on needs, which the chrome-scale kit above never had to grow:
+// a wide column, a filter bar, a rail, a name, a kind. Every one of them is declared in `../kit.mjs`
+// like the rest — these are the React callers, not a second definition.
+
+export interface PageProps extends HTMLAttributes<HTMLDivElement> {
+  /** The element. `main` for the column that holds the page's actual content. */
+  as?: 'div' | 'main' | 'section';
+  /** Sits in the gap under a masthead's waterline, close enough to read as part of the band. */
+  lift?: boolean;
+  /** Its children are sections stacked down the page, rather than one block. */
+  stack?: boolean;
+  children?: ReactNode;
+}
+
+/** The page's column: bounded width, the masthead's own gutters. */
+export function Page({ as: As = 'div', lift, stack, className, children, ...rest }: PageProps) {
+  return (
+    <As className={cx('motu-page', className)} data-lift={lift ? '' : undefined} data-stack={stack ? '' : undefined} {...rest}>
+      {children}
+    </As>
+  );
+}
+
+export interface SearchProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
+  /** The input itself. Passed in rather than owned, because the state belongs to the caller. */
+  children?: ReactNode;
+  /** The quiet mono line on the right: what the keyboard does here. */
+  hint?: ReactNode;
+}
+
+/**
+ * The filter bar: a card that overlaps the masthead's waterline.
+ *
+ * It renders no input of its own. A kit component that owned the value would be the kit making a
+ * state decision, and in a motu region that decision belongs to an island's declared key.
+ */
+export function Search({ hint, className, children, ...rest }: SearchProps) {
+  return (
+    <div className={cx('motu-search', className)} {...rest}>
+      {children}
+      {hint != null && <span className="motu-hint">{hint}</span>}
+    </div>
+  );
+}
+
+/** A list with room for a rail down its left edge. */
+export function Railed({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cx('motu-railed', className)} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+export interface RailProps extends HTMLAttributes<HTMLSpanElement> {
+  /** Where the current row starts, in CSS length. Omit both to park the rail invisibly. */
+  top?: string | number;
+  /** How tall the current row is. */
+  height?: string | number;
+}
+
+/**
+ * The lit bar that TRAVELS to whichever row is current.
+ *
+ * The caller measures — this component does not touch the DOM, and a kit that started measuring
+ * would be a kit that owns a ref, a resize observer and a layout effect for every consumer.
+ */
+export function Rail({ top, height, style, className, ...rest }: RailProps) {
+  const idle = top == null || height == null;
+  return (
+    <span
+      className={cx('motu-rail', className)}
+      data-idle={idle ? '' : undefined}
+      aria-hidden="true"
+      style={{ ['--rail-top' as string]: px(top), ['--rail-height' as string]: px(height), ...style }}
+      {...rest}
+    />
+  );
+}
+
+/** A number is a length; anything else is already one. */
+function px(v: string | number | undefined): string | undefined {
+  return v == null ? undefined : typeof v === 'number' ? `${v}px` : v;
+}
+
+/** The row of things a page-scale row leads with: a lamp, the name, its kind, its state. */
+export function TitleLine({ className, children, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span className={cx('motu-title-line', className)} {...rest}>
+      {children}
+    </span>
+  );
+}
+
+/** What the row IS, at page scale. */
+export function Name({ className, children, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span className={cx('motu-name', className)} {...rest}>
+      {children}
+    </span>
+  );
+}
+
+export interface KindProps extends HTMLAttributes<HTMLSpanElement> {
+  /** `sand` for the one kind that is a limit rather than a category. */
+  tone?: 'sand';
+}
+
+/**
+ * What KIND of thing a row is — a lagoon, a group, a baseline.
+ *
+ * Distinct from `Pill`, which carries a STATE. A kind never changes and a state is the whole reason
+ * you are looking; painting them alike is how a page stops being scannable.
+ */
+export function Kind({ tone, className, children, ...rest }: KindProps) {
+  return (
+    <span className={cx('motu-kind', className)} data-tone={tone} {...rest}>
+      {children}
+    </span>
+  );
+}
+
+/** The sand return mark. Appears on the row a keyboard or a cursor is on, and nowhere else. */
+export function Enter({ className, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span className={cx('motu-enter', className)} aria-hidden="true" {...rest}>
+      ↵
+    </span>
+  );
+}
+
+/** A person, as a sand disc. Give it their initial; give the element their name. */
+export function Avatar({ className, children, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span className={cx('motu-avatar', className)} {...rest}>
+      {children}
+    </span>
+  );
+}
+
+export interface SegmentedProps extends HTMLAttributes<HTMLDivElement> {
+  /** Where the lit thumb sits, in CSS length — the caller measures. */
+  thumbLeft?: string | number;
+  thumbWidth?: string | number;
+  children?: ReactNode;
+}
+
+/**
+ * The dock's segmented control: the lit pill SLIDES between options rather than blinking on.
+ *
+ * The thumb is positioned by the caller for the same reason the rail is — only the caller knows where
+ * the active option sits, and measuring is not the kit's job.
+ */
+export function Segmented({ thumbLeft, thumbWidth, className, children, ...rest }: SegmentedProps) {
+  return (
+    <div className={cx('motu-segmented', className)} role="group" {...rest}>
+      <span
+        className="motu-segmented__thumb"
+        aria-hidden="true"
+        style={{ left: px(thumbLeft), width: px(thumbWidth) }}
+      />
+      {children}
+    </div>
+  );
+}
+
+export interface OptProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** The chosen one. Rendered as `aria-current`, like every other selection in the kit. */
+  current?: boolean;
+}
+
+/** One option on a rail or in a segmented control. */
+export function Opt({ current, className, children, ...rest }: OptProps) {
+  return (
+    <button type="button" className={cx('motu-opt', className)} aria-current={current ?? undefined} {...rest}>
+      {children}
+    </button>
+  );
+}
+
+/** A key cap. `<kbd>` because that is what it is — the styling is the second reason, not the first. */
+export function Kbd({ className, children, ...rest }: HTMLAttributes<HTMLElement>) {
+  return (
+    <kbd className={cx('motu-kbd', className)} {...rest}>
+      {children}
+    </kbd>
+  );
+}
+
+/**
+ * motu's mark.
+ *
+ * A span with a background, not an `<img>`: the SVG is inlined in the stylesheet, so there is no
+ * asset to 404 and no second copy for the pages the host renders without a bundler. `role="img"` and
+ * a label because a background image is invisible to assistive tech by construction.
+ */
+export function Mark({ className, ...rest }: HTMLAttributes<HTMLSpanElement>) {
+  return <span className={cx('motu-mark', className)} role="img" aria-label="motu" {...rest} />;
 }

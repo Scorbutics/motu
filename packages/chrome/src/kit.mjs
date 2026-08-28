@@ -22,6 +22,7 @@
 // PLAIN .mjs, like everything else here: `./css.mjs` composes it for the host, which runs under bare
 // node with no bundler, and `./react/` composes the same rules for the two React surfaces.
 import {
+  MOTU_WATER,
   MOTU_CHROME,
   MOTU_SURFACE,
   MOTU_INK,
@@ -31,6 +32,7 @@ import {
   MOTU_MOTION,
   MOTU_VERDICT,
 } from './tokens.mjs';
+import { motuMarkUrl } from './mark.mjs';
 
 /**
  * The kit's own custom properties, on whatever selector the surface declares them.
@@ -78,6 +80,20 @@ export function motuKitShadowReset(scope = ':host') {
  * rather than a modifier class — `data-tone="warn"` reads as a value and a modifier class reads as a
  * second shape, and the kit has one shape per concept on purpose.
  */
+/**
+ * The clear glyph, as a mask.
+ *
+ * A MASK, NOT AN IMAGE, so it takes `currentColor` and follows the ink token instead of pinning a
+ * colour here — which is the rule this package is for. Encoded like every other inlined SVG: a raw hash
+ * would truncate the data URI, and this one carries no colour at all for the same reason.
+ */
+function cross() {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">' +
+    '<path d="M3 3 L13 13 M13 3 L3 13" stroke="black" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+}
+
 export function motuKitCss(scope = ':root') {
   const shadow = scope.startsWith(':host');
   return [
@@ -147,6 +163,10 @@ export function motuKitCss(scope = ':root') {
 .motu-row[data-surface="card"] { background: var(--surface-row); border-color: var(--line); }
 .motu-row[data-interactive] { cursor: pointer; transition: background 160ms, border-color 160ms, transform 160ms; }
 .motu-row[data-interactive]:hover { background: var(--tint); transform: translateX(2px); }
+/* NO UNDERLINE. motuSurfaceCss gives every <a> one on hover, which is right for a link inside prose
+   and wrong for a row that IS a card — it underlined the name, the sub and the trailing count all at
+   once. Stated here because the row already sets text-decoration: none and lost to a:hover. */
+.motu-row:hover, .motu-row:focus-visible { text-decoration: none; }
 .motu-row[data-interactive]:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
 .motu-row[aria-current="true"], .motu-row[data-selected] {
   background: var(--tint); border-color: var(--tide-accent);
@@ -220,6 +240,17 @@ export function motuKitCss(scope = ':root') {
   transition: color 160ms;
 }
 .motu-segmented > button:hover { color: var(--ink); }
+/* ONE OPT COMPONENT, TWO CONTAINERS. .motu-opt is the palette's rail option — left-aligned, full
+   width, nudging right on hover. Dropped into a segmented control it has to become a segment, and
+   the alternative was a variant prop, which would make every caller state which container it is
+   already inside. Adapting to the container is what CSS is for. */
+.motu-segmented > .motu-opt {
+  width: auto; text-align: center; gap: 0;
+  padding: 7px 14px; border-radius: ${MOTU_RADIUS.pill};
+  background: transparent;
+}
+.motu-segmented > .motu-opt:hover { background: transparent; transform: none; }
+.motu-segmented > .motu-opt[aria-current="true"] { background: transparent; color: ${MOTU_CHROME.onPrimary}; }
 .motu-segmented > button[aria-current="true"] { color: ${MOTU_CHROME.onPrimary}; }
 
 /* OPT: one option in a rail. It slides toward the pointer rather than merely tinting, which is what
@@ -423,9 +454,250 @@ export function motuKitCss(scope = ':root') {
 .motu-meter dt { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
 .motu-meter dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 
+/* --- THE PAGE SCALE ------------------------------------------------------------------------------
+   Everything above is CHROME scale: a lens row, a console row, a dock option — dense, because those
+   surfaces are read beside the thing they describe. A page a person LANDS on is read on its own, and
+   the same 7px row on an empty 1200px viewport reads as a settings list rather than as the product.
+
+   So the shapes get a second scale rather than a second component. data-scale="page" is the masthead's
+   argument again at row level: one .motu-row, two ends. A .motu-page-row would drift from the lens'
+   row within a month, and the lens' row is where the hover, the focus ring and the tone states live.
+*/
+.motu-page {
+  max-width: 960px;
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+@media (max-width: 720px) { .motu-page { padding-left: 20px; padding-right: 20px; } }
+/* Under the waterline: the waves are drawn INSIDE the masthead's bottom padding, so what sits below
+   needs almost no gap of its own — the band already left one. */
+.motu-page[data-lift] { padding-top: 6px; }
+.motu-page[data-stack] {
+  display: flex; flex-direction: column; gap: 18px;
+  padding-top: 22px; padding-bottom: 30px;
+}
+/* A <main> that IS the page column. PAGE_SHELL_CSS styles a bare main as a CENTRED 940px column —
+   the shell's own column, from before this kit had one — so a .motu-page nested inside it was
+   gutter-padded twice and centred once, and the rows sat two hundred pixels right of the filter bar
+   directly above them. Same column or no column; two is how they stop lining up. */
+main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
+@media (max-width: 720px) { main.motu-page { padding-left: 20px; padding-right: 20px; } }
+
+/* THE SEARCH BAR: a card that OVERLAPS the masthead's waterline, which is what ties the two bands
+   together. The gradient tab on its left is the water ramp again, vertical and 4px wide — the same
+   readout the gauge makes, at the size of a bookmark. */
+.motu-search {
+  display: flex; align-items: center; gap: 14px;
+  background: ${MOTU_SURFACE.card};
+  border-radius: ${MOTU_RADIUS.panel};
+  padding: 15px 20px;
+  box-shadow: 0 6px 22px rgba(11, 111, 104, .10);
+}
+.motu-search::before {
+  content: "";
+  width: 4px; height: 24px; flex: none;
+  border-radius: ${MOTU_RADIUS.pill};
+  background: linear-gradient(180deg, ${MOTU_WATER.mock.foam}, ${MOTU_WATER.mock.deep});
+}
+.motu-search > input {
+  flex: 1; min-width: 0;
+  border: 0; outline: none; background: none; padding: 0;
+  color: var(--ink);
+  font: 400 19px/1.2 var(--sans);
+}
+.motu-search > input::placeholder { color: var(--ink-faint); }
+/* THE CLEAR AFFORDANCE, IN OUR INK. type="search" is the right element — it gets the clear button and
+   the right keyboard on a phone — and Chrome paints that button in its own blue, which was the one
+   thing on the page that belonged to the browser rather than to motu. Restyled rather than removed:
+   a field a person has typed into wants a way out of it. */
+.motu-search > input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px; height: 14px;
+  cursor: pointer;
+  opacity: .35;
+  background: currentColor;
+  -webkit-mask: ${cross()} center / contain no-repeat;
+  mask: ${cross()} center / contain no-repeat;
+}
+.motu-search > input::-webkit-search-cancel-button:hover { opacity: .7; }
+/* The hint is the only place a keyboard affordance is stated, so it is mono and it is quiet: a person
+   who does not need it should not have to read it twice. */
+/* --ink-soft, NOT --ink-faint, and this is a deliberate departure from the mockup. The design gives
+   this line #8d9995, which measures about 3:1 on white — axe reports it as a serious contrast failure
+   and it is right: 10.5px tracked mono is the smallest text on the page. --ink-soft is the same cool
+   family, two steps darker, and clears AA. A hint nobody can read is not a quieter hint. */
+.motu-search .motu-hint {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: .06em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+@media (max-width: 560px) { .motu-search .motu-hint { display: none; } }
+
+/* THE SHELF: a labelled row of controls under the filter bar. The label is the quietest thing on the
+   page — a person who already knows what a segmented control does should never read it twice. */
+.motu-shelf { display: flex; align-items: center; gap: 12px; padding: 16px 4px 0; }
+.motu-shelf__label {
+  font: 600 10px/1 var(--mono);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  min-width: 44px;
+}
+
+/* THE RAIL: one lit bar that MOVES to the row under the cursor, rather than a border appearing on
+   each row in turn. Same reasoning as the segmented thumb — a lit thing that travels reads as one
+   pointer, and a border that blinks on reads as five independent hovers. The caller sets top/height,
+   because only the caller knows which row is current. */
+.motu-railed { position: relative; padding-left: 15px; }
+.motu-rail {
+  position: absolute;
+  left: 0; width: 3px;
+  top: var(--rail-top, 0); height: var(--rail-height, 0);
+  border-radius: ${MOTU_RADIUS.pill};
+  background: var(--w-deep);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--w-deep) 60%, transparent);
+  transition: top ${MOTU_MOTION.rail}, height ${MOTU_MOTION.rail}, opacity 160ms;
+  pointer-events: none;
+}
+.motu-rail[data-idle] { opacity: 0; }
+
+/* THE ROW, AT PAGE SCALE. Two lines rather than one: what it is, and what it is made of. */
+.motu-row[data-scale="page"] {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: stretch;
+  gap: 20px;
+  padding: 17px 20px;
+  border-radius: 13px;
+  border-color: transparent;
+}
+.motu-row[data-scale="page"][data-surface="card"] { background: ${MOTU_SURFACE.card}; }
+.motu-row[data-scale="page"][data-interactive]:hover {
+  transform: translateX(3px);
+  box-shadow: 0 8px 24px rgba(11, 111, 104, .12);
+}
+.motu-row[data-scale="page"] .motu-grow { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.motu-row[data-scale="page"] .motu-title-line { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.motu-row[data-scale="page"] .motu-name {
+  font: 500 21px/1.15 var(--sans);
+  letter-spacing: -.022em;
+}
+/* The chrome-scale sub is an uppercase LABEL over a value. At page scale it is a sentence about the
+   row above it — the lagoons a repo holds, the repos a group spans — and uppercasing a list of
+   repository names made them unreadable and, worse, wrong: Scorbutics/motu-demo-app is a name. */
+.motu-row[data-scale="page"] .motu-sub {
+  margin: 0;
+  font: 400 12.5px/1.4 var(--mono);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+  display: block;
+}
+/* THE GAUGE, LAID DOWN. At chrome scale it is a vertical bar in the row's flex line; a page row is a
+   two-column GRID, and a third child would have broken the grid rather than sat beside it. So it
+   becomes the card's bottom edge — the same fill, the same ratio, read as a waterline under the row
+   instead of a bar beside it. The row is already position: relative and clipped. */
+.motu-row[data-scale="page"] .motu-gauge {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  width: auto; height: 2px; margin: 0;
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--w-shallow), var(--w-deep));
+}
+.motu-row[data-scale="page"] .motu-gauge[style*="--fill"] {
+  background:
+    linear-gradient(90deg, var(--w-deep) 0%, var(--w-mid) var(--fill, 0%),
+      transparent var(--fill, 0%), transparent 100%),
+    color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.motu-row[data-scale="page"] .motu-trail {
+  align-self: center;
+  display: flex; align-items: center; gap: 14px;
+  font: 500 13px/1 var(--mono);
+  color: var(--ink);
+}
+
+/* THE ENTER MARK: the sand. One warm note in a cold ramp, which is what makes it read as an
+   affordance rather than as more water. Hidden until the row is current — an arrow on every row is
+   decoration, an arrow on ONE row is an instruction. */
+.motu-enter {
+  font: 600 11px/1 var(--mono);
+  color: ${MOTU_CHROME.sand};
+  opacity: 0;
+  transition: opacity 160ms;
+}
+.motu-row[data-interactive]:hover .motu-enter,
+.motu-row:focus-visible .motu-enter,
+.motu-row[aria-current="true"] .motu-enter { opacity: 1; }
+
+/* A KIND, as a tag: uppercase mono, tracked wide. Distinct from .motu-pill, which carries a STATE. */
+.motu-kind {
+  font: 600 9.5px/1 var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: ${MOTU_RADIUS.pill};
+  background: color-mix(in srgb, var(--w-deep) 9%, transparent);
+  color: var(--w-deep);
+  white-space: nowrap;
+}
+.motu-kind[data-tone="sand"] { background: color-mix(in srgb, ${MOTU_CHROME.sand} 34%, transparent); color: ${MOTU_CHROME.onSand}; }
+
+/* BREATHING: for a pill whose fact is that something is happening RIGHT NOW. The only animation in
+   the kit that never stops, and it is spent on the one state where stillness would be a lie. */
+.motu-breathe { animation: motu-breathe 2.4s ease-in-out infinite; }
+@keyframes motu-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .82; transform: scale(.97); }
+}
+
+/* A SHEEN over the row that was just chosen — one sweep, the bay's own gesture at row size. */
+.motu-row .motu-sheen {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.6) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: motu-sheen 720ms ease-out 1;
+}
+
+/* SAND, as a readout: the one metadata figure that is a LIMIT rather than a measurement. */
+.motu-sand { color: ${MOTU_CHROME.sand}; }
+/* THE MARK. A background rather than an <img>, so it needs no asset, no alt-text decision at every
+   call site, and no second copy for the server-rendered pages. The element that carries it supplies
+   the accessible name. */
+.motu-mark {
+  display: block; flex: none;
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  background: ${motuMarkUrl()} center / contain no-repeat;
+  box-shadow: 0 2px 8px rgba(4, 33, 29, .35);
+}
+
+/* The avatar: a sand disc. The only round thing on the page, which is what makes it read as a person. */
+.motu-avatar {
+  width: 30px; height: 30px; flex: none;
+  border-radius: ${MOTU_RADIUS.pill};
+  background: ${MOTU_CHROME.sand};
+  color: ${MOTU_CHROME.onSand};
+  display: grid; place-items: center;
+  font: 700 12px/1 var(--sans);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .motu-list > *, .motu-row, .motu-gauge, .motu-btn { animation: none; transition: none; }
   .motu-row[data-interactive]:hover { transform: none; }
+  /* The masthead's three loops and the row sheen. A page whose water never stops moving is exactly
+     what this preference is for, and the shapes all read correctly frozen — the waves keep their
+     silhouette, the foam its highlight, the live pill its colour. */
+  .motu-bay__waves::before, .motu-bay__waves::after,
+  .motu-bay[data-shape="masthead"]::after, .motu-bay[data-shape="masthead"] .sheen,
+  .motu-breathe, .motu-row .motu-sheen { animation: none; }
+  .motu-rail { transition: none; }
 }
 `,
   ]

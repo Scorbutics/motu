@@ -21,13 +21,17 @@ import { IndexLayout } from '@/app/index-layout';
 // TYPE-ONLY, from the app: the page's vocabulary is the application's to name.
 import type { IndexRegion, ProducedIndexKeys } from '@/app/index-region';
 
-export const indexArchipelago = archipelago<IndexRegion, 'x-lagoon-groups' | 'x-lagoon-repos' | 'x-lagoon-stats'>()({
+export const indexArchipelago = archipelago<
+  IndexRegion,
+  'x-lagoon-filter' | 'x-lagoon-groups' | 'x-lagoon-repos' | 'x-lagoon-stats'
+>()({
   id: 'index',
   root: IndexLayout,
   // The app's prop name on the left, motu's slot on the right. The page passes `composed` and
   // `repositories`; it never writes a slot name.
   slots: {
     readout: { slot: 'readout' },
+    filter: { slot: 'filter' },
     composed: { slot: 'composed' },
     repositories: { slot: 'repositories' },
   },
@@ -40,14 +44,23 @@ export const indexArchipelago = archipelago<IndexRegion, 'x-lagoon-groups' | 'x-
       bind: [{ stats: 'stats' }],
     },
     {
+      // THE PAGE'S ONE CONTROL, and the region's only producer. Declared here, so a second island
+      // claiming either key is a static error rather than a runtime store complaint reached after
+      // the work is done.
+      slot: 'filter',
+      element: 'x-lagoon-filter',
+      bind: ['query', 'show'],
+      writes: { 'query-changed': 'query', 'show-changed': 'show' },
+    },
+    {
       slot: 'composed',
       element: 'x-lagoon-groups',
-      bind: [{ groups: 'groups' }],
+      bind: [{ groups: 'groups' }, 'query', 'show'],
     },
     {
       slot: 'repositories',
       element: 'x-lagoon-repos',
-      bind: [{ repos: 'repos', cap: 'cap' }],
+      bind: [{ repos: 'repos', cap: 'cap' }, 'query', 'show'],
     },
   ],
 });

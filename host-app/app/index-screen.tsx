@@ -9,13 +9,22 @@ import { MotuRegion, Index } from "@/components/motu/index-region"
 import { LagoonGroups } from "@/components/lagoon/lagoon-groups"
 import { LagoonRepos } from "@/components/lagoon/lagoon-repos"
 import { LagoonStats } from "@/components/lagoon/lagoon-stats"
-import type { IndexRegion } from "@/app/index-region"
+import { LagoonFilter } from "@/components/lagoon/lagoon-filter"
+import type { IndexRegion, ProducedIndexKeys } from "@/app/index-region"
 
-export function IndexScreen({ groups, repos, stats, cap }: IndexRegion) {
+/**
+ * WHAT THE PAGE MAY PASS: everything the host feeds, and nothing an island produces.
+ *
+ * `query` and `show` are omitted rather than optional. The page holding its own copy of a key an
+ * island owns is the exact laundering the ownership rules exist to stop, and `Omit` makes it a
+ * compile error here instead of a lens warning later.
+ */
+export function IndexScreen({ groups, repos, stats, cap }: Omit<IndexRegion, ProducedIndexKeys>) {
   return (
     <MotuRegion>
       <Index.Root
         readout={<LagoonStats stats={stats} />}
+        filter={<LagoonFilter />}
         composed={<LagoonGroups groups={groups} />}
         repositories={<LagoonRepos repos={repos} cap={cap} />}
       />

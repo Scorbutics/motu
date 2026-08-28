@@ -5,6 +5,10 @@
 // EVERYTHING HERE IS HOST-FED. The server reads the store and filters it through `authorize`; neither
 // island can change any of it. That is not a limitation to apologise for — it is what the page IS. A
 // listing shows what you may see, and "what you may see" is decided somewhere no browser can reach.
+/** Which kinds the page lists. Re-exported from the component that owns the control. */
+export type { LagoonShow } from "@/components/lagoon/lagoon-filter"
+import type { LagoonShow } from "@/components/lagoon/lagoon-filter"
+
 export type LagoonGroup = {
   name: string
   members: Array<{ repo: string }>
@@ -42,12 +46,31 @@ export type IndexRegion = {
    * where `cap` was a prop nothing could ever set and every row silently used a hardcoded 1000.
    */
   cap: number
+
+  /**
+   * What the reader typed.
+   *
+   * ISLAND-OWNED. `lagoon-filter` writes it; both listing islands read it and narrow themselves. The
+   * filter never sees a list and neither list knows the filter exists — that is the coupling this
+   * region was drawn to declare, and it is the only one on the page.
+   */
+  query: string
+
+  /**
+   * Which kinds are listed.
+   *
+   * ISLAND-OWNED, by the same island. Two keys rather than one object, because they move
+   * independently: typing does not reset the segment, and choosing a segment does not clear the
+   * query. A single `{ query, show }` key would make every change to either a write of both, and the
+   * lens could no longer show which one actually moved.
+   */
+  show: LagoonShow
 }
 
 /**
- * Nothing on this page is island-owned.
+ * `query` and `show`.
  *
- * Both islands only render. There is no control here yet, and when one arrives — a filter, a sort —
- * it will produce a key and this type is where that gets declared.
+ * `ProducedKeysAre` in the archipelago makes it a compile error for this to drift from what the
+ * islands actually declare in `writes`.
  */
-export type ProducedIndexKeys = never
+export type ProducedIndexKeys = "query" | "show"

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Bay } from "@motu/chrome/react"
+import { Bay, Mark, Page } from "@motu/chrome/react"
 
 /**
  * The front page's ARRANGEMENT, as a component the archipelago points at.
@@ -10,29 +10,52 @@ import { Bay } from "@motu/chrome/react"
  * reach it, the lagoon rendered a defaulted `0 objects · 0 kB` above five repositories holding 41
  * records, which `store.stats()` cannot produce. The readout is a slot now, filled by an island with
  * its own scenarios; the bar around it stays arrangement.
+ *
+ * THE MASTHEAD IS THE SAME BAY. `shape="masthead"` is the tall end of one component — the deeper
+ * gradient, the looping sheen, the drifting waterline, room for a heading. A second header component
+ * for the front page would have been a second thing to keep in step with the console's, which is the
+ * drift `@motu/chrome` exists to stop.
+ *
+ * THE HEADLINE IS COPY, NOT DATA. "Your lagoons" and the sentence under it name no repository and
+ * count nothing, which is what keeps them here rather than in an island. The counts a visitor wants
+ * are already the readout's, and a second component counting the same host is exactly how the number
+ * in the bar stops matching the list below it — `lagoon-stats` says so about its own inputs.
  */
 export function IndexLayout({
   readout,
+  filter,
   composed,
   repositories,
 }: {
   readout?: ReactNode
+  filter?: ReactNode
   composed?: ReactNode
   repositories?: ReactNode
 }) {
   return (
     <>
       {/* `children` is the bay's hard-right readout slot — the kit's own word for where the host's
-          server-rendered bay puts this line. `titleAs` stays the default `strong`, matching that bay:
-          the page's real heading is elsewhere, and promoting this to an <h1> was called out in the
-          kit as an accessibility regression the styling cannot show. */}
-      <Bay title="motu" subtitle="published lagoons">
+          server-rendered bay puts this line. `titleAs` stays the default `strong`: the page's real
+          <h1> is the masthead's headline, one element below, and promoting this too would give the
+          page two first-level headings. */}
+      <Bay
+        shape="masthead"
+        leading={<Mark />}
+        title="motu"
+        headline="Your lagoons"
+        blurb="Every declared state, published and addressable."
+      >
         {readout}
       </Bay>
-      <main>
+      {/* The filter rides in the gap the masthead's bottom padding leaves under the waterline. */}
+      <Page lift>{filter}</Page>
+      {/* ONE COLUMN, not a column inside a column. `PAGE_SHELL_CSS` styles a bare <main> as its own
+          centred 940px block, which put these rows two hundred pixels right of the filter bar above
+          them. `Page as="main"` makes the two the same column. */}
+      <Page as="main" stack>
         {composed}
         {repositories}
-      </main>
+      </Page>
     </>
   )
 }

@@ -8,4 +8,5 @@
 // dropping it works for every bundler rather than adding a mapping per host.
 export { ELEMENT_REGISTRY } from './islands/registry';
 export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry';
+export { corpusArchipelago } from './archipelagos/corpus/corpus.archipelago';
 export { signinArchipelago } from './archipelagos/signin/signin.archipelago';

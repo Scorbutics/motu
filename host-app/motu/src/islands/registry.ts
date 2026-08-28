@@ -4,6 +4,8 @@
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
 import type { ElementSpec } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
+import { element as corpusFilterElement } from './corpus-filter.island';
+import { element as corpusStatesElement } from './corpus-states.island';
 import { element as githubSignInElement } from './github-sign-in.island';
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
@@ -18,7 +20,7 @@ import { element as githubSignInElement } from './github-sign-in.island';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [githubSignInElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [corpusFilterElement, corpusStatesElement, githubSignInElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -26,5 +28,7 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [githubSignInElement];
  * the same information in a form the compiler can look up by tag.
  */
 export interface ElementTypes {
+  'x-corpus-filter': typeof corpusFilterElement;
+  'x-corpus-states': typeof corpusStatesElement;
   'x-github-sign-in': typeof githubSignInElement;
 }

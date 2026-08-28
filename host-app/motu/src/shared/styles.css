@@ -106,3 +106,102 @@
   font-size: 0.875rem;
   text-align: center;
 }
+
+/* --- The corpus screen: recorded states, ranked -------------------------------------------------
+   Colours come from the same --_* tokens as the sign-in island, so `css-tokens` stays green and the
+   host's palette reaches these the moment it defines --x-*. */
+.corpus-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.corpus-filter__choice {
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius);
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.corpus-filter__choice.is-selected {
+  border-color: currentColor;
+  font-weight: 600;
+}
+.corpus-filter__count {
+  color: var(--_muted);
+}
+.corpus-states {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.corpus-states__caption,
+.corpus-states__empty {
+  color: var(--_muted);
+  font-size: 0.875rem;
+}
+.corpus-states__row {
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius);
+  padding: 0.75rem;
+  /* A fingerprint id is one long unbroken token — `authError=null,destination=null,…`. Left alone it
+     pushed the page 326px past a 390px viewport, which `responsive` caught in the audit tier and no
+     island check could: every island fits on its own, and the overflow was the ARRANGEMENT. */
+  min-width: 0;
+}
+.corpus-states__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.corpus-states__id {
+  /* `anywhere` rather than `break-all`: it breaks at the commas where it can, and mid-token only when
+     there is no other option. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+.corpus-states__share,
+.corpus-states__accepted {
+  color: var(--_muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.corpus-states__keys {
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+}
+.corpus-states__key {
+  display: flex;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.corpus-states__key dt {
+  color: var(--_muted);
+}
+.corpus-states__key dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* The page's own arrangement — not an island, and the reason it is here anyway is that the lagoon
+   previews the islands without it, so the overflow it fixes has to be fixed at the island too. */
+.corpus-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem 1.25rem;
+  max-width: 60rem;
+  margin: 0 auto;
+}
+.corpus-page__summary {
+  color: var(--_muted);
+}

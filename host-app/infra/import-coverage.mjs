@@ -47,7 +47,15 @@ const flag = (n) => {
   return next === undefined || next.startsWith('--') ? true : next;
 };
 
-const storeDir = env('MOTU_HOST_DIR') || resolve(homedir(), '.motu/host');
+// CONFIGURED, no default — see the coverage route for why. This script reported "nothing to import"
+// against `~/.motu/host` while five real corpora sat in `~/.local/share/motu-host`, which is a false
+// negative that looks exactly like success.
+const storeDir = env('MOTU_HOST_DIR');
+if (!storeDir) {
+  console.error('✗ MOTU_HOST_DIR is not set — it is where the lagoon host keeps its store, and there');
+  console.error('  is no safe default: guessing wrong reports "nothing to import" over real corpora.');
+  process.exit(1);
+}
 const coverageRoot = resolve(storeDir, 'coverage');
 const onlyRepo = typeof flag('repo') === 'string' ? flag('repo') : null;
 const deleteAfter = flag('delete-after-import') === true;

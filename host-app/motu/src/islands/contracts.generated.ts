@@ -8,9 +8,21 @@
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
+import type { CorpusFilter as C_corpus_filter } from '@/components/corpus/corpus-filter';
+import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus-states';
 import type { GithubSignIn as C_github_sign_in } from '@/components/auth/github-sign-in';
 
 export const CONTRACTS = {
+  'x-corpus-filter': {
+    input: ['value', 'unacceptedCount'],
+    output: { onFilterChange: 'filter-change' },
+    ambient: [],
+  },
+  'x-corpus-states': {
+    input: ['states', 'filter', 'regionId'],
+    output: {  },
+    ambient: [],
+  },
   'x-github-sign-in': {
     input: ['error', 'authError', 'isSubmitting', 'returnTo', 'destination'],
     output: { onSignIn: 'sign-in' },
@@ -42,6 +54,10 @@ type ContractFitsComponent<C, T extends Tag> = [
       keyof PropsOf<C>
     >];
 
+const _corpus_filter: ContractFitsComponent<typeof C_corpus_filter, 'x-corpus-filter'> = true;
+void _corpus_filter;
+const _corpus_states: ContractFitsComponent<typeof C_corpus_states, 'x-corpus-states'> = true;
+void _corpus_states;
 const _github_sign_in: ContractFitsComponent<typeof C_github_sign_in, 'x-github-sign-in'> = true;
 void _github_sign_in;
 

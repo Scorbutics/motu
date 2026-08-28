@@ -15,8 +15,6 @@
 // one repo and can do exactly one thing, and accepting a state takes the ADMIN token — because
 // nothing promotes a state to "known" except a flow or a person, and a reporting path that could mark
 // its own findings resolved reports nothing.
-import { resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { loadAccess, canIngest, secretMatches } from '@motu/host/src/access.mjs';
 import { proxyToHost } from '@/src/upstream';
 import { postgresProjectStore } from '@/src/auth/stores';
@@ -27,9 +25,20 @@ export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 export const runtime = 'nodejs';
 
-/** The same default `store.mjs` resolves, so both read one access.json. */
-function storeDir(): string {
-  return process.env.MOTU_HOST_DIR || resolve(homedir(), '.motu/host');
+/**
+ * Where the host keeps its store — CONFIGURED, with no default, and that is the fix rather than the
+ * inconvenience.
+ *
+ * This used to fall back to `~/.motu/host`, which is `store.mjs`'s own default and is NOT where this
+ * machine's host actually stores: its unit sets `MOTU_HOST_DIR=~/.local/share/motu-host`. Both
+ * directories existed, so nothing errored — the app simply read an access.json that was not there,
+ * got `{ repos: {} }`, and refused every ingest token as unrecognised. Fail-closed, silent, and
+ * indistinguishable from "that token is wrong".
+ *
+ * A default that is right on a fresh install and wrong on every configured one is worse than none.
+ */
+function storeDir(): string | null {
+  return process.env.MOTU_HOST_DIR || null;
 }
 
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -81,7 +90,15 @@ const handler = async (request: Request) => {
   }
   if (!project) return proxyToHost(request);
 
-  const access = loadAccess(storeDir());
+  // WITHOUT THE STORE we cannot evaluate the credential, so we do not pretend to. Falling through
+  // hands the request to the host WITH its token intact, which authenticates it exactly as before —
+  // the same reasoning as `abstain` in `authorize`: not knowing is not a verdict.
+  const dir = storeDir();
+  if (!dir) {
+    console.error('[coverage] MOTU_HOST_DIR is not set — cannot read the host access policy, falling through');
+    return proxyToHost(request);
+  }
+  const access = loadAccess(dir);
   const admin = isAdmin(request);
   const region = normalizeSegment(url.searchParams.get('region'));
 

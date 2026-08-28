@@ -39,3 +39,29 @@ test('every inlined SVG is encoded — a raw # truncates a data URI silently', a
     assert.ok(!url.includes('var(--'), 'an SVG in a data URI is an isolated document: no page variable reaches it');
   }
 });
+
+test('the kit cannot reach a host application it is injected into', async () => {
+  // WHY THIS IS A TEST AND NOT A CONVENTION. The tide line injects `motuKitCss('#tide')` into
+  // whatever application is rendering a lagoon — peps, Twenty, anyone who adopted motu. Handing that
+  // application our `--ink`, or a rule that paints its <button>s, because it happens to show a dock
+  // would be indefensible. Two properties make it safe, and both are silent when they break.
+  const { motuKitCss } = await import('../src/kit.mjs');
+  const css = motuKitCss('#tide').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // ONE: the variables land on the scope they were given, never on the document.
+  assert.ok(css.trimStart().startsWith('#tide {'), 'the variable block must open on the given scope');
+  assert.doesNotMatch(css, /(^|\})\s*:root\s*\{/, 'a :root block would re-theme the host application');
+
+  // TWO: every rule is anchored to a `motu-` class, so nothing selects an element the host owns.
+  const selectors = [...css.matchAll(/(^|\})\s*([^{}@]+?)\s*\{/g)].map((m) => m[2].trim());
+  const reaching = [];
+  for (const group of selectors) {
+    for (const part of group.split(',')) {
+      const s = part.trim();
+      // Keyframe stops (`0%`, `to`) and the scope block itself are not selectors in this sense.
+      if (!s || /^[0-9]/.test(s) || s === 'to' || s === 'from' || s.startsWith('#tide')) continue;
+      if (!s.includes('motu-')) reaching.push(s);
+    }
+  }
+  assert.deepEqual(reaching, [], 'every kit rule must be anchored to a motu- class');
+});

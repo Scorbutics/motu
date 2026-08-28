@@ -40,6 +40,7 @@
 //     assignment and there is no second source of truth to drift.
 
 import { setMotuToolbarHost, flood, applyFlood, clearFlood, floodFrames, type FloodFrom } from '@motu/core';
+import { motuKitCss } from '@motu/chrome/kit';
 
 export type TideView = 'region' | 'mountpoints';
 /** top-left, top-right, bottom-left, bottom-right. */
@@ -367,40 +368,9 @@ const CSS = `
 /* The rail is the vertical cousin of the segmented thumb: it SLIDES to the selected row rather than
    blinking on, so a switch has a direction you can follow. It lives inside the scrolled content, so
    it tracks the row it marks without any scroll bookkeeping. */
-#tide .rail {
-  position: absolute;
-  left: 0;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--tide-accent);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--tide-accent) 60%, transparent);
-  transition: top 300ms cubic-bezier(.34,1.45,.5,1), height 300ms cubic-bezier(.34,1.45,.5,1), background 220ms;
-  pointer-events: none;
-}
-#tide .opt {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 7px 10px 7px 15px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: background 160ms, color 160ms, transform 160ms;
-}
-#tide .opt:hover { background: rgba(15, 118, 110, .07); color: var(--ink); transform: translateX(2px); }
-#tide .opt[aria-current="true"] {
-  background: color-mix(in srgb, var(--tide-accent, #0f766e) 10%, transparent);
-  color: var(--motu-primary-deep, #0b5b55);
-  font-weight: 700;
-}
-#tide .opt[hidden] { display: none; }
+
+
+
 /* A depth lamp: lit for the mounted archipelago, dark for the rest. */
 #tide .lamp {
   width: 6px;
@@ -410,7 +380,7 @@ const CSS = `
   flex: 0 0 auto;
   transition: background 220ms, box-shadow 220ms;
 }
-#tide .opt[aria-current="true"] .lamp {
+#tide .motu-opt[aria-current="true"] .lamp {
   background: var(--tide-accent);
   box-shadow: 0 0 9px color-mix(in srgb, var(--tide-accent) 85%, transparent);
 }
@@ -430,7 +400,8 @@ const CSS = `
   outline: none;
 }
 #tide .filter:focus { border-color: var(--tide-accent); }
-#tide .empty { color: var(--ink-faint); font-size: 11.5px; padding: 6px 4px; }
+/* THE EMPTY STATE IS THE KIT'S (.motu-empty) — italic, --ink-soft, "the tool talking". The dock's
+   copy was upright and --ink-faint, which is the same sentence said two ways on two motu surfaces. */
 
 /* The debug lens' trigger is NOT here any more. It used to be a buoy moored in the bay: a 17px ring
    floating on the water, under every touch-target minimum, competing with the foam stroke behind it,
@@ -447,65 +418,17 @@ const CSS = `
   opacity: 0;
   background: linear-gradient(var(--sheen-angle, 90deg), transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
 }
-#tide .cap {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-  color: var(--ink-caption);
-  min-width: 62px;
-}
-#tide .grp {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, .04);
-}
+/* THE CAP IS THE KIT'S (.motu-cap). What stays is the one thing that is about this dock: a label
+   column wide enough that the rows beside it line up. */
+#tide .motu-cap { min-width: 62px; }
+
+
 /* The lit pill slides between options instead of blinking on — the one bit of state that moves. */
-#tide .thumb {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  border-radius: 999px;
-  background: var(--tide-accent);
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--tide-accent) 45%, transparent);
-  transition: left 260ms cubic-bezier(.34,1.4,.5,1), width 260ms cubic-bezier(.34,1.4,.5,1), background 200ms;
-  pointer-events: none;
-}
-#tide .grp button {
-  position: relative;
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--ink-soft);
-  font: inherit;
-  font-weight: 600;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 160ms;
-}
-#tide .grp button:hover { color: var(--ink); }
-#tide .grp button[aria-current="true"] { color: #fff; }
-#tide .kbd {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(255,255,255,.7);
-  color: #6b7280;
-  font: inherit;
-  font-size: 11px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-#tide .kbd:hover { color: var(--ink); border-color: rgba(0,0,0,.22); }
+
+
+/* THE KEY CAP IS THE KIT'S (.motu-kbd). The dock's copy hardcoded #6b7280 — a Tailwind grey, not a
+   motu colour at all, on the one surface that is always on screen. */
+
 /* The shared toolbar (transport / fit / debug chips) is adopted into this slot. */
 #tide .slot { display: flex; align-items: center; }
 #tide .hint { color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
@@ -610,7 +533,7 @@ const CSS = `
 
 @media (prefers-reduced-motion: reduce) {
   /* The wave itself is a WAAPI animation and is skipped in JS (a CSS rule cannot reach it). */
-  #tide .bar, #tide .thumb, #tide .patch, #tide .rail, #tide .opt { transition: none; }
+  #tide .bar, #tide .motu-segmented__thumb, #tide .patch, #tide .motu-rail, #tide .motu-opt { transition: none; }
   #tide[data-open="true"] .opt { animation: none; }
   #tide-palette .box, #tide-palette li { animation: none; }
 }
@@ -764,7 +687,27 @@ interface Command {
   run(): void;
 }
 
+/**
+ * The kit's shapes, for the dock to use instead of redrawing them.
+ *
+ * SCOPED TO #tide, and that is the whole reason this is not just `installMotuChrome()`. The dock is
+ * injected into somebody ELSE'S application — peps, Twenty, whatever adopted motu — and the chrome
+ * sheet sets custom properties on :root and resets the page. Handing a host application our --ink and
+ * our body background because it happens to render a dock would be indefensible. `motuKitCss('#tide')`
+ * puts the VARIABLES under the dock's own id; the shape rules are class-based and live in motu's own
+ * `motu-` namespace, where they collide with nothing.
+ *
+ * ONCE PER DOCUMENT, by id. A page can mount a dock more than once (the lagoon does, across frames),
+ * and a second copy of an identical sheet is only waste — but the host app case matters more: it may
+ * already have installed the chrome itself, and this must not fight it.
+ */
+function installKit(): void {
+  if (typeof document === 'undefined' || document.getElementById('motu-kit-css')) return;
+  document.head.appendChild(el('style', { id: 'motu-kit-css' }, motuKitCss('#tide')));
+}
+
 export function mountTideLine(opts: TideLineOptions): TideLine {
+  installKit();
   document.head.appendChild(el('style', { id: 'tide-css' }, CSS));
 
   // ── panel ──────────────────────────────────────────────────────────────────────────────────
@@ -772,9 +715,9 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
 
   /** A segmented pill row — right for a fixed pair like the view toggle, wrong for an open-ended set. */
   function segmented(cap: string): { grp: HTMLElement; thumb: HTMLElement } {
-    const thumb = el('span', { class: 'thumb' });
-    const grp = el('div', { class: 'grp', role: 'group', 'aria-label': cap }, thumb);
-    bar.appendChild(el('div', { class: 'row' }, el('span', { class: 'cap' }, cap), grp));
+    const thumb = el('span', { class: 'motu-segmented__thumb' });
+    const grp = el('div', { class: 'motu-segmented', role: 'group', 'aria-label': cap }, thumb);
+    bar.appendChild(el('div', { class: 'row' }, el('span', { class: 'motu-cap' }, cap), grp));
     return { grp, thumb };
   }
 
@@ -785,14 +728,14 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   // (The palette can always search everything; this is for when the panel is already open.)
   const FILTER_FROM = 7;
 
-  const rail = el('span', { class: 'rail' });
+  const rail = el('span', { class: 'motu-rail' });
   const listInner = el('div', { class: 'list__inner' }, rail);
   const listBox = el('div', { class: 'list', role: 'listbox', 'aria-label': 'Archipelago' }, listInner);
-  const emptyNote = el('p', { class: 'empty', hidden: '' }, 'No archipelago matches.');
+  const emptyNote = el('p', { class: 'motu-empty', hidden: '' }, 'No archipelago matches.');
   const listHead = el(
     'div',
     { class: 'col__head' },
-    el('span', { class: 'cap' }, 'Archipelago'),
+    el('span', { class: 'motu-cap' }, 'Archipelago'),
     el('span', { class: 'count' }, `${opts.stations.length}`),
   );
   const listCol = el('div', { class: 'col' }, listHead);
@@ -812,7 +755,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   for (const station of opts.stations) {
     const btn = el(
       'button',
-      { class: 'opt', type: 'button', role: 'option', 'data-id': station.id },
+      { class: 'motu-opt', type: 'button', role: 'option', 'data-id': station.id },
       el('span', { class: 'lamp' }),
       station.label,
     ) as HTMLButtonElement;
@@ -869,8 +812,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   const flowInner = el('div', { class: 'list__inner' });
   const flowBox = el('div', { class: 'list', role: 'listbox', 'aria-label': 'Flow' }, flowInner);
   const flowCount = el('span', { class: 'count' }, '0');
-  const flowHead = el('div', { class: 'col__head' }, el('span', { class: 'cap' }, 'Flow'), flowCount);
-  const flowNote = el('p', { class: 'empty' }, 'This region declares no flows.');
+  const flowHead = el('div', { class: 'col__head' }, el('span', { class: 'motu-cap' }, 'Flow'), flowCount);
+  const flowNote = el('p', { class: 'motu-empty' }, 'This region declares no flows.');
   const flowStatus = el('p', { class: 'hint', hidden: '' }, '');
   const flowCol = el('div', { class: 'col' }, flowHead, flowBox, flowNote, flowStatus);
   if (opts.onFlow) bar.appendChild(flowCol);
@@ -911,7 +854,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     for (const row of rowsToBuild) {
       const btn = el(
         'button',
-        { class: 'opt', type: 'button', role: 'option', title: row.sub },
+        { class: 'motu-opt', type: 'button', role: 'option', title: row.sub },
         el('span', { class: 'lamp' }),
         row.label,
       ) as HTMLButtonElement;
@@ -951,7 +894,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   const isMac = /Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent);
   const kbd = el(
     'button',
-    { class: 'kbd', type: 'button', title: 'Command palette' },
+    { class: 'motu-kbd', type: 'button', title: 'Command palette' },
     isTouch ? '⌕ Search' : isMac ? '⌘K' : 'Ctrl K',
   );
   kbd.addEventListener('click', () => openPalette());
@@ -977,7 +920,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     const review = el(
       'a',
       {
-        class: 'kbd',
+        class: 'motu-kbd',
         // RELATIVE TO THE HOST'S ROOT, not to this page: a lagoon is served at
         // /<repo>/<ref>/<slug> and inside a group at /g/<name>/f/<i>, so only an absolute path
         // reaches the console from both.
@@ -1351,7 +1294,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     cursor = Math.min(cursor, Math.max(0, shown.length - 1));
     list.replaceChildren();
     if (!shown.length) {
-      list.appendChild(el('li', { class: 'empty' }, 'Nothing matches.'));
+      list.appendChild(el('li', { class: 'motu-empty' }, 'Nothing matches.'));
       return;
     }
     shown.forEach((cmd, i) => {
@@ -1451,8 +1394,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     }
     const active = rows.find((r) => r.station.id === stationId)?.btn;
     if (active) {
-      rail.style.top = `${active.offsetTop + 6}px`;
-      rail.style.height = `${Math.max(active.offsetHeight - 12, 6)}px`;
+      rail.style.setProperty('--rail-top', `${active.offsetTop + 6}px`);
+      rail.style.setProperty('--rail-height', `${Math.max(active.offsetHeight - 12, 6)}px`);
       // Keep the mounted archipelago in view when the list is long enough to scroll.
       if (listBox.scrollHeight > listBox.clientHeight) active.scrollIntoView({ block: 'nearest' });
     }
@@ -1473,8 +1416,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   document.fonts?.ready.then(() => {
     const activeOpt = rows.find(({ btn }) => btn.getAttribute('aria-current') === 'true')?.btn;
     if (activeOpt) {
-      rail.style.top = `${activeOpt.offsetTop + 6}px`;
-      rail.style.height = `${Math.max(activeOpt.offsetHeight - 12, 6)}px`;
+      rail.style.setProperty('--rail-top', `${activeOpt.offsetTop + 6}px`);
+      rail.style.setProperty('--rail-height', `${Math.max(activeOpt.offsetHeight - 12, 6)}px`);
     }
     slide(viewGroup, viewGroup.grp.querySelector<HTMLElement>('button[aria-current="true"]'));
   });

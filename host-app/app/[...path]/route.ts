@@ -28,6 +28,7 @@ import { postgresShareLinkStore } from '@/src/auth/share-link-store';
 import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
+import { groupView } from '@/src/host/group-routes';
 import { store, access, normalizeRepo } from '@/src/host/store';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { visibilityFor } from '@/src/host/visibility';
@@ -206,6 +207,11 @@ const handler = async (request: Request) => {
       if (pathname === '/api/groups') return apiGroups(visible);
       if (pathname === '/api/baselines') return apiBaselines(url, visible);
       if (segments[0] === 'shot' && segments[1]) return shot(segments[1]);
+      // THE GALLERY, gated by the same predicate as the page that links to it. Before this it was
+      // proxied, and the host filtered its members with access.json alone — so a repository the front
+      // page listed (private, granted in the database) vanished on the way into the group.
+      const group = await groupView(segments, url, request, visible);
+      if (group) return group;
       if (segments.length && segments.length < 3 && !HOST_NAMESPACES.has(segments[0] as string)) {
         const listing = await repoListing(segments, visible);
         if (listing) return listing;

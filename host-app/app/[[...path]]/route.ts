@@ -70,6 +70,23 @@ function notFound(record: { repo: string; ref: string; slug: string }) {
  */
 const SHARE_COOKIE = 'motu_share';
 
+/**
+ * A Cookie header with one named cookie removed, everything else preserved byte-for-byte.
+ *
+ * Used only on the branch where this app attaches its OWN credential to the host — see the comment
+ * where it is called for why a stale `motu_read` cannot be allowed to ride along on that request.
+ */
+function withoutCookie(header: string | null, name: string): string {
+  return (header ?? '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => {
+      const eq = part.indexOf('=');
+      return eq < 0 || part.slice(0, eq).trim() !== name;
+    })
+    .join('; ');
+}
+
 /** One cookie out of a Cookie header. The host has the same helper; this is the app's side of it. */
 function cookieValue(header: string | null, name: string): string | null {
   for (const part of (header ?? '').split(';')) {
@@ -196,9 +213,26 @@ const handler = async (request: Request) => {
 
   // ALLOWED. `public` needs no credential — the host will serve it to anyone, and adding a bearer
   // there would mean the host's gate was never exercised on the path where it agrees with us.
-  const response = await proxyToHost(request, {
-    setHeaders: decision.because === 'public' ? {} : hostCredential(),
-  });
+  //
+  // A STALE `motu_read` COOKIE MUST NOT SHADOW OUR OWN CREDENTIAL, and this is not hypothetical — it
+  // is how the first real sign-in through this path failed. `access.mjs`'s `readSecretFrom` checks the
+  // cookie BEFORE the bearer, by design: a browser carries a cookie, an application carries a bearer,
+  // and the two were never meant to arrive on the same request. This proxy makes them arrive on the
+  // same request — it forwards whatever cookies the browser happens to hold AND attaches its own
+  // bearer once `authorize` has decided. A `motu_read` cookie set months ago, before a secret
+  // rotation, then wins over a bearer that is correct RIGHT NOW, and the person who was just granted
+  // access is refused by a credential they forgot they had.
+  //
+  // The fix is not in access.mjs's precedence — that rule is still right for the case it was written
+  // for, a browser with nothing else to offer. It is that once THIS app has decided, its bearer is the
+  // only credential this hop should present. So the browser's `motu_read` cookie, if any, is stripped
+  // here — not the whole Cookie header, which still carries the Supabase session cookies the app set
+  // and nothing else the host reads (`motu_read` is the host's only cookie, per access.mjs).
+  const cred: Record<string, string> =
+    decision.because === 'public'
+      ? {}
+      : { ...hostCredential(), cookie: withoutCookie(request.headers.get('cookie'), 'motu_read') };
+  const response = await proxyToHost(request, { setHeaders: cred });
 
   // NEVER BEHIND A SHARED CACHE. This response was computed for one viewer; `private, no-store` is
   // what stops a proxy between here and them handing it to the next person. Set for the allowed path

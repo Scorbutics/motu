@@ -13,6 +13,6 @@
   "isolation": "light",
   "removable": false,
   "publishAs": {
-    "repo": "motu-host"
+    "repo": "Scorbutics/motu-host-app"
   }
 }

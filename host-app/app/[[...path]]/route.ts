@@ -27,6 +27,9 @@ import { store, access, normalizeRepo } from '@/src/host/store';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { rootIndexPage } from '@motu/host/src/views.mjs';
 import { canRead } from '@motu/host/src/access.mjs';
+import {
+  apiHealth, apiRepos, apiGroups, apiBaselines, shot, repoListing, record as serveRecord,
+} from '@/src/host/read-routes';
 
 // Nothing here may be prerendered or cached. The record route answers differently per viewer, and a
 // static answer served to a second viewer is the exact failure `authorize` exists to prevent.
@@ -210,6 +213,34 @@ const handler = async (request: Request) => {
     }
   }
 
+  const segments = pathname.split('/').filter(Boolean).map((x) => {
+    try { return decodeURIComponent(x); } catch { return x; }
+  });
+
+  // THE READ ROUTES, moved out of server.mjs. Each filters through the APP's gate rather than the
+  // host's — which is the reason to move them at all: `readable()` in server.mjs knows only about
+  // access.json, so a repo private in the DATABASE was still named by /api/repos and /api/groups
+  // while its records 404'd. The listing and the gate have to agree, or the listing is the leak.
+  if (request.method === 'GET') {
+    try {
+      const visible = await visibilityFor(request);
+      if (pathname === '/api/health') return apiHealth();
+      if (pathname === '/api/repos') return apiRepos(visible);
+      if (pathname === '/api/groups') return apiGroups(visible);
+      if (pathname === '/api/baselines') return apiBaselines(url, visible);
+      if (segments[0] === 'shot' && segments[1]) return shot(segments[1]);
+      if (segments.length && segments.length < 3 && !HOST_NAMESPACES.has(segments[0] as string)) {
+        const listing = await repoListing(segments, visible);
+        if (listing) return listing;
+      }
+    } catch (err) {
+      // Same rule as the index: a store or database the app cannot reach is not a verdict. Fall
+      // through and let the host answer exactly as it did before.
+      console.error('[read-routes] falling through to the host:', (err as Error)?.message ?? err);
+      return proxyToHost(request);
+    }
+  }
+
   const record = parseRecordPath(pathname);
 
   // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
@@ -282,9 +313,17 @@ const handler = async (request: Request) => {
   return response;
 };
 
-/** The front page, rendered by the app from `views.mjs`'s own renderer — imported, never copied. */
-async function renderIndex(request: Request) {
-  const s = store();
+/** The host's own namespaces, which are never a repo listing. Mirrors records.ts. */
+const HOST_NAMESPACES = new Set(['shot', 'g', 'm', 'api', 'signin', 'console', 'auth', '_next']);
+
+/**
+ * One `visible(repo)` predicate for this request, sharing a single asker and one set of stores.
+ *
+ * Built once per request rather than per repo: the index alone asks it for every repo and every
+ * group member, and rebuilding the Supabase client each time would turn one page into dozens of
+ * connections.
+ */
+async function visibilityFor(request: Request) {
   const hostAccess = access();
   const deps = {
     projects: postgresProjectStore(),
@@ -296,8 +335,21 @@ async function renderIndex(request: Request) {
     viewer: await viewerOf(),
     shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
   };
+  const cache = new Map<string, Promise<boolean>>();
+  return (repo: string) => {
+    let hit = cache.get(repo);
+    if (!hit) {
+      hit = visibleTo(asker, repo, deps, hostAccess);
+      cache.set(repo, hit);
+    }
+    return hit;
+  };
+}
 
-  const keep = async (repo: string) => visibleTo(asker, repo, deps, hostAccess);
+/** The front page, rendered by the app from `views.mjs`'s own renderer — imported, never copied. */
+async function renderIndex(request: Request) {
+  const s = store();
+  const keep = await visibilityFor(request);
 
   const allRepos = s.listRepos() as Array<{ repo: string }>;
   const visible = await Promise.all(allRepos.map((r) => keep(r.repo)));

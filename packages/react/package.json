@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@motu/chrome": "workspace:*",
     "@motu/core": "workspace:*",
     "@motu/runtime": "workspace:*"
   },

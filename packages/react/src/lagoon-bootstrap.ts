@@ -6,6 +6,7 @@ import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
 import { applyMotuChrome, bindEntries, markSandbox } from '@motu/core';
+import { installMotuChrome } from '@motu/chrome/css';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
@@ -277,6 +278,16 @@ export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {
 // them as covered in production — the tool validating itself, with a report that looks better rather
 // than broken. The fold still runs; only egress is refused. See markSandbox.
 markSandbox();
+  // THE KIT'S CLASS RULES, on this entry too — and this is the entry EVERY CHECK DRIVES.
+  //
+  // `applyMotuChrome` below sets --motu-* properties and injects no rules, so an island painted with
+  // `@motu/chrome/react` rendered as unstyled text here while looking correct in the host app, which
+  // installs the sheet itself. The note under this one already records the cost of a project having
+  // to remember: "the review console installs motu's chrome sheet there". It should not have to, and
+  // neither should anyone else — so the lagoon runs motu chrome by default.
+  //
+  // Idempotent by its own <style id>, and prepended, so a project's sheet still wins where it says so.
+  installMotuChrome();
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(opts.chrome ?? {});
   // THE PROJECT'S OWN BOOT HOOK, on the focused entry too.

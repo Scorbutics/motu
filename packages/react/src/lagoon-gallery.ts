@@ -14,10 +14,11 @@
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { setDefaultIsolation, applyMotuChrome, markSandbox } from '@motu/core';
+import { installMotuChrome } from '@motu/chrome/css';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
-import { defineMotuApp, type ElementSpec } from './bootstrap';
+import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle';
 import { mountFitToggle } from './fit-toggle';
 import { mountTideLine, type TideFlow, type TideLens, type TideView } from './tideline';
@@ -171,6 +172,22 @@ export function startLagoon(opts: StartLagoonOptions): void {
 // than broken. The fold still runs; only egress is refused. See markSandbox.
 markSandbox();
   if (opts.isolation) setDefaultIsolation(opts.isolation);
+  // THE KIT'S CLASS RULES, AND THEN THE HOST'S PALETTE OVER THEM. Two different things, and only the
+  // second one used to happen.
+  //
+  // `applyMotuChrome` sets --motu-* custom properties on documentElement; it injects no rules. So
+  // anything the lagoon draws itself — the tide line, the lens — looked right, while an island built
+  // from `@motu/chrome/react` rendered as unstyled text: `Panel`, `PanelHead` and `Row` emit
+  // `.motu-sheet-panel`, `.motu-cap`, `.motu-row`, whose rules live in `motuChromeCss()` and were
+  // nowhere in a built lagoon. Verified on a published one: zero `.motu-sheet-panel` rules in any
+  // stylesheet.
+  //
+  // That made the lagoon disagree with the host application about how one component looks — and the
+  // lagoon is the surface that is supposed to be the TRUTH about that. It is not a project's job to
+  // remember to install the kit its islands are painted with, so the lagoon runs motu chrome by
+  // default. `installMotuChrome` is idempotent (it checks its own <style id>) and prepends, so a
+  // project's own sheet still wins on anything it chooses to override.
+  installMotuChrome();
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(config.chrome ?? {});
   overrides.setup?.();

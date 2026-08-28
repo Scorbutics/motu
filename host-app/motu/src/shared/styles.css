@@ -22,19 +22,41 @@
    display, colour, font — stay scoped, because those on :root would restyle the whole document. */
 :root,
 :where(:host, .motu-root) {
-  --_text: var(--x-color-text, inherit);
-  --_muted: var(--x-color-muted, #6b7280);
-  --_border: var(--x-border, #e5e7eb);
-  --_radius: var(--x-radius, 6px);
-  --_surface: var(--x-color-surface, #ffffff);
-  /* The sign-in control's palette, declared here with the rest: one place holds every literal, and
-     every rule below reads a --_* local. A host reskins by setting the --x-* above it. */
-  --_accent: var(--x-color-accent, #1f2328);
-  --_on-accent: var(--x-color-on-accent, #ffffff);
+  /* MOTU'S OWN PALETTE FIRST, a literal only as the last resort.
+     These fell back to Tailwind-ish greys — #6b7280, #e5e7eb, #ffffff, #1f2328 — so the sign-in card
+     rendered in a grey that appears nowhere else on this host, beside a teal bay. `css.mjs` names the
+     failure exactly: "a literal here is the beginning of the second palette this package exists to
+     prevent", and that is what it was. `motuChromeCss()` publishes --ink, --line, --surface-page,
+     --ink-muted and --tide-accent on :root, and the lagoon installs it by default now, so both
+     surfaces have them. The --x-* override still wins, and the literal survives only for a consumer
+     that has neither. */
+  --_text: var(--x-color-text, var(--ink, #22302c));
+  --_muted: var(--x-color-muted, var(--ink-muted, #6b7d78));
+  --_border: var(--x-border, var(--line, rgba(11, 111, 104, .12)));
+  --_radius: var(--x-radius, 10px);
+  --_surface: var(--x-color-surface, var(--surface-card, #fff));
+  /* The sign-in control's palette. The accent is the tide — the same green the bay and the row hover
+     use — rather than a near-black borrowed from GitHub's own button. */
+  --_accent: var(--x-color-accent, var(--tide-accent, #0f766e));
+  --_on-accent: var(--x-color-on-accent, #fff);
   --_warn: var(--x-color-warn, #8a5300);
   --_warn-surface: var(--x-color-warn-surface, #fff6e5);
   --_danger: var(--x-color-danger, #9b1c1c);
   --_danger-surface: var(--x-color-danger-surface, #fdecec);
+}
+
+/* THE PAGE SHELL, HERE RATHER THAN ONLY IN THE APP'S ROOT LAYOUT.
+   `main { max-width … }` lived in the Next layout alone, so the region had gutters on the real page
+   and none in the lagoon — panels edge-to-edge, touching each other and the viewport. The lagoon is
+   supposed to show what the page shows, and the arrangement is part of that. This sheet is the one
+   thing both surfaces load, so it is where the shell belongs. */
+main {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 26px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 /* SCOPED, unlike the locals above: `display: block` and a font on :root would restyle the document,

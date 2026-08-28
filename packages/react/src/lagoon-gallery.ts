@@ -15,6 +15,7 @@ import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { setDefaultIsolation, applyMotuChrome, markSandbox } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
+import { PAGE_SHELL_CSS } from '@motu/chrome/html';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
@@ -162,6 +163,30 @@ function resolveStations(
  * The single-target lagoon (`bootstrapLagoon`) is the one `motu island verify` drives and stays bare
  * on purpose. This is the human surface.
  */
+/**
+ * GUTTERS. The lagoon mounts regions into `#lagoon-root`, which had no page shell at all — no
+ * max-width, no padding, no gap — so every project's islands rendered edge-to-edge and touching each
+ * other, while the same components on the host application sat in a centred column. The lagoon is the
+ * surface that is supposed to show what the page shows; an arrangement it cannot reproduce is a
+ * difference a reviewer reads as the component's own.
+ *
+ * `PAGE_SHELL_CSS` is the shell alone — deliberately not `PAGE_CSS`, which also carries overrides
+ * written for the host's server-rendered row shape and fights the React kit.
+ *
+ * SCOPED TO `#lagoon-root` and injected with the lowest precedence: a region whose own root declares
+ * its arrangement (`main { … }` in the project's sheet, say) still wins, because that sheet is
+ * injected after this one. This only supplies a shell where a project has not.
+ */
+function installLagoonShell(): void {
+  if (typeof document === 'undefined' || document.getElementById('motu-lagoon-shell')) return;
+  const style = document.createElement('style');
+  style.id = 'motu-lagoon-shell';
+  style.textContent = `#lagoon-root{${PAGE_SHELL_CSS.replace(/^\s*main\s*\{|\}\s*$/g, '').trim()}}`;
+  // After the chrome sheet, before the project's: `installMotuChrome` prepends, and the project's own
+  // stylesheet is added later by the entry, so this lands between them.
+  document.head.prepend(style);
+}
+
 export function startLagoon(opts: StartLagoonOptions): void {
   const config = opts.config ?? {};
   const overrides = opts.overrides ?? {};
@@ -188,6 +213,7 @@ markSandbox();
   // default. `installMotuChrome` is idempotent (it checks its own <style id>) and prepends, so a
   // project's own sheet still wins on anything it chooses to override.
   installMotuChrome();
+  installLagoonShell();
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(config.chrome ?? {});
   overrides.setup?.();

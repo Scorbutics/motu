@@ -10,8 +10,9 @@ export const scenarios: Scenario[] = [
     // NO CARD AT ALL, which is a render worth pinning precisely because it renders nothing: the
     // component returns null rather than an empty "Composed" heading, and a heading over nothing is
     // what it looked like before somebody decided otherwise.
+    // Explicitly empty rather than absent — see lagoon-repos.evidence.ts for why the two differ.
     name: 'no galleries, so no card',
-    seed: {},
+    seed: { groups: [] },
   },
   {
     name: 'the galleries this host serves',

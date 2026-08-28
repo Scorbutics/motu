@@ -4,6 +4,11 @@
 import { islandElement } from '@motu/react';
 import { LagoonGroups } from '@/components/lagoon/lagoon-groups';
 
+// RENDERS NOTHING FROM ITS DEFAULTS, ON PURPOSE — `lagoon-render` warns about this and the warning is
+// accepted rather than unnoticed. With no galleries the component returns null instead of an empty
+// "Composed" heading, matching `views.mjs`, which emits '' for the same case. A heading over nothing
+// tells a visitor this host has a feature it is not using, which is noise on the one page that should
+// be a list of what exists. The `no galleries, so no card` scenario is that state, addressable.
 export const element = islandElement({
   tag: 'x-lagoon-groups',
   component: LagoonGroups,

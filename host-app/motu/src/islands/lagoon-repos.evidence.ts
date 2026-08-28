@@ -14,8 +14,12 @@ export const scenarios: Scenario[] = [
   {
     // `seed: {}` MEANS the empty state — the lanes reset between scenarios, so this is the component's
     // own defaults and not whichever scenario ran before it.
+    // SEEDED EXPLICITLY EMPTY, not `seed: {}`. Those are different states: an absent prop falls back
+    // to the component's default, an empty array is a value the region actually produced. Only the
+    // second is what a real host with nothing published sends, and `input-coverage` is right to
+    // count them apart.
     name: 'a host with nothing published',
-    seed: {},
+    seed: { repos: [] },
   },
   {
     name: 'the host as it stands',

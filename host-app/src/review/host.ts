@@ -32,16 +32,27 @@ export interface RepoSummary {
   brand?: string | null
 }
 
-/** Where the host is, and the token that lets us accept. Both are the operator's, not ours to guess. */
+/**
+ * Where the host is. That is all, now.
+ *
+ * THE TOKEN IS GONE. This carried an admin bearer the operator pasted into the console and the
+ * browser kept in localStorage — which was the honest trade while the console was a separate app
+ * talking to a host that understands one all-or-nothing credential. Folded into the lagoon host app,
+ * the question "may this person accept?" has a real answer: their GitHub session, and the
+ * `repo_access` row it earned. `/api/baseline/accept` is the app's route now and asks that; nothing
+ * on this side needs a secret, and the browser holds none.
+ */
 export interface HostConfig {
   base: string
-  token: string | null
 }
 
 async function json<T>(cfg: HostConfig, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${cfg.base}${path}`, {
     ...init,
-    headers: { ...(init?.headers ?? {}), ...(cfg.token ? { authorization: `Bearer ${cfg.token}` } : {}) },
+    // SAME ORIGIN, SO THE SESSION TRAVELS. The credential is the cookie the app already set; there is
+    // nothing to attach here and nothing for this module to be trusted with.
+    credentials: "same-origin",
+    headers: { ...(init?.headers ?? {}) },
   })
   if (!res.ok) {
     const body = await res.text().catch(() => "")

@@ -156,6 +156,14 @@ const CSS = `
   --w-mid: var(--motu-water-mid, #12988f);
   --w-shallow: var(--motu-water-shallow, #35c2b3);
   --tide-accent: var(--motu-primary, #0f766e);
+  /* INK, for the same reason the water above is tokens: these were five literals, and two of them
+     were values the framework has since MOVED. #9a9182 is the caption grey MOTU_INK.caption records
+     darkening because it measured 2.87:1 — the dock kept the old one, so the one surface that is
+     always on screen was the one that never got the fix. Defaults preserve the rest exactly. */
+  --ink: var(--motu-ink, #22302c);
+  --ink-soft: var(--motu-ink-soft, #5c6b63);
+  --ink-caption: var(--motu-ink-caption, #6e6659);
+  --ink-faint: var(--motu-ink-faint, #a39a8a);
 }
 #tide[data-transport="http"] {
   --w-deep: #076b7f;
@@ -330,7 +338,7 @@ const CSS = `
 #tide .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 #tide .col { display: flex; flex-direction: column; gap: 6px; align-self: stretch; width: 100%; }
 #tide .col__head { display: flex; align-items: baseline; gap: 8px; }
-#tide .count { font-size: 10px; color: #b3ab9c; font-weight: 600; margin-left: auto; }
+#tide .count { font-size: 10px; color: var(--ink-faint); font-weight: 600; margin-left: auto; }
 
 /* ── the archipelago list ─────────────────────────────────────────────────────────────────── */
 /* A segmented pill row is a control for two or three fixed options; a project can ship ten
@@ -378,7 +386,7 @@ const CSS = `
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #5c6b63;
+  color: var(--ink-soft);
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -386,7 +394,7 @@ const CSS = `
   cursor: pointer;
   transition: background 160ms, color 160ms, transform 160ms;
 }
-#tide .opt:hover { background: rgba(15, 118, 110, .07); color: #22302c; transform: translateX(2px); }
+#tide .opt:hover { background: rgba(15, 118, 110, .07); color: var(--ink); transform: translateX(2px); }
 #tide .opt[aria-current="true"] {
   background: color-mix(in srgb, var(--tide-accent, #0f766e) 10%, transparent);
   color: var(--motu-primary-deep, #0b5b55);
@@ -418,11 +426,11 @@ const CSS = `
   padding: 6px 9px;
   font: inherit;
   font-size: 12px;
-  color: #22302c;
+  color: var(--ink);
   outline: none;
 }
 #tide .filter:focus { border-color: var(--tide-accent); }
-#tide .empty { color: #a39a8a; font-size: 11.5px; padding: 6px 4px; }
+#tide .empty { color: var(--ink-faint); font-size: 11.5px; padding: 6px 4px; }
 
 /* The debug lens' trigger is NOT here any more. It used to be a buoy moored in the bay: a 17px ring
    floating on the water, under every touch-target minimum, competing with the foam stroke behind it,
@@ -443,7 +451,7 @@ const CSS = `
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .09em;
-  color: #9a9182;
+  color: var(--ink-caption);
   min-width: 62px;
 }
 #tide .grp {
@@ -471,7 +479,7 @@ const CSS = `
   appearance: none;
   border: 0;
   background: transparent;
-  color: #5c6b63;
+  color: var(--ink-soft);
   font: inherit;
   font-weight: 600;
   font-size: 12px;
@@ -481,7 +489,7 @@ const CSS = `
   white-space: nowrap;
   transition: color 160ms;
 }
-#tide .grp button:hover { color: #22302c; }
+#tide .grp button:hover { color: var(--ink); }
 #tide .grp button[aria-current="true"] { color: #fff; }
 #tide .kbd {
   appearance: none;
@@ -497,10 +505,10 @@ const CSS = `
   border-radius: 8px;
   cursor: pointer;
 }
-#tide .kbd:hover { color: #22302c; border-color: rgba(0,0,0,.22); }
+#tide .kbd:hover { color: var(--ink); border-color: rgba(0,0,0,.22); }
 /* The shared toolbar (transport / fit / debug chips) is adopted into this slot. */
 #tide .slot { display: flex; align-items: center; }
-#tide .hint { color: #a39a8a; font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
+#tide .hint { color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
 
 /* ── drag targets ────────────────────────────────────────────────────────────────────────── */
 /* Shown only while dragging: where the bay can land, and which one it will snap to on release. */
@@ -561,7 +569,7 @@ const CSS = `
   padding: 16px 18px;
   font: inherit;
   font-size: 15px;
-  color: #22302c;
+  color: var(--ink);
   outline: none;
   background: transparent;
 }
@@ -585,7 +593,7 @@ const CSS = `
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .08em;
-  color: #a39a8a;
+  color: var(--ink-faint);
   margin-left: auto;
 }
 #tide-palette li mark { background: transparent; color: var(--motu-primary, #0f766e); font-weight: 700; }
@@ -598,7 +606,7 @@ const CSS = `
   background: #faf8f4;
 }
 #tide-palette .about code { background: #f0ece3; padding: 1px 5px; border-radius: 4px; }
-#tide-palette .empty { padding: 18px; color: #a39a8a; font-size: 13px; }
+#tide-palette .empty { padding: 18px; color: var(--ink-faint); font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
   /* The wave itself is a WAAPI animation and is skipped in JS (a CSS rule cannot reach it). */
@@ -947,7 +955,41 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     isTouch ? '⌕ Search' : isMac ? '⌘K' : 'Ctrl K',
   );
   kbd.addEventListener('click', () => openPalette());
-  bar.appendChild(el('div', { class: 'row' }, slot, kbd));
+
+  /**
+   * BASELINES, FROM INSIDE THE LAGOON.
+   *
+   * A published page knows which repository it belongs to — the host stamps `meta[name="motu-repo"]`
+   * as it serves the bytes, and the lens already reads it to fetch this region's coverage corpus. So
+   * the page that a baseline is OF can offer the way to review it, instead of asking somebody to
+   * remember the console exists and then find the project again in its picker.
+   *
+   * ONLY WHEN THE STAMP IS THERE, which means only on a page a host served. Under `lagoon dev` or an
+   * opened file there is no repo and no host, so the button would lead nowhere — and a control that
+   * is sometimes a dead end is worse than one that is sometimes absent.
+   */
+  const servedRepo =
+    typeof document === 'undefined'
+      ? null
+      : document.querySelector<HTMLMetaElement>('meta[name="motu-repo"]')?.content?.trim() || null;
+  const children: (HTMLElement | string)[] = [slot];
+  if (servedRepo) {
+    const review = el(
+      'a',
+      {
+        class: 'kbd',
+        // RELATIVE TO THE HOST'S ROOT, not to this page: a lagoon is served at
+        // /<repo>/<ref>/<slug> and inside a group at /g/<name>/f/<i>, so only an absolute path
+        // reaches the console from both.
+        href: `/console?repo=${encodeURIComponent(servedRepo)}`,
+        title: `Review baselines for ${servedRepo}`,
+      },
+      '◎ Baselines',
+    );
+    children.push(review);
+  }
+  children.push(kbd);
+  bar.appendChild(el('div', { class: 'row' }, ...children));
   const dragHint = isTouch
     ? 'Drag the wave to any edge'
     : 'Drag the wave to any edge — it lies along the one you push it against';

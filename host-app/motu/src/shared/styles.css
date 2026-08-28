@@ -290,7 +290,11 @@ code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 .rv-body { flex: 1; display: grid; grid-template-columns: 240px 300px 1fr; min-height: 0; }
 /* Both phone-only affordances. On a wide screen the projects are already a column, so a control to
    reveal them would be a button that does nothing visible. */
-.rv-sheet-toggle, .rv-scrim, .rv-grab { display: none; }
+/* THE TOGGLE IS SCOPED, and it has to be now. It carries `.motu-btn` for its look, and the kit's
+   `display: inline-flex` and this rule have the same specificity — so which one won came down to
+   stylesheet order, which is decided by how Next injects them. It showed the phone control on a
+   1280px desk. One extra ancestor settles it in this file rather than by luck. */
+.rv-head .rv-sheet-toggle, .rv-scrim, .rv-grab { display: none; }
 .rv-rail, .rv-shots { overflow: auto; border-right: 1px solid var(--line); padding: 10px; }
 .rv-view { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 
@@ -339,9 +343,9 @@ code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 .ab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 /* --ink-soft: --ink-muted measures 4.0:1 here, just under AA. See .rp-owner above. */
 .ab-busy { color: var(--ink-soft); font-size: 12px; }
-.rv-token { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-muted); }
-.rv-token input { border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; }
-.rv-token button { border: 0; background: var(--w-mid); color: #fff; border-radius: 8px; padding: 7px 12px; font: 600 12px/1 inherit; cursor: pointer; }
+/* WHAT IS LEFT OF THE TOKEN FORM: a place to put the way in. The field and its button are gone with
+   the pasted secret they collected — the console knows who you are now. */
+.rv-token { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 18px 0 0; }
 
 /* --- THE DECK, on a phone -----------------------------------------------------------------------
    Stacking all four panels put everything on screen and made none of it usable — least of all the
@@ -351,12 +355,9 @@ code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 @media (max-width: 640px) {
   .rv { height: 100dvh; overflow: hidden; }
   .rv-head { padding: 10px 14px; gap: 10px; }
-  .rv-sheet-toggle {
-    display: inline-flex; align-items: center; gap: 6px; flex: none;
-    padding: 7px 12px; border-radius: 999px; cursor: pointer;
-    border: 1px solid rgba(255,255,255,.34); background: rgba(255,255,255,.14);
-    color: inherit; font: 600 12px/1 inherit;
-  }
+  /* THE LOOK IS THE KIT'S — .motu-btn[data-weight="water"]. What is left here is WHERE it appears,
+     which is the only part that was ever this console's: nowhere, until the rails stop fitting. */
+  .rv-head .rv-sheet-toggle { display: inline-flex; }
   /* The viewer takes what is left; the strip and the accept bar take only what they need. */
   .rv-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
   .rv-shots {

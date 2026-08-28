@@ -360,6 +360,26 @@ export function motuKitCss(scope = ':root') {
 .motu-btn[data-on][data-tone="warn"] { background: var(--warn); }
 .motu-btn[data-on][data-tone="broken"], .motu-btn[data-tone="broken"][data-on] { background: var(--broken); color: #fff; }
 /* The pill-shaped variant: a segmented control, a "back" affordance, a mode toggle. */
+/* ON THE WATER. A control inside a bay cannot use any of the weights above: they are all drawn for a
+   light panel, and a ghost button on a teal gradient is invisible. Translucent white over whatever
+   the water is, which works on every point of the ramp.
+
+   THIS EXISTED TWICE before it existed here — .rv-sheet-toggle in the review console's sheet and
+   .topbar button in the composed view — with the same 999px radius, the same rgba(255,255,255,.34)
+   border and the same .14 fill, differing only in a half-pixel of padding and font size. Neither
+   author could have known about the other; that is what a kit is for. */
+.motu-btn[data-weight="water"] {
+  flex: none;
+  padding: 8px 12px;
+  border-radius: ${MOTU_RADIUS.pill};
+  border: 1px solid rgba(255, 255, 255, .34);
+  background: rgba(255, 255, 255, .14);
+  color: inherit;
+  font: 600 12.5px/1 var(--sans);
+}
+.motu-btn[data-weight="water"]:hover { background: rgba(255, 255, 255, .24); color: inherit; }
+.motu-btn[data-weight="water"]:focus-visible { outline: 2px solid rgba(255, 255, 255, .8); outline-offset: 2px; }
+
 .motu-btn[data-shape="pill"] { border-radius: ${MOTU_RADIUS.pill}; padding: 5px 10px; font-size: 11px; }
 .motu-btn[data-size="icon"] { padding: 4px 8px; font-size: 12px; }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
-import { Bay } from "@motu/chrome/react"
+import { Bay, Mark } from "@motu/chrome/react"
 
 /**
  * WHERE THE CONSOLE'S PARTS SIT — once, for the page and for the lagoon.
@@ -27,6 +27,7 @@ export function ReviewLayout({
   viewer,
   accept,
   connect,
+  account,
   error,
 }: {
   title: string
@@ -44,6 +45,8 @@ export function ReviewLayout({
    * the layout puts them in the same place — which is what the caller meant.
    */
   connect?: ReactNode
+  /** Who is reading this, hard right on the water — the same badge the rest of the host carries. */
+  account?: ReactNode
   error?: ReactNode
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -96,23 +99,37 @@ export function ReviewLayout({
       <Bay
         className="rv-head"
         compact
+        shape="masthead"
         title={title}
         titleAs="h1"
         leading={
-          /* PHONE ONLY. On a wide screen the projects are already on screen, so a control to reveal
-             them would be a button that does nothing visible. */
+          <>
+          {/* THE WAY HOME, where the mark is on every other surface of this host. The console was the
+              one screen with no route back to the lagoons it reviews — you had to edit the URL. */}
+          <a className="motu-home" href="/" aria-label="All repositories">
+            <Mark />
+          </a>
+          {/* PHONE ONLY. On a wide screen the projects are already on screen, so a control to reveal
+              them would be a button that does nothing visible.
+
+              BRACED, because it is inside a fragment now. It used to sit in an expression position,
+              where a bare block comment is a comment; as a CHILD it is text, and would have rendered
+              this whole paragraph onto the water. tsc has no opinion — JSX text is valid text. */}
           <button
             type="button"
-            className="rv-sheet-toggle"
+            className="motu-btn rv-sheet-toggle"
+            data-weight="water"
             aria-expanded={sheetOpen}
             aria-controls="rv-projects"
             onClick={() => setSheetOpen((v) => !v)}
           >
             <span aria-hidden="true">☰</span> Projects
           </button>
+          </>
         }
       >
         {summary}
+        {account}
       </Bay>
 
       {error}

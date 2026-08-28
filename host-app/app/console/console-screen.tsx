@@ -19,6 +19,8 @@ import { DiffViewer } from "@/components/review/diff-viewer/DiffViewer"
 import { RepoPicker } from "@/components/review/repo-picker/RepoPicker"
 import { ShotList } from "@/components/review/shot-list/ShotList"
 import { StatusSummary } from "@/components/review/status-summary/StatusSummary"
+import { ViewerBadge } from "@/components/lagoon/viewer-badge"
+import type { Viewer } from "@/src/auth/viewer"
 import { acceptShots, listRepos, listShots, shotUrl, type HostConfig } from "@/src/review/host"
 
 /**
@@ -28,7 +30,7 @@ import { acceptShots, listRepos, listShots, shotUrl, type HostConfig } from "@/s
  * (accept) must see whatever the operator has pasted since the page loaded.
  */
 function cfgNow(): HostConfig {
-  return { base: "", token: typeof localStorage === "undefined" ? null : localStorage.getItem("motu-host-token") }
+  return { base: "" }
 }
 
 // Module scope, deliberately: the binding is a property of this composition root, not of a render.
@@ -70,45 +72,28 @@ const Review = createRegion(reviewArchipelago, {
 })
 
 /**
- * The host is the operator's, so the console asks once and remembers.
- *
- * STILL A PASTED TOKEN, and it should not stay one. This app now knows who you are — a GitHub session,
- * a `repo_access` table, an `authorize` that answers per repository — and accepting a baseline is
- * exactly the kind of act that identity is for. Folding the console in is what makes that possible;
- * doing it here would be changing an auth boundary inside a move, which is how a move stops being
- * reviewable. Left as it was, and written down.
- */
-function useToken(): [string | null, (t: string) => void] {
-  const [token, setToken] = useState<string | null>(null)
-  // READ IN AN EFFECT, not in the initialiser. This component renders on the SERVER first, where
-  // `localStorage` does not exist — the Vite console could read it inline because nothing there ever
-  // ran outside a browser, and that is the one line the move had to change.
-  useEffect(() => setToken(localStorage.getItem("motu-host-token")), [])
-  return [
-    token,
-    useCallback((t: string) => {
-      localStorage.setItem("motu-host-token", t)
-      setToken(t)
-    }, []),
-  ]
-}
-
-/**
  * The page's own work: fetching the project list, and the error it can fail with.
  *
  * Inside the Region, because it READS the region — `selectedRepo` is written by an island and this
  * reacts to it. Nothing here assigns that key: the host-side region type omits what an island
  * produces, so trying to would be a compile error rather than a habit.
  */
-function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) => void }) {
+function ReviewPage({ cfg, viewer, repo }: { cfg: HostConfig; viewer: Viewer | null; repo: string | null }) {
   const [error, setError] = useState<string | null>(null)
   const { repos = [], selectedRepo } = Review.useRegion()
 
   useEffect(() => {
     listRepos(cfg)
-      .then((r) => Review.provide("repos", r))
+      .then((r) => {
+        Review.provide("repos", r)
+        // ARRIVED WITH ONE IN MIND. A lagoon links here with `?repo=`, so the reviewer lands on the
+        // project they were just looking at rather than on a picker. Only if it is one they can
+        // actually see — the list is already filtered by whoever is asking, so an unknown name is
+        // either private to someone else or gone, and silently selecting nothing is the honest answer.
+        if (repo && r.some((x) => x.repo === repo)) Review.provide("selectedRepo", repo)
+      })
       .catch((e: Error) => setError(e.message))
-  }, [cfg])
+  }, [cfg, repo])
 
   /**
    * WEAR THE COLOUR OF THE PROJECT BEING REVIEWED.
@@ -161,39 +146,36 @@ function ReviewPage({ cfg, onToken }: { cfg: HostConfig; onToken: (t: string) =>
       shots={<ShotList />}
       viewer={<DiffViewer shotUrl={(h: string) => shotUrl(cfg, h)} />}
       error={error ? <p className="rv-error">{error}</p> : null}
-      // NULL WHEN THERE IS NO TOKEN, which is how a slot is left unmounted — `Root` treats null as
-      // absent rather than mounting the island with no child, which would put the accept bar on
-      // screen at exactly the moment the page said not to.
-      accept={cfg.token ? <AcceptBar /> : null}
+      account={<ViewerBadge viewer={viewer} />}
+      // NULL WHEN THERE IS NOBODY TO ACCEPT AS, which is how a slot is left unmounted — `Root` treats
+      // null as absent rather than mounting the island with no child, which would put the accept bar
+      // on screen at exactly the moment the page said not to.
+      accept={viewer ? <AcceptBar /> : null}
       connect={
-        cfg.token ? null : (
-          <form
-            className="rv-token"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const v = new FormData(e.currentTarget).get("token")
-              if (typeof v === "string" && v.trim()) onToken(v.trim())
-            }}
-          >
-            <label htmlFor="token">Paste the host token to accept baselines</label>
-            <input id="token" name="token" type="password" autoComplete="off" />
-            <button type="submit">Connect</button>
-          </form>
+        viewer ? null : (
+          // THE WAY IN, not a way round. This used to be a field asking for the host's admin token —
+          // a secret the operator pasted and the browser kept — because the console had no idea who
+          // was reading it. It does now, so the answer to "you cannot accept yet" is the same answer
+          // the rest of this host gives: sign in.
+          <p className="rv-token">
+            <a className="motu-btn" data-weight="strong" href={`/signin?returnTo=${encodeURIComponent("/console")}`}>
+              Sign in to accept baselines
+            </a>
+          </p>
         )
       }
     />
   )
 }
 
-export function ConsoleScreen() {
-  const [token, saveToken] = useToken()
-  // READS NEED NO TOKEN — the host serves them to anyone who can reach it, and gating the whole
-  // console behind a secret made a browsable tool unopenable. The token is only what lets you ACCEPT,
-  // so it is asked for where accepting happens, not at the door.
-  const cfg = useMemo(() => ({ base: "", token }), [token])
+export function ConsoleScreen({ viewer = null, repo = null }: { viewer?: Viewer | null; repo?: string | null }) {
+  // READS NEED NOTHING — the listing routes filter by whoever is asking, so a visitor sees the public
+  // projects and a member sees theirs. Gating the whole console behind a secret made a browsable tool
+  // unopenable; what identity decides is ACCEPTING, which is asked for where accepting happens.
+  const cfg = useMemo(() => ({ base: "" }), [])
   return (
     <Review.Region>
-      <ReviewPage cfg={cfg} onToken={saveToken} />
+      <ReviewPage cfg={cfg} viewer={viewer} repo={repo} />
     </Review.Region>
   )
 }

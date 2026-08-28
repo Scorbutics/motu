@@ -178,13 +178,9 @@ aside .motu-home .motu-mark { width: 22px; height: 22px; border-radius: 6px; }
   .topbar .who { min-width: 0; flex: 1; line-height: 1.25; }
   .topbar .who strong { display: block; font: 700 14px/1.25 inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar .who span { display: block; font: 500 11.5px/1.3 inherit; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar button {
-    flex: none; display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 12px; border-radius: 999px; cursor: pointer;
-    border: 1px solid rgba(255,255,255,.34);
-    background: rgba(255,255,255,.14); color: inherit;
-    font: 600 12.5px/1 inherit;
-  }
+  /* THE SHAPE IS THE KIT'S — .motu-btn[data-weight="water"], which this and the review console's
+     sheet each drew for themselves before it existed there. What stays is the one thing that is
+     genuinely about THIS button: the caret that says it opens a sheet. */
   .topbar button::after { content: '▾'; font-size: 11px; opacity: .9; }
 
   /* The rail becomes a bottom sheet. Same markup, same buttons — only where it sits changes, so the
@@ -277,7 +273,7 @@ export function composedPage({ id, group, members, live = false }) {
       <strong id="tb-title">${escapeHtml(members[0]?.title || members[0]?.slug || group)}</strong>
       <span id="tb-sub">${escapeHtml(group)} · ${members.length} lagoon${members.length === 1 ? '' : 's'}</span>
     </div>
-    <button type="button" id="tb-switch" aria-haspopup="dialog" aria-expanded="false" aria-controls="switcher">Switch</button>
+    <button type="button" class="motu-btn" data-weight="water" id="tb-switch" aria-haspopup="dialog" aria-expanded="false" aria-controls="switcher">Switch</button>
   </header>
   <div class="scrim" id="scrim" hidden></div>
   <aside id="switcher" aria-label="Choose a lagoon">

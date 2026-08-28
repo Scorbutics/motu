@@ -150,3 +150,29 @@ export async function proxyToHost(request: Request, options: ProxyOptions = {}):
     headers: forwardResponseHeaders(upstream),
   });
 }
+
+/**
+ * The credential the app presents once it has decided a visitor may READ something private.
+ *
+ * Absent means the host was started without a read secret, which is the ordinary case for a host with
+ * no private repos at all — and then a private read cannot be authorized by this app anyway, because
+ * there is nothing private for it to unlock.
+ */
+export function hostReadCredential(): Record<string, string> {
+  const secret = process.env.MOTU_HOST_READ_SECRET;
+  return secret ? { authorization: `Bearer ${secret}` } : {};
+}
+
+/**
+ * The credential for acting on a visitor's behalf — accepting a baseline, today.
+ *
+ * A DIFFERENT SECRET FROM THE READ ONE, and the difference is the point: the read secret unlocks
+ * private pages, this one changes what everybody sees. The host understands exactly one bearer for
+ * writes and has no idea who is asking; this app knows who is asking and cannot write. Each route
+ * that spends this is the join between those two facts, and is where the narrowing has to happen —
+ * the token itself is more privilege than any visitor holds.
+ */
+export function hostAdminCredential(): Record<string, string> {
+  const token = process.env.MOTU_HOST_ADMIN_TOKEN;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}

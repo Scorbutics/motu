@@ -4,7 +4,23 @@
    in light DOM. One sheet, both modes.
 
    Colours come from --x-* tokens (host-overridable) with --_* locals holding the fallback, so a host
-   can reskin islands without either side reopening isolation. */
+   can reskin islands without either side reopening isolation.
+
+   THE LOCALS ARE ALSO DECLARED ON :root, AND THAT IS NOT BELT-AND-BRACES.
+   `.motu-root` is added by `packages/core/src/island.ts` when an island mounts AS A CUSTOM ELEMENT.
+   Neither of the two places these components actually render does that: the Next page renders them as
+   plain React inside the region's wrap form, and the lagoon's own view renders them directly too —
+   verified, zero `.motu-root` and zero `x-*` elements in either. So the whole host block was inert
+   and every --_* resolved to nothing, which silently drops border, background and every colour while
+   leaving padding and font working. It renders a plausible, wrong screen.
+
+   peps never hit this because peps styles its islands with Tailwind, so it never asked these locals
+   for anything. This host is the first consumer of the scaffolded sheet that does.
+
+   Splitting the block is what makes it safe: the LOCALS go global (they are only fallback
+   definitions, and any :host / .motu-root still overrides them), while the presentational rules —
+   display, colour, font — stay scoped, because those on :root would restyle the whole document. */
+:root,
 :where(:host, .motu-root) {
   --_text: var(--x-color-text, inherit);
   --_muted: var(--x-color-muted, #6b7280);
@@ -19,6 +35,11 @@
   --_warn-surface: var(--x-color-warn-surface, #fff6e5);
   --_danger: var(--x-color-danger, #9b1c1c);
   --_danger-surface: var(--x-color-danger-surface, #fdecec);
+}
+
+/* SCOPED, unlike the locals above: `display: block` and a font on :root would restyle the document,
+   which is the app's business and not this sheet's. */
+:where(:host, .motu-root) {
   display: block;
   color: var(--_text);
   font-family: var(--x-font, inherit);

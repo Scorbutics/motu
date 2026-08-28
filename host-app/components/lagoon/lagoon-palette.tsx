@@ -133,8 +133,14 @@ export function LagoonPalette({
     .map((e) => ({ e, m: fuzzy(needle, e.label) }))
     .filter((x): x is { e: Entry; m: { first: number; spread: number } } => x.m !== null)
     .sort((a, b) => score(b.m) - score(a.m))
-    .slice(0, 8)
     .map((x) => x.e)
+
+  // NO SILENT CAP. Eight rows fit; more than that and the palette said nothing about the rest, so
+  // its opening state listed less than the page it covers and gave no sign of it — a reader saw a
+  // repository on the page that the palette had quietly dropped. It says how many it is holding back.
+  const CAP = 8
+  const visible = shown.slice(0, CAP)
+  const hidden = shown.length - visible.length
 
   return (
     <div className="motu-scrim" onClick={() => onOpenChange?.(false)}>
@@ -156,14 +162,18 @@ export function LagoonPalette({
           value={query ?? ""}
           onChange={(event) => onQueryChange?.(event.target.value)}
           placeholder="Go to a lagoon, a repository, a group"
-          aria-label="Go to a lagoon, a repository or a group"
+          // The same string a sighted reader sees, for the reason the filter's is.
+          aria-label="Go to a lagoon, a repository, a group"
         />
-        {shown.length ? (
+        {visible.length ? (
           <ul className="motu-palette__list">
-            {shown.map((e, i) => (
+            {visible.map((e, i) => (
               <li key={e.id} style={{ ["--i" as string]: i }}>
+                {/* NO LAMP. It carried `pending` for a group or a repo and `ok` for a lagoon —
+                    a distinction that renders as one teal dot ten times over, and `pending` is not a
+                    state either of those things has in `store.mjs`. The kind column says what each
+                    row is, which is the only thing there was to say. */}
                 <a className="motu-opt" data-entry href={e.href} onClick={motuSplashFrom}>
-                  <span className="motu-dot" data-tone={e.kind === "lagoon" ? "ok" : "pending"} />
                   <span className="motu-grow motu-ellipsis">{e.label}</span>
                   <span className="motu-opt__kind">{e.kind}</span>
                 </a>
@@ -172,6 +182,9 @@ export function LagoonPalette({
           </ul>
         ) : (
           <p className="motu-palette__empty">{`Nothing here matches “${needle}”.`}</p>
+        )}
+        {hidden > 0 && (
+          <p className="motu-palette__more">{`${hidden} more — keep typing to narrow it.`}</p>
         )}
         <footer className="motu-palette__foot">
           <Kbd>↑↓</Kbd> move <Kbd>↵</Kbd> open <Kbd>esc</Kbd> close

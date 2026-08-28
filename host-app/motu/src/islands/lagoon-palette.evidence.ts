@@ -22,8 +22,11 @@ export const scenarios: Scenario[] = [
     seed: { repos: REPOS, groups: GROUPS, open: false },
   },
   {
-    // Open with nothing typed: the whole host, ranked as it arrives, capped at eight.
-    name: 'open, showing everything it holds',
+    // Open with nothing typed. MORE THAN IT SHOWS: five repositories with their lagoons and two
+    // groups make twelve entries and the palette holds eight, so this is also the state where the
+    // count of what is held back has to be on screen. A fresh reader found that missing — the palette
+    // listed less than the page it covered and gave no sign of it.
+    name: 'open, holding more than it shows',
     seed: { repos: REPOS, groups: GROUPS, open: true },
   },
   {

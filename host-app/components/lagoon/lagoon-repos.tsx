@@ -65,7 +65,9 @@ export function LagoonRepos({ repos, cap = 1000, query = "", show = "all" }: Lag
               <Sub>{`${r.slugs.length} lagoon${r.slugs.length === 1 ? "" : "s"}`}</Sub>
             </Grow>
             <Trail wrap>
-              {`${r.records} / ${cap}`}
+              {/* GROUPED, like the readout above it. The bay says `1,000/repo` and this said
+                  `/ 1000` — the same `maxRecords`, rendered two ways, six hundred pixels apart. */}
+              {`${r.records.toLocaleString("en")} / ${cap.toLocaleString("en")}`}
               <Enter />
             </Trail>
           </Row>

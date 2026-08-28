@@ -53,13 +53,22 @@ export function LagoonFilter({ query = "", show = "all", onQueryChange, onShowCh
 
   return (
     <>
-      <Search hint="↑↓ move · ↵ open">
+      {/* THE HINT NAMES WHAT THIS BOX DOES, and it used to name what it did not. `↑↓ move · ↵ open`
+          sat here while neither key did anything from the field: ↑↓ is handled by the LIST, once
+          focus is already in one, and the palette's identical-looking footer was the only one of the
+          two that was true. A fresh reader found it by pressing the keys the screen told them to.
+
+          ⌘K is the one keystroke this box can honestly promise from where it stands. */}
+      <Search hint="⌘K to jump">
         <input
           type="search"
           value={query ?? ""}
           onChange={type}
           placeholder="Filter lagoons, repositories, groups"
-          aria-label="Filter lagoons, repositories and groups"
+          // THE SAME STRING, deliberately. It was "…repositories and groups" here and
+          // "…repositories, groups" on screen: a screen-reader user and a sighted user were told
+          // slightly different sentences about one field, which is a difference nobody can see.
+          aria-label="Filter lagoons, repositories, groups"
         />
       </Search>
       <div className="motu-shelf" ref={bar}>

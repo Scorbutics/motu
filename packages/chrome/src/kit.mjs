@@ -499,6 +499,15 @@ export function motuKitCss(scope = ':root') {
 .motu-palette__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
 .motu-palette__list > li { animation: motu-swim ${MOTU_MOTION.swimIn} both; animation-delay: calc(var(--i, 0) * 22ms); }
 .motu-palette__empty { margin: 0; padding: 18px; color: var(--ink-soft); font-size: 13px; }
+/* WHAT IS NOT SHOWN. A capped list that says nothing about the cap reads as the whole list, which is
+   how the palette came to show less than the page behind it with no sign of it. */
+.motu-palette__more {
+  margin: 0;
+  padding: 8px 18px 12px;
+  font: 500 11px/1 var(--mono);
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+}
 .motu-palette__foot {
   display: flex; align-items: center; gap: 6px;
   padding: 10px 14px;

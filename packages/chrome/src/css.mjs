@@ -163,18 +163,19 @@ export function motuWaterCss() {
    explain later. */
 .motu-bay.compact[data-shape="masthead"] { padding: 16px 18px; }
 
-.motu-bay[data-shape="masthead"] {
+.motu-bay[data-shape="masthead"], .motu-shore {
   /* The ramp, extended: the icon's deep blue at the top corner, through the bay's own two stops. 140
      degrees rather than 160 so the blue end sits behind the mark. */
   background: linear-gradient(140deg, ${MOTU_WATER.mock.abyss} 0%, var(--w-deep) 58%, var(--w-mid) 100%);
-  padding: 22px 40px 74px;
+  color: ${MOTU_CHROME.onPrimary};
   border-radius: 0;
 }
+.motu-bay[data-shape="masthead"] { padding: 22px 40px 74px; }
 /* THE CREST, REUSED AS FOAM. The same three radial gradients as .motu-bay::after — it is already the
    right shape — moved up above the waves and given a slow breath, because a masthead stays on screen
    long enough for a motionless highlight to read as a rendering artefact. */
 .motu-bay.compact[data-shape="masthead"]::after { bottom: -10px; height: 20px; }
-.motu-bay[data-shape="masthead"]::after {
+.motu-bay[data-shape="masthead"]::after, .motu-shore::after {
   bottom: 48px;
   height: 30px;
   /* HALF THE CREST'S STRENGTH. On a screen header the crest sits AT the panel edge, where a hard
@@ -191,7 +192,7 @@ export function motuWaterCss() {
 }
 /* The sheen LOOPS here rather than sweeping once. On a screen header one sweep says "this changed";
    on a masthead nothing changed, and the light is only the water being water. */
-.motu-bay[data-shape="masthead"] .sheen {
+.motu-bay[data-shape="masthead"] .sheen, .motu-shore .sheen {
   background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.26) 50%, transparent 65%);
   animation: motu-sheen-loop 11s ease-in-out .6s infinite;
 }
@@ -248,6 +249,59 @@ export function motuWaterCss() {
 
 /* The masthead's own headline block, below the title row. THIS is the page's h1; the bay's title
    stays the product mark beside it. */
+/* ------------------------------------------------------------------------------------------------
+   THE SHORE: the masthead's water, given the whole viewport.
+
+   For the screens that ARE one thing — signing in, an error, a refusal — where a card floating on a
+   pale ground reads as a page that failed to load its own design. Every rule above that paints the
+   masthead names this too, so there is one gradient, one sheen, one foam and one waterline; what is
+   different here is only the SHAPE of the container, which is the part that genuinely differs.
+*/
+/* FULL BLEED, and it has to say so. PAGE_SHELL_CSS styles a bare <main> as a centred 940px column
+   — the shell's own column — so the water was a 940px stripe with pale ground either side, which is
+   the second time that rule has boxed something that is not a column. main.motu-page says the same
+   thing for the same reason, two rules up. */
+main.motu-shore { max-width: none; margin: 0; }
+
+.motu-shore {
+  position: relative;
+  overflow: hidden;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  /* The content sits ABOVE centre. Dead centre puts a small card at the optical middle of a tall
+     screen, which reads as adrift; a little high reads as placed. */
+  justify-content: center;
+  align-items: center;
+  gap: 22px;
+  padding: 40px 20px 120px;
+  text-align: center;
+}
+/* The mark and the wordmark, over the water. */
+.motu-shore__mark { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+.motu-shore__mark > strong {
+  font: 700 20px/1 ${MOTU_TYPE.family};
+  letter-spacing: -.02em;
+}
+/* CONTENT ABOVE THE WATER. :not() on the two painted layers, because they are absolutely
+   positioned and a blanket > * turned them into flex items in normal flow — the waterline stopped
+   being the page's bottom edge and became an empty 78px box in the middle of the stack, which
+   renders as nothing at all. */
+.motu-shore > *:not(.sheen):not(.motu-bay__waves) { position: relative; z-index: 1; }
+/* WHAT SITS ON THE WATER. Opaque white and lifted, because the ground behind it is the deepest
+   surface this product has — a translucent panel on it reads as a smudge rather than as a sheet. */
+.motu-shore__sheet {
+  width: min(26rem, 100%);
+  background: ${MOTU_SURFACE.card};
+  border-radius: ${MOTU_RADIUS.panel};
+  box-shadow: 0 24px 60px rgba(4, 33, 29, .28);
+  color: var(--ink);
+  text-align: left;
+}
+@media (max-width: 720px) {
+  .motu-shore { padding: 28px 16px 110px; gap: 18px; }
+}
+
 /* THE BRAND ROW. A masthead's title row carries a 30px mark, so it centres rather than sitting on a
    baseline — the compact bay has no mark and stays as it was. And the mark IS the product name here,
    so the title reads as a wordmark (sans, tight) rather than as the mono readout a screen header

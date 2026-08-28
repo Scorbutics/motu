@@ -738,3 +738,47 @@ export function Kbd({ className, children, ...rest }: HTMLAttributes<HTMLElement
 export function Mark({ className, ...rest }: HTMLAttributes<HTMLSpanElement>) {
   return <span className={cx('motu-mark', className)} role="img" aria-label="motu" {...rest} />;
 }
+
+export interface ShoreProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
+  /** The wordmark beside the mark. Omit for a screen that should not announce the product. */
+  title?: ReactNode;
+  /** The page's heading, over the water. */
+  headline?: ReactNode;
+  /** A sentence under it. */
+  blurb?: ReactNode;
+  children?: ReactNode;
+}
+
+/**
+ * The masthead's water, given the whole viewport.
+ *
+ * For the screens that ARE one thing — signing in, an error, a refusal. Those have no listing to head
+ * and no page to open, so a band of water above a pale ground leaves most of the screen saying
+ * nothing; here the water IS the screen and the one thing floats on it.
+ *
+ * SAME PAINT AS THE MASTHEAD, by selector rather than by copy: `../css.mjs` names `.motu-shore`
+ * alongside `.motu-bay[data-shape="masthead"]` on the gradient, the foam and the looping sheen, and
+ * the waterline is the same `.motu-bay__waves` element. One water, two containers.
+ */
+export function Shore({ title, headline, blurb, className, children, ...rest }: ShoreProps) {
+  return (
+    <main className={cx('motu-shore', className)} {...rest}>
+      <span className="sheen" aria-hidden="true" />
+      {(title != null || headline != null) && (
+        <div className="motu-shore__mark">
+          <Mark />
+          {title != null && <strong>{title}</strong>}
+        </div>
+      )}
+      {(headline != null || blurb != null) && (
+        <div className="motu-bay__headline">
+          {headline != null && <h1>{headline}</h1>}
+          {blurb != null && <p>{blurb}</p>}
+        </div>
+      )}
+      {children}
+      {/* LAST, and empty — the waterline is the page's bottom edge, exactly as it is the masthead's. */}
+      <span className="motu-bay__waves" aria-hidden="true" />
+    </main>
+  );
+}

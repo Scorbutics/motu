@@ -71,15 +71,17 @@ main {
    Plain CSS on the sheet above's tokens, not Tailwind: this host has no Tailwind and adding one for
    a single button would put a build step in front of the one screen that must never fail to render.
    Every colour goes through a --x-* token so the host can reskin without reopening isolation. */
+/* NO BORDER, NO GROUND, NO WIDTH of its own any more. It sits on `.motu-shore__sheet`, which is the
+   kit's white card on deep water — so drawing a second bordered panel inside it produced a box in a
+   box, and the pale `--_surface` inside an opaque white sheet read as a smudge. What is left is what
+   this control genuinely owns: the stack and its rhythm.
+   It keeps working unwrapped — the lagoon mounts this island alone — because a flex column with
+   padding is a complete thing on any ground. */
 .motu-signin {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 26rem;
   padding: 2rem;
-  border: 1px solid var(--_border);
-  border-radius: calc(var(--_radius) * 2);
-  background: var(--_surface);
 }
 .motu-signin__title {
   margin: 0;
@@ -140,13 +142,8 @@ main {
 }
 
 /* The sign-in page's arrangement. On the page and in the lagoon, from one component. */
-.motu-signin-page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 3rem 1.25rem;
-}
+/* `.motu-signin-page` is gone with the <main> it dressed: the arrangement is `Shore` now, which is
+   the kit's, so this screen's page-level layout stopped being this file's business. */
 .motu-signin-page__footer {
   color: var(--_muted);
   font-size: 0.875rem;

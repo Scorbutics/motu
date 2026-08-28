@@ -108,9 +108,11 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    islands also changed; when none did, the arrangement moved.
  - EVERY DECLARED STATE IS AN ADDRESS — do not hand-drive the store to look at one. `motu lagoon
    states` lists them (`--json`, `--base <url>`): an island's scenario is
-   `/lagoon.html?target=island:<tag>&scenario=<name-or-slug>`, a region's flow is
-   `/?region=<id>&flow=<name>&step=<n>` on the gallery (the entry `serve` and `publish` build), with
-   `step` stopping the replay early so the states BETWEEN the steps are reachable too. That is how you
+   `/?target=island:<tag>&scenario=<name-or-slug>`, a region's flow is
+   `/?region=<id>&flow=<name>&step=<n>`, with `step` stopping the replay early so the states BETWEEN
+   the steps are reachable too. BOTH are the gallery — the entry `serve` and `publish` build and the
+   one a person opens. An island opens ALONE there, through the same one-slot mount `island verify`
+   drives, so a standalone island (in no region) is addressable too. That is how you
    look at the state you are about to change, and how you hand someone a link to it. A name that
    resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
    false` — because being handed the default state while believing it is the one you named is the
@@ -396,6 +398,47 @@ Know the one gap that leaves. A client that talks to the database or the auth se
 declaration and neither tool pins its shape. That adapter is the last unproven inch of this design.
 It is a few lines by construction, which is the mitigation; routing the read through an operation is
 the fix when it stops being a few lines.
+
+## Adoption is staged, and stage 1 does not touch the page
+
+A region's arrangement lives in the archipelago's `root` — the application's own layout component,
+with `slots` mapping its props to the region's islands, rendered by the page AND by the lagoon from
+the same map — or in a hand-written lagoon frame, which is a second description of the page. Both are
+supported, and which one you are in is a STAGE, not a verdict.
+
+Adopt as a THIN OVERLAY first: islands, `<X.Island>` inside the page's existing JSX, a frame that
+holds only the application's own components. `region-root` reports that shape as `ok` and names `root`
+without failing on it, because moving a page is a real refactor of the host's own code and no project
+can do ten of them before its first green run. Then migrate ONE region at a time, when you already
+have a reason to open its page. Then, when the last one is done, set `"regionRoot": "required"` in
+`motu.config.json` — the switch that makes the arc finish rather than stall half-done.
+
+A MIGRATION SWEEP ACROSS EVERY REGION IS THE WRONG SHAPE, and the reason is not diff size. Two things
+change in a move to `root` that no check sees:
+
+ - EXCLUSIVITY GETS DEMOTED. A ternary whose branches cannot both render becomes two independent
+   props, and nothing enforces that at most one is non-null — peps' actions page traded
+   `weeksLoaded ? <WeekNavigator/> : <Skeleton/>` for a `weekNav` prop and a `weekNavPlaceholder` prop
+   rendered adjacently, with a comment standing where the guarantee used to be. When `slots` cannot
+   express an either/or, keep the ternary in the page and pass ONE node.
+ - THE SERVER/CLIENT BOUNDARY MOVES. The root renders inside `<X.Region>`, a client component. A
+   layout the page rendered on the server crosses into the client bundle when it becomes the root, and
+   the nesting inverts: peps' `/forgot-password` went from `page → AuthLayout → Screen` to
+   `page → Screen → Region → AuthLayout`. Same pixels, different tree, different bundle. Read what the
+   extracted layout imports before moving it.
+
+What the migration BUYS is one thing, and it is worth being exact about it: the lagoon previews the
+page instead of a drawing of it. Islands, contracts, ownership, coverage and `removal-check` work the
+same in either shape — `removal-check` rewrites `<X.Root>` back to the layout component and unwraps
+`<X.Island>`, so both shapes survive deleting motu. What it COSTS is that the extraction is not
+reversible by the tool: removal leaves the extracted layout files behind, where stage 1 returns the
+page to exactly the JSX it had. So the trade is lagoon fidelity against a page you can still hand back
+unchanged, and a region earns the move when someone is already editing it.
+
+A frame that genuinely must draw its own markup says why once — `inventedArrangement('why', <…/>)`
+downgrades the error to a warning, and warnings do not fail `motu check`. It is a HOLD, not an answer.
+`motu archipelago adopt-root <id>` does the derivable half of a migration and refuses rather than
+guessing when the frame nests two host components.
 
 ## Three tiers, and which one you are in
 

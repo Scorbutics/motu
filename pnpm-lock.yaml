@@ -350,6 +350,9 @@ importers:
 
   packages/react:
     dependencies:
+      '@motu/chrome':
+        specifier: workspace:*
+        version: link:../chrome
       '@motu/core':
         specifier: workspace:*
         version: link:../core

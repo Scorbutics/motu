@@ -25,6 +25,11 @@ const PACKAGES = [
   'packages/chrome',
   'packages/core',
   'packages/runtime',
+  // NOT optional, however internal it looks. `@motu/cli`, `@motu/debug-overlay` and `@motu/host` all
+  // declare a dependency on it, so leaving it off this list published three packages whose install
+  // resolves a package that is not on the registry. Its position is the build's (after `runtime`,
+  // before `react`), because that is the order the comment above promises.
+  'packages/coverage',
   'packages/react',
   'packages/debug-overlay',
   'packages/adapters/angularjs',

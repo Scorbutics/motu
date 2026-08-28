@@ -92,8 +92,13 @@ export interface TideLineOptions {
 }
 
 export interface TideLine {
-  /** Reflect the mounted state back onto the panel (lit segment + sliding thumb). */
-  setActive(stationId: string, view: TideView): void;
+  /**
+   * Reflect the mounted state back onto the panel (lit segment + sliding thumb).
+   *
+   * `label` is for what is mounted but is NOT a station: an addressed island lights nothing in the
+   * list (it is not a region) and would otherwise leave the bar reading as though nothing were open.
+   */
+  setActive(stationId: string, view: TideView, label?: string): void;
   /**
    * The flows of whichever region is mounted, and which one is showing.
    *
@@ -1396,8 +1401,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   }
 
   let lastStation = '';
-  function setActive(stationId: string, view: TideView): void {
-    stationLabel = rows.find((r) => r.station.id === stationId)?.station.label ?? '';
+  function setActive(stationId: string, view: TideView, label?: string): void {
+    stationLabel = label ?? rows.find((r) => r.station.id === stationId)?.station.label ?? '';
     renderLabel();
     for (const { station, btn } of rows) {
       btn.setAttribute('aria-current', String(station.id === stationId));

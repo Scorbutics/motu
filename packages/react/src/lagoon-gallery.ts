@@ -27,12 +27,15 @@ import { mountReactLagoon } from './lagoon-react-mount';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
 import {
   stateNames,
+  islandTag,
   pickState,
   publishStates,
   readStateRequest,
+  readTarget,
   replayFlow,
   reportState,
   resolveFlowRegion,
+  resolveIslandScenario,
   type LagoonEvidence,
 } from './lagoon-states';
 
@@ -112,11 +115,14 @@ export interface StartLagoonOptions {
   /** Recorded callsite frames (`motu archipelago record-frame` output), as a Vite glob result. */
   frames?: Record<string, string>;
   /**
-   * The project's declared states, so `?flow=<name>` opens this gallery ON one.
+   * The project's declared states, so `?flow=<name>` and `?target=island:<tag>&scenario=<name>` open
+   * this gallery ON one.
    *
    * The gallery is what `lagoon serve` and `lagoon publish` actually build — a region publish uses
    * this entry, not the bare one — so a state address that only worked on `lagoon.html` would not
-   * work on the lagoon anybody looks at.
+   * work on the lagoon anybody looks at. That was true of every ISLAND scenario until this entry was
+   * given `scenarios` as well as `flows`: the address printed by `motu lagoon states` pointed at the
+   * one entry `lagoon serve` never builds, and landed on the first region instead.
    */
   evidence?: LagoonEvidence;
   /** Element the archipelago mounts into. */
@@ -315,6 +321,52 @@ markSandbox();
   if (flowRegion) current = flowRegion;
   // `?region=<id>` on its own opens that station — the same address, minus the state.
   else if (request.region && ids.includes(request.region)) current = request.region;
+
+  // AN ISLAND, ADDRESSED — `?target=island:<tag>`, optionally `&scenario=<name>`.
+  //
+  // Not a station, and deliberately not "the region that declares it, seeded". An island can be
+  // standalone — in no region at all, which is a permanent and legitimate state — and for one that
+  // IS in a region, a scenario is authored against the island's own prop names while the region
+  // binds different ones. Seeding a region with them puts keys in the store nothing reads and shows
+  // the region's ordinary state under the scenario's name. So this mounts the island alone, through
+  // the same synthesised one-slot config `motu island verify` drives, inside the gallery's chrome:
+  // what a human looks at is what was verified.
+  const wantedIsland = islandTag(readTarget() ?? opts.target);
+  let island: { tag: string; seed?: Record<string, unknown> } | undefined;
+  // A REFUSAL MOUNTS NOTHING. The banner alone is not the refusal: leaving the first region on screen
+  // under it is the substitution being refused, and a screenshot of it looks like a working lagoon.
+  let refused = false;
+  if (wantedIsland && !opts.elements.some((e) => e.tag === wantedIsland)) {
+    reportState({
+      ok: false,
+      target: `island:${wantedIsland}`,
+      kind: request.scenario ? 'scenario' : 'none',
+      error: `no island "${wantedIsland}" in this lagoon`,
+      available: opts.elements.map((e) => e.tag),
+    });
+    refused = true;
+  } else if (wantedIsland && request.scenario) {
+    const wanted = resolveIslandScenario(opts.evidence?.scenarios, wantedIsland, request.scenario);
+    reportState(wanted.outcome);
+    // AN UNRESOLVABLE STATE MUST NOT RENDER SOMETHING ELSE. The focused entry refuses to mount on a
+    // scenario it could not resolve; this entry has to refuse identically, or the same address means
+    // "refused" on one and "here is some other state" on the other.
+    if (wanted.outcome.ok) island = { tag: wantedIsland, seed: wanted.seed };
+    else refused = true;
+  } else if (wantedIsland) {
+    reportState({ ok: true, target: `island:${wantedIsland}`, kind: 'none' });
+    island = { tag: wantedIsland };
+  } else if (request.scenario) {
+    reportState({
+      ok: false,
+      target: 'this lagoon',
+      kind: 'scenario',
+      error: `?scenario= addresses an ISLAND's state — name the island (target=island:x-…), or address a region with ?flow=`,
+      available: Object.keys(opts.evidence?.scenarios ?? {}),
+    });
+    refused = true;
+  }
+
   let view: TideView = localStorage.getItem(VIEW_KEY) === 'mountpoints' ? 'mountpoints' : 'region';
 
   function mount(id: string): void {
@@ -347,6 +399,42 @@ markSandbox();
     tide.setActive(current, view);
     tide.setFlows(flowsOf(id), activeFlowName(id));
     applyRequestedFlow(id);
+  }
+
+  /**
+   * Mount the addressed island ALONE, in this page's chrome.
+   *
+   * The station list stays visible and nothing in it is lit: what is mounted is not a region, and
+   * lighting the one that happens to declare this island would say otherwise. Picking a station from
+   * the tide line leaves island mode, and drops the address with it.
+   */
+  function mountIsland(open: { tag: string; seed?: Record<string, unknown> }): void {
+    const target: LagoonTarget = { kind: 'island', tag: open.tag };
+    const synthesised = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: open.seed });
+    if (react) {
+      mountReactLagoon(root, synthesised, {
+        elements: opts.elements,
+        host,
+        seed: open.seed ?? {},
+        view,
+      });
+    } else {
+      root!.replaceChildren();
+      root!.appendChild(
+        defineLagoon(target, {
+          elements: opts.elements,
+          css: opts.css,
+          defaultTheme: config.defaultTheme ?? 'motu',
+          host,
+          seed: open.seed,
+        }),
+      );
+    }
+    // Nothing in the station list is lit — this is not a region — so the bar carries the address
+    // instead, and the bay stays there to leave by.
+    const state = window.__motuLagoonState;
+    tide.setActive('', view, state?.name ? `${open.tag} · ${state.name}` : open.tag);
+    tide.setFlows([], null);
   }
 
   /**
@@ -399,11 +487,24 @@ markSandbox();
     transport: mode,
     about: config.about ?? DEFAULT_ABOUT,
     lens: lens ? { toggle: lens.toggle, isOpen: lens.isOpen, subscribe: lens.subscribe } : undefined,
-    onStation: (id) => mount(id),
+    // Picking a station LEAVES an island address, and takes it out of the URL: leaving it there
+    // would hand someone a link that reopens the island they navigated away from.
+    onStation: (id) => {
+      if (island) {
+        const url = new URL(location.href);
+        url.searchParams.delete('target');
+        url.searchParams.delete('scenario');
+        history.replaceState(null, '', url);
+        island = undefined;
+        reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
+      }
+      mount(id);
+    },
     onView: (next) => {
       view = next;
       localStorage.setItem(VIEW_KEY, next);
-      mount(current);
+      if (island) mountIsland(island);
+      else mount(current);
     },
     // RUNNING A FLOW FROM THE PANEL, and leaving an address behind.
     //
@@ -449,7 +550,12 @@ markSandbox();
     },
   });
 
-  if (ids.length) {
+  if (island) {
+    mountIsland(island);
+  } else if (refused) {
+    // Said above, in the banner and in `window.__motuLagoonState`. Nothing renders under it.
+    root.replaceChildren();
+  } else if (ids.length) {
     mount(current);
   } else {
     root.innerHTML =

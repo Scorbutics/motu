@@ -1,0 +1,230 @@
+# motu's own gates, over motu's own surfaces.
+#
+# The rule this enforces is in CLAUDE.md: every screen motu ships is islands and archipelagos, checked
+# by `motu check`. A UI framework that hand-writes its own screens is testing a claim it never makes —
+# and an adapter's only other consumer usually lives in somebody else's repository, so an in-tree
+# consumer is the one that cannot drift unnoticed.
+#
+# THREE PROJECTS, THREE CONFIGS. `motu check` locates a project by the `motu.config.json` in its cwd,
+# which is why every step below names a `working-directory`:
+#
+#   .                 demo-app, the AngularJS OCEAN     (motu.config.json at the repo root)
+#   host-app/motu     the Next host                     (islands package beside the app)
+#   review-console    the Vite console                  (non-blocking — see that job)
+#
+# Split by TIER, as documented in docs/07-checks-and-verification.md:
+#   static   every push — no browser, seconds
+#   runtime  every push — one browser per project, "does it work"
+#   audit    nightly    — responsive + a11y, the expensive per-island pair
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly, for the audit tier only. Drift found a day later still beats drift found never.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+env:
+  # Every job resolves the framework from THIS checkout. The CLI derives it from the running binary,
+  # so this is belt-and-braces for the commands that shell out.
+  MOTU_ROOT: ${{ github.workspace }}
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # STATIC — the loop tier. No browser. This is the job that should stay under a minute.
+  # ---------------------------------------------------------------------------------------------
+  static:
+    name: motu check (static)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      # BEFORE setup-node, not after. `cache: pnpm` resolves the pnpm binary while setup-node runs, so
+      # enabling corepack afterwards fails the cache step with "Unable to locate executable file: pnpm".
+      # corepack ships with node and honours the `packageManager` field, so the version is the repo's.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # NOT OPTIONAL, and the reason is `.gitignore`: `dist/` is ignored, and every `@motu/*` package
+      # resolves through `main: ./dist/index.js`. A fresh checkout has no dist at all, so a check run
+      # before this step fails on module resolution rather than on anything it was asked about.
+      - name: Build packages
+        run: node scripts/build-packages.mjs
+
+      # The host's own gate, which motu does not replace: `motu check` runs MOTU's checks only.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # DEMO-APP RUNS THE TWO SWEEPS, NOT `motu check`, and the reason is structural rather than a
+      # standard being lowered.
+      #
+      # `motu check` includes `integrate check`, which reads the HOST application's own source to
+      # answer "does the page compose, place and read this region?". demo-app's host is the AngularJS
+      # ocean at `../ocean/web-console` — a Java/JSP tree that is NOT in this repository. So the scan
+      # finds nothing, exits 2 ("could not run", not "failed"), and takes the whole suite with it
+      # before islands or regions are reached. There is no `hostSources` value that fixes this: the
+      # host is genuinely absent, and a check that cannot see the host cannot prove anything about it.
+      #
+      # What CAN be proved here is everything that lives in this repo — the islands and the regions —
+      # so those are named directly. Same checks `motu check` would run, minus the one with no subject.
+      - name: demo-app — islands (static)
+        run: node packages/cli/src/cli.mjs island verify --all
+        working-directory: .
+
+      - name: demo-app — regions (static)
+        run: node packages/cli/src/cli.mjs archipelago verify --all
+        working-directory: .
+
+      # The Next host HAS its application in this repo, so it runs the whole suite — islands, regions,
+      # integration and removal — which is what `motu check` is.
+      - name: host-app — the Next host
+        run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check
+        working-directory: host-app/motu
+
+  # ---------------------------------------------------------------------------------------------
+  # RUNTIME — one real browser per project. Islands mount, scenarios differ, declared writes land,
+  # flows end as promised, and every step could have failed.
+  # ---------------------------------------------------------------------------------------------
+  runtime:
+    name: motu check --runtime
+    runs-on: ubuntu-latest
+    needs: static
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: node scripts/build-packages.mjs
+
+      # playwright is a dependency of `@motu/cli` and pnpm does not hoist, so the browser is installed
+      # from THAT package's directory or `npx` resolves nothing.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: packages/cli
+
+      # See the note in the `static` job for why demo-app names its sweeps instead of `motu check`.
+      #
+      # Its REGION sweep finishes in about a second because demo-app declares no flows — it has no
+      # `*.evidence.ts` at all — so `region-flow`, `flow-mutation` and `wiring-live` have nothing to
+      # drive and skip. That is a real gap in the example, not a fast pass: see the audit in
+      # docs/14-ocean-migration.md and the island sweep above, which does boot a browser.
+      - name: demo-app — islands (real browser)
+        run: node packages/cli/src/cli.mjs island verify --all --runtime
+        working-directory: .
+
+      - name: demo-app — regions (real browser)
+        run: node packages/cli/src/cli.mjs archipelago verify --all --runtime
+        working-directory: .
+
+      - name: host-app — the Next host
+        run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check --runtime
+        working-directory: host-app/motu
+
+  # ---------------------------------------------------------------------------------------------
+  # AUDIT — `responsive` + `a11y`, the two most expensive per-island checks. Their answer changes when
+  # the RENDERING changes, not when a key moves, so running them on every edit buys nothing and costs
+  # half the run; running them never is how a region ships unusable on a phone. Hence: nightly.
+  # ---------------------------------------------------------------------------------------------
+  audit:
+    name: motu check --audit (nightly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: node scripts/build-packages.mjs
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: packages/cli
+
+      # `--audit` implies `--runtime`: asking whether a UI is usable at every viewport only means
+      # something against something that rendered.
+      - name: demo-app — islands (audit)
+        run: node packages/cli/src/cli.mjs island verify --all --audit
+        working-directory: .
+
+      - name: host-app — the Next host
+        run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check --audit
+        working-directory: host-app/motu
+
+  # ---------------------------------------------------------------------------------------------
+  # REVIEW CONSOLE — REPORTED, NOT GATED, and the distinction is deliberate.
+  #
+  # It fails `region-root` today: a React host composing with neither a `root` nor a lagoon frame, so
+  # the page and the lagoon each describe the arrangement their own way and nothing compares the two.
+  # That is the check being RIGHT — the console is genuinely un-migrated (see
+  # docs/06-composition-and-adoption.md), and it is a real backlog item rather than a bug.
+  #
+  # Gating on it would make every unrelated PR red, and a permanently red gate teaches everyone to
+  # ignore the gate. Omitting it entirely would let it rot unseen. So: visible, annotated, non-blocking
+  # — and this job is deleted, not un-skipped, the day the console declares a `root`.
+  # ---------------------------------------------------------------------------------------------
+  review-console:
+    name: motu check (review-console, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: node scripts/build-packages.mjs
+
+      - name: review-console — known `region-root` failure
+        run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check
+        working-directory: review-console

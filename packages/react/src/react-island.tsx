@@ -74,6 +74,25 @@ interface ArchipelagoValue {
    * page: the staggering disappears from the mechanism rather than being avoided by a caller.
    */
   pending: Map<string, { value: unknown; source: string }>;
+  /**
+   * Flush what the islands enqueued, ONCE, after the commit that enqueued it.
+   *
+   * The provider's own effect used to be the only flush, on the reasoning that effects run
+   * child-first and parents last. That holds for the commit that renders the PROVIDER — the mount —
+   * and for nothing after it: when a page below re-renders with new props, React re-renders only that
+   * subtree, the provider's effect never runs, and every island's contribution sits in `pending`
+   * unread. The store then keeps the props of the FIRST render for the life of the page, and since a
+   * bound key that HAS BEEN SET wins over the page's own prop, the island renders the mount-time
+   * value forever. peps' annuaire spun on `loading: true` from the first paint with the fetch long
+   * since settled.
+   *
+   * So the flush is scheduled by whoever enqueues, in a microtask: every island of the commit has run
+   * its effect by then, so it is still ONE batched write, and it no longer depends on which component
+   * happened to re-render.
+   */
+  schedule: () => void;
+  /** Write everything enqueued as ONE batch. Idempotent: an empty queue is a no-op. */
+  flush: () => void;
 }
 
 const ArchipelagoContext = createContext<ArchipelagoValue | null>(null);
@@ -145,7 +164,7 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
     // island already bound to the first one. Reuse the registered store when the id is already known.
     const existing = getArchipelagoStore(config.id);
     const store = existing ?? defineArchipelago(config, { host, seed, channels });
-    return {
+    const ctx: ArchipelagoValue = {
       config,
       store,
       host,
@@ -153,7 +172,29 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
         elements.filter((e): e is ReactElementSpec => 'component' in e).map((e) => [e.tag, e]),
       ),
       pending: new Map<string, { value: unknown; source: string }>(),
+      schedule: () => {},
+      flush: () => {},
     };
+    let scheduled = false;
+    ctx.flush = () => {
+      scheduled = false;
+      if (!ctx.pending.size) return;
+      const entries = [...ctx.pending];
+      ctx.pending.clear();
+      ctx.store.batch(() => {
+        // Attribution stays per key: the host feeding a declared host-fed key is a different fact
+        // from an island publishing its own, and the lens reports them differently.
+        for (const [key, { value: v, source }] of entries) {
+          runWithWriteSource(source, () => ctx.store.set(key, v));
+        }
+      });
+    };
+    ctx.schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => ctx.flush());
+    };
+    return ctx;
     // Keyed by archipelago id: the registration is global and one-shot, and re-running it on every
     // prop identity change would rebuild the store on each render of the host page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,17 +214,11 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
   // the island path uses, so the two cannot disagree about who owns what.
   // AFTER EVERY ISLAND, BY CONSTRUCTION. Effects run child-first, parent last, so by the time this
   // runs each island has enqueued whatever its props changed — and it lands as one notification.
+  // The mount commit still flushes HERE, synchronously with the rest of the effects, so the region is
+  // whole before anything reads it. Later commits are flushed by `schedule()` — see its note: they do
+  // not reach this effect at all, which is the bug it used to hide.
   useEffect(() => {
-    if (!value.pending.size) return;
-    const entries = [...value.pending];
-    value.pending.clear();
-    value.store.batch(() => {
-      // Attribution stays per key: the host feeding a declared host-fed key is a different fact from
-      // an island publishing its own, and the lens reports them differently.
-      for (const [key, { value: v, source }] of entries) {
-        runWithWriteSource(source, () => value.store.set(key, v));
-      }
-    });
+    value.flush();
   });
 
   // `createElement`, with the return type ANNOTATED — not JSX.
@@ -374,9 +409,12 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
       // the island that received it made every fed key read as an island feeding itself — the same
       // mis-attribution that hid the page's coupling in the first place.
       const source = provided.has(key) ? 'host' : slot;
-      // ENQUEUED, not written. The provider flushes every island's contribution together — see
+      // ENQUEUED, not written. The flush writes every island's contribution together — see
       // `pending`. Writing here is what let a subscriber see the region mid-update.
       ctx.pending.set(key, { value, source });
+      // ...and ASK for that flush. The provider only re-renders when its own parent does, so an
+      // island that re-rendered on its own would otherwise enqueue into a queue nobody reads.
+      ctx.schedule();
     }
   });
 

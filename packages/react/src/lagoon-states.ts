@@ -11,8 +11,12 @@
 // browser eval every time, with nothing to compare against if the copy is wrong. What was missing was
 // not capability — it was an ADDRESS.
 //
-//   lagoon.html?target=island:x-week-actions&scenario=a%20week%20to%20answer
-//   lagoon.html?target=archipelago:actions&flow=marking%20a%20mission%20done&step=2
+//   ?target=island:x-week-actions&scenario=a%20week%20to%20answer
+//   ?region=actions&flow=marking%20a%20mission%20done&step=2
+//
+// Both read by the GALLERY (`motu lagoon serve`) and by the focused entry (`lagoon.html`, which
+// `motu island verify` drives), because an address that only one of them honours is one a person
+// pastes and watches render something else.
 //
 // The evidence is already in the bundle (the lagoon's fixtures glob has always read `*.evidence.ts`
 // for its `fixtures`; only `scenarios` was dropped on the floor), so this costs a URL parse and the
@@ -116,6 +120,55 @@ export function readStateRequest(search?: string): StateRequest {
     step: n !== null && Number.isFinite(n) && n >= 0 ? Math.floor(n) : null,
     region: params.get('region'),
   };
+}
+
+/**
+ * The target this URL asks for, or null.
+ *
+ * The FOCUSED entry has always read this — it is what lets one dev server answer for every island —
+ * and the gallery did not. So an island address opened on the lagoon a human actually runs
+ * (`motu lagoon serve` builds the GALLERY) resolved to no target at all and rendered the first
+ * region: the exact silent substitution the top of this file exists to refuse, one layer above where
+ * it was being refused. Both entries read the target from here now.
+ */
+export function readTarget(search?: string): string | null {
+  const params = new URLSearchParams(
+    search ?? (typeof location !== 'undefined' ? location.search : ''),
+  );
+  return params.get('target');
+}
+
+/** The tag an `island:<tag>` target names — '' for a region target, or for no target at all. */
+export function islandTag(target: string | null | undefined): string {
+  return typeof target === 'string' && target.startsWith('island:') ? target.slice('island:'.length) : '';
+}
+
+/**
+ * The SEED a named island scenario means, or the refusal that has to stop the mount.
+ *
+ * Shared by both entries on purpose: a name that does not exist must be refused identically whether
+ * it was typed at `lagoon.html` or at the gallery, because the two now accept the same address.
+ */
+export function resolveIslandScenario(
+  scenarios: Record<string, Scenario[]> | undefined,
+  tag: string,
+  wanted: string,
+): { seed?: Record<string, unknown>; outcome: StateOutcome } {
+  const target = `island:${tag}`;
+  const declared = scenarios?.[tag];
+  const found = pickState(declared, wanted);
+  if (!found) {
+    return {
+      outcome: {
+        ok: false,
+        target,
+        kind: 'scenario',
+        error: `no scenario "${wanted}" in ${tag}'s evidence`,
+        available: stateNames(declared),
+      },
+    };
+  }
+  return { seed: found.seed, outcome: { ok: true, target, kind: 'scenario', name: found.name ?? wanted } };
 }
 
 /** EVERY region declaring a flow by this name — plural because the name alone can be ambiguous. */

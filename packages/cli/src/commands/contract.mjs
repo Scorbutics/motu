@@ -146,6 +146,27 @@ export function contractCheckCommand(argv) {
   const text = JSON.stringify(snap, null, 2) + '\n';
   const file = SNAPSHOT();
 
+  // WHAT DID THIS ACTUALLY LOOK AT? A snapshot of nothing compares equal to a snapshot of nothing, so
+  // an empty scan — a misconfigured `app`, a moved islands directory, a host whose sources this does
+  // not reach — recorded emptiness once with `--update` and printed PASS on every run afterwards,
+  // forever, over a project it never examined. That is `removal-check`'s old "no motu references in
+  // the host application" bug, in a second command.
+  //
+  // Exit 2, not 1: nothing was examined, so nothing is contradicted either. Same verdict and the same
+  // wording as `integrate check`'s `host-sources`, which is the sibling case.
+  const methods = Object.values(snap.services).flat().length;
+  const islandCount = Object.keys(snap.islands).length;
+  const regionCount = Object.keys(snap.archipelagos).length;
+  if (methods + islandCount + regionCount === 0) {
+    console.error(
+      color.red(color.bold('NOTHING TO CHECK')) +
+        `  no callable method, island or archipelago was found under ${paths.rel(APP_ROOT)} — ` +
+        `nothing was examined, so nothing is proved about the boundary.`,
+    );
+    console.error(color.dim('  Check `app`, `islands` and `archipelagos` in motu.config.json.'));
+    process.exit(2);
+  }
+
   if (argv.update) {
     writeFileSync(file, text);
     console.log(`${paths.rel(file)} updated`);
@@ -157,10 +178,9 @@ export function contractCheckCommand(argv) {
   }
   if (readFileSync(file, 'utf8') === text) {
     const edges = Object.values(snap.archipelagos).flatMap((a) => a.coupling).length;
-    const methods = Object.values(snap.services).flat().length;
     console.log(
       color.green(color.bold('PASS')) +
-        color.dim(`  boundary unchanged — ${methods} callable method(s), ${Object.keys(snap.islands).length} island(s), ${edges} coupling edge(s)`),
+        color.dim(`  boundary unchanged — ${methods} callable method(s), ${islandCount} island(s), ${edges} coupling edge(s)`),
     );
     return;
   }

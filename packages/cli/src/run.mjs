@@ -116,8 +116,9 @@ ${color.bold('verify flags:')}
 
 ${color.bold('lagoon states:')}
   ${color.dim('an island scenario and a region flow are ADDRESSES — open the lagoon directly on one:')}
-  ${color.dim('  /lagoon.html?target=island:x-week-actions&scenario=a%20week%20to%20answer')}
-  ${color.dim('  /?flow=marking%20a%20mission%20done&step=2   (the gallery: `serve`/`publish` build this one)')}
+  ${color.dim('  /?target=island:x-week-actions&scenario=a%20week%20to%20answer')}
+  ${color.dim('  /?flow=marking%20a%20mission%20done&step=2')}
+  ${color.dim('  both against the gallery — the entry `serve` and `publish` build, and the one a person opens')}
   --base <url>    print absolute URLs against a running lagoon instead of paths
   --json          machine-readable catalogue
   ${color.dim('a name that resolves to nothing REFUSES to render — it never falls back to the default state.')}

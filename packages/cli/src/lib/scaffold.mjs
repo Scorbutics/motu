@@ -395,7 +395,7 @@ import { startLagoon } from '@motu/react';
 import { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from '@motu/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
-import { ALL_FIXTURES, ALL_ROLES, ALL_FLOWS } from '{{fixturesImport}}';
+import { ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from '{{fixturesImport}}';
 import config from '{{lagoonConfigImport}}';
 import * as overrides from '{{overridesImport}}';
 {{hostImport}}{{hostGlobalCss}}
@@ -429,8 +429,10 @@ startLagoon({
   },
   // Recorded callsite frames (\`motu archipelago record-frame\`). The glob has to be written here:
   // Vite resolves it statically, at this file's location.
-  // Region flows only: this entry mounts REGIONS, so an island scenario has nothing here to apply to.
-  evidence: { flows: ALL_FLOWS },
+  // BOTH, and the scenarios are not optional here. This is the entry \`lagoon serve\` and
+  // \`lagoon publish\` build, so an address it cannot resolve is an address that works nowhere a human
+  // looks — which is what \`?target=island:…&scenario=…\` was until this line carried scenarios too.
+  evidence: { scenarios: ALL_SCENARIOS, flows: ALL_FLOWS },
   frames: import.meta.glob('{{framesGlob}}', { query: '?inline', import: 'default', eager: true }),
 });
 `;

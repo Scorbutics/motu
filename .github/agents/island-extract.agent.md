@@ -273,7 +273,7 @@ A region's arrangement lives in ONE of two places, and both are supported:
   description, so the two cannot differ. Safe by construction.
 - **A hand-written lagoon frame** (`layout` in the overrides) — a second description of the page,
   checked but not eliminated: `island-composition` compares WHICH islands the region is made of
-  against what the page places, and `frame-is-page` refuses arrangement the frame invented. Nothing
+  against what the page places, and `region-root` refuses arrangement the frame invented. Nothing
   compares the ARRANGEMENT itself.
 
 **An extraction uses the frame, and that is correct rather than a concession.** You are working on a
@@ -281,6 +281,12 @@ page that already exists and already expresses its own arrangement in JSX. Movin
 region-level refactor of the host's own code; doing it in the same step as pulling out one island
 couples two changes and hides the risky one. Extract the island, look at it in the lagoon, then decide
 about the region.
+
+THAT DECISION IS A STAGE, NOT A VERDICT: adopt as a thin overlay (islands in the page's own JSX +
+a frame), migrate one region to `root` when you already have a reason to open its page, then set
+`"regionRoot": "required"` when the last one is done. The archipelago-build skill has the arc and
+the two hazards a migration carries that no check sees. A frame that genuinely must draw says so
+once with `inventedArrangement('why', <…/>)` — a warning, and warnings do not fail `motu check`.
 
 `motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
 restructure, so the safe shape is free there.
@@ -301,7 +307,7 @@ sets `"regionRoot": "required"` in `motu.config.json`, and a frame becomes an er
   arrangement in the region's `root` or its `layout`, data in `seed`. A wrapper is motu-only code in
   the app's repository.
 - **Never invent arrangement in a frame.** A frame may hold only the application's own components,
-  fragments and `island(slot)`. `frame-is-page` fails on an intrinsic element or a literal string,
+  fragments and `island(slot)`. `region-root` fails on an intrinsic element or a literal string,
   because a frame that draws its own version of the page drifts from it — peps shipped a lagoon saying
   "On récupère ton accès" over a page saying "Mot de passe oublié ?" for weeks, entirely green.
 - Never add runtime module loading, federation, per-island versioning, or island-to-island imports

@@ -1060,7 +1060,7 @@ export async function verifyCommand(argv) {
     } else {
       printSweep('motu island verify — all islands', results);
     }
-    process.exit(results.every((r) => r.errors.length === 0) ? 0 : 1);
+    process.exit(sweepExitCode(results));
   }
 
   const result = await runIslandVerify(argv, name);
@@ -1173,6 +1173,23 @@ export async function runIslandVerify(argv, name) {
 export function verifyExitCode(result) {
   if (result.errors.length) return 1;
   return result.report.findings.some((f) => f.level === 'inconclusive') ? 2 : 0;
+}
+
+/**
+ * A SWEEP's exit code: the worst verdict any member reached.
+ *
+ * Both sweeps used to gate on `errors.length === 0` alone, which made them the one path where an
+ * inconclusive run reported success — no Chromium, every runtime check unanswered, `--all` exits 0
+ * and CI goes green on a question nobody asked. The single-target form has always used
+ * `verifyExitCode`; this is the same rule applied across members.
+ *
+ * An error still beats an inconclusive, exactly as it does for one member: a run that found something
+ * wrong has an answer, and that answer is 1.
+ */
+export function sweepExitCode(results) {
+  const codes = results.map(verifyExitCode);
+  if (codes.includes(1)) return 1;
+  return codes.includes(2) ? 2 : 0;
 }
 
 /** `--json` shape for one member of a sweep. */
@@ -1956,18 +1973,23 @@ function frameModuleFor(id) {
       return ['.tsx', '.ts', '/index.tsx', '/index.ts', ''].map((e) => base + e).find((c) => existsSync(c)) ?? null;
     };
 
-    const kindFirst = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\n\};/);
+    // `\s*` BEFORE THE CLOSER, NOT `\n`. These used to require a newline, so a one-line
+    // `export const regions = [corpusRegion, signinRegion];` — which is how a small project writes
+    // it — matched nothing, no frame was found, and `region-root` reported a frame-composed region
+    // as having no frame at all. That is an ERROR telling a correct stage-1 project to declare a
+    // `root` it does not need, produced by the formatting of a file nobody thought was load-bearing.
+    const kindFirst = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\s*\};/);
     const inKindFirst = kindFirst && kindFirst[1].match(named);
     if (inKindFirst) return { module: inKindFirst[2] ? moduleOf(inKindFirst[2]) : null, declared: true };
 
-    const asRecord = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\n\};/);
+    const asRecord = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\s*\};/);
     if (asRecord) {
       const entry = asRecord[1].match(named);
       if (!entry) continue;
       return { module: entry[2] ? moduleOf(entry[2]) : null, declared: true };
     }
 
-    const asArray = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\n\];/);
+    const asArray = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\s*\];/);
     if (!asArray) continue;
     let sawSomeModule = false;
     for (const ident of asArray[1].match(/[A-Za-z_$][\w$]*/g) ?? []) {
@@ -2152,6 +2174,37 @@ function frameIsPageCheck(report, id, region) {
       'island-composition',
       'composed from the archipelago\u2019s `root` \u2014 one declaration, so the region cannot be made of ' +
         'different islands from the page',
+    );
+    return;
+  }
+
+  // AN OCEAN COMPOSES FROM ITS OWN `layout`, and that is a third legitimate shape rather than a
+  // missing `root`.
+  //
+  // `root` is a React component and `<X.Island>` is a React binding, so an AngularJS ocean can supply
+  // neither. What it has is a template of `<motu-island slot="…">` markers on the archipelago, which
+  // `<motu-archipelago name="…">` renders in the page and which the lagoon's own preference order
+  // already honours (`lagoon-react-mount.tsx`: root, then `layout`, then declared order). Demanding a
+  // React `root` from a legacy host made every ocean region a hard error — motu's own `demo-app`, the
+  // reference ocean, could not pass `motu check` at all.
+  //
+  // Reported with its LIMIT named. In the embedded ocean the legacy page may place its own markers
+  // rather than mounting the whole region, and nothing compares those two — which is the same class of
+  // gap a hand-written frame has, so it gets the same kind of line.
+  const layoutDecl = /^\s*layout\s*:/m.test(blankComments(archText));
+  if (layoutDecl) {
+    report.ok(
+      'region-root',
+      `composed from the archipelago's own \`layout\` — the ocean's form, rendered by ` +
+        `<motu-archipelago> in the page and by the lagoon from the same template. Where the legacy ` +
+        `page places its own <motu-island> markers instead, that placement is a second description ` +
+        `nothing here compares`,
+      (region?.islands ?? []).length,
+    );
+    report.skip(
+      'island-composition',
+      "composed from the archipelago's `layout` — one template, so the region cannot be made of " +
+        'different islands from the page that mounts it',
     );
     return;
   }
@@ -2609,7 +2662,7 @@ export async function archipelagoVerifyCommand(argv) {
     } else {
       printSweep('motu archipelago verify — all regions', results);
     }
-    process.exit(results.every((r) => r.errors.length === 0) ? 0 : 1);
+    process.exit(sweepExitCode(results));
   }
 
   const result = await runArchipelagoVerify(argv, id);

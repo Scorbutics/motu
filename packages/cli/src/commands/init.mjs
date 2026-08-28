@@ -331,14 +331,18 @@ export async function initCommand(argv) {
     }
   }
 
-  if (argv.json) {
-    console.log(JSON.stringify({ root, host, appPackage, created, skipped }, null, 2));
-    return;
-  }
-
   // The rules the HOST's agent has to follow — shipped with motu so they cannot drift from what the
   // CLI enforces, written into the instruction files the repo already keeps.
+  //
+  // BEFORE the `--json` branch, not after. It used to sit below it, so `motu init --json` scaffolded
+  // the project and silently skipped the rules — and `--json` is exactly the invocation a script or a
+  // CI image uses, which is the one place nobody reads the output to notice they are missing.
   const rules = applyHostRules(hostRoot);
+
+  if (argv.json) {
+    console.log(JSON.stringify({ root, host, appPackage, created, skipped, rules }, null, 2));
+    return;
+  }
 
   console.log(color.green(`✓ initialized motu project in ${basename(root)}/`) + color.dim(`  (host: ${host})`));
   for (const p of created) console.log('  ' + color.dim(relPosix(root, p).replace(/^\.\//, '')));

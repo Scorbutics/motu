@@ -160,7 +160,7 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
 /**
  * The escape hatch for a frame that genuinely cannot be the page's own code, and it costs a sentence.
  *
- * Same shape as `rawChannel`: the reason stays in the file, where `frame-is-page` finds it and prints
+ * Same shape as `rawChannel`: the reason stays in the file, where `region-root` finds it and prints
  * it beside a WARNING instead of an error. Some arrangement really has no component to point at — a
  * page whose layout is generated, a host motu does not own — and saying so out loud is the difference
  * between a known stand-in and a drawing nobody knew was a drawing.

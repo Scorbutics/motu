@@ -40,12 +40,12 @@ function frameModuleFor(id) {
       const base = new URL(spec[1].replace(/\.js$/, ''), `file://${overrides}`).pathname;
       return ['.tsx', '.ts', ''].map((e) => base + e).find((c) => existsSync(c)) ?? null;
     };
-    const record = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\n\};/);
+    const record = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\s*\};/);
     if (record) {
       const entry = record[1].match(named);
       return entry?.[2] ? moduleOf(entry[2]) : null;
     }
-    const array = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\n\];/);
+    const array = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\s*\];/);
     for (const ident of array?.[1].match(/[A-Za-z_$][\w$]*/g) ?? []) {
       const module = moduleOf(ident);
       if (!module) continue;

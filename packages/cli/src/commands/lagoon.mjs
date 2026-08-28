@@ -748,7 +748,11 @@ export async function lagoonStatesCommand(argv) {
           const name = s.name ?? `#${i + 1}`;
           return {
             name,
-            url: `${base}/lagoon.html?${q({ target: `island:${tag}`, scenario: address(name, i) })}`,
+            // The gallery, like the region rows below — NOT lagoon.html. `lagoon serve` and
+            // `lagoon publish` build the gallery and serve it at every path, so this address used to
+            // land on the gallery with a `target` it ignored: the first region rendered, no banner,
+            // and the URL looked like it had worked. The gallery reads an `island:` target now.
+            url: `${base}/?${q({ target: `island:${tag}`, scenario: address(name, i) })}`,
           };
         }),
       };

@@ -310,12 +310,20 @@ function checkRegion(region, sources) {
   // its default — placed, composed, read, and quietly empty. The lagoon cannot see this: it seeds the
   // key itself, which is the whole point of a preview and the reason it cannot answer this question.
   const passed = passedProps(sources, islandNames, code, rootSlotMap(region.id));
+  // AN ISLAND-PRODUCED KEY IS NOT THE PAGE'S TO FEED, so its absence is correct rather than a finding.
+  //
+  // This check and the runtime used to contradict each other. `react-island.tsx` refuses to publish a
+  // prop whose key has a declared producer — "OWNED KEYS ARE NOT THE PAGE'S TO PUBLISH", D5 — and warns
+  // when a page passes one; this warned when a page did NOT. A region with an island-owned key could
+  // not satisfy both, and doing what this line asked was the laundering the ownership rules exist to
+  // stop. Only HOST-FED keys are the page's responsibility.
+  const producedHere = producedKeys(region);
   for (const island of liveIslands) {
     const bound = Object.entries(island.bind ?? {});
     if (!bound.length) continue;
     const props = passed.get(island.slot);
     if (!props) continue; // not placed with children — the registry form takes its props from the store
-    const unfed = bound.filter(([prop]) => !props.has(prop));
+    const unfed = bound.filter(([prop, key]) => !props.has(prop) && !producedHere.has(key));
     if (unfed.length) {
       add(
         'warn',

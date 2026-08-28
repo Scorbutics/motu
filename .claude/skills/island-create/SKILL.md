@@ -173,7 +173,7 @@ A region's arrangement lives in ONE of two places, and both are supported:
   description, so the two cannot differ. Safe by construction.
 - **A hand-written lagoon frame** (`layout` in the overrides) — a second description of the page,
   checked but not eliminated: `island-composition` compares WHICH islands the region is made of
-  against what the page places, and `frame-is-page` refuses arrangement the frame invented. Nothing
+  against what the page places, and `region-root` refuses arrangement the frame invented. Nothing
   compares the ARRANGEMENT itself.
 
 **An extraction uses the frame, and that is correct rather than a concession.** You are working on a
@@ -181,6 +181,12 @@ page that already exists and already expresses its own arrangement in JSX. Movin
 region-level refactor of the host's own code; doing it in the same step as pulling out one island
 couples two changes and hides the risky one. Extract the island, look at it in the lagoon, then decide
 about the region.
+
+THAT DECISION IS A STAGE, NOT A VERDICT: adopt as a thin overlay (islands in the page's own JSX +
+a frame), migrate one region to `root` when you already have a reason to open its page, then set
+`"regionRoot": "required"` when the last one is done. The archipelago-build skill has the arc and
+the two hazards a migration carries that no check sees. A frame that genuinely must draw says so
+once with `inventedArrangement('why', <…/>)` — a warning, and warnings do not fail `motu check`.
 
 `motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
 restructure, so the safe shape is free there.

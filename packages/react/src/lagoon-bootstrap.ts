@@ -18,6 +18,7 @@ import {
   pickState,
   publishStates,
   readStateRequest,
+  resolveIslandScenario,
   replayFlow,
   reportState,
   stateNames,
@@ -256,20 +257,9 @@ function resolveScenario(
       },
     };
   }
-  const declared = opts.evidence?.scenarios?.[target.tag];
-  const found = pickState(declared, name);
-  if (!found) {
-    return {
-      outcome: {
-        ok: false,
-        target: label,
-        kind: 'scenario',
-        error: `no scenario "${name}" in ${target.tag}'s evidence`,
-        available: stateNames(declared),
-      },
-    };
-  }
-  return { seed: found.seed, outcome: { ok: true, target: label, kind: 'scenario', name: found.name ?? name } };
+  // The lookup and its refusal live in lagoon-states, because the gallery now accepts the same
+  // address and the two must refuse an unknown name the same way.
+  return resolveIslandScenario(opts.evidence?.scenarios, target.tag, name);
 }
 
 export function bootstrapLagoon(opts: LagoonBootstrapOptions): HTMLElement {

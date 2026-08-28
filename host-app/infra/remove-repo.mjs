@@ -69,13 +69,22 @@ if (!dir) {
 // process that owns the index had never been told.
 //
 // Two writers again, which is the same failure phases 2 and 3 were built to avoid. So: stop it.
-const HOST_UNIT = process.env.MOTU_HOST_UNIT ?? 'motu-host'
-function hostIsRunning() {
-  try {
-    return execSync(`systemctl --user is-active ${HOST_UNIT}`, { encoding: 'utf8' }).trim() === 'active'
-  } catch {
-    return false
-  }
+//
+// BOTH PROCESSES, and the second one is why this comment is longer than it was. Phase 4 moved the
+// READ routes into the app, so `motu-host-app` now opens the store too and caches the same index.
+// This script stopped `motu-host` and nothing else, so a removal that had already succeeded on disk
+// was still being served from the app's memory — the repo was gone, the file said so, and
+// `/api/repos` listed it anyway. Exactly the failure the paragraph above describes, one process
+// later, and it read as "the removal silently did nothing".
+const HOST_UNITS = (process.env.MOTU_HOST_UNITS ?? 'motu-host,motu-host-app').split(',').filter(Boolean)
+function runningUnits() {
+  return HOST_UNITS.filter((unit) => {
+    try {
+      return execSync(`systemctl --user is-active ${unit}`, { encoding: 'utf8' }).trim() === 'active'
+    } catch {
+      return false
+    }
+  })
 }
 
 const indexPath = resolve(dir, 'index.json')
@@ -122,13 +131,15 @@ if (pinning.length) {
   if (pinning.length > 5) console.log(`      … and ${pinning.length - 5} more`)
 }
 
-if (confirm && hostIsRunning()) {
+const running = confirm ? runningUnits() : []
+if (running.length) {
   console.error('')
-  console.error(`✗ ${HOST_UNIT} is running and holds this index in memory.`)
-  console.error('  It would overwrite this edit on its next publish. Stop it, run this, start it:')
-  console.error(`      systemctl --user stop ${HOST_UNIT}`)
+  console.error(`✗ ${running.join(' and ')} ${running.length > 1 ? 'are' : 'is'} running and hold${running.length > 1 ? '' : 's'} this index in memory.`)
+  console.error('  The write would be overwritten, or served stale from a cache that never heard about')
+  console.error('  it. Stop them, run this, start them:')
+  console.error(`      systemctl --user stop ${running.join(' ')}`)
   console.error(`      node infra/remove-repo.mjs --repo ${repo} --confirm${force ? ' --force' : ''}`)
-  console.error(`      systemctl --user start ${HOST_UNIT}`)
+  console.error(`      systemctl --user start ${running.join(' ')}`)
   process.exit(1)
 }
 

@@ -375,11 +375,49 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         } catch {
           where = null;
         }
-        // LOOPBACK ONLY. This host proxies to whatever it is told, so anything else would make it an
-        // open relay for the machine it runs on — pointed at a metadata endpoint, say, by anyone who
-        // has the token. A dev server on another machine is not a case this needs to serve.
-        if (typeof where !== 'string' || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(where.replace(/\/+$/, '')))
-          return json(res, 400, { error: 'url must be http://127.0.0.1:<port>' });
+        // LOOPBACK BY DEFAULT, and that default does not move. This host FETCHES whatever it is told,
+        // so an unrestricted registry makes it an open relay for the machine it runs on — pointed at a
+        // cloud metadata endpoint, say, by anyone holding the token. The rule stays; what is new is
+        // that an operator can widen it deliberately, for the case it was refusing: a dev server on
+        // somebody's laptop, reachable over a tailnet or a tunnel.
+        //
+        // AN ALLOWLIST THE OPERATOR WRITES, not a flag the caller sets. "I trust these names" is a
+        // different claim from "anyone with the token may point me anywhere", and only the person
+        // running the host can make the first one. Unset means today's behaviour exactly.
+        //
+        //     MOTU_LIVE_ALLOW=.tailnet.ts.net,laptop.lan
+        //
+        // KNOW WHAT THIS DOES NOT BUY YOU. A name on the list is checked as a NAME; it is not
+        // resolved, so a name you allow that later resolves somewhere else is a URL this host will
+        // fetch. That is why the list is names rather than a subnet, why it is opt-in, and why the
+        // metadata range below is refused whatever the list says — a broad suffix should not be able
+        // to open the one address that turns SSRF into credentials.
+        const liveAllowed = (candidate) => {
+          let u;
+          try {
+            u = new URL(candidate);
+          } catch {
+            return false;
+          }
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+          // NEVER, on any list. 169.254.0.0/16 is where cloud metadata lives; 0.0.0.0 and [::] mean
+          // "this machine" by another spelling.
+          if (/^(169\.254\.|0\.0\.0\.0$|\[?::\]?$)/.test(u.hostname)) return false;
+          if (/^(127\.0\.0\.1|localhost|\[?::1\]?)$/.test(u.hostname)) return true;
+          const allow = String(process.env.MOTU_LIVE_ALLOW ?? '')
+            .split(',')
+            .map((x) => x.trim().toLowerCase())
+            .filter(Boolean);
+          const host = u.hostname.toLowerCase();
+          // A leading dot is a SUFFIX ("any name under this tailnet"); anything else is exact.
+          return allow.some((a) => (a.startsWith('.') ? host.endsWith(a) : host === a));
+        };
+        if (typeof where !== 'string' || !liveAllowed(where.replace(/\/+$/, '')))
+          return json(res, 400, {
+            error: process.env.MOTU_LIVE_ALLOW
+              ? 'url must be loopback or a host named in MOTU_LIVE_ALLOW'
+              : 'url must be http://127.0.0.1:<port> — set MOTU_LIVE_ALLOW to permit named hosts',
+          });
         live.set(repo, slug, where.replace(/\/+$/, ''));
         return json(res, 200, { ok: true, member: `${repo}/${slug}`, url: where, ttlMs: 90_000 });
       }

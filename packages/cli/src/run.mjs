@@ -128,7 +128,12 @@ ${color.bold('lagoon serve flags:')}
   --host          also serve on your LAN, to open it on a phone on the same wifi
   --no-build      serve the last published artifact instead of rebuilding
   --watch         rebuild on every source change and live-reload open viewers (phones included)
+  --live-url <url>  the address the HOST should fetch this from, when it is not on this machine
   ${color.dim('takes the same target/--fit flags as publish. Ctrl-C to stop.')}
+  ${color.dim('--live-url needs --host, and the host must ALLOW the name (MOTU_LIVE_ALLOW there):')}
+  ${color.dim('  motu lagoon serve --watch --host --live-url http://192.168.1.20:8901')}
+  ${color.dim('the address is whatever the HOST can reach: a LAN IP, a tailnet peer, a tunnel. An')}
+  ${color.dim('ingress/funnel name usually is NOT — those publish one port, and not this one.')}
 
 ${color.bold('lagoon publish flags:')}
   --archipelago <id>   publish one archipelago instead of an island

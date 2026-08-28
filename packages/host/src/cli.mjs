@@ -50,6 +50,11 @@ if (argv.help || argv.h) {
   --max-records <n>     publish records kept per repo (default ${DEFAULT_MAX_RECORDS})
   --max-bytes <n>       bytes kept per repo (default ${(DEFAULT_MAX_BYTES / 1073741824).toFixed(0)} GB) — whichever cap binds first wins
   --token <secret>      required for uploads (or $MOTU_HOST_TOKEN)
+
+  ${color.dim('$MOTU_LIVE_ALLOW     hosts a live lagoon may be announced from, beyond loopback')}
+  ${color.dim('  comma-separated; a leading dot is a suffix. Unset = loopback only.')}
+  ${color.dim('  MOTU_LIVE_ALLOW=.my-tailnet.ts.net,192.168.1.20')}
+  ${color.dim('  This host FETCHES what it is told, so every name here is one it can be aimed at.')}
 `);
   process.exit(0);
 }

@@ -416,6 +416,54 @@ export function lagoonServeCommand(argv) {
   const lan = argv.host === true || argv.host === '0.0.0.0';
   const bind = lan ? '0.0.0.0' : '127.0.0.1';
 
+  // WHERE THE HOST SHOULD COME AND FETCH THIS, when it is not here.
+  //
+  // The registry has always stored a URL rather than a port, and this is the flag that finally makes
+  // that mean something: the announcement said `http://127.0.0.1:<port>` unconditionally, so a live
+  // lagoon only worked when the host happened to share a machine with the dev server. Give it a
+  // reachable address — a tailnet name, an `ssh -R` tunnel, anything the host can resolve — and the
+  // same feature works from a laptop the host has never heard of.
+  //
+  // VALIDATED HERE, LOUDLY, because the failure is otherwise silent in the worst way: the host stores
+  // whatever it is given, every fetch of it fails, and each viewer quietly falls back to the last
+  // published build. The page renders. It is just not live, and nothing says so.
+  const liveUrlRaw = typeof argv['live-url'] === 'string' ? argv['live-url'] : process.env.MOTU_LIVE_URL || '';
+  let liveUrl = '';
+  if (liveUrlRaw) {
+    let parsed;
+    try {
+      parsed = new URL(liveUrlRaw);
+    } catch {
+      console.error(color.red(`✗ --live-url must be an absolute URL, got "${liveUrlRaw}"`));
+      console.error(color.dim('  e.g. --live-url https://my-laptop.tailnet.ts.net:8901'));
+      process.exit(1);
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      console.error(color.red(`✗ --live-url must be http or https, got "${parsed.protocol}"`));
+      process.exit(1);
+    }
+    // A LOOPBACK ADDRESS HERE IS ALMOST CERTAINLY A MISTAKE, and it is the mistake this flag exists to
+    // fix — passing it means announcing the default, from a machine that needed the flag. Refused
+    // rather than warned: a warning scrolls past and the symptom is a badge that lies.
+    if (/^(127\.|0\.0\.0\.0$|\[?::1\]?$|localhost$)/.test(parsed.hostname)) {
+      console.error(color.red(`✗ --live-url points at ${parsed.hostname}, which is this machine.`));
+      console.error(color.dim('  That is what the announcement already says. Give the host an address IT can reach —'));
+      console.error(color.dim('  a tailnet name, a tunnel, a LAN IP — or drop the flag if the host runs here too.'));
+      process.exit(1);
+    }
+    // Trailing slash trimmed: the host joins this with a path, and `//__motu_reload` is a
+    // protocol-relative URL naming a host called __motu_reload. The reload client learned that one.
+    liveUrl = liveUrlRaw.replace(/\/+$/, '');
+  }
+  if (liveUrl && !lan) {
+    // Announcing an address the host can reach while listening only on loopback means the host will
+    // arrive and find nothing. The two flags belong together, and the pair is easy to half-remember.
+    console.error(color.red('✗ --live-url without --host: this would listen on 127.0.0.1 only,'));
+    console.error(color.dim('  so the host would resolve the address you gave it and then be refused.'));
+    console.error(color.dim('  Add --host to accept connections from outside this machine.'));
+    process.exit(1);
+  }
+
   const watching = argv.watch === true;
   if (watching && argv.build === false) {
     console.error(color.red('✗ --watch and --no-build contradict each other — --no-build never rebuilds'));
@@ -532,11 +580,30 @@ export function lagoonServeCommand(argv) {
       }).catch(() => null);
 
     let announced = false;
+    let refused = false;
     const beat = async () => {
-      const res = await call('/api/live', { url: `http://127.0.0.1:${port}` });
+      const announceUrl = liveUrl || `http://127.0.0.1:${port}`;
+      const res = await call('/api/live', { url: announceUrl });
+      // A REFUSAL IS SAID ONCE, and until now it was said never. The announcement is best-effort by
+      // design — nothing here should keep the CLI alive or fail a preview — but "best effort" was
+      // implemented as swallowing the response, so a host that REJECTED the registration produced no
+      // output at all. I watched this happen for twenty-six seconds: the server started, the page
+      // served, and the only symptom was a gallery that never went live and never said why.
+      //
+      // Once, not every beat: this retries every 30 seconds and a wrong URL stays wrong.
+      if (res && !res.ok && !refused) {
+        refused = true;
+        const why = await res.json().catch(() => null);
+        console.error(color.red(`  ✗ the host refused this as a live member: ${why?.error ?? res.status}`));
+        console.error(color.dim(`    announced: ${announceUrl}`));
+      }
       if (res?.ok && !announced) {
         announced = true;
         console.log(color.dim(`  live in the gallery: ${base}/g/<group>  (${repo}:${slug})`));
+        // THE ADDRESS IS PRINTED, always. It is the one value here nobody can check from the outside:
+        // if the host cannot reach it, every viewer silently sees the last published build instead,
+        // and this line is the only place the actual announcement is visible.
+        console.log(color.dim(`  the host will fetch it from: ${announceUrl}`));
       }
     };
     void beat();

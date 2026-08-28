@@ -130,9 +130,12 @@ main {
   color: var(--_danger);
   background: var(--_danger-surface);
 }
+/* NO OPACITY. `color: inherit` puts this on the notice's own danger red over the danger surface,
+   which already sits close to the AA floor; `.8` took it under, and axe called it serious. The hint
+   is distinguished by SIZE, which costs no contrast — "You can try again." is the sentence that tells
+   somebody the failure is recoverable, and it was the least readable thing on the screen. */
 .motu-signin__hint {
   color: inherit;
-  opacity: 0.8;
   font-size: 0.875rem;
 }
 

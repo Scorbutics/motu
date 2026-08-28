@@ -16,13 +16,17 @@
 // be a second writer of that bookkeeping, which is how the invariant the plan says not to rewrite
 // gets broken by something that never meant to touch it.
 import { parseRecordPath } from '@/src/host/records';
-import { authorize, refusalMessage, refusalStatus } from '@/src/auth/authorize';
+import { authorize, refusalMessage, refusalStatus, type Asker, type AuthorizeDeps } from '@/src/auth/authorize';
 import { postgresProjectStore, postgresMembershipStore } from '@/src/auth/stores';
 import { postgresAccessStore } from '@/src/auth/access-store';
 import { postgresShareLinkStore } from '@/src/auth/share-link-store';
 import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
+import { store, access, normalizeRepo } from '@/src/host/store';
+// @motu/host is plain ESM node; tsc reads it through allowJs.
+import { rootIndexPage } from '@motu/host/src/views.mjs';
+import { canRead } from '@motu/host/src/access.mjs';
 
 // Nothing here may be prerendered or cached. The record route answers differently per viewer, and a
 // static answer served to a second viewer is the exact failure `authorize` exists to prevent.
@@ -170,9 +174,42 @@ function hostCredential(): Record<string, string> {
   return secret ? { authorization: `Bearer ${secret}` } : {};
 }
 
+/**
+ * May this viewer see that this repo EXISTS?
+ *
+ * The same decision the record route makes, asked for a listing — because a filter that disagreed
+ * with the gate would either hide something readable or, far worse, name something that is not.
+ * `server.mjs` learned this the hard way and left the note: the gallery itself was filtered correctly
+ * on the first try while the sentence ABOUT it still printed "2 lagoons · acme/secret + acme/open".
+ *
+ * ABSTAIN falls back to the host's own `access.json`, exactly as it does for a record: a repo the
+ * database has never heard of is still the host's to judge, and it judges by the same policy it did
+ * before phase 2.
+ */
+async function visibleTo(asker: Asker, repo: string, deps: AuthorizeDeps, hostAccess: unknown): Promise<boolean> {
+  const decision = await authorize(asker, { repo, ref: 'latest', slug: 'all' }, deps);
+  if (decision.outcome === 'allow') return true;
+  if (decision.outcome === 'deny') return false;
+  return canRead(hostAccess, repo, { adminOk: false, readSecret: null }) as boolean;
+}
+
 const handler = async (request: Request) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
+
+  // THE INDEX IS THE APP'S NOW — the first route to move out of `server.mjs` under phase 4, and the
+  // one that makes the migration visible at all. Everything below it still falls through.
+  if (pathname === '/' && request.method === 'GET') {
+    try {
+      return await renderIndex(request);
+    } catch (err) {
+      // A store the app cannot open is not a reason to serve a blank host: fall through and let the
+      // node host answer, exactly as it did before. Same reasoning as `abstain`.
+      console.error('[index] falling through to the host:', (err as Error)?.message ?? err);
+      return proxyToHost(request);
+    }
+  }
+
   const record = parseRecordPath(pathname);
 
   // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
@@ -244,6 +281,44 @@ const handler = async (request: Request) => {
   }
   return response;
 };
+
+/** The front page, rendered by the app from `views.mjs`'s own renderer — imported, never copied. */
+async function renderIndex(request: Request) {
+  const s = store();
+  const hostAccess = access();
+  const deps = {
+    projects: postgresProjectStore(),
+    memberships: postgresMembershipStore(),
+    access: postgresAccessStore(),
+    shareLinks: postgresShareLinkStore(),
+  };
+  const asker = {
+    viewer: await viewerOf(),
+    shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
+  };
+
+  const keep = async (repo: string) => visibleTo(asker, repo, deps, hostAccess);
+
+  const allRepos = s.listRepos() as Array<{ repo: string }>;
+  const visible = await Promise.all(allRepos.map((r) => keep(r.repo)));
+  const repos = allRepos.filter((_, i) => visible[i]);
+
+  // A GROUP'S SUMMARY NAMES ITS MEMBERS, so filtering the repo list alone is not enough — and a group
+  // left with nothing readable is DROPPED rather than shown empty, because "a gallery you may not
+  // see" is itself the fact being withheld. Both rules copied from server.mjs deliberately.
+  const allGroups = s.listGroups() as Array<{ members?: Array<{ repo: string }> }>;
+  const groups: unknown[] = [];
+  for (const g of allGroups) {
+    const members = [];
+    for (const m of g.members ?? []) if (await keep(m.repo)) members.push(m);
+    if (members.length) groups.push({ ...g, members });
+  }
+
+  return new Response(rootIndexPage({ repos, groups, stats: s.stats() }), {
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+  });
+}
 
 // Named exports, one per method, because that is the only way the App Router accepts a handler.
 // The host itself only answers GET, HEAD and POST — everything else it 405s (server.mjs) — and the

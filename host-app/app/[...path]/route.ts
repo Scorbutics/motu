@@ -29,6 +29,9 @@ import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
 import { groupView } from '@/src/host/group-routes';
+import { railMembers, focusIndex } from '@/src/host/lagoon-rail';
+// @motu/host is plain ESM node; tsc reads it through allowJs.
+import { composedPage } from '@motu/host/src/views.mjs';
 import { store, access, normalizeRepo } from '@/src/host/store';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { visibilityFor } from '@/src/host/visibility';
@@ -230,6 +233,53 @@ const handler = async (request: Request) => {
   // page or the index is still the HOST's read secret and still handled there.
   if (!record) return proxyToHost(request);
 
+  // THE SHELL, for a page. Every lagoon carries the rail that used to belong to a group — see
+  // `lagoon-rail.ts` — so what the browser gets at this address is the sidebar plus a frame, and the
+  // frame asks for `/f`, which is the same bytes without the shell. A reload stream and a bare
+  // request are the page itself and go straight through.
+  if (!record.isReload && !record.bare) {
+    try {
+      const visible = await visibilityFor({
+        viewer: await viewerOf(),
+        shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
+      });
+      // GATED BY THE SAME PREDICATE THE INDEX USES, and placed before the authorize block for one
+      // reason: `visibilityFor` already resolves an ABSTAIN through access.json, and on this host
+      // every repo abstains today. Deciding the shell after the abstain branch meant deciding it
+      // never. A lagoon this viewer may not see falls through to the gate below and is refused
+      // there, exactly as before — the shell is never the thing that reveals one exists.
+      if (!(await visible(record.repo))) throw new Error('not visible');
+      const members = await railMembers(visible);
+      if (members.length) {
+        const at = focusIndex(members, record.repo, record.slug);
+        return new Response(
+          composedPage({
+            id: null,
+            // THE LAGOON'S OWN NAME in the bay, not `repo · slug`. That was the group's title format
+            // and it is one thing a group has that a single lagoon does not — a name of its own. At
+            // rail width it wrapped to two lines and collided with the count beside it.
+            group: members[at]?.title ?? record.slug,
+            docTitle: `${record.repo}/${record.slug}`,
+            members: members.map((m, i) => ({ ...m, i })),
+            live: true,
+            focus: at,
+          }),
+          { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
+        );
+      }
+      // AN EMPTY RAIL IS NOT A SHELL. If nothing resolved — a store the app cannot read, a viewer who
+      // may see nothing — fall through and serve the page as it always was, rather than a sidebar
+      // with nothing in it wrapped around the one thing they asked for.
+    } catch (err) {
+      // A REFUSAL IS NOT A FAULT. `not visible` is this block deciding it has no business rendering a
+      // shell; everything else is the store or the database failing, which is worth a line.
+      if ((err as Error)?.message !== 'not visible') {
+        console.error('[lagoon-rail] serving the page bare:', (err as Error)?.message ?? err);
+      }
+    }
+  }
+
+
   // A SHARE LINK ARRIVES AS `?k=`, and on a record path the app must answer it rather than let it
   // through: the host has its own `?k=` handler for its own secret, and forwarding one would set the
   // wrong cookie for the wrong credential. See `unlock` for what it does with it.
@@ -283,7 +333,12 @@ const handler = async (request: Request) => {
     decision.because === 'public'
       ? {}
       : { ...hostCredential(), cookie: withoutCookie(request.headers.get('cookie'), 'motu_read') };
-  const response = await proxyToHost(request, { setHeaders: cred });
+  // THE BYTES. `__motu_frame` is the app's own address and the host has never heard of it, so it
+  // comes back off before the hop — the host answers the page exactly as it did, live or stored.
+  const response = await proxyToHost(request, {
+    setHeaders: cred,
+    rewritePath: (p) => (record.bare ? p.replace(/\/__motu_frame(?=(\/__motu_reload)?$)/, '') : p),
+  });
 
   // NEVER BEHIND A SHARED CACHE. This response was computed for one viewer; `private, no-store` is
   // what stops a proxy between here and them handing it to the next person. Set for the allowed path

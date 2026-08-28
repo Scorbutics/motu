@@ -227,7 +227,10 @@ aside .motu-home .motu-mark { width: 22px; height: 22px; border-radius: 6px; }
  * kept because re-pointing a single frame would throw away whatever state you had just driven the
  * region into, which is the one thing you opened it to look at.
  */
-export function composedPage({ id, group, members, live = false }) {
+// `docTitle` defaults to '' rather than null so its inferred type is a STRING. These files are plain
+// .mjs read through allowJs, and a `= null` default infers as `null | undefined` — which makes every
+// caller passing a real title a type error, with the error pointing at the caller.
+export function composedPage({ id, group, members, live = false, focus = 0, docTitle = '' }) {
   const byRepo = new Map();
   members.forEach((m, i) => {
     if (!byRepo.has(m.repo)) byRepo.set(m.repo, []);
@@ -241,7 +244,14 @@ export function composedPage({ id, group, members, live = false }) {
         list
           .map(
             (m) =>
-              `<button class="member" data-i="${m.i}" aria-current="${m.i === 0}" data-live="${m.live ? 'true' : 'false'}">` +
+              `<button class="member" data-i="${m.i}" aria-current="${m.i === focus}" data-live="${m.live ? 'true' : 'false'}"` +
+              // AN EXPLICIT ADDRESS, when the caller has one. A GROUP's frames are relative (`f/<i>`)
+              // because a group is a named thing with its own URL to be relative to. The rail on an
+              // individual lagoon is not: its members are whole lagoons with addresses of their own,
+              // and pointing each frame at its own bare page means no index has to agree with
+              // anything — the class of bug that made the shell and the frames move together.
+              (m.frameHref ? ` data-href="${escapeHtml(m.frameHref)}"` : '') +
+              `>` +
               `<span class="gauge" aria-hidden="true"></span>` +
               `<span class="body"><span class="name">${escapeHtml(m.title || m.slug)}` +
               (m.live ? `<em class="live-dot motu-breathe" title="served live by motu lagoon serve --watch">live</em>` : '') +
@@ -262,7 +272,7 @@ export function composedPage({ id, group, members, live = false }) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHtml(group)} — composed lagoon</title>
+<title>${escapeHtml(docTitle || `${group} — composed lagoon`)}</title>
 <style>${motuChromeCss()}${SHELL_CSS}</style>
 </head>
 <body>
@@ -314,6 +324,12 @@ export function composedPage({ id, group, members, live = false }) {
 </div>
 <script>
 (function () {
+  var FOCUS = ${Number(focus) || 0};
+  // Whether the header names the SELECTION or the view. A group's bay names the group — a stable
+  // thing that does not change as you move inside it. A lagoon's rail is a switcher between whole
+  // lagoons, so a static header would name whichever page you arrived at and then go stale the
+  // moment you picked another: the header saying one lagoon while the frame shows a different one.
+  var FOLLOWS_MEMBER = ${docTitle ? 'true' : 'false'};
   var stage = document.getElementById('stage');
   var frames = {};
   var current = null;
@@ -325,7 +341,9 @@ export function composedPage({ id, group, members, live = false }) {
       // whole reason composition works, so the frame gets no privileges it does not need.
       f.setAttribute('title', 'lagoon frame ' + i);
       f.setAttribute('loading', 'lazy');
-      f.src = 'f/' + i;
+      // The member's own address when it has one, otherwise this view's relative frame.
+      var chosenBtn = document.querySelector('button.member[data-i="' + i + '"]');
+      f.src = (chosenBtn && chosenBtn.dataset.href) ? chosenBtn.dataset.href : 'f/' + i;
       stage.appendChild(f);
       frames[i] = f;
     }
@@ -335,8 +353,19 @@ export function composedPage({ id, group, members, live = false }) {
     });
     current = i;
     var chosen = document.querySelector('button.member[data-i="' + i + '"]');
+    // querySelector('.name'), NOT childNodes[0] — which is the GAUGE span, and has no text. The topbar
+    // has been setting itself to an empty string since it was written; nobody saw it because that
+    // title only exists below 760px, where it read as "the header has no title on a phone".
+    var nameEl = chosen ? chosen.querySelector('.name') : null;
+    var name = nameEl ? nameEl.textContent.trim() : '';
     var label = document.getElementById('tb-title');
-    if (chosen && label) label.textContent = chosen.childNodes[0].textContent.trim();
+    if (chosen && label) label.textContent = name;
+    // THE BAY FOLLOWS THE RAIL TOO, and only where the rail is a switcher between whole lagoons.
+    // A GROUP's bay names the group — a stable thing that does not change when you move inside it —
+    // so it opts out. A lagoon's bay named whichever page you happened to ARRIVE at, and then went
+    // stale the moment you picked another: the header said one lagoon while the frame showed another.
+    var bayName = document.querySelector('#switcher .bay-name');
+    if (chosen && bayName && FOLLOWS_MEMBER) bayName.textContent = name;
     if (history.replaceState) history.replaceState(null, '', '#' + i);
   }
   // --- the sheet, on a phone --------------------------------------------------------------------
@@ -394,7 +423,7 @@ export function composedPage({ id, group, members, live = false }) {
     if (b) { show(+b.dataset.i); closeSheet(); }
   });
   var initial = parseInt((location.hash || '').slice(1), 10);
-  show(Number.isInteger(initial) ? initial : 0);
+  show(Number.isInteger(initial) ? initial : FOCUS);
 
   // WHO IS READING THIS. Asked, not assumed: this page is bytes the node host serves identically to
   // everyone, so the only honest starting state is hidden and the only way to leave it is to ask

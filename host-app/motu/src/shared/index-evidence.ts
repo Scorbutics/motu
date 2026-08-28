@@ -3,7 +3,7 @@
 // Typed against the APP's own types with `import type`, which erases at runtime so the loaders that
 // read evidence files are unaffected — and a renamed field then fails the build here instead of
 // quietly previewing last month's shape.
-import type { LagoonGroup, LagoonRepo } from '../../../app/index-region'
+import type { LagoonRepo } from '../../../app/index-region'
 
 /** What this host actually holds, so the preview is not a fiction about a fictional host. */
 export const REPOS: LagoonRepo[] = [
@@ -12,19 +12,6 @@ export const REPOS: LagoonRepo[] = [
   { repo: 'motu-review', slugs: ['all'], records: 12 },
   { repo: 'Scorbutics/motu-demo-app', slugs: ['all'], records: 1 },
   { repo: 'Scorbutics/motu-host-app', slugs: ['all'], records: 1 },
-]
-
-export const GROUPS: LagoonGroup[] = [
-  {
-    name: 'product',
-    members: [
-      { repo: 'twentyhq/twenty' },
-      { repo: 'motu-review' },
-      { repo: 'Scorbutics/motu-demo-app' },
-      { repo: 'Scorbutics/motu-host-app' },
-    ],
-  },
-  { name: 'everything', members: [...REPOS.map((r) => ({ repo: r.repo }))] },
 ]
 
 /**

@@ -14,13 +14,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Kbd } from "@motu/chrome/react"
 import { motuSplashFrom } from "@motu/chrome/splash"
-import type { LagoonGroup, LagoonRepo } from "@/app/index-region"
+import type { LagoonRepo } from "@/app/index-region"
 
 /** What a palette entry is. `kind` is the app's own vocabulary, printed on the right of the row. */
 type Entry = {
   id: string
   label: string
-  kind: "group" | "repo" | "lagoon" | "action"
+  kind: "repo" | "lagoon" | "action"
   href: string
   /** Somebody is serving this one right now. Shown, and ranked ahead of everything else. */
   live?: boolean
@@ -39,7 +39,6 @@ const ACTIONS: Entry[] = [
 
 export interface LagoonPaletteProps {
   repos?: LagoonRepo[]
-  groups?: LagoonGroup[]
   /** Whether the palette is showing. Region-owned, so a link or a flow can open it. */
   open?: boolean
   /** What has been typed into it. Region-owned for the same reason. */
@@ -74,9 +73,8 @@ function fuzzy(needle: string, haystack: string): { first: number; spread: numbe
 /** Earlier and tighter wins. `tideline.ts`'s weighting, kept so the two palettes rank alike. */
 const score = (m: { first: number; spread: number }) => -(m.first * 3 + m.spread)
 
-function entriesFrom(groups: LagoonGroup[], repos: LagoonRepo[]): Entry[] {
+function entriesFrom(repos: LagoonRepo[]): Entry[] {
   const out: Entry[] = [...ACTIONS]
-  for (const g of groups) out.push({ id: `g:${g.name}`, label: g.name, kind: "group", href: `/g/${g.name}` })
   for (const r of repos) {
     out.push({ id: `r:${r.repo}`, label: r.repo, kind: "repo", href: `/${r.repo}/` })
     // A LAGOON IS ADDRESSABLE TOO, and it is what a person usually means. A repo holding one slug
@@ -97,7 +95,6 @@ function entriesFrom(groups: LagoonGroup[], repos: LagoonRepo[]): Entry[] {
 
 export function LagoonPalette({
   repos,
-  groups,
   open = false,
   query = "",
   onOpenChange,
@@ -146,7 +143,7 @@ export function LagoonPalette({
 
   if (!open) return null
 
-  const all = entriesFrom(groups ?? [], repos ?? [])
+  const all = entriesFrom(repos ?? [])
   const needle = (query ?? "").trim()
   const shown = all
     .map((e) => ({ e, m: fuzzy(needle, e.label) }))

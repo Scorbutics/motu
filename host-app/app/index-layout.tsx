@@ -25,14 +25,12 @@ export function IndexLayout({
   readout,
   account,
   filter,
-  composed,
   repositories,
   palette,
 }: {
   readout?: ReactNode
   account?: ReactNode
   filter?: ReactNode
-  composed?: ReactNode
   repositories?: ReactNode
   palette?: ReactNode
 }) {
@@ -64,7 +62,6 @@ export function IndexLayout({
           centred 940px block, which put these rows two hundred pixels right of the filter bar above
           them. `Page as="main"` makes the two the same column. */}
       <Page as="main" stack>
-        {composed}
         {repositories}
       </Page>
       {/* LAST, AND OUTSIDE THE COLUMN. The palette covers the page; nesting it in the content column

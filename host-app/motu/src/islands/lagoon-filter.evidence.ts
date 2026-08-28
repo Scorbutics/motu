@@ -22,9 +22,9 @@ export const scenarios: Scenario[] = [
     seed: { query: 'motu' },
   },
   {
-    // NARROWED. The thumb has moved AND a query is standing, which is the combination the two-key
-    // model exists for; a single `{ query, show }` object would make either change a write of both.
-    name: 'narrowed to groups, with a query standing',
-    seed: { query: 'product', show: 'groups' },
+    // A QUERY THAT MATCHES NOTHING is still a query: the field holds it, and what the LIST does with
+    // it is the list's business. The control has one job and this is the far end of it.
+    name: 'a query that will find nothing',
+    seed: { query: 'zzzz' },
   },
 ];

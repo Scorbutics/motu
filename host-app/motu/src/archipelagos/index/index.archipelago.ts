@@ -24,7 +24,6 @@ import type { IndexRegion, ProducedIndexKeys } from '@/app/index-region';
 export const indexArchipelago = archipelago<
   IndexRegion,
   | 'x-lagoon-filter'
-  | 'x-lagoon-groups'
   | 'x-lagoon-palette'
   | 'x-lagoon-repos'
   | 'x-lagoon-stats'
@@ -32,14 +31,19 @@ export const indexArchipelago = archipelago<
 >()({
   id: 'index',
   root: IndexLayout,
-  // The app's prop name on the left, motu's slot on the right. The page passes `composed` and
-  // `repositories`; it never writes a slot name.
+  // The app's prop name on the left, motu's slot on the right. The page passes `repositories`; it
+  // never writes a slot name.
+  //
+  // NO `composed` SLOT ANY MORE. This page listed the composed GALLERIES above the repositories, and
+  // they were noise: on this host every group holds very nearly every repository, so the rows said
+  // the same thing twice and pushed the actual list down the page. A gallery is a way of LOOKING at
+  // lagoons, not a thing to browse alongside them — and every lagoon now carries the rail that lets
+  // you move between them, which is what the group listing was really for.
   slots: {
     readout: { slot: 'readout' },
     filter: { slot: 'filter' },
     palette: { slot: 'palette' },
     account: { slot: 'account' },
-    composed: { slot: 'composed' },
     repositories: { slot: 'repositories' },
   },
   islands: [
@@ -64,8 +68,8 @@ export const indexArchipelago = archipelago<
       // the work is done.
       slot: 'filter',
       element: 'x-lagoon-filter',
-      bind: ['query', 'show'],
-      writes: { 'query-changed': 'query', 'show-changed': 'show' },
+      bind: ['query'],
+      writes: { 'query-changed': 'query' },
     },
     {
       // ⌘K. The region's second producer, and the only island that reads BOTH listings — it searches
@@ -73,18 +77,13 @@ export const indexArchipelago = archipelago<
       // rather than a query of its own.
       slot: 'palette',
       element: 'x-lagoon-palette',
-      bind: [{ repos: 'repos', groups: 'groups', open: 'paletteOpen', query: 'paletteQuery' }],
+      bind: [{ repos: 'repos', open: 'paletteOpen', query: 'paletteQuery' }],
       writes: { 'palette-open': 'paletteOpen', 'palette-query': 'paletteQuery' },
-    },
-    {
-      slot: 'composed',
-      element: 'x-lagoon-groups',
-      bind: [{ groups: 'groups' }, 'query', 'show'],
     },
     {
       slot: 'repositories',
       element: 'x-lagoon-repos',
-      bind: [{ repos: 'repos', cap: 'cap' }, 'query', 'show'],
+      bind: [{ repos: 'repos', cap: 'cap' }, 'query'],
     },
   ],
 });

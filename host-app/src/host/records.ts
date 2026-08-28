@@ -19,6 +19,13 @@ export type RecordPath = {
   slug: string;
   /** The live-reload stream hangs off the page's own path and is the same resource for gating. */
   isReload: boolean;
+  /**
+   * The page WITHOUT its shell — what the frame inside the shell asks for.
+   *
+   * The same resource for gating, deliberately: it is the identical bytes at a different address, so
+   * anything that refuses the page must refuse this too, and `authorize` sees one record either way.
+   */
+  bare: boolean;
 };
 
 function normalizeRepo(raw: string): string | null {
@@ -62,12 +69,24 @@ export function parseRecordPath(pathname: string): RecordPath | null {
   if (HOST_NAMESPACES.has(segments[0] as string)) return null;
 
   const isReload = segments[segments.length - 1] === '__motu_reload';
-  const parts = isReload ? segments.slice(0, -1) : segments;
+  const afterReload = isReload ? segments.slice(0, -1) : segments;
+  // THE BYTES, WITHOUT THE SHELL. Every lagoon page is a rail plus a frame now, and the frame has to
+  // be able to ask for the page ALONE or it would load the shell inside itself, for ever. It is an
+  // app-level address: the host has never heard of it, and the proxy strips it back off before the
+  // hop.
+  //
+  // `__motu_frame` AND NOT `f`, which is what this was for an hour. A slug is any segment, so `f` is
+  // a legal lagoon name — and `/acme/web/latest/f` then parsed as a BARE request for
+  // `acme/latest/web` instead of the lagoon called f. A test written to check exactly that found it.
+  // The `__motu_` prefix is the reserved namespace `__motu_reload` already established; it carries
+  // the same theoretical collision and the same answer to it.
+  const bare = afterReload[afterReload.length - 1] === '__motu_frame';
+  const parts = bare ? afterReload.slice(0, -1) : afterReload;
   if (parts.length < 3) return null;
 
   const slug = normalizeSegment(parts[parts.length - 1]);
   const ref = normalizeSegment(parts[parts.length - 2]);
   const repo = normalizeRepo(parts.slice(0, -2).join('/'));
   if (!repo || !ref || !slug) return null;
-  return { repo, ref, slug, isReload };
+  return { repo, ref, slug, isReload, bare };
 }

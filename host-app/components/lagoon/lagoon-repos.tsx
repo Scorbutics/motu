@@ -8,7 +8,6 @@
 import { ListItem, Row, Gauge, Grow, TitleLine, Name, Kind, Pill, Sub, Trail, Enter, Dot, Empty } from "@motu/chrome/react"
 import { RailedList } from "@/components/lagoon/railed-list"
 import type { LagoonRepo } from "@/app/index-region"
-import type { LagoonShow } from "@/components/lagoon/lagoon-filter"
 
 export interface LagoonReposProps {
   repos?: LagoonRepo[]
@@ -22,12 +21,9 @@ export interface LagoonReposProps {
   cap?: number
   /** What the reader typed. Matched against the repo's own name — the only text a row carries. */
   query?: string
-  /** Which kinds are listed. This island renders nothing at all when it is not one of them. */
-  show?: LagoonShow
 }
 
-export function LagoonRepos({ repos, cap = 1000, query = "", show = "all" }: LagoonReposProps) {
-  if (show === "groups") return null
+export function LagoonRepos({ repos, cap = 1000, query = "" }: LagoonReposProps) {
   // NULL IS NOT ABSENT, and a default only answers the second. A region key can hold null — a cleared
   // key, a host that answered nothing, the value `flow-mutation` sends — and `repos.length` on null
   // throws, which unmounts the region rather than rendering an empty one. That crash was invisible

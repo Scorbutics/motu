@@ -6,14 +6,7 @@
 // island can change any of it. That is not a limitation to apologise for — it is what the page IS. A
 // listing shows what you may see, and "what you may see" is decided somewhere no browser can reach.
 /** Which kinds the page lists. Re-exported from the component that owns the control. */
-export type { LagoonShow } from "@/components/lagoon/lagoon-filter"
-import type { LagoonShow } from "@/components/lagoon/lagoon-filter"
 import type { Viewer } from "@/src/auth/viewer"
-
-export type LagoonGroup = {
-  name: string
-  members: Array<{ repo: string }>
-}
 
 export type LagoonRepo = {
   repo: string
@@ -35,15 +28,6 @@ export type LagoonRepo = {
 }
 
 export type IndexRegion = {
-  /**
-   * The composed galleries, already filtered.
-   *
-   * FILTERED BEFORE IT ARRIVES, and the island is never told what was removed. A group whose members
-   * were all filtered out is dropped upstream rather than passed here empty, because "a gallery you
-   * may not see" is itself the fact being withheld — server.mjs learned that and the note survives in
-   * the route that feeds this key.
-   */
-  groups: LagoonGroup[]
 
   /** The repositories this viewer may see. Same rule: filtered upstream, never explained here. */
   repos: LagoonRepo[]
@@ -83,15 +67,6 @@ export type IndexRegion = {
    */
   query: string
 
-  /**
-   * Which kinds are listed.
-   *
-   * ISLAND-OWNED, by the same island. Two keys rather than one object, because they move
-   * independently: typing does not reset the segment, and choosing a segment does not clear the
-   * query. A single `{ query, show }` key would make every change to either a write of both, and the
-   * lens could no longer show which one actually moved.
-   */
-  show: LagoonShow
 
   /**
    * Whether the ⌘K palette is showing.
@@ -108,9 +83,9 @@ export type IndexRegion = {
 }
 
 /**
- * `query` and `show`.
+ * `query`, and the palette's two.
  *
  * `ProducedKeysAre` in the archipelago makes it a compile error for this to drift from what the
  * islands actually declare in `writes`.
  */
-export type ProducedIndexKeys = "query" | "show" | "paletteOpen" | "paletteQuery"
+export type ProducedIndexKeys = "query" | "paletteOpen" | "paletteQuery"

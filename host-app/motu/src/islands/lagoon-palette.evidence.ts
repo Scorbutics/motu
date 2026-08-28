@@ -4,7 +4,7 @@
 // its long list or its ranking unless they go looking, and "go looking" is not a thing a check does.
 // Seeded open, each state is an address.
 import type { Scenario } from '@motu/runtime/mock';
-import { REPOS, REPOS_WITH_LIVE, GROUPS } from '../shared/index-evidence.js';
+import { REPOS, REPOS_WITH_LIVE } from '../shared/index-evidence.js';
 
 export const fixtures = [];
 export const roles: string[] = [];
@@ -19,7 +19,7 @@ export const scenarios: Scenario[] = [
     // false is a value the region produced; `input-coverage` counts them apart, and it is right to —
     // only the second is what a region that has been opened and closed again actually holds.
     name: 'closed, which is almost always',
-    seed: { repos: REPOS, groups: GROUPS, open: false },
+    seed: { repos: REPOS, open: false },
   },
   {
     // Open with nothing typed. MORE THAN IT SHOWS: five repositories with their lagoons and two
@@ -27,36 +27,36 @@ export const scenarios: Scenario[] = [
     // count of what is held back has to be on screen. A fresh reader found that missing — the palette
     // listed less than the page it covered and gave no sign of it.
     name: 'open, holding more than it shows',
-    seed: { repos: REPOS, groups: GROUPS, open: true },
+    seed: { repos: REPOS, open: true },
   },
   {
     // RANKED. "motu" matches a group, four repositories and their lagoons; what this state pins is
     // the order, which is the only part of a fuzzy search anybody can get wrong quietly.
     name: 'a query, ranked',
-    seed: { repos: REPOS, groups: GROUPS, open: true, query: 'motu' },
+    seed: { repos: REPOS, open: true, query: 'motu' },
   },
   {
     // The empty result. Its own sentence, naming what was typed — a palette that just shows nothing
     // reads as broken rather than as a miss.
     name: 'nothing matches',
-    seed: { repos: REPOS, groups: GROUPS, open: true, query: 'qqzz' },
+    seed: { repos: REPOS, open: true, query: 'qqzz' },
   },
   {
     // LIVE RANKS FIRST. With nothing typed the palette is the host in its arrival order; a lagoon
     // somebody is editing jumps the queue, because it is the one entry whose content will differ
     // from the last time they looked. Only a scenario can show that ordering.
     name: 'a live lagoon comes first',
-    seed: { repos: REPOS_WITH_LIVE, groups: GROUPS, open: true },
+    seed: { repos: REPOS_WITH_LIVE, open: true },
   },
   {
     // A HOST WITH NOTHING ON IT, palette open. The state that breaks, and the one `input-coverage`
     // asked for: every seeded input crossed, rather than varied one at a time.
     name: 'open over an empty host',
-    seed: { repos: [], groups: [], open: true },
+    seed: { repos: [], open: true },
   },
   {
     // Closed over an empty host, which is the very first thing a new host renders.
     name: 'closed over an empty host',
-    seed: { repos: [], groups: [], open: false },
+    seed: { repos: [], open: false },
   },
 ];

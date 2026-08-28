@@ -12,10 +12,10 @@ export const element = islandElement({
   component: LagoonPalette,
   options: {
     contract: {
-      // WHAT IT IS TOLD: the same two listings the page shows, and its own two decisions read back.
-      // It searches what the viewer may see and nothing else — the lists arrive already filtered by
+      // WHAT IT IS TOLD: the same listing the page shows, and its own two decisions read back. It
+      // searches what the viewer may see and nothing else — the list arrives already filtered by
       // `authorize`, so the palette cannot become the way around the gate.
-      input: ['repos', 'groups', 'open', 'query'],
+      input: ['repos', 'open', 'query'],
       // WHAT IT DECIDES. Two keys, because they move independently: ⌘K toggles one and typing moves
       // the other, and a single `{ open, query }` would make either change a write of both.
       output: { onOpenChange: 'palette-open', onQueryChange: 'palette-query' },

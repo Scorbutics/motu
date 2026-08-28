@@ -149,12 +149,14 @@ test('the app and the host read a record path the same way', async () => {
     ref: 'latest',
     slug: 'all',
     isReload: false,
+    bare: false,
   });
   assert.deepEqual(parseRecordPath('/motu-review/0d7f715fef5e/all'), {
     repo: 'motu-review',
     ref: '0d7f715fef5e',
     slug: 'all',
     isReload: false,
+    bare: false,
   });
 });
 
@@ -166,6 +168,41 @@ test('the reload stream is the same resource, and is gated as one', async () => 
     ref: 'latest',
     slug: 'all',
     isReload: true,
+    bare: false,
+  });
+});
+
+test('the bare address is the same resource, and is gated as one', () => {
+  // `/f` is what the frame INSIDE a lagoon's shell asks for: the page without the shell, or the
+  // frame would load the shell inside itself for ever. It is the identical bytes at a second
+  // address, so it must parse to the identical record — anything that refuses the page has to
+  // refuse this, and `authorize` must not be able to tell them apart.
+  assert.deepEqual(parseRecordPath('/acme/web/latest/all/__motu_frame'), {
+    repo: 'acme/web',
+    ref: 'latest',
+    slug: 'all',
+    isReload: false,
+    bare: true,
+  });
+
+  // Both suffixes at once: the frame's own reload channel.
+  assert.deepEqual(parseRecordPath('/acme/web/latest/all/__motu_frame/__motu_reload'), {
+    repo: 'acme/web',
+    ref: 'latest',
+    slug: 'all',
+    isReload: true,
+    bare: true,
+  });
+
+  // AND A SLUG ACTUALLY CALLED `f` IS UNTOUCHED. This is why the suffix is `__motu_frame` and not
+  // `f`: a slug is any segment, so `f` is a legal lagoon name, and for an hour `/acme/web/latest/f`
+  // parsed as a bare request for `acme/latest/web`. This assertion is the one that found it.
+  assert.deepEqual(parseRecordPath('/acme/web/latest/f'), {
+    repo: 'acme/web',
+    ref: 'latest',
+    slug: 'f',
+    isReload: false,
+    bare: false,
   });
 });
 

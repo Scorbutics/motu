@@ -16,6 +16,7 @@ import type { LagoonGroups as C_lagoon_groups } from '@/components/lagoon/lagoon
 import type { LagoonPalette as C_lagoon_palette } from '@/components/lagoon/lagoon-palette';
 import type { LagoonRepos as C_lagoon_repos } from '@/components/lagoon/lagoon-repos';
 import type { LagoonStats as C_lagoon_stats } from '@/components/lagoon/lagoon-stats';
+import type { ViewerBadge as C_viewer_badge } from '@/components/lagoon/viewer-badge';
 
 export const CONTRACTS = {
   'x-corpus-filter': {
@@ -55,6 +56,11 @@ export const CONTRACTS = {
   },
   'x-lagoon-stats': {
     input: ['stats'],
+    output: {  },
+    ambient: [],
+  },
+  'x-viewer-badge': {
+    input: ['viewer'],
     output: {  },
     ambient: [],
   },
@@ -100,6 +106,8 @@ const _lagoon_repos: ContractFitsComponent<typeof C_lagoon_repos, 'x-lagoon-repo
 void _lagoon_repos;
 const _lagoon_stats: ContractFitsComponent<typeof C_lagoon_stats, 'x-lagoon-stats'> = true;
 void _lagoon_stats;
+const _viewer_badge: ContractFitsComponent<typeof C_viewer_badge, 'x-viewer-badge'> = true;
+void _viewer_badge;
 
 /**
  * Declare an island: its tag, the component it mounts, and nothing that can be derived.

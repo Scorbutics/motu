@@ -46,5 +46,13 @@ export const FILTERED_REPOS: LagoonRepo[] = [
 /** The host total from `/api/health` while this was written — 76.3 MB on the page. */
 export const STATS = { blobs: 346, bytes: 80031207, maxRecords: 1000 }
 
+/**
+ * WHOEVER IS READING IT, in the reduced form the badge takes.
+ *
+ * The real handle rather than an invented one, like every other row in this file: the states a person
+ * previews should be this host's, and `Scorbutics` is who signs into it.
+ */
+export const VIEWER = { handle: 'Scorbutics', initial: 'S' }
+
 /** The host's per-repo record cap, which is what each row's fill is drawn against. */
 export const CAP = 1000

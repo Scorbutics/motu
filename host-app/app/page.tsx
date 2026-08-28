@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { store } from '@/src/host/store';
 import { visibilityFor } from '@/src/host/visibility';
 import { createClient } from '@/src/supabase/server';
+import { viewerFrom } from '@/src/auth/viewer';
 import { IndexScreen } from '@/app/index-screen';
 import type { LagoonGroup, LagoonRepo } from '@/app/index-region';
 
@@ -17,7 +18,9 @@ async function viewerOf() {
   try {
     const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
-    return data.user ? { userId: data.user.id } : null;
+    // The id is what `authorize` gates by; the reduced form is what the badge renders. Both from one
+    // read, so the page cannot show a name it is not also gating with.
+    return data.user ? { userId: data.user.id, viewer: viewerFrom(data.user) } : null;
   } catch {
     return null;
   }
@@ -26,8 +29,9 @@ async function viewerOf() {
 export default async function IndexPage() {
   const s = store();
   const jar = await cookies();
+  const who = await viewerOf();
   const visible = await visibilityFor({
-    viewer: await viewerOf(),
+    viewer: who,
     shareToken: jar.get('motu_share')?.value ?? null,
   });
 
@@ -47,5 +51,13 @@ export default async function IndexPage() {
   }
 
   const stats = s.stats() as { blobs: number; bytes: number; maxRecords: number };
-  return <IndexScreen groups={groups} repos={repos} stats={stats} cap={stats.maxRecords} />;
+  return (
+    <IndexScreen
+      groups={groups}
+      repos={repos}
+      stats={stats}
+      cap={stats.maxRecords}
+      viewer={who?.viewer ?? null}
+    />
+  );
 }

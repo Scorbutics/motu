@@ -6,7 +6,7 @@
 // on a DIFFERENT island's render, because asserting `query` after emitting `query-changed` would only
 // prove the lagoon stored what it was handed.
 import type { RegionScenario } from '@motu/runtime/mock';
-import { REPOS, GROUPS, FILTERED_REPOS, STATS, CAP } from '../../shared/index-evidence.js';
+import { REPOS, GROUPS, FILTERED_REPOS, STATS, CAP, VIEWER } from '../../shared/index-evidence.js';
 
 // EVERY SEED STATES THE PRODUCED KEYS, and that is not belt-and-braces. The lagoon carries a region's
 // state ACROSS scenarios: the flow that types "no-such-repository" left it there, and the next
@@ -20,7 +20,7 @@ export const scenarios: RegionScenario[] = [
     // Each slot renders ITS OWN island. Two lists of repository names side by side is exactly the
     // shape where a crossed wire renders perfectly and means the wrong thing.
     name: 'each card is its own card',
-    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '' },
+    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
     steps: [
       { expectRender: { composed: 'product' } },
       { expectRender: { repositories: 'twentyhq/twenty' } },
@@ -33,6 +33,10 @@ export const scenarios: RegionScenario[] = [
       // which nothing else on the page produces — `render-coverage` names a slot no flow looks at,
       // and this one had none until the control existed.
       { expectRender: { filter: 'Repositories' } },
+      // The account slot renders the BADGE, and the handle is text no other island on this page
+      // produces. Worth its own assertion beyond coverage: a corner that silently renders somebody
+      // else's identity is the one mistake here nobody would report as a bug.
+      { expectRender: { account: 'Scorbutics' } },
     ],
   },
   {
@@ -40,7 +44,7 @@ export const scenarios: RegionScenario[] = [
     // nothing else. A repository filtered out upstream must not appear — and `provide` moving the
     // list is a real stimulus, so the assertion depends on what the step did.
     name: 'a filtered list shows only what it was given',
-    seed: { groups: [], repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '' },
+    seed: { groups: [], repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
     steps: [
       { expectRender: { repositories: 'Scorbutics/peps_ta_boite_app' } },
       {
@@ -56,7 +60,7 @@ export const scenarios: RegionScenario[] = [
     // a different stimulus. Asserting a name that is present in the unfiltered list would have passed
     // whatever was typed.
     name: 'typing narrows the repositories',
-    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '' },
+    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
     steps: [
       { expectRender: { repositories: 'twentyhq/twenty' } },
       {
@@ -73,7 +77,7 @@ export const scenarios: RegionScenario[] = [
     // ITS OWN SCENARIO rather than a third step above: after a query that matches nothing the
     // repositories list is already empty, and an assertion that holds before the emit is not a check.
     name: 'choosing groups hides the repositories',
-    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '' },
+    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
     steps: [
       { expectRender: { repositories: 'twentyhq/twenty' } },
       {
@@ -87,7 +91,7 @@ export const scenarios: RegionScenario[] = [
     // at all, so an assertion on any entry proves the key reached it — and the mutant, which sends
     // null, closes it again and fails.
     name: 'the palette opens over the page',
-    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '' },
+    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
     steps: [
       {
         emit: { slot: 'palette', event: 'palette-open', detail: true },
@@ -100,7 +104,7 @@ export const scenarios: RegionScenario[] = [
     // the unfiltered list would render whatever was typed, and this sentence only appears when the
     // query matched nothing — which is what makes the step depend on its own stimulus.
     name: 'typing in the palette narrows it',
-    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: true, paletteQuery: '' },
+    seed: { groups: GROUPS, repos: REPOS, stats: STATS, cap: CAP, query: '', show: 'all', paletteOpen: true, paletteQuery: '', viewer: VIEWER },
     steps: [
       // COVERAGE for the palette's slot: its own footer, which no other island prints.
       { expectRender: { palette: 'esc' } },

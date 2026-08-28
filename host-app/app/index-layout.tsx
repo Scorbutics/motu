@@ -23,12 +23,14 @@ import { Bay, Mark, Page } from "@motu/chrome/react"
  */
 export function IndexLayout({
   readout,
+  account,
   filter,
   composed,
   repositories,
   palette,
 }: {
   readout?: ReactNode
+  account?: ReactNode
   filter?: ReactNode
   composed?: ReactNode
   repositories?: ReactNode
@@ -48,6 +50,7 @@ export function IndexLayout({
         blurb="Every declared state, published and addressable."
       >
         {readout}
+        {account}
       </Bay>
       {/* The filter rides in the gap the masthead's bottom padding leaves under the waterline. */}
       <Page lift>{filter}</Page>

@@ -8,6 +8,7 @@
 /** Which kinds the page lists. Re-exported from the component that owns the control. */
 export type { LagoonShow } from "@/components/lagoon/lagoon-filter"
 import type { LagoonShow } from "@/components/lagoon/lagoon-filter"
+import type { Viewer } from "@/src/auth/viewer"
 
 export type LagoonGroup = {
   name: string
@@ -46,6 +47,19 @@ export type IndexRegion = {
    * where `cap` was a prop nothing could ever set and every row silently used a hardcoded 1000.
    */
   cap: number
+
+  /**
+   * Whoever is reading this, or null for a visitor.
+   *
+   * HOST-FED, and read on the SERVER rather than fetched. The alternative — asking `/auth/whoami`
+   * after hydration — renders the visitor state first and swaps, which on an identity badge means
+   * every signed-in reader watches themselves appear to be signed out for a frame.
+   *
+   * It is the reduced form (`viewerFrom`), not the session: a handle and a letter. The email, the
+   * provider id and the avatar URL stay on the server, so no browser bundle can render them by
+   * accident and no page load of this host reaches GitHub for a picture.
+   */
+  viewer: Viewer | null
 
   /**
    * What the reader typed.

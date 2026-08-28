@@ -716,6 +716,50 @@ main.motu-page { max-width: 960px; margin: 0; padding: 22px 40px 30px; }
   color: var(--ink);
 }
 
+/* --- THE ACCOUNT: who is reading this, and the way out ------------------------------------------
+   On the water, at the hard right of a bar, beside the readout. The handle is the label and the disc
+   is the CONTROL — the only round thing there, which is what makes it read as a person rather than as
+   one more number. */
+.motu-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.motu-account__name {
+  font: 500 12px/1 var(--mono);
+  letter-spacing: .02em;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motu-account:hover { text-decoration: none; }
+.motu-account__out {
+  appearance: none; border: 0; padding: 0; background: none; cursor: pointer;
+  position: relative; display: inline-flex; color: inherit;
+  border-radius: ${MOTU_RADIUS.pill};
+  transition: transform 160ms, box-shadow 160ms;
+}
+.motu-account__out:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(4, 33, 29, .35); }
+.motu-account__out:focus-visible { outline: 2px solid rgba(255, 255, 255, .8); outline-offset: 2px; }
+/* THE WORD, ON HOVER. A disc with a letter in it is not an obvious way to leave — the affordance has
+   to say so somewhere a person can find it before they click, and the accessible name (title) is
+   only half of that because it does not exist for a pointer that never hovers long enough. */
+.motu-account__hint {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  padding: 5px 9px; border-radius: ${MOTU_RADIUS.pill};
+  background: rgba(4, 33, 29, .88); color: ${MOTU_CHROME.onPrimary};
+  font: 600 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transform: translateY(-3px);
+  transition: opacity 160ms, transform 160ms;
+}
+.motu-account__out:hover .motu-account__hint,
+.motu-account__out:focus-visible .motu-account__hint { opacity: 1; transform: translateY(0); }
+
 /* THE MARK, AS THE WAY HOME. On the front page the mark IS the product; anywhere deeper it is also
    the way back to it, which is the habit every application on the web already teaches. One class, so
    that is true on the pages node renders and the ones React does — and a real hit target around a

@@ -11,6 +11,7 @@ import { LagoonRepos } from "@/components/lagoon/lagoon-repos"
 import { LagoonStats } from "@/components/lagoon/lagoon-stats"
 import { LagoonFilter } from "@/components/lagoon/lagoon-filter"
 import { LagoonPalette } from "@/components/lagoon/lagoon-palette"
+import { ViewerBadge } from "@/components/lagoon/viewer-badge"
 import type { IndexRegion, ProducedIndexKeys } from "@/app/index-region"
 
 /**
@@ -20,11 +21,12 @@ import type { IndexRegion, ProducedIndexKeys } from "@/app/index-region"
  * island owns is the exact laundering the ownership rules exist to stop, and `Omit` makes it a
  * compile error here instead of a lens warning later.
  */
-export function IndexScreen({ groups, repos, stats, cap }: Omit<IndexRegion, ProducedIndexKeys>) {
+export function IndexScreen({ groups, repos, stats, cap, viewer }: Omit<IndexRegion, ProducedIndexKeys>) {
   return (
     <MotuRegion>
       <Index.Root
         readout={<LagoonStats stats={stats} />}
+        account={<ViewerBadge viewer={viewer} />}
         filter={<LagoonFilter />}
         composed={<LagoonGroups groups={groups} />}
         repositories={<LagoonRepos repos={repos} cap={cap} />}

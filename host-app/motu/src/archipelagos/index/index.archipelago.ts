@@ -23,7 +23,12 @@ import type { IndexRegion, ProducedIndexKeys } from '@/app/index-region';
 
 export const indexArchipelago = archipelago<
   IndexRegion,
-  'x-lagoon-filter' | 'x-lagoon-groups' | 'x-lagoon-palette' | 'x-lagoon-repos' | 'x-lagoon-stats'
+  | 'x-lagoon-filter'
+  | 'x-lagoon-groups'
+  | 'x-lagoon-palette'
+  | 'x-lagoon-repos'
+  | 'x-lagoon-stats'
+  | 'x-viewer-badge'
 >()({
   id: 'index',
   root: IndexLayout,
@@ -33,6 +38,7 @@ export const indexArchipelago = archipelago<
     readout: { slot: 'readout' },
     filter: { slot: 'filter' },
     palette: { slot: 'palette' },
+    account: { slot: 'account' },
     composed: { slot: 'composed' },
     repositories: { slot: 'repositories' },
   },
@@ -43,6 +49,14 @@ export const indexArchipelago = archipelago<
       slot: 'readout',
       element: 'x-lagoon-stats',
       bind: [{ stats: 'stats' }],
+    },
+    {
+      // WHO IS READING THIS. Beside the readout, on the water — an island because it SHOWS an
+      // identity and ACTS on one, and the smallest one here with the most at stake: a badge that
+      // keeps rendering a handle after the session is gone is the safe-LOOKING failure.
+      slot: 'account',
+      element: 'x-viewer-badge',
+      bind: [{ viewer: 'viewer' }],
     },
     {
       // THE PAGE'S ONE CONTROL, and the region's only producer. Declared here, so a second island

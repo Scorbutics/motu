@@ -138,7 +138,16 @@ button.member .live-dot {
   button.member[aria-current="true"]::after { display: none; }
   button.member .live-dot { animation: none; box-shadow: none; }
 }
-aside footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line); word-break: break-all; }
+aside footer {
+  margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+aside footer > .motu-cap { min-width: 0; word-break: break-all; }
+/* THE ACCOUNT ON A LIGHT FOOTER. .motu-account is the kit's, and it was drawn for the bay — white
+   text on water. Here it sits on the sheet's own pale surface, so the ink and the focus ring flip;
+   the SHAPE, the disc and the hover word are the kit's and are not restated. */
+aside footer .motu-account { color: var(--ink); flex: none; }
+aside footer .motu-account__out:focus-visible { outline-color: var(--tide-accent); }
 main.stage { flex: 1; position: relative; background: #fff; }
 main.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
 
@@ -289,11 +298,21 @@ export function composedPage({ id, group, members, live = false }) {
       leading: `<a class="motu-home" href="/" aria-label="All repositories">${motuMark()}</a>`,
     })}
     <div class="rail">${rail}</div>
-    <footer class="motu-cap">${
-      live
-        ? `today${id ? ` · <a style="color:inherit" href="/m/${escapeHtml(id)}/">pin this view</a>` : ''}`
-        : `manifest ${escapeHtml(id ?? '')}`
-    }</footer>
+    <footer>
+      <span class="motu-cap">${
+        live
+          ? `today${id ? ` · <a style="color:inherit" href="/m/${escapeHtml(id)}/">pin this view</a>` : ''}`
+          : `manifest ${escapeHtml(id ?? '')}`
+      }</span>
+      <!-- WHO IS READING THIS, and the way out — filled in by the script below.
+           EMPTY IN THE HTML, deliberately. This page is rendered by the node host, which has no
+           session at all: it serves the same bytes to everyone, and guessing would mean rendering
+           somebody's handle for the next visitor. It asks the APP (/auth/whoami, same origin
+           through the proxy) once the page is up, and until it answers this is nothing rather than a
+           wrong state. When phase 4 moves /g/ into the app the answer arrives server-side and the
+           fetch goes away. -->
+      <div class="motu-account" id="account" hidden></div>
+    </footer>
   </aside>
   <main class="stage" id="stage"></main>
 </div>
@@ -380,6 +399,48 @@ export function composedPage({ id, group, members, live = false }) {
   });
   var initial = parseInt((location.hash || '').slice(1), 10);
   show(Number.isInteger(initial) ? initial : 0);
+
+  // WHO IS READING THIS. Asked, not assumed: this page is bytes the node host serves identically to
+  // everyone, so the only honest starting state is hidden and the only way to leave it is to ask
+  // the app. same-origin credentials because the session is a cookie and this is the same origin
+  // through the proxy; a failure leaves the control hidden, which is the state it started in.
+  fetch('/auth/whoami', { credentials: 'same-origin', headers: { accept: 'application/json' } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (me) {
+      var box = document.getElementById('account');
+      if (!box || !me) return;
+      if (!me.signedIn) {
+        box.innerHTML = '<a class="motu-account" href="/signin"><span class="motu-account__name">Sign in</span></a>';
+        box.hidden = false;
+        return;
+      }
+      // TEXT THROUGH textContent, markup through a template. The handle comes from a provider and is
+      // the one value on this page nobody here chose, so it is never concatenated into HTML.
+      var form = document.createElement('form');
+      form.action = '/auth/signout';
+      form.method = 'post';
+      var name = document.createElement('span');
+      name.className = 'motu-account__name';
+      name.textContent = me.handle;
+      var out = document.createElement('button');
+      out.type = 'submit';
+      out.className = 'motu-account__out';
+      out.title = 'Sign out ' + me.handle;
+      var disc = document.createElement('span');
+      disc.className = 'motu-avatar';
+      disc.setAttribute('aria-hidden', 'true');
+      disc.textContent = me.initial;
+      var hint = document.createElement('span');
+      hint.className = 'motu-account__hint';
+      hint.textContent = 'Sign out';
+      out.appendChild(disc);
+      out.appendChild(hint);
+      form.appendChild(name);
+      form.appendChild(out);
+      box.appendChild(form);
+      box.hidden = false;
+    })
+    .catch(function () { /* still hidden, which is where it started */ });
 })();
 </script>
 </body>

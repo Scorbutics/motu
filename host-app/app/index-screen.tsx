@@ -8,13 +8,14 @@
 import { MotuRegion, Index } from "@/components/motu/index-region"
 import { LagoonGroups } from "@/components/lagoon/lagoon-groups"
 import { LagoonRepos } from "@/components/lagoon/lagoon-repos"
+import { LagoonStats } from "@/components/lagoon/lagoon-stats"
 import type { IndexRegion } from "@/app/index-region"
 
 export function IndexScreen({ groups, repos, stats }: IndexRegion) {
   return (
     <MotuRegion>
       <Index.Root
-        stats={stats}
+        readout={<LagoonStats stats={stats} />}
         composed={<LagoonGroups groups={groups} />}
         repositories={<LagoonRepos repos={repos} />}
       />

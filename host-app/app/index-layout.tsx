@@ -1,26 +1,25 @@
 import type { ReactNode } from "react"
 import { Bay } from "@motu/chrome/react"
-import { size } from "@/src/host/format"
 
 /**
  * The front page's ARRANGEMENT, as a component the archipelago points at.
  *
- * THE BAY IS NOT AN ISLAND. It shows numbers, but it names no repository and reads no region key that
- * a viewer's access changes — it is the same for everyone who can reach the page at all. motu's own
- * rule is that what merely ARRANGES is not an island, and a chrome bar reporting the host's total
- * size is chrome. The two things that ARE filtered per viewer — the galleries and the repositories —
- * are the islands, and they are the two that could leak.
+ * THE BAY IS ARRANGEMENT; ITS READOUT IS NOT. That distinction cost a bug. This file used to take
+ * `stats` and render the readout itself, on the argument that a chrome bar naming no repository is
+ * chrome — but the test is SHOWS versus ARRANGES, and a total is shown. Because the region could not
+ * reach it, the lagoon rendered a defaulted `0 objects · 0 kB` above five repositories holding 41
+ * records, which `store.stats()` cannot produce. The readout is a slot now, filled by an island with
+ * its own scenarios; the bar around it stays arrangement.
  */
 export function IndexLayout({
-  stats,
+  readout,
   composed,
   repositories,
 }: {
-  stats?: { blobs: number; bytes: number; maxRecords: number }
+  readout?: ReactNode
   composed?: ReactNode
   repositories?: ReactNode
 }) {
-  const s = stats ?? { blobs: 0, bytes: 0, maxRecords: 1000 }
   return (
     <>
       {/* `children` is the bay's hard-right readout slot — the kit's own word for where the host's
@@ -28,7 +27,7 @@ export function IndexLayout({
           the page's real heading is elsewhere, and promoting this to an <h1> was called out in the
           kit as an accessibility regression the styling cannot show. */}
       <Bay title="motu" subtitle="published lagoons">
-        {`${s.blobs} object${s.blobs === 1 ? "" : "s"} · ${size(s.bytes)} · cap ${s.maxRecords}/repo`}
+        {readout}
       </Bay>
       <main>
         {composed}

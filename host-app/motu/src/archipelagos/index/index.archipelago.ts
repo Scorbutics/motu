@@ -21,16 +21,24 @@ import { IndexLayout } from '@/app/index-layout';
 // TYPE-ONLY, from the app: the page's vocabulary is the application's to name.
 import type { IndexRegion, ProducedIndexKeys } from '@/app/index-region';
 
-export const indexArchipelago = archipelago<IndexRegion, 'x-lagoon-groups' | 'x-lagoon-repos'>()({
+export const indexArchipelago = archipelago<IndexRegion, 'x-lagoon-groups' | 'x-lagoon-repos' | 'x-lagoon-stats'>()({
   id: 'index',
   root: IndexLayout,
   // The app's prop name on the left, motu's slot on the right. The page passes `composed` and
   // `repositories`; it never writes a slot name.
   slots: {
+    readout: { slot: 'readout' },
     composed: { slot: 'composed' },
     repositories: { slot: 'repositories' },
   },
   islands: [
+    {
+      // The bay's readout. An island because it SHOWS a total, not because of where it sits — see
+      // index-layout.tsx for the call I got wrong first and what it cost.
+      slot: 'readout',
+      element: 'x-lagoon-stats',
+      bind: [{ stats: 'stats' }],
+    },
     {
       slot: 'composed',
       element: 'x-lagoon-groups',

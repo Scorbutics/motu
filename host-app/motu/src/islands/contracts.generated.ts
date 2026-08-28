@@ -13,6 +13,7 @@ import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus
 import type { GithubSignIn as C_github_sign_in } from '@/components/auth/github-sign-in';
 import type { LagoonGroups as C_lagoon_groups } from '@/components/lagoon/lagoon-groups';
 import type { LagoonRepos as C_lagoon_repos } from '@/components/lagoon/lagoon-repos';
+import type { LagoonStats as C_lagoon_stats } from '@/components/lagoon/lagoon-stats';
 
 export const CONTRACTS = {
   'x-corpus-filter': {
@@ -37,6 +38,11 @@ export const CONTRACTS = {
   },
   'x-lagoon-repos': {
     input: ['repos'],
+    output: {  },
+    ambient: [],
+  },
+  'x-lagoon-stats': {
+    input: ['stats'],
     output: {  },
     ambient: [],
   },
@@ -76,6 +82,8 @@ const _lagoon_groups: ContractFitsComponent<typeof C_lagoon_groups, 'x-lagoon-gr
 void _lagoon_groups;
 const _lagoon_repos: ContractFitsComponent<typeof C_lagoon_repos, 'x-lagoon-repos'> = true;
 void _lagoon_repos;
+const _lagoon_stats: ContractFitsComponent<typeof C_lagoon_stats, 'x-lagoon-stats'> = true;
+void _lagoon_stats;
 
 /**
  * Declare an island: its tag, the component it mounts, and nothing that can be derived.

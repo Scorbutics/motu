@@ -212,7 +212,9 @@ aside .motu-home .motu-mark { width: 22px; height: 22px; border-radius: 6px; }
     box-shadow: 0 -14px 40px rgba(11, 111, 104, .22);
     transform: translateY(100%);
     transition: transform 220ms cubic-bezier(.2,.9,.3,1);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    /* NO SAFE-AREA INSET. Nothing here sets viewport-fit=cover, so this is specified to be zero —
+       and on Firefox for Android it is not, which is what doubled the dock's bottom bar. peps deleted
+       every one of these for the same reason (peps_ta_boite e0eeea7). */
   }
   body.sheet-open aside { transform: translateY(0); }
   body.sheet-dragging aside { transition: none; }

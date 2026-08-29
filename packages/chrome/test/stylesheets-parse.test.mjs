@@ -90,3 +90,13 @@ test('the dock panel slides rather than toggling display', async () => {
   assert.match(css, /#tide\[data-open="true"\] \.panel \{[^}]*transform: none/s);
   assert.ok(!/#tide \.panel \{[^}]*display: none/s.test(css), 'the panel is back to a display toggle');
 });
+
+test('the dock asks for no safe-area inset', async () => {
+  // TWICE NOW, IN TWO CODEBASES. On Firefox for Android env(safe-area-inset-bottom) comes back
+  // non-zero even though nothing here sets viewport-fit=cover, and a bottom bar that folds it into
+  // its padding arrives about twice as tall as it should. peps deleted every one of these rather
+  // than working around it (peps_ta_boite e0eeea7); this keeps them from coming back here.
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const withoutComments = motuDockCss().replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!withoutComments.includes('env('), 'an env() inset is back in the dock stylesheet');
+});

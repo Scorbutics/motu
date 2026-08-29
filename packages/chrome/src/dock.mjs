@@ -553,19 +553,20 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     flex-direction: row;
     justify-content: center;
     gap: 10px;
-    /* A DETERMINISTIC BAR, and a BOUNDED safe area.
+    /* A DETERMINISTIC BAR, AND NO SAFE-AREA INSET AT ALL.
      *
-     * The height used to be whatever the content plus padding came to, with the safe-area inset added
-     * into the same shorthand. On Firefox for Android that arrived about twice as tall as anywhere
-     * else — env() insets are supposed to be zero without viewport-fit=cover, and an engine that
-     * reports one anyway silently doubles a bar whose height was never stated.
+     * On Firefox for Android this arrived about twice as tall as anywhere else, because its height
+     * was whatever content plus padding came to and the safe-area inset was folded into the same
+     * shorthand.
      *
-     * So the bar states its own height, and the inset is capped: a real gesture bar is ~24px, and
-     * anything larger is an engine being wrong rather than a phone being unusual.
+     * peps hit exactly this and fixed it by DELETING every env(safe-area-inset-bottom) rather than
+     * working around it (peps_ta_boite e0eeea7, "fix: firefox mobile bottom bar padding", which also
+     * dropped viewportFit: 'cover'). Nothing motu serves sets viewport-fit=cover, so these insets are
+     * specified to be zero here and buy nothing — while an engine that reports one anyway silently
+     * doubles a bar whose height was never stated. So: state the height, and do not ask.
      */
     min-height: 44px;
     padding: 0 14px;
-    padding-bottom: min(env(safe-area-inset-bottom, 0px), 24px);
     border-radius: 14px 14px 0 0;
     background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 52%, var(--w-shallow));
   }
@@ -593,7 +594,6 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     -webkit-backdrop-filter: blur(14px) saturate(1.35);
     box-shadow: 0 -14px 40px color-mix(in srgb, var(--w-deep) 22%, transparent);
     transform: translateY(100%);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   #tide[data-edge="left"] .panel { transform: translateY(100%); }
   #tide[data-open="true"] .panel { transform: none; }

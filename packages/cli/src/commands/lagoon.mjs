@@ -18,6 +18,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
 import { networkInterfaces } from 'node:os';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -308,6 +309,54 @@ ${page}</body>
 }
 
 /**
+ * The dock, drawn by the SERVER rather than bundled into the page.
+ *
+ * This is the second consumer of `@motu/chrome/dock`, and the reason that module exists rather than a
+ * stylesheet in the host: the host app frames a published artifact, `motu lagoon serve` serves one
+ * directly, and both must draw the same dock. A copy in each is two chromes that drift — and the dev
+ * loop and every runtime check run through THIS one, so a divergence here is a divergence between
+ * what a person sees while working and what the checks assert on.
+ *
+ * IT ONLY TAKES OVER A LAGOON IT CAN DRIVE, per page, decided in the browser. An artifact built
+ * before `__motuLagoonControl` existed can list nothing and switch nothing, so hiding its own dock
+ * would take the controls away and put nothing in their place. Same rule the host applies, for the
+ * same reason.
+ *
+ * Injected, never bundled: that is the whole point. Change the dock and no lagoon needs rebuilding.
+ */
+function injectDock(page) {
+  return `${page}
+<style>${motuDockCss()}</style>
+<script>
+${motuDockJs()}
+(function () {
+  var tries = 0;
+  var take = function () {
+    if (tries++ > 60) return;
+    if (!window.__motuLagoonControl) return setTimeout(take, 200);
+    // The artifact still ships its own while both exist. Hidden, not removed: it owns that element.
+    // THE TWO DOCKS SHARE AN ID, and here they share a document as well — so the rule that hides the
+    // artifact's would hide the replacement with it. In the host that never came up: the artifact is
+    // in a frame and the new dock is in the shell. Mark ours, and hush only what is not ours.
+    var mounted = document.createElement('div');
+    document.body.appendChild(mounted);
+    motuMountDock({ mount: mounted, lagoonWindow: function () { return window; } });
+    var ours = mounted.querySelector('#tide');
+    if (ours) ours.setAttribute('data-hosted', '');
+    var hush = document.createElement('style');
+    hush.textContent = '#tide:not([data-hosted]){display:none!important}';
+    document.head.appendChild(hush);
+    // The served page is the lagoon itself, so the dock stands on this document and this document
+    // keeps the strip — the same reserve the host's shell makes around a framed one.
+    document.documentElement.dataset.motuDock =
+      window.matchMedia('(max-width: 760px)').matches ? 'bottom' : 'right';
+  };
+  take();
+})();
+</script>`;
+}
+
+/**
  * A rebuild is only useful if the phone in your hand notices it, so `--watch` also injects a tiny
  * live-reload client that listens on an SSE endpoint this same server owns.
  *
@@ -513,7 +562,7 @@ export function lagoonServeCommand(argv) {
 
   // The served bytes are a VARIABLE, not a constant: --watch swaps them in place, so the funnel or
   // LAN URL in front of this server never has to be re-pointed to see new work.
-  let body = Buffer.from(wrapForBrowser(watching ? injectReloadClient(page) : page), 'utf8');
+  let body = Buffer.from(wrapForBrowser(injectDock(watching ? injectReloadClient(page) : page)), 'utf8');
   /** Open live-reload streams, one per viewer (a laptop and a phone on the same URL is the point). */
   const viewers = new Set();
 
@@ -745,7 +794,7 @@ export function lagoonServeCommand(argv) {
       const started = Date.now();
       try {
         const fresh = inlineToArtifact(buildSingleFile({ entry, target, fit }), title);
-        body = Buffer.from(wrapForBrowser(injectReloadClient(fresh)), 'utf8');
+        body = Buffer.from(wrapForBrowser(injectDock(injectReloadClient(fresh))), 'utf8');
         const secs = ((Date.now() - started) / 1000).toFixed(1);
         console.log(
           `${color.green('✓')} rebuilt in ${secs}s — ${(body.length / 1024).toFixed(0)} kB` +

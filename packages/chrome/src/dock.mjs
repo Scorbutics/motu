@@ -633,10 +633,19 @@ function motuMountDock(opts) {
 
   var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
   var scroll = el('div', { class: 'scroll' });
+  // THE RIG: what is a MODE rather than a place. The view toggle is the dock's own; the transport and
+  // fit chips belong to whoever mounted them and are read rather than reimplemented, so a control a
+  // future package appends shows up here with nothing to keep in sync.
+  var rigPills = el('div', { class: 'rig__pills' });
+  var rig = el('div', { class: 'rig' }, [
+    el('div', { class: 'rig__head' }, [el('span', { class: 'motu-cap' }, ['Rig'])]),
+    rigPills,
+  ]);
   var panel = el('div', { class: 'panel', role: 'group', 'aria-label': 'Lagoon controls' }, [
     masthead,
     el('div', { class: 'find' }, [filter]),
     scroll,
+    rig,
   ]);
   var scrim = el('div', { class: 'scrim' });
   tide.append(scrim, rail, panel);
@@ -701,7 +710,14 @@ function motuMountDock(opts) {
       el('span', { class: 'lamp' }),
       label,
     ]);
-    b.addEventListener('click', run);
+    b.addEventListener('click', function () {
+      // LIT ON PRESS, not only once the lagoon answers. Running a flow takes as long as its steps
+      // take, and a list that stays unchanged for a second reads as a click that missed.
+      var siblings = b.parentNode ? b.parentNode.children : [];
+      for (var i = 0; i < siblings.length; i++) siblings[i].setAttribute('aria-current', 'false');
+      b.setAttribute('aria-current', 'true');
+      run();
+    });
     return b;
   };
 
@@ -731,12 +747,37 @@ function motuMountDock(opts) {
 
     var flows = (cat.flows && cat.flows[now.region]) || [];
     states.count.textContent = String(flows.length);
-    var rows = [row('As seeded', true, function () { ctl.runFlow(null); })];
+    // WHICH ONE IS SHOWING, from the lagoon rather than from a guess. This used to hardcode "As
+    // seeded" as current and every flow as not — so pressing a state ran it and the list went on
+    // showing the same row lit, which reads as the click having done nothing.
+    var showing = now.flow || null;
+    var rows = [row('As seeded', showing === null, function () { ctl.runFlow(null); })];
     flows.forEach(function (f) {
       if (!hit(f.name)) return;
-      rows.push(row(f.name, false, function () { ctl.runFlow(f.name); }));
+      rows.push(row(f.name, showing === f.name, function () { ctl.runFlow(f.name); }));
     });
     states.list.replaceChildren.apply(states.list, rows);
+
+    // ── the rig ──────────────────────────────────────────────────────────────────────────────
+    var pills = [];
+    ['region', 'mountpoints'].forEach(function (v) {
+      var b = el('button', {
+        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
+        'aria-current': now.view === v ? 'true' : 'false',
+      }, [v === 'region' ? 'Region' : 'Mountpoints']);
+      b.addEventListener('click', function () { ctl.setView(v); });
+      pills.push(b);
+    });
+    (ctl.chips ? ctl.chips() : []).forEach(function (c) {
+      if (!c.label) return;
+      var b = el('button', {
+        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
+        title: c.title || '', 'aria-pressed': c.pressed ? 'true' : 'false',
+      }, [c.label]);
+      b.addEventListener('click', function () { ctl.pressChip(c.index); });
+      pills.push(b);
+    });
+    rigPills.replaceChildren.apply(rigPills, pills);
 
     bayTitle.textContent = now.region || '—';
     baySub.textContent = flows.length + (flows.length === 1 ? ' state' : ' states');

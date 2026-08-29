@@ -430,6 +430,8 @@ markSandbox();
     if (!id) return;
     current = id;
     localStorage.setItem(STORAGE_KEY, id);
+    // Changing region leaves whatever flow was showing behind with the region that had it.
+    shownFlow = activeFlowName(id);
     // A host rendering this lagoon's chrome from outside follows the same changes the in-page panel
     // does, and finds out the same way: by being told, not by polling the DOM for what changed.
     controlChanged();
@@ -562,10 +564,32 @@ markSandbox();
   const publishControl = (): void => {
     (window as unknown as { __motuLagoonControl?: unknown }).__motuLagoonControl = {
       regions: () => stations.map((x) => ({ id: x.id, label: x.label })),
-      current: () => ({ region: current, view, island: island ?? null }),
+      current: () => ({ region: current, view, island: island ?? null, flow: shownFlow }),
       show: (id: string) => onStation(id),
       setView: (next: TideView) => onView(next),
       runFlow: (name: string | null) => onFlow(name),
+      /**
+       * The transport and fit chips, for a panel drawn outside this page.
+       *
+       * READ, NOT REGISTERED — the same trick the command palette already uses on them. They are
+       * mounted by whichever package owns them (`@motu/core`'s toolbar, and anything that appends to
+       * it later), into an element with a known id, so a control added by a future package appears
+       * out here with nothing to keep in sync.
+       */
+      chips: () => {
+        const bar = document.getElementById('motu-toolbar');
+        if (!bar) return [];
+        return [...bar.querySelectorAll('button')].map((b, i) => ({
+          index: i,
+          label: (b.textContent ?? '').trim(),
+          title: b.title ?? '',
+          pressed: b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-current') === 'true',
+        }));
+      },
+      pressChip: (index: number) => {
+        const bar = document.getElementById('motu-toolbar');
+        (bar?.querySelectorAll('button')[index] as HTMLButtonElement | undefined)?.click();
+      },
       /** Told whenever the mounted region, view or flow changes, so a host's chrome can follow. */
       subscribe: (fn: () => void) => {
         controlWatchers.add(fn);
@@ -573,6 +597,8 @@ markSandbox();
       },
     };
   };
+  /** The flow the region is currently showing, or null for the state the page seeds. */
+  let shownFlow: string | null = null;
   const controlWatchers = new Set<() => void>();
   const controlChanged = () => {
     for (const fn of controlWatchers) fn();
@@ -609,6 +635,11 @@ markSandbox();
     // remount: a flow leaves the region where its last step put it, and going back to what the page
     // establishes is a state too.
   const onFlow = (name: string | null) => {
+      // WHICH STATE IS SHOWING, remembered rather than inferred. A host drawing this panel from
+      // outside cannot read it from anywhere else: the in-page dock kept it in its own DOM, so a
+      // second reader had nothing to go on and lit "As seeded" forever, whatever you pressed.
+      shownFlow = name;
+      controlChanged();
       const url = new URL(location.href);
       url.searchParams.set('region', current);
       if (name) url.searchParams.set('flow', name);

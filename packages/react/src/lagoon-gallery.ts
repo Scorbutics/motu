@@ -83,7 +83,7 @@ export interface LagoonOverrides extends RegionOverrideMaps {
 
 /** The dev-only seam lens, handed in by the app so @motu/react keeps no dependency on it. */
 export interface LagoonLens extends TideLens {
-  mount: (opts: { chip: boolean }) => void;
+  mount: (opts: { chip: boolean; tab?: boolean }) => void;
 }
 
 export interface StartLagoonOptions {
@@ -522,7 +522,14 @@ markSandbox();
   // across a reload. No chip in the toolbar: the lens draws its own tab on the edge of its panel, so
   // opening and closing happen in one place instead of from inside a popup that closes behind it.
   const lens = opts.debug === false ? undefined : opts.lens;
-  lens?.mount({ chip: false });
+  // NO CHIP AND NO TAB. The overlay draws its own edge tab whenever the toolbar chip is off, on the
+  // reasoning that a root which took the chip away must not be left without a way in — true when it
+  // was written, and no longer true here: the dock's rig has a Seam lens toggle. Two triggers for one
+  // thing, one of them floating over the application, is exactly the clutter this move was about.
+  //
+  // The LAYER it toggles stays. Outlines, wires and hit-testing measure the host's live DOM and only
+  // mean anything drawn over the running page — the one part of the lens a sidebar cannot be.
+  lens?.mount({ chip: false, tab: false });
 
   /**
    * Which row the panel should light, given what the URL asked for.

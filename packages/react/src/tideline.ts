@@ -72,6 +72,17 @@ export interface TideLens {
   toggle(): void;
   isOpen(): boolean;
   subscribe(fn: (open: boolean) => void): () => void;
+  /**
+   * Render the lens' FINDINGS into a container the dock owns, and return the teardown.
+   *
+   * The direction is inverted on purpose, and it is the same inversion `setMotuToolbarHost` already
+   * uses for the transport chips: the dock hands over a box, the lens fills it. @motu/debug-overlay
+   * is dev-only and a production root has to shake it out entirely, so the dock cannot import it to
+   * ask what a finding looks like — and does not need to.
+   *
+   * Optional, so a lens that predates this still satisfies the interface and simply has no tab.
+   */
+  mountFindings?(container: HTMLElement): () => void;
 }
 
 export interface TideLineOptions {
@@ -375,6 +386,74 @@ const CSS = `
 #tide .motu-opt[aria-current="true"] .lamp, #tide .motu-opt.on .lamp { background: var(--tide-accent); }
 #tide .motu-opt .sub { display: block; font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
 #tide[data-open="true"] .motu-opt { animation: tide-swim 260ms cubic-bezier(.2,.9,.3,1) both; }
+
+/* ── the two tabs, and the seams pane ─────────────────────────────────────────────────────── */
+#tide .find--filter { padding-top: 2px; }
+#tide .tabs { flex: 1 1 auto; }
+#tide .seams { display: none; }
+#tide .panel[data-tab="seams"] .seams {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 14px 12px;
+}
+#tide .panel[data-tab="seams"] .scroll, #tide .panel[data-tab="seams"] .find--filter { display: none; }
+
+/* THE TALLY IS COUNTS AND NOTHING ELSE. There is no headline above it: a sentence summarising the
+ * region could not be contradicted by the region, and a verdict that cannot be wrong cannot be
+ * trusted either. The counts and the findings under them each name something checkable. */
+#tide .seam-tally { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+#tide .seam-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+#tide .seam-count i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
+#tide .seam-count[data-tone="broken"] i { background: var(--motu-danger, #b91c1c); }
+#tide .seam-count[data-tone="warn"] i { background: var(--motu-caution, #b45309); }
+#tide .seam-count[data-tone="ok"] i { background: var(--tide-accent); }
+
+#tide .seam-find {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 11px 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-row);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+#tide .seam-find:hover { border-color: var(--tide-accent); }
+#tide .seam-find::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 9999px;
+  background: var(--ink-faint);
+}
+#tide .seam-find[data-tone="broken"]::before { background: var(--motu-danger, #b91c1c); }
+#tide .seam-find[data-tone="warn"]::before { background: var(--motu-caution, #b45309); }
+#tide .seam-find__t { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12.5px; }
+#tide .seam-find__t i { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: currentColor; opacity: .5; }
+#tide .seam-find__d { color: var(--ink-muted); font-size: 11.5px; line-height: 1.45; font-weight: 500; }
 
 /* ── the rig ───────────────────────────────────────────────────────────────────────────────── */
 #tide .rig {
@@ -1041,6 +1120,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   }
 
   // ── the panel, assembled ───────────────────────────────────────────────────────────────────
+  const filterRow = el('div', { class: 'find find--filter' }, filter);
   const bayTitle = el('b', {}, '—');
   const baySub = el('small', {}, '');
   const fold = el('button', { class: 'fold', type: 'button', title: 'Close', 'aria-label': 'Close lagoon controls' }, '›');
@@ -1061,7 +1141,48 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     rigPills,
   );
 
-  bar.append(masthead, el('div', { class: 'find' }, filter, kbd), scroll, rig);
+  // ── two tabs, when there is a lens to fill the second ──────────────────────────────────────
+  //
+  // STATES is where the region is, SEAMS is what the lens has noticed about it. They are the same
+  // region looked at two ways, which is why they are tabs in one panel rather than two panels: the
+  // lens used to be a separate surface with its own tab on its own edge, so the thing that tells you
+  // something is wrong lived a layer away from the thing you were using.
+  const seamsPane = el('div', { class: 'seams' });
+  let unmountFindings: (() => void) | null = null;
+  const tabs = el('div', { class: 'motu-segmented tabs', role: 'tablist' });
+  const tabThumb = el('span', { class: 'motu-segmented__thumb' });
+  tabs.appendChild(tabThumb);
+  const statesTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'true' }, 'States') as HTMLButtonElement;
+  const seamsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, 'Seams') as HTMLButtonElement;
+  tabs.append(statesTab, seamsTab);
+
+  const showTab = (which: 'states' | 'seams') => {
+    bar.dataset.tab = which;
+    statesTab.setAttribute('aria-current', String(which === 'states'));
+    seamsTab.setAttribute('aria-current', String(which === 'seams'));
+    const on = which === 'states' ? statesTab : seamsTab;
+    tabThumb.style.left = `${on.offsetLeft}px`;
+    tabThumb.style.width = `${on.offsetWidth}px`;
+    // MOUNTED ONLY WHEN LOOKED AT. The lens subscribes to every store write to keep its findings
+    // current, and a subscription that runs while nobody is reading it is work the page pays for
+    // permanently — on a panel that is closed most of the time.
+    if (which === 'seams' && !unmountFindings && opts.lens?.mountFindings) {
+      unmountFindings = opts.lens.mountFindings(seamsPane);
+    } else if (which !== 'seams' && unmountFindings) {
+      unmountFindings();
+      unmountFindings = null;
+    }
+  };
+  statesTab.addEventListener('click', () => showTab('states'));
+  seamsTab.addEventListener('click', () => showTab('seams'));
+
+  const hasSeams = Boolean(opts.lens?.mountFindings);
+  if (hasSeams) {
+    bar.append(masthead, el('div', { class: 'find' }, tabs, kbd), filterRow, scroll, seamsPane, rig);
+  } else {
+    bar.append(masthead, el('div', { class: 'find' }, filter, kbd), scroll, rig);
+  }
+  bar.dataset.tab = 'states';
 
   // ── the bay ────────────────────────────────────────────────────────────────────────────────
   const SVG_NS = 'http://www.w3.org/2000/svg';

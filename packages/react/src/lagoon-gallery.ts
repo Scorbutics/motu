@@ -543,7 +543,12 @@ markSandbox();
     stations,
     transport: mode,
     about: config.about ?? DEFAULT_ABOUT,
-    lens: lens ? { toggle: lens.toggle, isOpen: lens.isOpen, subscribe: lens.subscribe } : undefined,
+    // mountFindings comes across too, so the dock can show a Seams tab without importing the dev-only
+    // package to find out what a finding is. Forwarded rather than spread, because everything else on
+    // a LagoonLens (its own mount) is the app's business and not the dock's.
+    lens: lens
+      ? { toggle: lens.toggle, isOpen: lens.isOpen, subscribe: lens.subscribe, mountFindings: lens.mountFindings }
+      : undefined,
     // Picking a station LEAVES an island address, and takes it out of the URL: leaving it there
     // would hand someone a link that reopens the island they navigated away from.
     onStation: (id) => {

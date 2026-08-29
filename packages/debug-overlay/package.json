@@ -26,5 +26,8 @@
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
   }
 }

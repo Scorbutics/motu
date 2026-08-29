@@ -614,6 +614,21 @@ markSandbox();
        * Its panel is the sidebar now, so this is the half that could not move: it measures the host's
        * live DOM and only means anything drawn over the page itself.
        */
+      /**
+       * Crosshair mode, as a toggle rather than a setter, so the panel does not have to mirror a flag
+       * that lives in the lens.
+       *
+       * TURNING IT ON TURNS THE LAYER ON. Picking with the outlines hidden is pointing at nothing:
+       * the highlight that says what you are about to select is drawn by the layer.
+       */
+      togglePicking: () => {
+        picking = !picking;
+        if (picking && lens && !lens.isOpen()) lens.toggle();
+        lens?.setPicking?.(picking);
+        controlChanged();
+        return picking;
+      },
+      pickingOn: () => picking,
       toggleLens: () => lens?.toggle(),
       lensOpen: () => Boolean(lens?.isOpen()),
       /** Subscribe to everything the lens reports, so a panel elsewhere does not go stale. */
@@ -631,6 +646,8 @@ markSandbox();
   };
   /** The flow the region is currently showing, or null for the state the page seeds. */
   let shownFlow: string | null = null;
+  /** Crosshair mode, mirrored here because the lens does not report it back. */
+  let picking = false;
   const controlWatchers = new Set<() => void>();
   const controlChanged = () => {
     for (const fn of controlWatchers) fn();

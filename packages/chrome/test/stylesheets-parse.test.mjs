@@ -91,6 +91,18 @@ test('the dock panel slides rather than toggling display', async () => {
   assert.ok(!/#tide \.panel \{[^}]*display: none/s.test(css), 'the panel is back to a display toggle');
 });
 
+test('the closed panel takes the dock out of the page', async () => {
+  // The regression this encodes: making the panel SLIDE meant it stopped being display:none when
+  // shut, and a static flex sibling of the rail is 340px wide whether or not you can see it. The
+  // container measured 386px against a 46px reserve — a third of the application covered by an
+  // invisible panel, which is why several screenshots went past it. Only the rail may be in flow.
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  const panel = css.slice(css.indexOf('#tide .panel {'));
+  const block = panel.slice(0, panel.indexOf('}'));
+  assert.match(block, /position:\s*fixed/, 'the panel must be out of flow, or it occupies the page while closed');
+});
+
 test('the dock asks for no safe-area inset', async () => {
   // TWICE NOW, IN TWO CODEBASES. On Firefox for Android env(safe-area-inset-bottom) comes back
   // non-zero even though nothing here sets viewport-fit=cover, and a bottom bar that folds it into

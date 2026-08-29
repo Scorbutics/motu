@@ -109,6 +109,13 @@ export interface TideLens {
   toggleRecording?(): { recording: boolean; status: string };
   recordingState?(): { recording: boolean; status: string };
   /**
+   * Crosshair mode: point at an island on the page and select it.
+   *
+   * The one control that belongs OUTSIDE the panel, because the panel is the thing in the way of what
+   * you are pointing at.
+   */
+  setPicking?(on: boolean): void;
+  /**
    * Called whenever anything the lens reports has moved.
    *
    * Without it a panel in another document paints once and then describes a region that has moved

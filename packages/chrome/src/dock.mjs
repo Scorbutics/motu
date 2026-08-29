@@ -105,18 +105,55 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   padding: 12px 0;
   border: 0;
-  cursor: pointer;
   color: var(--motu-on-primary, #fff);
   background: linear-gradient(180deg, var(--w-deep), var(--w-mid) 46%, var(--w-shallow));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--w-deep) 22%, transparent),
     0 10px 30px color-mix(in srgb, var(--w-deep) 26%, transparent);
   transition: opacity 180ms ease, transform 220ms cubic-bezier(.22,.9,.3,1);
 }
-#tide .rail-dock:hover { filter: brightness(1.06); }
-#tide .rail-dock:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: -4px; }
+/* THE OPENING HALF fills the rail and carries what the whole thing used to: the press target, the
+ * hover, the focus ring. The picker sits under it as a peer rather than inside it. */
+#tide .rail-open {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+#tide .rail-open:hover { filter: brightness(1.06); }
+#tide .rail-open:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: -4px; }
+/* An ACT on the rail, not a link into the panel — square, quiet until it is on, and legible against
+ * the water at any primary the lagoon happens to wear. */
+#tide .rail-act {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--motu-on-primary, #fff);
+  background: color-mix(in srgb, var(--motu-on-primary, #fff) 16%, transparent);
+}
+#tide .rail-act:hover { background: color-mix(in srgb, var(--motu-on-primary, #fff) 28%, transparent); }
+#tide .rail-act:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
+#tide .rail-act[aria-pressed="true"] {
+  background: var(--motu-on-primary, #fff);
+  color: var(--w-deep);
+}
+#tide .rail-act[hidden] { display: none; }
 #tide .rail-dock .mark { width: 20px; height: 20px; flex: 0 0 auto; }
 #tide .rail-dock .lamp {
   width: 7px;
@@ -168,6 +205,19 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
  * visibility delayed to the end of the slide so a closed panel cannot be tabbed into.
  */
 #tide .panel {
+  /* OUT OF FLOW, or the closed panel is 340px of the application.
+   *
+   * It used to be display:none when shut, which took no space; making it SLIDE meant keeping it in
+   * the layout, and a flex sibling of the rail is 340px wide whether you can see it or not. The
+   * container measured 386px against a 46px reserve, so a third of the page was covered by an
+   * invisible panel — invisible being the reason it survived several screenshots.
+   *
+   * Anchored to the dock's edge instead: the rail is the only thing in flow, the container is the
+   * width of the rail, and what the page reserves is what the dock occupies. */
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
   width: var(--dock-w);
   display: flex;
   flex-direction: column;
@@ -179,7 +229,7 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   visibility: hidden;
   transition: transform 240ms cubic-bezier(.2,.9,.3,1), visibility 0s linear 240ms;
 }
-#tide[data-edge="left"] .panel { transform: translateX(-100%); }
+#tide[data-edge="left"] .panel { transform: translateX(-100%); right: auto; left: 0; }
 #tide[data-open="true"] .panel {
   transform: none;
   visibility: visible;
@@ -729,6 +779,7 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     border-radius: 14px 14px 0 0;
     background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 52%, var(--w-shallow));
   }
+  #tide .rail-open { flex-direction: row; gap: 10px; width: auto; }
   #tide .rail-dock .stand {
     writing-mode: horizontal-tb;
     flex: 0 1 auto;
@@ -851,12 +902,26 @@ function motuMountDock(opts) {
   };
 
   var tide = el('div', { id: 'tide', 'data-open': 'false' });
+  // A STRIP, NOT A BUTTON. It used to be one button that opened the panel; it now holds more than one
+  // act, and a button inside a button is not a thing. The opening half is still a button, so keyboard
+  // and screen readers get it for free.
   var railLabel = el('span', { class: 'stand' }, ['lagoon']);
-  var rail = el('button', { class: 'rail-dock', type: 'button', 'aria-label': 'Lagoon controls', 'aria-expanded': 'false' }, [
-    el('span', { class: 'lamp' }),
-    railLabel,
-    el('span', { class: 'chev' }, ['‹']),
-  ]);
+  var railOpen = el('button', {
+    class: 'rail-open', type: 'button', 'aria-label': 'Lagoon controls', 'aria-expanded': 'false',
+  }, [el('span', { class: 'lamp' }), railLabel, el('span', { class: 'chev' }, ['‹'])]);
+  /**
+   * THE PICKER, ON THE RAIL, reachable without opening anything.
+   *
+   * Every other control is a mode or a report and belongs in the panel. This one is "point at a thing
+   * on the page" — and the panel is 560px of the page, sitting between you and whatever you meant to
+   * point at. The rail is the state where the page is unobstructed, so the picker lives there.
+   */
+  var pick = el('button', {
+    class: 'rail-act', type: 'button', 'aria-pressed': 'false',
+    title: 'Point at an island on the page to inspect it (Esc to stop)',
+    'aria-label': 'Pick an island on the page',
+  }, ['⌖']);
+  var rail = el('div', { class: 'rail-dock' }, [railOpen, pick]);
 
   var bayTitle = el('b', {}, ['—']);
   var baySub = el('small', {}, ['']);
@@ -920,9 +985,14 @@ function motuMountDock(opts) {
 
   var open = function (on) {
     tide.dataset.open = on ? 'true' : 'false';
-    rail.setAttribute('aria-expanded', on ? 'true' : 'false');
+    railOpen.setAttribute('aria-expanded', on ? 'true' : 'false');
   };
-  rail.addEventListener('click', function () { open(true); });
+  railOpen.addEventListener('click', function () { open(true); });
+  pick.addEventListener('click', function () {
+    var ctl = control();
+    if (!ctl || !ctl.togglePicking) return;
+    pick.setAttribute('aria-pressed', ctl.togglePicking() ? 'true' : 'false');
+  });
   fold.addEventListener('click', function () { open(false); });
   // Tapping the backdrop closes it, which is the gesture the switcher already teaches.
   scrim.addEventListener('click', function () { open(false); });
@@ -1353,6 +1423,10 @@ function motuMountDock(opts) {
         coveragePane.replaceChildren.apply(coveragePane, nodes);
       }
     }
+
+    // A lagoon with no lens has nothing to point with, so the picker is absent rather than inert.
+    pick.hidden = !ctl.togglePicking;
+    if (ctl.pickingOn) pick.setAttribute('aria-pressed', ctl.pickingOn() ? 'true' : 'false');
 
     bayTitle.textContent = now.region || '—';
     baySub.textContent = flows.length + (flows.length === 1 ? ' state' : ' states');

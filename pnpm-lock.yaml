@@ -260,6 +260,9 @@ importers:
       '@motu/adapter-next':
         specifier: workspace:*
         version: link:../adapters/next
+      '@motu/chrome':
+        specifier: workspace:*
+        version: link:../chrome
       '@motu/core':
         specifier: workspace:*
         version: link:../core

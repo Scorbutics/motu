@@ -241,10 +241,12 @@ export const PRIMARY_VAR_NAMES = Object.keys(primaryVars('#000'));
 export async function rasteriseDocument(doc, opts = {}) {
   // EXCLUDE THE DOCK BY DEFAULT. motu's own tide line is the one thing on a lagoon page guaranteed to
   // be motu-coloured, and detecting it would make every project come back teal -- the tool finding
-  // itself. Empirically it does not survive into the raster anyway (twenty's pill is plainly teal on
+  // itself. The boot splash is the same hazard and worse, because it covers the whole viewport. Empirically it does not survive into the raster anyway (twenty's pill is plainly teal on
   // screen and contributed zero chromatic pixels), but "it happens not to show up" is not a reason,
   // and the day it starts showing up nothing would announce it.
-  const { width = 480, height = 320, timeoutMs = 8000, exclude = '#tide' } = opts;
+  // #motu-boot is the host's loading splash, which is a full-screen motu-coloured gradient and would
+  // otherwise BE the answer on any page slow enough to still be showing it.
+  const { width = 480, height = 320, timeoutMs = 8000, exclude = '#tide, #motu-boot' } = opts;
   try {
     const win = doc.defaultView;
     const cw = doc.documentElement.clientWidth || width;

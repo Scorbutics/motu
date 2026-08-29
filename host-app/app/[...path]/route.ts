@@ -187,7 +187,7 @@ function hostCredential(): Record<string, string> {
 }
 
 
-const handler = async (request: Request) => {
+const serve = async (request: Request) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
@@ -324,7 +324,12 @@ const handler = async (request: Request) => {
   // never heard of it, so any hop that forgets to take it off gets a 404 for a page that exists —
   // which is exactly what this branch did. Every repo on this host abstains today, so that was every
   // frame except the ones whose repo happened to be answered by another branch.
-  if (decision.outcome === 'abstain') return proxyToHost(request, { rewritePath: bareRewrite });
+  // THE SAME SPLASH ON BOTH ARTIFACT PATHS. A repo with no row abstains and is served from here, which
+  // is most of this host today -- patching only the decided path left twenty, the very artifact the
+  // loader exists for, without one.
+  if (decision.outcome === 'abstain') {
+    return withBootSplash(await proxyToHost(request, { rewritePath: bareRewrite }));
+  }
 
   // ALLOWED. `public` needs no credential — the host will serve it to anyone, and adding a bearer
   // there would mean the host's gate was never exercised on the path where it agrees with us.
@@ -349,7 +354,9 @@ const handler = async (request: Request) => {
       : { ...hostCredential(), cookie: withoutCookie(request.headers.get('cookie'), 'motu_read') };
   // THE BYTES. `__motu_frame` is the app's own address and the host has never heard of it, so it
   // comes back off before the hop — the host answers the page exactly as it did, live or stored.
-  const response = await proxyToHost(request, { setHeaders: cred, rewritePath: bareRewrite });
+  // THE ARTIFACT ONLY. The shell around a lagoon is rendered by this app and paints at once; a
+  // loader over it would be a regression, so the splash goes on the framed document and nothing else.
+  const response = withBootSplash(await proxyToHost(request, { setHeaders: cred, rewritePath: bareRewrite }));
 
   // NEVER BEHIND A SHARED CACHE. This response was computed for one viewer; `private, no-store` is
   // what stops a proxy between here and them handing it to the next person. Set for the allowed path
@@ -361,6 +368,125 @@ const handler = async (request: Request) => {
   }
   return response;
 };
+
+/**
+ * A LOADER, because a lagoon is one enormous document and the wait was blank.
+ *
+ * Measured on twenty's artifact: first-paint at 272ms, first-CONTENTFUL-paint at 3984ms. The browser
+ * has the page and paints nothing recognisable for three and a half seconds, on top of the transfer.
+ * The host streams (TTFB 0.42s against a 3.0s total), so markup placed right after <body> paints
+ * almost immediately -- which is why this needs no sharding and no change to any artifact.
+ *
+ * INJECTED WHILE STREAMING, not by buffering the document. Holding 19 MB to do a string replace
+ * would delay the first byte until the last one arrived and defeat the entire point.
+ *
+ * IT REMOVES ITSELF TWICE OVER. A published lagoon renders into the body and takes this with it --
+ * the same thing that made `motu-repo` have to live in the <head> -- so it usually disappears at the
+ * exact moment there is something to see. The listener is for the artifacts that do not.
+ */
+const BOOT_SPLASH = [
+  '<div id="motu-boot" role="status" aria-live="polite" style="position:fixed;inset:0;z-index:2147483646;',
+  'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;',
+  'background:#eef8f6;transition:opacity .26s ease;font:500 13px/1.55 ui-sans-serif,system-ui,\'Segoe UI\',Roboto,sans-serif;color:#5f716c">',
+  '<div style="width:180px;height:6px;border-radius:9999px;overflow:hidden;background:rgba(11,111,104,.12)">',
+  '<div style="width:45%;height:100%;border-radius:9999px;background:linear-gradient(90deg,#0b6f68,#12988f 55%,#35c2b3);',
+  'animation:motu-boot-swim 1.15s cubic-bezier(.45,.05,.55,.95) infinite"></div></div>',
+  '<div>opening the lagoon…</div>',
+  '<style>@keyframes motu-boot-swim{0%{transform:translateX(-100%)}100%{transform:translateX(322%)}}',
+  '@media (prefers-reduced-motion:reduce){#motu-boot [style*="motu-boot-swim"]{animation:none;width:100%}}</style>',
+  '</div>',
+  '<script>(function(){var g=function(){var e=document.getElementById("motu-boot");if(!e)return;',
+  'e.style.opacity="0";setTimeout(function(){e.remove()},260)};',
+  'if(document.readyState==="complete")g();else addEventListener("load",g);setTimeout(g,60000)})();</script>',
+].join('');
+
+/**
+ * Inject the splash after the first <body>, without waiting for the document to finish.
+ *
+ * Buffers only until <body> is found (or 64 kB, whichever comes first) so a tag straddling a chunk
+ * boundary is still matched, then gets out of the way and passes every later chunk straight through.
+ */
+const withBootSplash = (response: Response): Response => {
+  const body = response.body;
+  if (!body) return response;
+  if (!/^text\/html/i.test(response.headers.get('content-type') ?? '')) return response;
+
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let held = '';
+  let injected = false;
+
+  const transform = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      if (injected) return controller.enqueue(chunk);
+      held += decoder.decode(chunk, { stream: true });
+      const at = /<body[^>]*>/i.exec(held);
+      if (at) {
+        const cut = at.index + at[0].length;
+        injected = true;
+        controller.enqueue(encoder.encode(held.slice(0, cut) + BOOT_SPLASH + held.slice(cut)));
+        held = '';
+      } else if (held.length > 65536) {
+        // No <body> in the first 64 kB: this is not a document worth waiting on.
+        injected = true;
+        controller.enqueue(encoder.encode(held));
+        held = '';
+      }
+    },
+    flush(controller) {
+      if (held) controller.enqueue(encoder.encode(held));
+    },
+  });
+
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  return new Response(body.pipeThrough(transform), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
+/**
+ * COMPRESS ON THE WAY OUT, which is worth more than anything else on this route.
+ *
+ * A published lagoon is one self-contained HTML document, and twenty's is 19.66 MB of it. Measured
+ * against the real artifact: the host served it with no content-encoding at all, so a viewer
+ * downloaded all 19.66 MB raw -- 10.0s of a ~25s load, at about 2 MB/s over the funnel, against
+ * 0.22s on loopback. gzip takes the same bytes to 6.12 MB, a 3.2x cut, for one header. It needed no
+ * change to any artifact and it applied to every lagoon already published, which is why it came
+ * before both of the other ideas on the table.
+ *
+ * STREAMED, never buffered. CompressionStream lets the 19 MB go out as it arrives; gzipping into a
+ * Buffer first would hold the whole artifact in memory per request and delay the first byte until
+ * the last one was read, which is the opposite of what a loader needs.
+ *
+ * `vary` is not optional. Without it a cache in front of this can hand a gzipped body to a client
+ * that never asked for one.
+ */
+const COMPRESSIBLE = /^(?:text\/|application\/(?:javascript|json|xml)|image\/svg)/i;
+
+const compressed = (request: Request, response: Response): Response => {
+  const body = response.body;
+  if (!body) return response;                                     // HEAD, 204, 304
+  if (response.headers.get('content-encoding')) return response;   // already encoded upstream
+  if (!/\bgzip\b/.test(request.headers.get('accept-encoding') ?? '')) return response;
+  if (!COMPRESSIBLE.test(response.headers.get('content-type') ?? '')) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set('content-encoding', 'gzip');
+  // The length is the UNCOMPRESSED one and is now a lie; a wrong content-length truncates the body.
+  headers.delete('content-length');
+  headers.append('vary', 'accept-encoding');
+  return new Response(body.pipeThrough(new CompressionStream('gzip')), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
+/** Every path out of `serve` goes through the compressor, so no return can forget it. */
+const handler = async (request: Request) => compressed(request, await serve(request));
 
 /** The host's own namespaces, which are never a repo listing. Mirrors records.ts. */
 const HOST_NAMESPACES = new Set(['shot', 'g', 'm', 'api', 'signin', 'console', 'auth', '_next']);

@@ -13,7 +13,12 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { applyMotuChrome, channelFrom } from "@motu/core"
 import { createRegion, nextHostBridge } from "@motu/adapter-next"
 import { useRouter } from "next/navigation"
-import { ELEMENT_REGISTRY, reviewArchipelago } from "motu-host-islands"
+import { ELEMENT_REGISTRY } from "motu-host-islands"
+// The ARCHIPELAGO from its own module, not from the barrel beside the registry — a barrel that
+// exports the island registry pulls in every island, so an island reaching an application page
+// that composes a region closes a cycle back here and `createRegion` reads it before it is
+// initialised. `integrate check` warns about it (`root-imports`).
+import { reviewArchipelago } from "@/motu/src/archipelagos/review/review.archipelago"
 import { AcceptBar } from "@/components/review/accept-bar/AcceptBar"
 import { DiffViewer } from "@/components/review/diff-viewer/DiffViewer"
 import { RepoPicker } from "@/components/review/repo-picker/RepoPicker"

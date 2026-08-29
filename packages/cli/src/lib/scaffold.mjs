@@ -148,12 +148,61 @@ export const LAGOON_PACKAGE_JSON = `{
 }
 `;
 
+/**
+ * WHAT A PAGE SAYS WHEN ITS OWN BUNDLE NEVER RAN.
+ *
+ * motu already refuses loudly when a state NAME resolves to nothing: banner, console error, and
+ * `__motuLagoonState.ok: false`, because being handed a page you did not ask for is the failure worth
+ * engineering against. A module-eval crash had none of that. `startLagoon` never runs, so nothing is
+ * left to report it, and the page is WHITE — indistinguishable from a region that renders nothing.
+ *
+ * That cost an afternoon on a real project: a circular import made one archipelago evaluate after the
+ * composition root that used it, the whole single-chunk lagoon died on the ReferenceError, and every
+ * region went blank. Auth, the proxy and the host were all suspected first, because a blank page
+ * accuses nothing. The console had the answer the entire time.
+ *
+ * A CLASSIC SCRIPT IN THE HEAD, before the module. Module scripts are deferred, so this is installed
+ * and listening before the first line of the bundle is evaluated — which is the only way to catch a
+ * crash that happens during evaluation.
+ *
+ * IT ONLY SPEAKS WHEN THE LAGOON NEVER BOOTED. `__motuLagoonStates` is published by `startLagoon`, so
+ * its absence AFTER load is exactly "the bundle did not finish". An error with the catalogue present
+ * is an ordinary runtime error in somebody's component, which is theirs to see in the console and not
+ * something to paint over the page.
+ */
+export const LAGOON_BOOT_GUARD = `<script>
+(function () {
+  var first = null;
+  var note = function (e) { if (first === null && e) first = e; };
+  addEventListener('error', function (e) { note(e.error || e.message); }, true);
+  addEventListener('unhandledrejection', function (e) { note(e.reason); });
+  function verdict() {
+    if (window.__motuLagoonStates || first === null) return;
+    var text = (first && (first.stack || first.message)) || String(first);
+    var line = String(text).split('\\n')[0];
+    window.__motuLagoonState = { ok: false, kind: 'boot', target: 'lagoon', error: line };
+    console.error('motu: the lagoon bundle did not boot - nothing on this page is the application.\\n' + text);
+    var el = document.createElement('div');
+    el.setAttribute('data-motu-boot-error', '');
+    el.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483647;padding:12px 16px;' +
+      'background:#7f1d1d;color:#fff;font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;' +
+      'box-shadow:0 2px 12px rgba(0,0,0,.35);white-space:pre-wrap';
+    el.textContent = 'motu: this lagoon did not boot - ' + line +
+      '\\nNothing below is the application. The whole bundle is one module graph, so one module ' +
+      'throwing takes every region with it.';
+    (document.body || document.documentElement).appendChild(el);
+  }
+  addEventListener('load', function () { setTimeout(verdict, 250); });
+})();
+</script>`;
+
 export const LAGOON_INDEX_HTML = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>motu lagoon — {{appPackage}}</title>
+${LAGOON_BOOT_GUARD}
     <style>
       * { box-sizing: border-box; }
       body {
@@ -177,6 +226,7 @@ export const LAGOON_FOCUS_HTML = `<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>motu lagoon — single target (isolated)</title>
+${LAGOON_BOOT_GUARD}
     <style>
       * { box-sizing: border-box; }
       body {

@@ -11,7 +11,14 @@
 // real component inside the island wrapper.
 import { createRegion, nextHostBridge } from '@motu/adapter-next';
 import { useRouter } from 'next/navigation';
-import { ELEMENT_REGISTRY, signinArchipelago } from 'motu-host-islands';
+import { ELEMENT_REGISTRY } from 'motu-host-islands';
+// The ARCHIPELAGO comes from its own module, not from the barrel beside the registry.
+// A barrel that exports the island registry pulls in every island, so an island whose view
+// reaches an application page — and that page composing a region — closes a cycle back to this
+// file, and `createRegion` then reads the archipelago before it is initialised. It cost peps a
+// day: eight hops, every region blank, and a page that said nothing. `integrate check` warns
+// about it now (`root-imports`); this is the shape it asks for.
+import { signinArchipelago } from '@/motu/src/archipelagos/signin/signin.archipelago';
 
 export const Signin = createRegion(signinArchipelago, {
   elements: ELEMENT_REGISTRY,

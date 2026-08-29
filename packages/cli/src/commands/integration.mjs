@@ -181,6 +181,39 @@ function checkRegion(region, sources) {
   }
   add('ok', 'composed', `${binding} = createRegion(${constName}) in ${rel(bindingFile)}`);
 
+  // 1a — WHERE THE ARCHIPELAGO CAME FROM, which decides whether this file can be evaluated at all.
+  //
+  // Taking the archipelago from the SAME module that supplies the island registry means taking it
+  // from the project barrel, and a barrel that exports the registry necessarily pulls in every
+  // island. Any island whose view reaches an application page, and that page composing a region,
+  // closes a cycle back to this file — and then `createRegion(<archipelago>)` runs while the
+  // archipelago is still in its temporal dead zone.
+  //
+  // That is not hypothetical. On peps it was eight hops:
+  //   directory-fiche root -> barrel -> islands/registry -> week-actions.island -> WeekActionsView
+  //   -> BoosterStrip -> mission-helpers -> directory-member-fiche -> directory-fiche root
+  // The whole lagoon is one module graph, so one module throwing took EVERY region blank, not just
+  // that one, and the page said nothing at all.
+  //
+  // The fix is one line: import the archipelago from its own module. The registry may still come
+  // from wherever it likes — it is the ARCHIPELAGO's path that has to be short.
+  //
+  // A WARNING, not an error: the rule is new, regions predate it, and a project whose islands never
+  // reach a page is genuinely fine. `sources-tested` was introduced the same way.
+  const bindingSrc = code(readFileSync(bindingFile, 'utf8'));
+  const archImport = bindingSrc.match(new RegExp(`import\\s*\\{([^}]*\\b${constName}\\b[^}]*)\\}\\s*from\\s*['"]([^'"]+)['"]`));
+  if (archImport && /\bELEMENT_REGISTRY\b|\bREGISTRY\b/.test(archImport[1])) {
+    add(
+      'warn',
+      'root-imports',
+      `${rel(bindingFile)} takes ${constName} from '${archImport[2]}' — the same module it takes the ` +
+        `island registry from, which is the project barrel. That barrel pulls in every island, so an ` +
+        `island reaching an application page that composes a region closes a cycle back to this file ` +
+        `and ${constName} is read before it is initialised. Import it from its own module instead; ` +
+        `the registry can stay where it is.`,
+    );
+  }
+
   // 1b — MOUNTED? a composition root nobody renders is a binding, not an integration. The wrapper is
   //      often re-exported under the page's own name (`export const MotuRegion = Actions.Region`), so
   //      take every name that resolves to it and look for any of them in the host's JSX.

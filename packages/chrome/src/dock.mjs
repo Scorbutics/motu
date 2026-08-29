@@ -319,6 +319,34 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .motu-opt .sub { display: block; font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
 #tide[data-open="true"] .motu-opt { animation: tide-swim 260ms cubic-bezier(.2,.9,.3,1) both; }
 
+/* ── the command palette ──────────────────────────────────────────────────────────────────── */
+.dock-palette {
+  position: fixed; inset: 0; z-index: 2147483647; display: flex;
+  justify-content: center; align-items: flex-start; padding-top: 14vh;
+  background: color-mix(in srgb, var(--w-deep) 34%, transparent);
+}
+.dock-palette[hidden] { display: none; }
+.dock-palette .box {
+  width: min(560px, 92vw); max-height: 62vh; display: flex; flex-direction: column;
+  border-radius: 16px; overflow: hidden; background: #fff;
+  box-shadow: 0 0 0 1px var(--line), 0 24px 60px color-mix(in srgb, var(--w-deep) 26%, transparent);
+  font: 500 13px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+.dock-palette input {
+  border: 0; border-bottom: 1px solid var(--line); padding: 14px 16px;
+  font: 500 14px/1.4 inherit; color: var(--ink); outline: none;
+}
+.dock-palette ul { margin: 0; padding: 6px; list-style: none; overflow: auto; }
+.dock-palette li {
+  display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+  border-radius: 10px; cursor: pointer; color: var(--ink);
+}
+.dock-palette li[aria-selected="true"] { background: color-mix(in srgb, var(--tide-accent) 10%, #fff); }
+.dock-palette li .kind {
+  margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+
 /* ── the two tabs, and the seams pane ─────────────────────────────────────────────────────── */
 #tide .find--filter { padding-top: 2px; }
 #tide .tabs { flex: 1 1 auto; }
@@ -380,6 +408,45 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   width: 3px;
   border-radius: 9999px;
   background: var(--ink-faint);
+}
+#tide .seam-find[data-tone="broken"]::before { background: var(--motu-danger, #b91c1c); }
+#tide .seam-find[data-tone="warn"]::before { background: var(--motu-caution, #b45309); }
+#tide .seam-find__t { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12.5px; }
+#tide .seam-find__t i { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: currentColor; opacity: .5; }
+#tide .seam-find__d { color: var(--ink-muted); font-size: 11.5px; line-height: 1.45; font-weight: 500; }
+
+/* ── the two tabs, and the seams pane ─────────────────────────────────────────────────────── */
+#tide .tabs { flex: 1 1 auto; }
+#tide .find--filter { padding-top: 2px; }
+#tide .seams { display: none; }
+#tide .panel[data-tab="seams"] .seams {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 14px 12px;
+}
+#tide .panel[data-tab="seams"] .scroll, #tide .panel[data-tab="seams"] .find--filter { display: none; }
+#tide .seam-tally { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+#tide .seam-count {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px;
+  border-radius: 9999px; border: 1px solid var(--line); background: #fff;
+  font-size: 11px; font-weight: 600; color: var(--ink-muted);
+}
+#tide .seam-count i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
+#tide .seam-count[data-tone="broken"] i { background: var(--motu-danger, #b91c1c); }
+#tide .seam-count[data-tone="warn"] i { background: var(--motu-caution, #b45309); }
+#tide .seam-count[data-tone="ok"] i { background: var(--tide-accent); }
+#tide .seam-find {
+  position: relative; display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 11px 11px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface-row); color: var(--ink);
+}
+#tide .seam-find::before {
+  content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px;
+  border-radius: 9999px; background: var(--ink-faint);
 }
 #tide .seam-find[data-tone="broken"]::before { background: var(--motu-danger, #b91c1c); }
 #tide .seam-find[data-tone="warn"]::before { background: var(--motu-caution, #b45309); }
@@ -486,7 +553,19 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     flex-direction: row;
     justify-content: center;
     gap: 10px;
-    padding: 9px 14px calc(9px + env(safe-area-inset-bottom, 0px));
+    /* A DETERMINISTIC BAR, and a BOUNDED safe area.
+     *
+     * The height used to be whatever the content plus padding came to, with the safe-area inset added
+     * into the same shorthand. On Firefox for Android that arrived about twice as tall as anywhere
+     * else — env() insets are supposed to be zero without viewport-fit=cover, and an engine that
+     * reports one anyway silently doubles a bar whose height was never stated.
+     *
+     * So the bar states its own height, and the inset is capped: a real gesture bar is ~24px, and
+     * anything larger is an engine being wrong rather than a phone being unusual.
+     */
+    min-height: 44px;
+    padding: 0 14px;
+    padding-bottom: min(env(safe-area-inset-bottom, 0px), 24px);
     border-radius: 14px 14px 0 0;
     background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 52%, var(--w-shallow));
   }
@@ -641,10 +720,23 @@ function motuMountDock(opts) {
     el('div', { class: 'rig__head' }, [el('span', { class: 'motu-cap' }, ['Rig'])]),
     rigPills,
   ]);
+  // STATES is where the region is; SEAMS is what the lens has noticed about it. The same region
+  // looked at two ways, which is why they are tabs in one panel rather than two surfaces.
+  var tabs = el('div', { class: 'motu-segmented tabs', role: 'tablist' });
+  var tabThumb = el('span', { class: 'motu-segmented__thumb' });
+  var statesTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'true' }, ['States']);
+  var seamsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Seams']);
+  tabs.append(tabThumb, statesTab, seamsTab);
+  var seams = el('div', { class: 'seams' });
+  var kbd = el('button', { class: 'motu-kbd', type: 'button', title: 'Command palette' },
+    [/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '\u2318K' : 'Ctrl K']);
+
   var panel = el('div', { class: 'panel', role: 'group', 'aria-label': 'Lagoon controls' }, [
     masthead,
-    el('div', { class: 'find' }, [filter]),
+    el('div', { class: 'find' }, [tabs, kbd]),
+    el('div', { class: 'find find--filter' }, [filter]),
     scroll,
+    seams,
     rig,
   ]);
   var scrim = el('div', { class: 'scrim' });
@@ -691,6 +783,18 @@ function motuMountDock(opts) {
   /** The lagoon's own two globals — absent until it has booted, so everything here re-reads them. */
   var catalogue = function () { try { return lagoonWindow().__motuLagoonStates || null; } catch (e) { return null; } };
   var control = function () { try { return lagoonWindow().__motuLagoonControl || null; } catch (e) { return null; } };
+
+  var showTab = function (which) {
+    panel.dataset.tab = which;
+    statesTab.setAttribute('aria-current', String(which === 'states'));
+    seamsTab.setAttribute('aria-current', String(which === 'seams'));
+    var on = which === 'states' ? statesTab : seamsTab;
+    tabThumb.style.left = on.offsetLeft + 'px';
+    tabThumb.style.width = on.offsetWidth + 'px';
+    paint();
+  };
+  statesTab.addEventListener('click', function () { showTab('states'); });
+  seamsTab.addEventListener('click', function () { showTab('seams'); });
 
   var section = function (cap) {
     var count = el('span', { class: 'count' }, ['0']);
@@ -779,6 +883,36 @@ function motuMountDock(opts) {
     });
     rigPills.replaceChildren.apply(rigPills, pills);
 
+    // ── seams ────────────────────────────────────────────────────────────────────────────────
+    // COUNTS, AND THE FINDINGS THEMSELVES. No headline over them: a sentence summarising a region
+    // cannot be contradicted by the region, and a verdict that cannot be wrong cannot be trusted.
+    if (panel.dataset.tab === 'seams') {
+      var report = ctl.findings ? ctl.findings() : null;
+      if (!report) {
+        seams.replaceChildren(el('p', { class: 'motu-empty' },
+          ['This lagoon ships no seam lens, so there is nothing to report.']));
+      } else {
+        var t = report.tally;
+        var tally = el('div', { class: 'seam-tally' }, [
+          el('span', { class: 'seam-count', 'data-tone': 'broken' }, [el('i'), t.broken + ' broken']),
+          el('span', { class: 'seam-count', 'data-tone': 'warn' }, [el('i'), t.warn + ' warning' + (t.warn === 1 ? '' : 's')]),
+          el('span', { class: 'seam-count', 'data-tone': 'ok' }, [el('i'), report.islands + ' mounted']),
+        ]);
+        var head = el('div', { class: 'sect__head' }, [
+          el('span', { class: 'motu-cap' }, ['Findings']),
+          el('span', { class: 'count' }, [t.decisions ? report.findings.length + ' \u00b7 ' + t.decisions + ' needs a decision' : String(report.findings.length)]),
+        ]);
+        var cards = report.findings.map(function (f) {
+          return el('div', { class: 'seam-find', 'data-tone': f.tone }, [
+            el('span', { class: 'seam-find__t' }, [el('i'), f.title]),
+            el('span', { class: 'seam-find__d' }, [f.detail]),
+          ]);
+        });
+        if (!cards.length) cards = [el('p', { class: 'motu-empty' }, ['Nothing to report about this region.'])];
+        seams.replaceChildren.apply(seams, [tally, head].concat(cards));
+      }
+    }
+
     bayTitle.textContent = now.region || '—';
     baySub.textContent = flows.length + (flows.length === 1 ? ' state' : ' states');
     railLabel.textContent = now.region || 'lagoon';
@@ -805,9 +939,77 @@ function motuMountDock(opts) {
     attach();
   }, 250);
 
+  // ── the command palette ──────────────────────────────────────────────────────────────────────
+  //
+  // BUILT FROM THE CONTROL SURFACE, so it lists whatever this lagoon can actually do rather than a
+  // registry kept in step by hand — regions, the states of the one on screen, the view, and every
+  // chip the artifact has mounted, including ones added by a package this file has never heard of.
+  var pInput = el('input', { type: 'text', placeholder: 'Switch region, state, view\u2026', 'aria-label': 'Lagoon command palette' });
+  var pList = el('ul', { role: 'listbox' });
+  var palette = el('div', { class: 'dock-palette', hidden: '' }, [el('div', { class: 'box' }, [pInput, pList])]);
+  mountEl.appendChild(palette);
+  var shown = [];
+  var cursor = 0;
+
+  var commands = function () {
+    var ctl = control();
+    var cat = catalogue();
+    if (!ctl || !cat) return [];
+    var now = ctl.current();
+    var out = (cat.archipelagos || []).map(function (r) {
+      return { label: r.label, kind: 'region', run: function () { ctl.show(r.id); } };
+    });
+    ((cat.flows && cat.flows[now.region]) || []).forEach(function (f) {
+      out.push({ label: f.name, kind: 'state', run: function () { ctl.runFlow(f.name); } });
+    });
+    out.push({ label: 'As seeded', kind: 'state', run: function () { ctl.runFlow(null); } });
+    out.push({ label: 'Region', kind: 'view', run: function () { ctl.setView('region'); } });
+    out.push({ label: 'Mountpoints', kind: 'view', run: function () { ctl.setView('mountpoints'); } });
+    (ctl.chips ? ctl.chips() : []).forEach(function (c) {
+      if (c.label) out.push({ label: c.label + ' \u2014 ' + (c.title || 'toggle'), kind: 'toggle', run: function () { ctl.pressChip(c.index); } });
+    });
+    return out;
+  };
+
+  var renderPalette = function () {
+    var q = pInput.value.trim().toLowerCase();
+    shown = commands().filter(function (c) { return !q || c.label.toLowerCase().indexOf(q) >= 0; });
+    cursor = Math.min(cursor, Math.max(0, shown.length - 1));
+    pList.replaceChildren.apply(pList, shown.length
+      ? shown.map(function (c, i) {
+          var li = el('li', { role: 'option', 'aria-selected': String(i === cursor) },
+            [el('span', {}, [c.label]), el('span', { class: 'kind' }, [c.kind])]);
+          li.addEventListener('mouseenter', function () { cursor = i; renderPalette(); });
+          li.addEventListener('click', function () { c.run(); closePalette(); });
+          return li;
+        })
+      : [el('li', { class: 'motu-empty' }, ['Nothing matches.'])]);
+  };
+  var openPalette = function () { palette.hidden = false; pInput.value = ''; cursor = 0; renderPalette(); pInput.focus(); };
+  var closePalette = function () { palette.hidden = true; };
+  kbd.addEventListener('click', openPalette);
+  pInput.addEventListener('input', renderPalette);
+  palette.addEventListener('pointerdown', function (e) { if (e.target === palette) closePalette(); });
+  pInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') return closePalette();
+    if (e.key === 'Enter') { if (shown[cursor]) { shown[cursor].run(); closePalette(); } return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    if (!shown.length) return;
+    cursor = (cursor + (e.key === 'ArrowDown' ? 1 : shown.length - 1)) % shown.length;
+    renderPalette();
+  });
+  addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'k') {
+      e.preventDefault();
+      palette.hidden ? openPalette() : closePalette();
+    }
+  });
+
   return function () {
     clearInterval(poll);
     if (stop) stop();
+    palette.remove();
     tide.remove();
   };
 }

@@ -84,6 +84,14 @@ export interface TideLens {
    * Optional, so a lens that predates this still satisfies the interface and simply has no tab.
    */
   mountFindings?(container: HTMLElement): () => void;
+  /**
+   * The findings as DATA, for a panel drawn in another document.
+   *
+   * `mountFindings` hands over a container, which only works when the panel and the lagoon share a
+   * document. The host draws the chrome outside the artifact, so what has to cross is the result,
+   * not the DOM.
+   */
+  findings?(): unknown;
 }
 
 export interface TideLineOptions {

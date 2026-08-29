@@ -52,6 +52,20 @@ function collect() {
 }
 
 /**
+ * The findings as DATA, for a panel that is not in this document.
+ *
+ * The host draws the lagoon's chrome from outside the artifact now, and findings are derived from
+ * things that only exist in HERE: the mount registry, the store's write log, the call log. So the
+ * derivation stays and only its result crosses — the same split the toolbar chips already use, and
+ * the right one anyway, because the derivation is small and stable while the rendering is what churns.
+ */
+export function currentFindings() {
+  const input = collect();
+  const findings = findingsOf(input);
+  return { findings, tally: tallyOf(findings), islands: input.islands.length };
+}
+
+/**
  * Render the findings into `container`, and keep them current. Returns the teardown.
  */
 export function mountFindings(container: HTMLElement): () => void {

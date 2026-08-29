@@ -23,7 +23,7 @@ import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChrom
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle';
 import { mountFitToggle } from './fit-toggle';
-import { mountTideLine, type TideFlow, type TideLens, type TideView } from './tideline';
+import type { TideFlow, TideLens, TideView } from './tideline';
 import { mountReactLagoon } from './lagoon-react-mount';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
 import {
@@ -586,6 +586,8 @@ markSandbox();
           pressed: b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-current') === 'true',
         }));
       },
+      /** What the lens has noticed about the region on screen, or null when there is no lens. */
+      findings: () => (lens && lens.findings ? lens.findings() : null),
       pressChip: (index: number) => {
         const bar = document.getElementById('motu-toolbar');
         (bar?.querySelectorAll('button')[index] as HTMLButtonElement | undefined)?.click();
@@ -678,20 +680,26 @@ markSandbox();
 
   publishControl();
 
-  const tide = mountTideLine({
-    stations,
-    transport: mode,
-    about: config.about ?? DEFAULT_ABOUT,
-    // mountFindings comes across too, so the dock can show a Seams tab without importing the dev-only
-    // package to find out what a finding is. Forwarded rather than spread, because everything else on
-    // a LagoonLens (its own mount) is the app's business and not the dock's.
-    lens: lens
-      ? { toggle: lens.toggle, isOpen: lens.isOpen, subscribe: lens.subscribe, mountFindings: lens.mountFindings }
-      : undefined,
-    onStation,
-    onView,
-    onFlow,
-  });
+  /**
+   * NO PANEL IN HERE ANY MORE.
+   *
+   * The dock was bundled into every artifact, which meant changing it republished every lagoon that
+   * existed, and it had to overlay the application because it lived in the same document. It is drawn
+   * by whoever HOSTS the lagoon now — the host app around a framed artifact, or `motu lagoon serve`
+   * for the dev loop and the checks — from `@motu/chrome/dock`, reading the catalogue this page
+   * publishes and driving the control surface below.
+   *
+   * What stays here is what only this page can know: the catalogue, the handlers, and which state is
+   * showing. `mountTideLine` is still exported for the older entry (`bootstrapLagoon`) that mounts it
+   * directly; nothing on this path imports it, so it shakes out of the bundle.
+   */
+  const tide = {
+    setActive: (..._a: unknown[]) => controlChanged(),
+    setFlows: (..._a: unknown[]) => controlChanged(),
+    /** The outcome of a flow already lands in `__motuLagoonState`, which is what a driver reads. */
+    setFlowOutcome: (..._a: unknown[]) => {},
+  };
+
 
   if (island) {
     mountIsland(island);

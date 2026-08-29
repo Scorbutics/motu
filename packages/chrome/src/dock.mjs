@@ -146,16 +146,47 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .rail-dock .chev { font-size: 12px; opacity: .8; flex: 0 0 auto; }
 #tide[data-open="true"] .rail-dock { display: none; }
 
+/* THE HANDLE RIDES ON THE WATER — the switcher's rule, and the reason it moved into the masthead:
+ * above it, a white bar sat on the panel's pale surface, invisible, so the sheet read as having no
+ * handle at all.
+ *
+ * DECLARED HERE, ABOVE THE MEDIA QUERIES, and only its appearance. Whether it SHOWS is the phone's
+ * business and is decided in the phone block below. Written after that block instead — which is
+ * where it started — a bare display:none beats the media query at equal specificity on source
+ * order, and switches the handle off in the one place it exists for. That has now happened twice in
+ * this file; a base rule that only styles cannot do it a third time.
+ */
+#tide .grab { padding: 8px 0 2px; cursor: grab; touch-action: none; position: relative; z-index: 3; }
+
 /* ── the panel ─────────────────────────────────────────────────────────────────────────────── */
+/* IT SLIDES, and that is why it is not a display toggle.
+ *
+ * A panel toggled between none and flex cannot transition — there is no interpolation between "not in
+ * the layout" and "in it" — so the dock appeared and vanished while the shell's own lagoon switcher,
+ * two centimetres away, slid. Two sheets on one screen behaving differently is worse than either.
+ * This is the switcher's own treatment: translated out of view, transform transitioned, with
+ * visibility delayed to the end of the slide so a closed panel cannot be tabbed into.
+ */
 #tide .panel {
   width: var(--dock-w);
-  display: none;
+  display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
   background: var(--surface-page);
   box-shadow: 0 0 0 1px var(--line), 0 18px 50px color-mix(in srgb, var(--w-deep) 22%, transparent);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 240ms cubic-bezier(.2,.9,.3,1), visibility 0s linear 240ms;
 }
-#tide[data-open="true"] .panel { display: flex; }
+#tide[data-edge="left"] .panel { transform: translateX(-100%); }
+#tide[data-open="true"] .panel {
+  transform: none;
+  visibility: visible;
+  transition: transform 240ms cubic-bezier(.2,.9,.3,1), visibility 0s;
+}
+/* Following a finger has to be immediate; a transition here fights the drag. */
+#tide[data-dragging="true"] .panel { transition: none; }
 
 /* The masthead is the kit's, waves and all — the same header the host's own pages wear, so the dock
  * and the pages around it cannot drift apart. */
@@ -467,17 +498,32 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   #tide[data-edge="left"] .rail-dock .stand { rotate: none; }
   #tide .rail-dock .chev { rotate: 90deg; }
   #tide .panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: auto;
-    max-height: min(78vh, 620px);
+    max-height: 76vh;
     border-radius: 16px 16px 0 0;
     overflow: hidden;
+    /* THE LENS'S OWN TREATMENT, which the switcher already wears: this surface, this shadow, a
+     * backdrop blur. A flat page background reads as a different material to everything else motu
+     * puts over a lagoon. */
+    background: var(--surface-panel);
+    backdrop-filter: blur(14px) saturate(1.35);
+    -webkit-backdrop-filter: blur(14px) saturate(1.35);
+    box-shadow: 0 -14px 40px color-mix(in srgb, var(--w-deep) 22%, transparent);
+    transform: translateY(100%);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+  #tide[data-edge="left"] .panel { transform: translateY(100%); }
+  #tide[data-open="true"] .panel { transform: none; }
   #tide .panel > .motu-bay { border-radius: 16px 16px 0 0; }
   /* A SHEET, NOT A PANEL THAT HAPPENS TO BE AT THE BOTTOM. The shell's lagoon switcher comes up the
    * same edge with a backdrop and a grab bar, and two things that behave differently while looking
    * the same is worse than either. */
   #tide .scrim {
+    display: block;
     position: fixed;
     inset: 0;
     z-index: -1;
@@ -487,14 +533,7 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     transition: opacity 200ms ease;
   }
   #tide[data-open="true"] .scrim { opacity: 1; pointer-events: auto; }
-  #tide .grab {
-    display: block;
-    width: 38px;
-    height: 4px;
-    margin: 8px auto 0;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--motu-on-primary, #fff) 55%, transparent);
-  }
+  #tide .grab { display: block; }
 }
 /* The grab bar and the backdrop are the phone's story only; on a desktop rail they would be furniture
  * with nothing to do.
@@ -505,6 +544,7 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 @media (min-width: 761px) {
   #tide .grab, #tide .scrim { display: none; }
 }
+#tide .grab i { display: block; width: 40px; height: 4px; margin: 0 auto; border-radius: 999px; background: rgba(255, 255, 255, .5); }
 
 /* THE SHELL'S SHEET WINS. Same origin, so the host sets this on the frame's own root when it opens
  * the lagoon switcher; the dock steps aside rather than stacking a second sheet on the same edge. */
@@ -583,15 +623,17 @@ function motuMountDock(opts) {
   var bayTitle = el('b', {}, ['—']);
   var baySub = el('small', {}, ['']);
   var fold = el('button', { class: 'fold', type: 'button', 'aria-label': 'Close lagoon controls' }, ['›']);
+  // INSIDE the bay, not above it. The handle is white, so on the panel's pale surface it was
+  // invisible and the sheet read as having none; on the water it reads exactly as the switcher's does.
+  var grab = el('span', { class: 'grab' }, [el('i')]);
   var masthead = el('div', { class: 'motu-bay', 'data-shape': 'masthead' }, [
+    grab,
     el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), fold]),
   ]);
 
   var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
   var scroll = el('div', { class: 'scroll' });
-  var grab = el('span', { class: 'grab' });
   var panel = el('div', { class: 'panel', role: 'group', 'aria-label': 'Lagoon controls' }, [
-    grab,
     masthead,
     el('div', { class: 'find' }, [filter]),
     scroll,
@@ -610,6 +652,32 @@ function motuMountDock(opts) {
   // Tapping the backdrop closes it, which is the gesture the switcher already teaches.
   scrim.addEventListener('click', function () { open(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
+
+  // DRAG TO DISMISS, for the reason the switcher gives for having it: a sheet a thumb can only close
+  // by reaching for a backdrop feels stuck, and following the finger is what makes it read as a panel
+  // rather than a popup. Past a third of its height it goes; short of that it springs back.
+  var startY = null;
+  var dy = 0;
+  grab.addEventListener('pointerdown', function (e) {
+    startY = e.clientY;
+    dy = 0;
+    tide.dataset.dragging = 'true';
+    grab.setPointerCapture(e.pointerId);
+  });
+  grab.addEventListener('pointermove', function (e) {
+    if (startY === null) return;
+    dy = Math.max(0, e.clientY - startY);
+    panel.style.transform = 'translateY(' + dy + 'px)';
+  });
+  var endDrag = function () {
+    if (startY === null) return;
+    startY = null;
+    delete tide.dataset.dragging;
+    panel.style.transform = '';
+    if (dy > panel.getBoundingClientRect().height / 3) open(false);
+  };
+  grab.addEventListener('pointerup', endDrag);
+  grab.addEventListener('pointercancel', endDrag);
 
   /** The lagoon's own two globals — absent until it has booted, so everything here re-reads them. */
   var catalogue = function () { try { return lagoonWindow().__motuLagoonStates || null; } catch (e) { return null; } };

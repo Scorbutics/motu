@@ -7,6 +7,7 @@
 // this package is imported by a test, so the first thing that noticed was always a Next build.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 
 test('the chrome sheet parses and carries the shapes its callers name', async () => {
   const { motuChromeCss } = await import('../src/css.mjs');
@@ -64,4 +65,28 @@ test('the kit cannot reach a host application it is injected into', async () => 
     }
   }
   assert.deepEqual(reaching, [], 'every kit rule must be anchored to a motu- class');
+});
+
+// The dock's stylesheet, for the reason the others are here: it is a template literal, and a backtick
+// in a comment inside one ends the string several rules early. That has happened four times in this
+// package's stylesheets; the module simply fails to import, which is what these tests catch.
+test('the dock sheet parses, and its bootstrap is valid script', async () => {
+  const { motuDockCss, motuDockJs } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  assert.ok(css.length > 1000, 'the dock sheet came back empty');
+  for (const shape of ['#tide .rail-dock', '#tide .panel', '#tide .grab', '#tide .scrim']) {
+    assert.ok(css.includes(shape), 'the dock sheet lost ' + shape);
+  }
+  // The bootstrap is serialised into a page that has no bundler, so it has to be valid on its own.
+  new vm.Script(motuDockJs());
+});
+
+test('the dock panel slides rather than toggling display', async () => {
+  const { motuDockCss } = await import('../src/dock.mjs');
+  // A panel switched between `none` and `flex` cannot transition, and the shell's own sheet beside it
+  // does. This is the rule that keeps the two behaving alike.
+  const css = motuDockCss();
+  assert.match(css, /#tide \.panel \{[^}]*transform: translateX\(100%\)/s);
+  assert.match(css, /#tide\[data-open="true"\] \.panel \{[^}]*transform: none/s);
+  assert.ok(!/#tide \.panel \{[^}]*display: none/s.test(css), 'the panel is back to a display toggle');
 });

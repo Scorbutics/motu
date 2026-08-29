@@ -418,6 +418,54 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   color: var(--motu-caution, #b45309);
 }
 
+#tide .islands { display: none; }
+#tide .panel[data-tab="islands"] .islands {
+  display: flex; flex-direction: column; gap: 8px;
+  flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px 14px 12px;
+}
+#tide .panel[data-tab="islands"] .scroll,
+#tide .panel[data-tab="islands"] .seams,
+#tide .panel[data-tab="islands"] .find--filter { display: none; }
+/* A CARD KEEPS ITS OWN HEIGHT. These panes are flex columns that scroll, and a flex child shrinks by
+ * default when the column runs out of room — so the cards were squeezed and then clipped by their own
+ * overflow, losing the last prop row and the summary line under it. Measured: 112px tall around 152px
+ * of content. The pane scrolls; the cards do not compress. */
+#tide .islands > *, #tide .seams > * { flex: 0 0 auto; }
+#tide .isl { border: 1px solid var(--line); border-radius: 11px; background: var(--surface-row); overflow: hidden; }
+#tide .isl__head {
+  display: grid; grid-template-columns: 8px minmax(0, 1fr) minmax(0, 1.1fr) auto;
+  align-items: center; gap: 7px; padding: 8px 10px;
+  background: color-mix(in srgb, var(--tide-accent) 6%, #fff);
+  font: 600 11.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#tide .isl__head > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#tide .isl__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
+#tide .isl__dot[data-tone="broken"] { background: var(--motu-danger, #b91c1c); }
+#tide .isl__dot[data-tone="warn"] { background: var(--motu-caution, #b45309); }
+#tide .isl__dot[data-tone="ok"] { background: var(--tide-accent); }
+#tide .isl__slot { font-weight: 700; color: var(--ink); }
+#tide .isl__tag, #tide .isl__meta { color: var(--ink-muted); font-weight: 500; }
+#tide .isl__meta { font-size: 10px; }
+#tide .isl__body { padding: 7px 10px 9px; display: flex; flex-direction: column; gap: 3px; }
+#tide .isl__prop {
+  display: grid; grid-template-columns: minmax(0, 0.9fr) 64px minmax(0, 1.4fr);
+  gap: 7px; align-items: center;
+  font: 500 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#tide .isl__prop > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#tide .isl__pn { font-weight: 700; color: var(--ink); }
+#tide .isl__pv { color: var(--ink-muted); }
+#tide .isl__ps {
+  text-align: center; border-radius: 9999px; padding: 1px 6px; font-size: 9.5px; font-weight: 700;
+  background: color-mix(in srgb, var(--ink-faint) 14%, #fff); color: var(--ink-muted);
+}
+/* THE TWO THAT MEAN SOMETHING IS WRONG: default is an island rendering on nothing, and
+ * bound-empty is a wire that exists with nothing on it. The rest are ordinary. */
+#tide .isl__ps[data-state="default"] { background: color-mix(in srgb, var(--motu-danger, #b91c1c) 14%, #fff); color: var(--motu-danger, #b91c1c); }
+#tide .isl__ps[data-state="bound-empty"] { background: color-mix(in srgb, var(--motu-caution, #b45309) 16%, #fff); color: var(--motu-caution, #b45309); }
+#tide .isl__ps[data-state="bound"] { background: color-mix(in srgb, var(--tide-accent) 14%, #fff); color: var(--w-deep); }
+#tide .isl__did { margin: 4px 0 0; font-size: 10.5px; color: var(--ink-faint); font-weight: 500; }
+
 #tide .seam-notice {
   margin: 0; padding: 6px 9px; border-radius: 8px; font-size: 11px; font-weight: 600;
   background: color-mix(in srgb, var(--motu-caution, #b45309) 12%, #fff);
@@ -802,8 +850,13 @@ function motuMountDock(opts) {
   var tabThumb = el('span', { class: 'motu-segmented__thumb' });
   var statesTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'true' }, ['States']);
   var seamsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Seams']);
-  tabs.append(tabThumb, statesTab, seamsTab);
+  // ISLANDS IS A DIFFERENT QUESTION, which is why it is a tab and not more rows under Seams. Seams
+  // asks how the region is WIRED; this asks what each island was actually given. The same key answers
+  // both from opposite ends — Seams says who reads `shots`, this says whether shot-list got it.
+  var islandsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Islands']);
+  tabs.append(tabThumb, statesTab, seamsTab, islandsTab);
   var seams = el('div', { class: 'seams' });
+  var islandsPane = el('div', { class: 'islands' });
   var kbd = el('button', { class: 'motu-kbd', type: 'button', title: 'Command palette' },
     [/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '\u2318K' : 'Ctrl K']);
 
@@ -813,6 +866,7 @@ function motuMountDock(opts) {
     el('div', { class: 'find find--filter' }, [filter]),
     scroll,
     seams,
+    islandsPane,
     rig,
   ]);
   var scrim = el('div', { class: 'scrim' });
@@ -864,13 +918,15 @@ function motuMountDock(opts) {
     panel.dataset.tab = which;
     statesTab.setAttribute('aria-current', String(which === 'states'));
     seamsTab.setAttribute('aria-current', String(which === 'seams'));
-    var on = which === 'states' ? statesTab : seamsTab;
+    islandsTab.setAttribute('aria-current', String(which === 'islands'));
+    var on = which === 'states' ? statesTab : which === 'seams' ? seamsTab : islandsTab;
     tabThumb.style.left = on.offsetLeft + 'px';
     tabThumb.style.width = on.offsetWidth + 'px';
     paint();
   };
   statesTab.addEventListener('click', function () { showTab('states'); });
   seamsTab.addEventListener('click', function () { showTab('seams'); });
+  islandsTab.addEventListener('click', function () { showTab('islands'); });
 
   var section = function (cap) {
     var count = el('span', { class: 'count' }, ['0']);
@@ -1077,6 +1133,48 @@ function motuMountDock(opts) {
         });
         if (!cards.length) cards = [el('p', { class: 'motu-empty' }, ['Nothing to report about this region.'])];
         seams.replaceChildren.apply(seams, sheetNodes.concat([tally, head]).concat(cards));
+      }
+    }
+
+    // ── islands ──────────────────────────────────────────────────────────────────────────────
+    if (panel.dataset.tab === 'islands') {
+      var mounted = ctl.islands ? ctl.islands() : null;
+      if (!mounted) {
+        islandsPane.replaceChildren(el('p', { class: 'motu-empty' },
+          ['This lagoon ships no seam lens, so there is nothing to inspect.']));
+      } else if (!mounted.length) {
+        islandsPane.replaceChildren(el('p', { class: 'motu-empty' }, ['No island is mounted.']));
+      } else {
+        islandsPane.replaceChildren.apply(islandsPane, mounted.map(function (isl) {
+          var head = el('div', { class: 'isl__head' }, [
+            el('i', { class: 'isl__dot', 'data-tone': isl.verdict }),
+            el('span', { class: 'isl__slot' }, [isl.slot]),
+            el('span', { class: 'isl__tag' }, [isl.tag]),
+            el('span', { class: 'isl__meta' }, [isl.isolation]),
+          ]);
+          var body = el('div', { class: 'isl__body' });
+          if (isl.risk) body.appendChild(el('p', { class: 'seam-notice' }, ['\u26a0 ' + isl.risk]));
+          if (!isl.props.length) {
+            body.appendChild(el('p', { class: 'motu-empty' }, ['No declared props.']));
+          } else {
+            isl.props.forEach(function (pr) {
+              body.appendChild(el('div', { class: 'isl__prop', title: pr.name + ' = ' + pr.value }, [
+                el('span', { class: 'isl__pn' }, [pr.name]),
+                el('span', { class: 'isl__ps', 'data-state': pr.state }, [pr.state]),
+                el('span', { class: 'isl__pv' }, [pr.storeKey ? pr.storeKey + ' = ' + pr.value : pr.value]),
+              ]));
+            });
+          }
+          // The counts, because "what did this island actually do" is the other half of "what was it
+          // given", and it is one line rather than another table.
+          var did = [];
+          if (isl.writes.length) did.push('writes ' + isl.writes.join(', '));
+          if (isl.emits.length) did.push('emits ' + isl.emits.join(', '));
+          if (isl.calls) did.push(isl.calls + ' call' + (isl.calls === 1 ? '' : 's'));
+          if (isl.intents) did.push(isl.intents + ' intent' + (isl.intents === 1 ? '' : 's'));
+          body.appendChild(el('p', { class: 'isl__did' }, [did.length ? did.join(' \u00b7 ') : 'reads only']));
+          return el('div', { class: 'isl' }, [head, body]);
+        }));
       }
     }
 

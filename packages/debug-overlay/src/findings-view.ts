@@ -21,7 +21,7 @@ import {
   hostCalls,
 } from '@motu/core';
 import { lens } from './store';
-import { computeProps, verdictOf, bindKeys, preview, ago, type Verdict } from './model';
+import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';
 import { toggleDebugOverlay, isDebugOverlayOpen } from './overlay';
 
@@ -56,6 +56,40 @@ function collect() {
   }
   const traced = new Set(lens.calls.map((c) => `${c.service}.${c.method}`)).size;
   return { islands, writes, verdicts, calls: lens.calls.length, traced };
+}
+
+/**
+ * WHAT IS MOUNTED, per island — the lens's island scope, as data.
+ *
+ * A different question from the region sheet, which is why it earns its own tab rather than more
+ * rows under Seams: the sheet asks how the region is WIRED, this asks what each island was actually
+ * given. The same key answers both, from opposite ends — the sheet says who reads `shots`, this says
+ * whether shot-list got it or is sitting at its default.
+ */
+export function currentIslands() {
+  return getMountedIslands().map((info) => {
+    const def = getIslandDefinition(info.element);
+    const props = computeProps(info, def);
+    return {
+      slot: info.slot,
+      tag: info.element,
+      isolation: isolationOf(info.el),
+      verdict: verdictOf(props),
+      /** A declared reach the lagoon stubs and core cannot observe — visible only because it is declared. */
+      risk: lens.externalRisk(info) || '',
+      props: props.map((r) => ({
+        name: r.name,
+        state: r.state,
+        storeKey: r.storeKey ?? '',
+        value: preview(r.value),
+      })),
+      reads: bindKeys(info),
+      writes: lens.islandWrites(info),
+      emits: Object.entries(info.spec.on ?? {}).filter(([, h]) => h).map(([e]) => e),
+      calls: lens.islandCalls(info).length,
+      intents: lens.intents.filter((i) => i.source === info.slot).length,
+    };
+  });
 }
 
 /**

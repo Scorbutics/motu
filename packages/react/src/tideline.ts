@@ -96,6 +96,8 @@ export interface TideLens {
   sheet?(): unknown;
   /** Channels, calls and intents — the rest of the lens, as data. See `findings` for why. */
   seams?(): unknown;
+  /** One entry per mounted island: what it was given, what it reads, writes and emits. */
+  islands?(): unknown;
 }
 
 export interface TideLineOptions {

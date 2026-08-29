@@ -138,15 +138,25 @@ function ReviewPage({ cfg, viewer, repo }: { cfg: HostConfig; viewer: Viewer | n
   // Each slot gets the REAL component with no props of its own: everything these five render comes
   // from the region, fed by the declared `shots` source. `viewer` is the exception — where the host
   // lives is the page's to say, never region state.
+  // `projects` IS NULL WHEN WE ARRIVED WITH A PROJECT. The lagoon's sidebar that linked here already
+  // listed every project; drawing that column again is the same list twice, one click apart. Unscoped
+  // — the palette's action, or somebody typing /console — it is how you choose one, so it stays.
+  //
+  // (A comment cannot sit in an attribute position: `{/* … */}` between props is a parse error, not a
+  // comment. It belongs here, above the element.)
   return (
     <Review.Root
-      title="Baseline review"
+      // THE PROJECT NAMES ITSELF when there is one. Dropping the picker took away the only thing on
+      // screen that said which project this was about — and "Baseline review" over a list of shots
+      // is a heading that could be any of them.
+      title={repo ?? "Baseline review"}
       summary={<StatusSummary />}
-      projects={<RepoPicker />}
+      projects={repo ? null : <RepoPicker />}
       shots={<ShotList />}
       viewer={<DiffViewer shotUrl={(h: string) => shotUrl(cfg, h)} />}
       error={error ? <p className="rv-error">{error}</p> : null}
       account={<ViewerBadge viewer={viewer} />}
+      backHref={repo ? `/${repo}/` : "/"}
       // NULL WHEN THERE IS NOBODY TO ACCEPT AS, which is how a slot is left unmounted — `Root` treats
       // null as absent rather than mounting the island with no child, which would put the accept bar
       // on screen at exactly the moment the page said not to.

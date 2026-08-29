@@ -138,6 +138,15 @@ button.member .live-dot {
   button.member[aria-current="true"]::after { display: none; }
   button.member .live-dot { animation: none; box-shadow: none; }
 }
+/* THE RAIL'S ONE ACTION. Under the members because it is about them, above the footer because the
+   footer is about this VIEW — when it was pinned there it read as a property of the page rather than
+   something to do with the project. */
+.rail-action {
+  margin: 4px 10px 10px;
+  justify-content: center;
+  gap: 8px;
+}
+
 aside footer {
   margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line);
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -251,6 +260,7 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
               // and pointing each frame at its own bare page means no index has to agree with
               // anything — the class of bug that made the shell and the frames move together.
               (m.frameHref ? ` data-href="${escapeHtml(m.frameHref)}"` : '') +
+              ` data-repo="${escapeHtml(m.repo)}"` +
               `>` +
               `<span class="gauge" aria-hidden="true"></span>` +
               `<span class="body"><span class="name">${escapeHtml(m.title || m.slug)}` +
@@ -304,6 +314,13 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
       leading: `<a class="motu-home" href="/" aria-label="All repositories">${motuMark()}</a>`,
     })}
     <div class="rail">${rail}</div>
+    <!-- BASELINE REVIEW, HERE AND NOT ON THE FRONT PAGE. Reviewing is something you do TO a project,
+         so the way in belongs beside the project you are looking at — not in the masthead of the page
+         that lists them all, where it was a link with no subject and you had to pick one again on
+         arrival. data-repo is rewritten by show(i) so it always names the selected member. -->
+    <a class="rail-action motu-btn" data-weight="quiet" id="rail-review" href="/console">
+      <span aria-hidden="true">◎</span> Baseline review
+    </a>
     <footer>
       <span class="motu-cap">${
         live
@@ -366,6 +383,12 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
     // stale the moment you picked another: the header said one lagoon while the frame showed another.
     var bayName = document.querySelector('#switcher .bay-name');
     if (chosen && bayName && FOLLOWS_MEMBER) bayName.textContent = name;
+    // The review link names whichever project is on screen. Without this it would keep pointing at
+    // the one you arrived on, which is the same staleness the header had.
+    var review = document.getElementById('rail-review');
+    if (chosen && review && chosen.dataset.repo) {
+      review.href = '/console?repo=' + encodeURIComponent(chosen.dataset.repo);
+    }
     if (history.replaceState) history.replaceState(null, '', '#' + i);
   }
   // --- the sheet, on a phone --------------------------------------------------------------------

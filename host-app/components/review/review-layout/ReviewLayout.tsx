@@ -28,6 +28,7 @@ export function ReviewLayout({
   accept,
   connect,
   account,
+  backHref = "/",
   error,
 }: {
   title: string
@@ -47,6 +48,13 @@ export function ReviewLayout({
   connect?: ReactNode
   /** Who is reading this, hard right on the water — the same badge the rest of the host carries. */
   account?: ReactNode
+  /**
+   * Where the mark goes.
+   *
+   * The REPO's page when we know which project this is about, and the index otherwise. Sending a
+   * scoped reviewer all the way back to the list of every lagoon is a step they then have to undo.
+   */
+  backHref?: string
   error?: ReactNode
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -89,7 +97,12 @@ export function ReviewLayout({
   }
 
   return (
-    <div className={`rv${sheetOpen ? " rv-sheet-open" : ""}${dragging ? " rv-sheet-dragging" : ""}`}>
+    // SCOPED means "we already know which project", so the picker column is not drawn at all — the
+    // grid loses it rather than showing an empty 240px gutter. `projects == null` is the caller
+    // saying so: `Root` treats a null slot as absent, which is the same signal the accept bar uses.
+    <div
+      className={`rv${projects == null ? " rv-scoped" : ""}${sheetOpen ? " rv-sheet-open" : ""}${dragging ? " rv-sheet-dragging" : ""}`}
+    >
       {/* THE BAY, from motu's kit — not a second drawing of it.
           This header spelled out the same `linear-gradient(160deg, var(--w-deep), var(--w-mid) 60%,
           var(--w-shallow))` the framework's bay already carried, and missed the crest and the mono
@@ -106,7 +119,7 @@ export function ReviewLayout({
           <>
           {/* THE WAY HOME, where the mark is on every other surface of this host. The console was the
               one screen with no route back to the lagoons it reviews — you had to edit the URL. */}
-          <a className="motu-home" href="/" aria-label="All repositories">
+          <a className="motu-home" href={backHref} aria-label="Back to the lagoon">
             <Mark />
           </a>
           {/* PHONE ONLY. On a wide screen the projects are already on screen, so a control to reveal
@@ -135,6 +148,7 @@ export function ReviewLayout({
       {error}
 
       <div className="rv-body">
+        {projects == null ? null : (
         <aside className="rv-rail" id="rv-projects" ref={sheetRef} aria-label="Projects">
           <div
             className="rv-grab"
@@ -148,6 +162,7 @@ export function ReviewLayout({
           </div>
           {projects}
         </aside>
+        )}
         {/* The same island either way: a column beside the viewer on a wide screen, a strip you thumb
             along above it on a phone. It owns the selection in both, so nothing new can claim it. */}
         <nav className="rv-shots" aria-label="Shots">

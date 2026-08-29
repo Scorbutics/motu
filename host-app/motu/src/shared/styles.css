@@ -288,6 +288,11 @@ code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 .rv-head { flex: none; }
 .rv-error { margin: 0; padding: 8px 20px; background: var(--error-bg); color: var(--error-ink); font-size: 12.5px; }
 .rv-body { flex: 1; display: grid; grid-template-columns: 240px 300px 1fr; min-height: 0; }
+/* ARRIVED WITH A PROJECT IN MIND. The console is reached from a lagoon's own sidebar now, which
+   already listed every project — so repeating that list here, in the same place on screen, was the
+   same column twice one click apart. Scoped, the desk is shots and the viewer. */
+.rv-scoped .rv-body { grid-template-columns: 300px 1fr; }
+.rv-scoped .rv-sheet-toggle { display: none; }
 /* Both phone-only affordances. On a wide screen the projects are already a column, so a control to
    reveal them would be a button that does nothing visible. */
 /* THE TOGGLE IS SCOPED, and it has to be now. It carries `.motu-btn` for its look, and the kit's
@@ -302,6 +307,7 @@ code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
    room to stack them. Measured at 390px, the three-column form overflowed the document by 197px. */
 @media (max-width: 900px) and (min-width: 641px) {
   .rv-body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+  .rv-scoped .rv-body { grid-template-rows: auto 1fr; }
   .rv-rail, .rv-shots { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; }
   .rv { height: auto; min-height: 100vh; }
 }

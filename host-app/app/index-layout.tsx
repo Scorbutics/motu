@@ -47,13 +47,12 @@ export function IndexLayout({
         headline="Your lagoons"
         blurb="Every declared state, published and addressable."
       >
+        {/* NO REVIEW LINK HERE ANY MORE. Reviewing is something you do TO a project, so the way in
+            lives beside the project — in a lagoon's own sidebar, where it names what you are looking
+            at. In this masthead it was a link with no subject: it opened a console that then asked
+            you to pick a project you had not chosen yet. It is still in the palette, which is a
+            different thing: a command you go looking for, not a permanent word in the bar. */}
         {readout}
-        {/* THE CONSOLE, NAMED. It is also in the palette as an action, and a palette entry is not
-            discoverable — ⌘K only helps somebody who already suspects the thing exists. This is the
-            one other place on this host worth going, so it gets a word in the bar. */}
-        <a className="motu-back" href="/console">
-          Baseline review
-        </a>
         {account}
       </Bay>
       {/* The filter rides in the gap the masthead's bottom padding leaves under the waterline. */}

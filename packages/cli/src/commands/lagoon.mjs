@@ -344,7 +344,10 @@ ${motuDockJs()}
     var ours = mounted.querySelector('#tide');
     if (ours) ours.setAttribute('data-hosted', '');
     var hush = document.createElement('style');
-    hush.textContent = '#tide:not([data-hosted]){display:none!important}';
+    hush.textContent = '#tide:not([data-hosted]){display:none!important}' +
+      // THE FLOATING TOOLBAR TOO. It used to be adopted by the in-page dock; with that gone it falls
+      // back to floating over the application, and its chips are already in the rig out here.
+      '#motu-toolbar{display:none!important}';
     document.head.appendChild(hush);
     // The served page is the lagoon itself, so the dock stands on this document and this document
     // keeps the strip — the same reserve the host's shell makes around a framed one.

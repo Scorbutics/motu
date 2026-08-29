@@ -588,6 +588,8 @@ markSandbox();
       },
       /** What the lens has noticed about the region on screen, or null when there is no lens. */
       findings: () => (lens && lens.findings ? lens.findings() : null),
+      /** The region sheet: the declaration, proved by the region that is running. */
+      sheet: () => (lens && lens.sheet ? lens.sheet() : null),
       pressChip: (index: number) => {
         const bar = document.getElementById('motu-toolbar');
         (bar?.querySelectorAll('button')[index] as HTMLButtonElement | undefined)?.click();

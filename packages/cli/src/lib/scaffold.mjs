@@ -442,7 +442,7 @@ export const LAGOON_GALLERY_ENTRY = `{{envShim}}// The lagoon gallery entry.
 // the project's own registry, and the debug overlay — which @motu/react must not depend on, so the app
 // hands it in.
 import { startLagoon } from '@motu/react';
-import { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay, mountFindings, currentFindings } from '@motu/debug-overlay';
+import { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay, mountFindings, currentFindings, currentSheet } from '@motu/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS } from '{{appPackage}}';
 import css from '{{appPackage}}/styles.css?inline';
 import { ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from '{{fixturesImport}}';
@@ -478,6 +478,7 @@ startLagoon({
     subscribe: subscribeDebugOverlay,
   mountFindings,
   findings: currentFindings,
+  sheet: currentSheet,
   },
   // Recorded callsite frames (\`motu archipelago record-frame\`). The glob has to be written here:
   // Vite resolves it statically, at this file's location.

@@ -449,7 +449,7 @@ ${PRIMARY_DETECT_JS}
         st.id = 'motu-dock-hush';
         // Hidden, not removed: the artifact owns that element and may still be using it for its own
         // state. What it must stop doing is drawing a second dock over the first.
-        st.textContent = '#tide{display:none!important}html[data-motu-dock]{padding:0!important}';
+        st.textContent = '#tide{display:none!important}#motu-toolbar{display:none!important}html[data-motu-dock]{padding:0!important}';
         d.head.appendChild(st);
       } catch (e) { /* not ours */ }
     };

@@ -351,6 +351,12 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .find--filter { padding-top: 2px; }
 #tide .tabs { flex: 1 1 auto; }
 #tide .seams { display: none; }
+/* WIDER FOR THE SHEET. States is a list of names and reads fine in a column; the region sheet is a
+ * five-column table, and at 340px every cell truncates to an ellipsis. The panel widens only while
+ * that tab is showing, so the dock is not permanently large for the view that does not need it. */
+@media (min-width: 761px) {
+  #tide .panel[data-tab="seams"] { width: min(560px, 46vw); }
+}
 #tide .panel[data-tab="seams"] .seams {
   display: flex;
   flex-direction: column;
@@ -365,6 +371,53 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 /* THE TALLY IS COUNTS AND NOTHING ELSE. There is no headline above it: a sentence summarising the
  * region could not be contradicted by the region, and a verdict that cannot be wrong cannot be
  * trusted either. The counts and the findings under them each name something checkable. */
+/* THE SHEET: dense on purpose. It is a table to SCAN — the eye goes down the key column looking for
+ * the one that is wrong — so every cell truncates to one line and the whole row carries the full text
+ * in its title. Making the cells wrap would turn twenty-four keys into a page nobody reads. */
+#tide .sheet { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+#tide .sheet__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) 66px minmax(0, 1fr) minmax(0, 1.1fr) 70px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 16px 5px 7px;
+  border-radius: 7px;
+  font: 500 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--surface-row);
+}
+#tide .sheet__row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+#tide .sheet__k { font-weight: 700; color: var(--ink); }
+#tide .sheet__own {
+  text-align: center;
+  border-radius: 9999px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+#tide .sheet__own[data-kind="island"] {
+  background: color-mix(in srgb, var(--tide-accent) 16%, #fff);
+  color: var(--w-deep);
+}
+#tide .sheet__own[data-kind="host"] { background: color-mix(in srgb, var(--ink-faint) 14%, #fff); color: var(--ink-muted); }
+#tide .sheet__rd, #tide .sheet__val { color: var(--ink-muted); }
+#tide .sheet__moved { text-align: right; font-size: 10px; color: var(--ink-faint); }
+#tide .sheet__moved[data-moved="true"] { color: var(--tide-accent); }
+/* The flag sits OUTSIDE the grid so a row without one keeps the same column widths as a row with. */
+#tide .sheet__flag {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--motu-caution, #b45309);
+}
+
 #tide .seam-tally { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
 #tide .seam-count {
   display: inline-flex;
@@ -887,10 +940,46 @@ function motuMountDock(opts) {
     // COUNTS, AND THE FINDINGS THEMSELVES. No headline over them: a sentence summarising a region
     // cannot be contradicted by the region, and a verdict that cannot be wrong cannot be trusted.
     if (panel.dataset.tab === 'seams') {
+      // THE REGION SHEET FIRST, because it is what the lens opens on: one row per declared key, who
+      // owns it, who reads it, what it holds, and whether anything has moved it. The findings under
+      // it are conclusions; this is the declaration proved by the region that is running, and it is
+      // the thing to read before the archipelago.
+      var sheet = ctl.sheet ? ctl.sheet() : null;
+      var sheetNodes = [];
+      if (sheet && sheet.rows.length) {
+        sheetNodes.push(el('div', { class: 'sect__head' }, [
+          el('span', { class: 'motu-cap' }, ['Region']),
+          el('span', { class: 'count' }, [sheet.total + ' key' + (sheet.total === 1 ? '' : 's') +
+            ' \u00b7 ' + sheet.owned + ' island-owned, ' + (sheet.total - sheet.owned) + ' host-fed']),
+        ]));
+        var table = el('div', { class: 'sheet' });
+        sheet.rows.forEach(function (r) {
+          var row = el('div', {
+            class: 'sheet__row',
+            title: r.key + ' \u2014 ' + (r.islandOwned ? 'written by ' + r.owner : 'fed by the host') +
+              '; read by ' + (r.readers.join(', ') || 'nobody') + '\n' + r.value,
+          }, [
+            el('span', { class: 'sheet__k' }, [r.key]),
+            el('span', { class: 'sheet__own', 'data-kind': r.islandOwned ? 'island' : 'host' }, [r.owner]),
+            el('span', { class: 'sheet__rd' }, [r.readers.length ? r.readers.join(', ') : '\u2205 nobody']),
+            el('span', { class: 'sheet__val' }, [r.value]),
+            el('span', { class: 'sheet__moved', 'data-moved': r.moved ? 'true' : 'false' }, [r.moved || 'seed']),
+          ]);
+          if (r.flag) {
+            var flag = el('span', { class: 'sheet__flag', title: r.flagTitle },
+              [r.flag === 'laundering' ? '\u26a0' : '\u25cb']);
+            row.appendChild(flag);
+          }
+          table.appendChild(row);
+        });
+        sheetNodes.push(table);
+      }
+
       var report = ctl.findings ? ctl.findings() : null;
       if (!report) {
-        seams.replaceChildren(el('p', { class: 'motu-empty' },
-          ['This lagoon ships no seam lens, so there is nothing to report.']));
+        seams.replaceChildren.apply(seams, sheetNodes.concat([
+          el('p', { class: 'motu-empty' }, ['This lagoon ships no seam lens, so there is nothing to report.']),
+        ]));
       } else {
         var t = report.tally;
         var tally = el('div', { class: 'seam-tally' }, [
@@ -909,7 +998,7 @@ function motuMountDock(opts) {
           ]);
         });
         if (!cards.length) cards = [el('p', { class: 'motu-empty' }, ['Nothing to report about this region.'])];
-        seams.replaceChildren.apply(seams, [tally, head].concat(cards));
+        seams.replaceChildren.apply(seams, sheetNodes.concat([tally, head]).concat(cards));
       }
     }
 

@@ -12,9 +12,9 @@
 //
 // The kit's classes are used bare: the dock has already injected `motuKitCss('#tide')` at its own
 // scope, so anything mounted inside it is styled without this file shipping a stylesheet.
-import { getMountedIslands, getIslandDefinition } from '@motu/core';
+import { getMountedIslands, getIslandDefinition, writtenKeys, launderingSuspects } from '@motu/core';
 import { lens } from './store';
-import { computeProps, verdictOf, type Verdict } from './model';
+import { computeProps, verdictOf, bindKeys, preview, ago, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';
 import { toggleDebugOverlay, isDebugOverlayOpen } from './overlay';
 
@@ -49,6 +49,66 @@ function collect() {
   }
   const traced = new Set(lens.calls.map((c) => `${c.service}.${c.method}`)).size;
   return { islands, writes, verdicts, calls: lens.calls.length, traced };
+}
+
+/**
+ * THE REGION SHEET, as data.
+ *
+ * The lens opens on this — one row per key: who owns it, who reads it, what it holds, whether it has
+ * moved, and a flag where a declared write has never fired or the host answered an island. It is the
+ * archipelago's own declaration, proved by the region that is running, which is why it is worth
+ * reading before the archipelago itself.
+ *
+ * Serialised rather than rendered here, for the reason the findings are: the panel that shows it is
+ * drawn by whoever hosts the lagoon, and that is usually a different document. What cannot move is
+ * the derivation — the mount registry, the store, the move log and the laundering suspects are all
+ * in HERE.
+ */
+export function currentSheet() {
+  const islands = getMountedIslands();
+  if (!islands.length) return { rows: [], owned: 0, total: 0 };
+  const store = islands[0].store;
+  const here = islands.filter((i) => i.store === store);
+
+  // DECLARED: who writes each key, who reads it. Both come from the archipelago's own entries, so
+  // this is the declaration rather than an approximation of it.
+  const owner = new Map<string, string>();
+  const readers = new Map<string, string[]>();
+  for (const info of here) {
+    for (const key of writtenKeys(info.spec)) owner.set(key, info.slot);
+    for (const key of bindKeys(info)) readers.set(key, [...(readers.get(key) ?? []), info.slot]);
+  }
+  const moves = lens.moves.get(store) ?? new Map();
+  const suspects = new Map(launderingSuspects().map((x) => [x.key, x]));
+  const keys = [...new Set([...readers.keys(), ...owner.keys()])].sort();
+
+  const rows = keys.map((key) => {
+    const from = owner.get(key) ?? null;
+    const m = moves.get(key);
+    const suspect = suspects.get(key);
+    return {
+      key,
+      owner: from ?? 'host',
+      islandOwned: Boolean(from),
+      readers: readers.get(key) ?? [],
+      value: preview(store.get(key)),
+      // "seed" is the honest word for a key nothing has been seen to move: it holds what the page
+      // established, and no declared write has fired.
+      moved: m ? `${m.by} · ${m.n}× · ${ago(m.at)}` : null,
+      /** '' | 'laundering' | 'never-fired' — the two things a row can be flagged for. */
+      flag: suspect
+        ? 'laundering'
+        : from && !m
+          ? 'never-fired'
+          : '',
+      flagTitle: suspect
+        ? `the host wrote this ${suspect.gapMs}ms after ${suspect.after.slot} emitted "${suspect.after.event}"`
+        : from && !m
+          ? `${from} declares this write; nothing has fired it yet`
+          : '',
+    };
+  });
+  return { rows, owned: rows.filter((r) => r.islandOwned).length, total: rows.length };
 }
 
 /**

@@ -92,6 +92,8 @@ export interface TideLens {
    * not the DOM.
    */
   findings?(): unknown;
+  /** The region sheet as data — one row per declared key. See `findings` for why it is not DOM. */
+  sheet?(): unknown;
 }
 
 export interface TideLineOptions {

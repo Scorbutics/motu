@@ -9,6 +9,7 @@
     "@happy-dom/global-registrator": "^20.11.2",
     "@motu/adapter-angularjs": "workspace:*",
     "@motu/adapter-next": "workspace:*",
+    "@motu/chrome": "workspace:*",
     "@motu/core": "workspace:*",
     "@motu/coverage": "workspace:*",
     "@motu/react": "workspace:*",

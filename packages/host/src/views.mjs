@@ -430,11 +430,16 @@ ${PRIMARY_DETECT_JS}
         if (!d) return;
         var driveable = !!(f.contentWindow && f.contentWindow.__motuLagoonControl);
         tide.hidden = !driveable;
-        // AND THIS DOCUMENT KEEPS THE STRIP. The rule lives in the dock's own stylesheet, which is
-        // loaded here now, so the shell only has to say that a dock is standing there — and only
-        // while one actually is, since a hidden dock must not reserve anything.
-        if (driveable) document.documentElement.dataset.motuDock = 'right';
-        else document.documentElement.removeAttribute('data-motu-dock');
+        // AND THIS DOCUMENT KEEPS THE STRIP — on the side the dock is actually standing on.
+        //
+        // Hardcoding 'right' reserved a 46px column down the right edge while the dock was a bar
+        // along the BOTTOM, which is the empty gutter beside the sheet in the screenshot. The dock
+        // moves to the bottom edge under 760px, so the reserve has to move with it.
+        if (driveable) {
+          document.documentElement.dataset.motuDock = phone.matches ? 'bottom' : 'right';
+        } else {
+          document.documentElement.removeAttribute('data-motu-dock');
+        }
         var had = d.getElementById('motu-dock-hush');
         if (!driveable) { if (had) had.remove(); return; }
         if (had) return;
@@ -575,6 +580,19 @@ ${PRIMARY_DETECT_JS}
   // The shell is the one that knows, so the shell decides: while this sheet is open the frame's own
   // root is stamped and the dock stands down (see the :root[data-motu-shell-sheet] rule in the
   // tideline's stylesheet). Same origin, so this is one attribute rather than a message protocol.
+  // ONE SHEET AT A TIME, AND THE DOCK IS OURS NOW.
+  //
+  // This used to reach into the frame, because that is where the dock lived. It is drawn in this
+  // document now, so stamping the frame hid nothing and both sheets came up the same edge together.
+  // The stamp still goes to the frame as well — an artifact old enough to draw its own dock is still
+  // out there, and it still has to stand down.
+  var phone = window.matchMedia('(max-width: 760px)');
+  function markSheet(open) {
+    var here = document.getElementById('tide');
+    if (here) here.dataset.shellSheet = open ? 'open' : 'closed';
+    if (open) document.documentElement.removeAttribute('data-motu-dock');
+    markFrames(open);
+  }
   function markFrames(open) {
     Array.prototype.forEach.call(document.querySelectorAll('iframe'), function (f) {
       try {
@@ -589,12 +607,12 @@ ${PRIMARY_DETECT_JS}
     scrim.hidden = false;
     body.classList.add('sheet-open');
     switchBtn.setAttribute('aria-expanded', 'true');
-    markFrames(true);
+    markSheet(true);
   }
   function closeSheet() {
     body.classList.remove('sheet-open');
     switchBtn.setAttribute('aria-expanded', 'false');
-    markFrames(false);
+    markSheet(false);
     // Kept in the layout until the transition ends, or the backdrop vanishes before the sheet does.
     setTimeout(function () { if (!body.classList.contains('sheet-open')) scrim.hidden = true; }, 240);
   }

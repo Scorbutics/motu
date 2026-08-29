@@ -474,11 +474,42 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   #tide .panel > .motu-bay { border-radius: 16px 16px 0 0; }
+  /* A SHEET, NOT A PANEL THAT HAPPENS TO BE AT THE BOTTOM. The shell's lagoon switcher comes up the
+   * same edge with a backdrop and a grab bar, and two things that behave differently while looking
+   * the same is worse than either. */
+  #tide .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: color-mix(in srgb, var(--w-deep) 38%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  #tide[data-open="true"] .scrim { opacity: 1; pointer-events: auto; }
+  #tide .grab {
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--motu-on-primary, #fff) 55%, transparent);
+  }
+}
+/* The grab bar and the backdrop are the phone's story only; on a desktop rail they would be furniture
+ * with nothing to do.
+ *
+ * SCOPED TO THE DESKTOP RATHER THAN LEFT UNCONDITIONAL, because this sits after the phone block and
+ * source order beats a media query at equal specificity: as a bare rule it switched them off on the
+ * phone too, which is where they are the entire point. */
+@media (min-width: 761px) {
+  #tide .grab, #tide .scrim { display: none; }
 }
 
 /* THE SHELL'S SHEET WINS. Same origin, so the host sets this on the frame's own root when it opens
  * the lagoon switcher; the dock steps aside rather than stacking a second sheet on the same edge. */
-:root[data-motu-shell-sheet="open"] #tide { opacity: 0; pointer-events: none; }
+:root[data-motu-shell-sheet="open"] #tide,
+#tide[data-shell-sheet="open"] { opacity: 0; pointer-events: none; }
 
 @keyframes tide-swim {
   from { opacity: 0; transform: translateY(6px); }
@@ -558,12 +589,15 @@ function motuMountDock(opts) {
 
   var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
   var scroll = el('div', { class: 'scroll' });
+  var grab = el('span', { class: 'grab' });
   var panel = el('div', { class: 'panel', role: 'group', 'aria-label': 'Lagoon controls' }, [
+    grab,
     masthead,
     el('div', { class: 'find' }, [filter]),
     scroll,
   ]);
-  tide.append(rail, panel);
+  var scrim = el('div', { class: 'scrim' });
+  tide.append(scrim, rail, panel);
   mountEl.appendChild(tide);
   tide.dataset.edge = 'right';
 
@@ -573,6 +607,9 @@ function motuMountDock(opts) {
   };
   rail.addEventListener('click', function () { open(true); });
   fold.addEventListener('click', function () { open(false); });
+  // Tapping the backdrop closes it, which is the gesture the switcher already teaches.
+  scrim.addEventListener('click', function () { open(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
 
   /** The lagoon's own two globals — absent until it has booted, so everything here re-reads them. */
   var catalogue = function () { try { return lagoonWindow().__motuLagoonStates || null; } catch (e) { return null; } };

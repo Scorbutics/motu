@@ -1,56 +1,59 @@
-import { configure, HttpTransport } from '@motu/runtime';
-import { MockTransport } from '@motu/runtime/mock';
+// The lagoon gallery entry.
+//
+// MIGRATED FROM A HAND-ROLLED GALLERY. This file used to be the gallery itself: it configured the
+// transport, mounted the transport and fit toggles, built its own archipelago switcher with its own
+// localStorage keys, injected the frame stylesheets, and mounted the tide line. All of that now lives
+// in @motu/react (`startLagoon`), which is what `motu init` scaffolds and what every other project
+// uses — so improvements to the gallery arrive with the framework instead of needing this file
+// rewritten.
+//
+// It mattered beyond tidiness: the chrome moved OUT of the artifact, and a hand-rolled gallery
+// publishes neither the catalogue nor the control surface the host's sidebar reads. This project was
+// the only one left drawing its own dock, and so the only one that could not show the region sheet,
+// the seams, the island scope or coverage.
+//
+// What stays here is only what Vite requires in the app: the build-time defines, the project's own
+// registry and stylesheet, the frame glob, and the debug overlay — which @motu/react must not depend
+// on, so the app hands it in.
+import { HttpTransport } from '@motu/runtime';
 import { setDefaultIsolation, type HostBridge } from '@motu/core';
-import { defineMotuApp, resolveTransportMode, mountTransportToggle, mountFitToggle, mountTideLine, type TideView, type TransportMode, type MotuArchipelago } from '@motu/react';
+import { startLagoon, overridesFor, type TransportMode } from '@motu/react';
 import { angularHostScopeChannel } from '@motu/adapter-angularjs';
-import { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from '@motu/debug-overlay';
-import { ELEMENT_REGISTRY, membersArchipelago, adminArchipelago, usersArchipelago, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
+import {
+  mountDebugOverlay,
+  toggleDebugOverlay,
+  isDebugOverlayOpen,
+  subscribeDebugOverlay,
+  mountFindings,
+  currentFindings,
+  currentSheet,
+  currentSeams,
+  currentIslands,
+  currentCoupling,
+  currentCoverage,
+  watchSeams,
+  toggleRecording,
+  recordingState,
+} from '@motu/debug-overlay';
+import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
 import css from 'demo-app/styles.css?inline';
+import config from '../lagoon.config.json';
 import { setupLagoonAngularHost } from './angular-host.js';
 // Ambient ocean cascade (lagoon-only): the host's typography/palette + the --x-* token contract, so
-// light islands inherit the ocean look offline exactly as they would embedded. Stand-in for the real
-// ocean stylesheet; refine from the live app. Injected early so island styles still win.
+// light islands inherit the ocean look offline exactly as they would embedded. Injected early so
+// island styles still win.
 import './ocean.css';
 
 // Build/dev default for the transport, injected by vite.config from the MOTU_TRANSPORT env var.
-// Empty string means "unset" → mock. Agents run without the var and get backend-free data.
+// Empty string means "unset" → mock, so agents get backend-free data.
 declare const __MOTU_TRANSPORT__: string;
 // Present in the lagoon by default (the sandbox); MOTU_DEBUG=0 strips it.
 declare const __MOTU_DEBUG__: boolean;
-// Project-wide default isolation, injected from motu.config.json by vite (see setDefaultIsolation).
+// Project-wide default isolation, injected from motu.config.json by vite.
 declare const __MOTU_ISOLATION__: 'shadow' | 'light';
 
-// Set BEFORE defineMotuApp so the lagoon previews the project's real isolation posture.
+// BEFORE anything mounts, so the lagoon previews the project's real isolation posture.
 setDefaultIsolation(__MOTU_ISOLATION__);
-
-// Standalone composition root. It can back the SAME components with either MockTransport (autonomous
-// design iteration, no WildFly/login) or HttpTransport (the real backend, using the human's session
-// cookie via the dev proxy). The mode resolution + the browser toggle are generic (@motu/react); the
-// wiring of each mode below is the only project-specific part.
-const TRANSPORT_MODE = resolveTransportMode(
-  typeof __MOTU_TRANSPORT__ === 'string' ? __MOTU_TRANSPORT__ : '',
-);
-
-function configureTransport(mode: TransportMode): void {
-  if (mode === 'http') {
-    // Real backend through the dev proxy, authenticated by the human's own session + XSRF cookie.
-    configure(
-      new HttpTransport('/api/rest/motu', {
-        xsrfCookieName: 'M-XSRF-TOKEN',
-        xsrfHeaderName: 'X-M-XSRF-TOKEN',
-      }),
-    );
-    return;
-  }
-  // Each island owns its own mock in its fixtures.mock.ts; ALL_FIXTURES/ALL_ROLES aggregate them so
-  // the standalone lagoon and the single-target verify lagoon share one source of truth (no inline dupes).
-  configure(new MockTransport(ALL_FIXTURES, ALL_ROLES));
-}
-
-configureTransport(TRANSPORT_MODE);
-
-// Give AngularJS islands (e.g. the extracted member-search) a host so they render offline.
-setupLagoonAngularHost();
 
 const host: HostBridge = {
   navigate: (path) => {
@@ -62,106 +65,77 @@ const host: HostBridge = {
   },
 };
 
-// Every archipelago the project ships, so the lagoon can switch between them (below). Only the members
-// region has a search island reading `searchConfig`, so only it gets that channel + criteria seed;
-// wiring it to the others would surface as orphan channels in the debug overlay.
-const ARCHIPELAGOS: (MotuArchipelago & { label: string })[] = [
-  {
-    // No hero badge: the tide line's water surface is the "you are in the lagoon" signal now, so the
-    // archipelago's own header stays exactly what the ocean will render.
-    config: membersArchipelago(),
-    label: 'Members',
-    options: {
-      host,
-      seed: { criteria: {} },
-      // Mirror the host's field schema into the store so the search island receives its
-      // `config` prop. The lagoon host seeds a stub (no widgetBuilder) -> island uses its own config.
-      channels: [angularHostScopeChannel({ key: 'hostSearchConfig', into: 'searchConfig' })],
-    },
-  },
-  { config: adminArchipelago, label: 'Org Lookup', options: { host } },
-  { config: usersArchipelago, label: 'Users', options: { host, seed: { criteria: {} } } },
-];
-
-defineMotuApp({
-  elements: ELEMENT_REGISTRY,
-  css,
-  defaultTheme: 'motu',
-  archipelagos: ARCHIPELAGOS.map(({ config, options }) => ({ config, options })),
-});
-
-// Switcher: swap the mounted <motu-archipelago> when a human picks a different one. The selection
-// persists across reloads so the lagoon reopens on the archipelago you were last working on. The
-// controls themselves live on the TIDE LINE (./tideline.ts) — a water surface at the top edge that
-// only rises when you reach for it, so the archipelago, not the tooling, owns the first screenful.
-const STORAGE_KEY = 'motu:lagoon:archipelago';
-const VIEW_KEY = 'motu:lagoon:view';
-const root = document.getElementById('lagoon-root')!;
-const ids = ARCHIPELAGOS.map(({ config }) => config.id);
-let current = localStorage.getItem(STORAGE_KEY) ?? '';
-if (!ids.includes(current)) current = ids[0];
-let currentView: TideView = localStorage.getItem(VIEW_KEY) === 'mountpoints' ? 'mountpoints' : 'region';
-
 // Authored per-mountpoint frames (lagoon-only): the stand-in geometry for each slot's distinct ocean
-// callsite, keyed by [data-motu-arch][data-motu-slot]. Authored files AND `motu archipelago
-// record-frame` output both live in src/frames/*.css and are injected here; the bridge never ships
-// them (in the ocean the real callsite provides the container).
-const frameSheets = import.meta.glob('./frames/*.css', { query: '?inline', import: 'default', eager: true }) as Record<
-  string,
-  string
->;
-const frameStyle = document.createElement('style');
-frameStyle.textContent = Object.values(frameSheets).join('\n');
-document.head.appendChild(frameStyle);
+// callsite. Authored files AND `motu archipelago record-frame` output both live in src/frames/*.css;
+// the bridge never ships them, because in the ocean the real callsite provides the container.
+const frames = import.meta.glob('./frames/*.css', {
+  query: '?inline',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
 
-function mountArchipelago(id: string): void {
-  current = id;
-  localStorage.setItem(STORAGE_KEY, id);
-  root.replaceChildren();
-  const el = document.createElement('motu-archipelago');
-  el.setAttribute('name', id);
-  // Mountpoints view frames each slot separately (distributed placement); region renders the layout.
-  if (currentView === 'mountpoints') el.setAttribute('view', 'mountpoints');
-  root.appendChild(el);
-  tide.setActive(current, currentView);
-}
-
-// Dev-only seam lens. In the lagoon it shows what is NOT connected (render-from-defaults made visible).
-// No toolbar chip: the tide line owns the trigger (the buoy in its corner bay), so the page-wide lens
-// is not summoned from inside a popup that closes behind it. Mounted BEFORE the chrome below, which
-// reads its restored state to draw the buoy — the lens remembers being on across a reload.
-if (__MOTU_DEBUG__) mountDebugOverlay({ chip: false });
-
-// One chrome surface for the whole lagoon: archipelago + view + the shared toolbar chips
-// (transport/fit/debug are adopted into the bar) + a Cmd/Ctrl+K palette over all of them.
-const tide = mountTideLine({
-  stations: ARCHIPELAGOS.map(({ config, label }) => ({ id: config.id, label })),
-  transport: TRANSPORT_MODE,
-  about:
-    'Transport is switchable at runtime from the chip on this bar (or <code>?transport=http|mock</code>). ' +
-    'MOCK renders offline sample data with no login; HTTP hits the real backend through the dev-proxy ' +
-    'using your own session cookie. The default is set by the <code>MOTU_TRANSPORT</code> env var ' +
-    '(unset = mock, so agents get offline data by default).',
-  // The seam lens, handed to the chrome rather than imported by it: @motu/react must not depend on
-  // the dev-only overlay package. __MOTU_DEBUG__ strips both the overlay and this wiring together.
-  lens: __MOTU_DEBUG__
-    ? { toggle: toggleDebugOverlay, isOpen: isDebugOverlayOpen, subscribe: subscribeDebugOverlay }
-    : undefined,
-  onStation: (id) => mountArchipelago(id),
-  onView: (view) => {
-    currentView = view;
-    localStorage.setItem(VIEW_KEY, view);
-    mountArchipelago(current);
+startLagoon({
+  elements: ELEMENT_REGISTRY,
+  archipelagos: ARCHIPELAGOS,
+  fixtures: ALL_FIXTURES,
+  roles: ALL_ROLES,
+  css,
+  config,
+  frames,
+  isolation: __MOTU_ISOLATION__,
+  transport: typeof __MOTU_TRANSPORT__ === 'string' ? __MOTU_TRANSPORT__ : '',
+  debug: __MOTU_DEBUG__,
+  overrides: {
+    host,
+    // Stands up a fake AngularJS host so the extracted member-search island renders offline. It was a
+    // top-level call; `setup` is the declared point for it and runs in BOTH views rather than only
+    // whichever happened to import this module first.
+    setup: setupLagoonAngularHost,
+    /**
+     * HTTP is the only mode this project builds itself.
+     *
+     * The real backend sits behind the dev proxy and wants this project's own XSRF cookie and header
+     * names, which `httpBase` alone cannot say. Mock is deliberately left to the default: the lagoon
+     * has to work offline, and every island already owns its fixtures.
+     */
+    transportFor: (mode: TransportMode) =>
+      mode === 'http'
+        ? new HttpTransport('/api/rest/motu', {
+            xsrfCookieName: 'M-XSRF-TOKEN',
+            xsrfHeaderName: 'X-M-XSRF-TOKEN',
+          })
+        : undefined,
+    // PER REGION, and only where it is meant. Only `members` has a search island reading
+    // `searchConfig`, so only it gets that channel — wiring it to the others would show up in the
+    // lens as channels nothing reads, which is a finding rather than a configuration.
+    regions: [
+      overridesFor(membersArchipelago(), {
+        seed: { criteria: {} },
+        // Mirror the host's field schema into the store so the search island receives its `config`
+        // prop. The lagoon seeds a stub (no widgetBuilder), so the island uses its own config.
+        channels: [angularHostScopeChannel({ key: 'hostSearchConfig', into: 'searchConfig' })],
+      }),
+      overridesFor(usersArchipelago, { seed: { criteria: {} } }),
+    ],
   },
+  // The seam lens, handed in rather than imported: @motu/react must not depend on the dev-only
+  // package, and __MOTU_DEBUG__ strips both the overlay and this wiring together.
+  lens: __MOTU_DEBUG__
+    ? {
+        mount: mountDebugOverlay,
+        toggle: toggleDebugOverlay,
+        isOpen: isDebugOverlayOpen,
+        subscribe: subscribeDebugOverlay,
+        mountFindings,
+        findings: currentFindings,
+        sheet: currentSheet,
+        seams: currentSeams,
+        islands: currentIslands,
+        coupling: currentCoupling,
+        coverage: currentCoverage,
+        toggleRecording,
+        recordingState,
+        watch: watchSeams,
+      }
+    : undefined,
 });
-
-mountArchipelago(current);
-
-// A generic floating switch (from @motu/react) so a human can flip transports in the browser without
-// editing code. Mock needs no login; Http uses the current cookie.
-mountTransportToggle(TRANSPORT_MODE);
-
-// Soft-migration preview: flip the whole region between the native end-design and the legacy fit that
-// islands wear while dropped into the still-legacy page.
-mountFitToggle();
-

@@ -14,6 +14,20 @@ export interface ShotRef {
 
 export interface ReviewRegion {
   /** Every project the host holds. HOST-FED — the page fetches it once. */
+  /**
+   * The project this console was OPENED for, or null for the browsable console.
+   *
+   * DISTINCT FROM `selectedRepo`, and the distinction is the whole point. `selectedRepo` is what the
+   * picker chose; this is what the URL said before anything was picked — a lagoon's own sidebar links
+   * here with `?repo=`, because reviewing is something you do to a project you were already looking
+   * at. When it is set the page draws no picker at all, so the two facts must not share one key: a
+   * console that hid its picker the moment you used it would be unusable.
+   *
+   * HOST-FED, and it is also the LAGOON's condition — the archipelago names it in `unless`, so the
+   * preview makes the same choice the page makes instead of mounting a column the page would not.
+   */
+  scopedRepo: string | null
+
   repos: RepoSummary[]
   /** Which project is being reviewed. OWNED by the repo picker. */
   selectedRepo: string | null

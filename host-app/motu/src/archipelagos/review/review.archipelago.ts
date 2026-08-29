@@ -25,7 +25,11 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
   // not slots — they pass straight through to the layout.
   slots: {
     summary: { slot: 'status-summary' },
-    projects: { slot: 'repo-picker' },
+    // EXCLUSIVE ON `scopedRepo`. The page passes null for this slot when it was opened for one
+    // project; without naming the condition here the LAGOON would mount the picker anyway and preview
+    // a screen the application never shows. It does not move the decision — the page still decides by
+    // passing a node or null — it lets the preview follow it.
+    projects: { slot: 'repo-picker', unless: 'scopedRepo' },
     shots: { slot: 'shot-list' },
     viewer: { slot: 'diff-viewer' },
     accept: { slot: 'accept-bar' },

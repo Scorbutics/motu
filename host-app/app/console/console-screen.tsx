@@ -82,6 +82,13 @@ function ReviewPage({ cfg, viewer, repo }: { cfg: HostConfig; viewer: Viewer | n
   const [error, setError] = useState<string | null>(null)
   const { repos = [], selectedRepo } = Review.useRegion()
 
+  // ARRIVED FOR ONE PROJECT. Published into the region rather than kept as a prop, because the slot's
+  // `unless` reads it — and if the page drew no picker while the region still said otherwise, the
+  // lagoon and the page would disagree about the same screen.
+  useEffect(() => {
+    Review.provide("scopedRepo", repo)
+  }, [repo])
+
   useEffect(() => {
     listRepos(cfg)
       .then((r) => {

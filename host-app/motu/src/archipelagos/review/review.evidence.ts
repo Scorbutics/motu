@@ -13,6 +13,10 @@ import { REPOS, SHOTS, SELECTED } from '../../shared/review-evidence.js';
 // and internally consistent on both sides, so nothing noticed. `integrate check`'s `flow-shape` does
 // now.
 const SEED = {
+  // NULL, so every existing flow previews the BROWSABLE console — the one with a picker. The scoped
+  // shape is a flow of its own below, which is the only way anyone sees it: it depends on a URL
+  // parameter, and no amount of clicking around a running host produces it.
+  scopedRepo: null,
   repos: REPOS,
   selectedRepo: 'Scorbutics/peps_ta_boite_app',
   shots: SHOTS,
@@ -76,5 +80,33 @@ export const scenarios: RegionScenario[] = [
         expectRender: { 'diff-viewer': '.diff.png' },
       },
     ],
+  },
+  {
+    /**
+     * ARRIVING FROM A LAGOON, already scoped to one project.
+     *
+     * The console is reached two ways and they are different screens. From a lagoon's own sidebar it
+     * comes with `?repo=`, and the page draws NO project column: you have just come from the list
+     * that would be in it. Typed straight, there is no project yet and the picker is how you choose.
+     *
+     * ONLY A SEEDED STATE SHOWS THIS ONE. The lagoon mounts every declared slot, because there is no
+     * page there to have an opinion — so until `scopedRepo` named the condition in the archipelago's
+     * `slots`, the preview always drew the picker and the scoped screen was unreachable in the one
+     * surface built for looking at screens.
+     *
+     * NO STIMULUS, DELIBERATELY. This asserts "with a project already chosen, the desk is the shots
+     * and the viewer" — a claim about a STATE rather than a data flow, which is the form the rules
+     * allow when the input IS the seed. Its pair below is the same region without the key, and the
+     * two together are what make the condition visible: one address each.
+     */
+    name: 'arriving scoped to one project',
+    seed: { ...SEED, scopedRepo: 'Scorbutics/peps_ta_boite_app' },
+    steps: [{ expectRender: { 'shot-list': 'compact-rows@mobile' } }],
+  },
+  {
+    /** The browsable console: no project decided yet, so the picker is how you choose one. */
+    name: 'browsable, with the project picker',
+    seed: SEED,
+    steps: [{ expectRender: { 'repo-picker': 'Scorbutics/peps_ta_boite_app' } }],
   },
 ];

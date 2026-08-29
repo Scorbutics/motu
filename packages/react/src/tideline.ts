@@ -94,6 +94,8 @@ export interface TideLens {
   findings?(): unknown;
   /** The region sheet as data — one row per declared key. See `findings` for why it is not DOM. */
   sheet?(): unknown;
+  /** Channels, calls and intents — the rest of the lens, as data. See `findings` for why. */
+  seams?(): unknown;
 }
 
 export interface TideLineOptions {

@@ -12,7 +12,14 @@
 //
 // The kit's classes are used bare: the dock has already injected `motuKitCss('#tide')` at its own
 // scope, so anything mounted inside it is styled without this file shipping a stylesheet.
-import { getMountedIslands, getIslandDefinition, writtenKeys, launderingSuspects } from '@motu/core';
+import {
+  getMountedIslands,
+  getIslandDefinition,
+  writtenKeys,
+  launderingSuspects,
+  getChannels,
+  hostCalls,
+} from '@motu/core';
 import { lens } from './store';
 import { computeProps, verdictOf, bindKeys, preview, ago, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';
@@ -49,6 +56,75 @@ function collect() {
   }
   const traced = new Set(lens.calls.map((c) => `${c.service}.${c.method}`)).size;
   return { islands, writes, verdicts, calls: lens.calls.length, traced };
+}
+
+/**
+ * THE REST OF THE LENS, as data: what feeds the region, what it asked the outside for, what it pushed
+ * back, and which keys are actually shared.
+ *
+ * One call rather than four, because every one of these crosses a document boundary to reach the
+ * panel that shows them, and four round trips per repaint would be four chances to disagree about
+ * which moment they describe.
+ */
+export function currentSeams() {
+  const active = lens.activeStores();
+  const tags = lens.activeIslandTags();
+
+  // ── what feeds it ────────────────────────────────────────────────────────────────────────────
+  // NEVER-FIRED FIRST, because that is the signal worth surfacing loudest: a channel installed and
+  // never used is the silent-event bug, and it looks exactly like a working one in a list sorted by
+  // name.
+  const channels = getChannels()
+    .filter((c) => active.has(c.store))
+    .sort((a, b) => a.fireCount - b.fireCount)
+    .map((c, i) => {
+      const keys = [...c.keys];
+      const boundKeys = lens.storeReaders(c.store);
+      const connected = c.fireCount > 0 && keys.some((k) => boundKeys.has(k));
+      const readers = lens.channelReaders(c).map((r) => r.slot);
+      const bits: string[] = [];
+      if (c.fireCount === 0) bits.push('never fired');
+      else {
+        bits.push(`×${c.fireCount}`);
+        if (c.lastAt) bits.push(ago(c.lastAt));
+        if (!connected) bits.push('no reader');
+      }
+      return {
+        label: c.name || (keys.length ? '→ ' + keys.join(', ') : `channel #${c.index ?? i}`),
+        tone: c.fireCount === 0 ? 'broken' : connected ? 'ok' : 'warn',
+        detail: bits.join(' · '),
+        payload: c.fireCount > 0 && c.lastKey !== undefined ? `${c.lastKey}=${preview(c.lastValue)}` : '',
+        readers,
+      };
+    });
+
+  // ── what it asked for ────────────────────────────────────────────────────────────────────────
+  // BOTH ROUTES, one question. A contract call goes through the transport the lagoon swaps for
+  // fixtures; a host call is an island importing a module directly and the lagoon standing it down.
+  // Both are "this screen needs data it does not have", and separating them hid the second from
+  // anyone looking for the first.
+  const calls = lens.calls
+    .filter((c) => c.island != null && tags.has(c.island))
+    .slice(-16)
+    .map((c) => ({ label: `${c.service}.${c.method}`, island: c.island ?? '', detail: c.argsKey || '' }));
+  const traced = hostCalls()
+    .filter((c) => c.island && tags.has(c.island))
+    .slice(-16)
+    .map((c) => ({
+      label: `${c.module}.${c.fn}`,
+      island: c.island ?? '',
+      // Shallow args, which is the whole point of the trace: enough to see fetchClubFeed(11), not a log dump.
+      detail: c.args.map((a) => preview(a)).join(', '),
+    }));
+
+  // ── what it pushed back ──────────────────────────────────────────────────────────────────────
+  const slots = new Set(getMountedIslands().map((i) => i.slot));
+  const intents = lens.intents
+    .filter((i) => i.source != null && slots.has(i.source))
+    .slice(-8)
+    .map((i) => ({ label: i.name ?? String(i.kind ?? 'intent'), from: i.source ?? '' }));
+
+  return { channels, calls, traced, intents };
 }
 
 /**

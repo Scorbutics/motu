@@ -418,6 +418,29 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   color: var(--motu-caution, #b45309);
 }
 
+#tide .seam-notice {
+  margin: 0; padding: 6px 9px; border-radius: 8px; font-size: 11px; font-weight: 600;
+  background: color-mix(in srgb, var(--motu-caution, #b45309) 12%, #fff);
+  color: var(--motu-caution, #b45309);
+}
+#tide .seam-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: var(--surface-row);
+  font: 500 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#tide .seam-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#tide .seam-row__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
+#tide .seam-row[data-tone="broken"] .seam-row__dot { background: var(--motu-danger, #b91c1c); }
+#tide .seam-row[data-tone="warn"] .seam-row__dot { background: var(--motu-caution, #b45309); }
+#tide .seam-row[data-tone="ok"] .seam-row__dot { background: var(--tide-accent); }
+#tide .seam-row__l { font-weight: 700; color: var(--ink); }
+#tide .seam-row__d, #tide .seam-row__r { color: var(--ink-muted); }
+
 #tide .seam-tally { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
 #tide .seam-count {
   display: inline-flex;
@@ -973,6 +996,61 @@ function motuMountDock(opts) {
           table.appendChild(row);
         });
         sheetNodes.push(table);
+      }
+
+      // ── what feeds it, what it asked for, what it pushed back ────────────────────────────────
+      var seamData = ctl.seams ? ctl.seams() : null;
+      if (seamData) {
+        var listSection = function (cap, count, rows, emptyText) {
+          var head = el('div', { class: 'sect__head' }, [
+            el('span', { class: 'motu-cap' }, [cap]),
+            el('span', { class: 'count' }, [String(count)]),
+          ]);
+          var body = rows.length ? rows : [el('p', { class: 'motu-empty' }, [emptyText])];
+          sheetNodes.push(head);
+          body.forEach(function (n) { sheetNodes.push(n); });
+        };
+
+        // NEVER-FIRED IS THE LOUD ONE: a channel installed and never used looks exactly like a
+        // working one in any list that is not sorted by it.
+        var dead = seamData.channels.filter(function (c) { return c.tone === 'broken'; }).length;
+        if (dead) {
+          sheetNodes.push(el('p', { class: 'seam-notice' },
+            ['\u26a0 ' + dead + ' channel' + (dead > 1 ? 's' : '') + ' never fired']));
+        }
+        listSection('Feeds', seamData.channels.length, seamData.channels.map(function (c) {
+          return el('div', { class: 'seam-row', 'data-tone': c.tone, title: c.label + '\n' + c.detail }, [
+            el('i', { class: 'seam-row__dot' }),
+            el('span', { class: 'seam-row__l' }, [c.label]),
+            // The last payload belongs beside the count: "fired 6 times" and "the last one carried
+            // error=null" are the same question asked twice, and the second is the one that says
+            // whether the wire is carrying anything worth reading.
+            el('span', { class: 'seam-row__d' }, [c.detail + (c.payload ? ' \u00b7 ' + c.payload : '')]),
+            el('span', { class: 'seam-row__r' }, [c.readers.length ? '\u2192 ' + c.readers.join(', ') : '\u2192 no island reads this']),
+          ]);
+        }), 'No channels installed.');
+
+        var asked = seamData.calls.concat(seamData.traced);
+        listSection('Asked for', asked.length, asked.map(function (c) {
+          return el('div', { class: 'seam-row', 'data-tone': 'ok', title: c.label + '(' + c.detail + ')' }, [
+            el('i', { class: 'seam-row__dot' }),
+            el('span', { class: 'seam-row__l' }, [c.label]),
+            el('span', { class: 'seam-row__d' }, [c.detail]),
+            el('span', { class: 'seam-row__r' }, [c.island]),
+          ]);
+        }),
+        // WHY it is empty matters. A region whose islands reach host modules directly never touches
+        // the transport, so this is empty by construction rather than because nothing happened.
+        'Nothing was asked for \u2014 everything on screen came from the seed.');
+
+        listSection('Pushed back', seamData.intents.length, seamData.intents.map(function (i) {
+          return el('div', { class: 'seam-row', 'data-tone': 'ok', title: i.label }, [
+            el('i', { class: 'seam-row__dot' }),
+            el('span', { class: 'seam-row__l' }, [i.label]),
+            el('span', { class: 'seam-row__d' }, ['']),
+            el('span', { class: 'seam-row__r' }, [i.from]),
+          ]);
+        }), 'No intents pushed.');
       }
 
       var report = ctl.findings ? ctl.findings() : null;

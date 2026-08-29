@@ -512,14 +512,34 @@ ${PRIMARY_DETECT_JS}
   var sheet = document.getElementById('switcher');
   var grab = document.getElementById('grab');
 
+  // TWO SHEETS, ONE EDGE. The lagoon's own dock becomes a bottom sheet on a phone, and so is this
+  // one -- but they belong to different things: this switches which lagoon you are looking at, that
+  // one drives the region inside it. Both arriving from the bottom edge at once is a stack nobody
+  // can read, and they cannot negotiate it themselves because they are in different documents.
+  //
+  // The shell is the one that knows, so the shell decides: while this sheet is open the frame's own
+  // root is stamped and the dock stands down (see the :root[data-motu-shell-sheet] rule in the
+  // tideline's stylesheet). Same origin, so this is one attribute rather than a message protocol.
+  function markFrames(open) {
+    Array.prototype.forEach.call(document.querySelectorAll('iframe'), function (f) {
+      try {
+        var root = f.contentDocument && f.contentDocument.documentElement;
+        if (!root) return;
+        if (open) root.setAttribute('data-motu-shell-sheet', 'open');
+        else root.removeAttribute('data-motu-shell-sheet');
+      } catch (e) { /* not ours to touch */ }
+    });
+  }
   function openSheet() {
     scrim.hidden = false;
     body.classList.add('sheet-open');
     switchBtn.setAttribute('aria-expanded', 'true');
+    markFrames(true);
   }
   function closeSheet() {
     body.classList.remove('sheet-open');
     switchBtn.setAttribute('aria-expanded', 'false');
+    markFrames(false);
     // Kept in the layout until the transition ends, or the backdrop vanishes before the sheet does.
     setTimeout(function () { if (!body.classList.contains('sheet-open')) scrim.hidden = true; }, 240);
   }

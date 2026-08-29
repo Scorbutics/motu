@@ -41,17 +41,19 @@
 
 import { setMotuToolbarHost, flood, applyFlood, clearFlood, floodFrames, type FloodFrom } from '@motu/core';
 import { motuKitCss } from '@motu/chrome/kit';
+import { MOTU_MARK_SVG } from '@motu/chrome/mark';
 
 export type TideView = 'region' | 'mountpoints';
-/** top-left, top-right, bottom-left, bottom-right. */
-export type TideCorner = 'tl' | 'tr' | 'bl' | 'br';
 /**
- * Which of the corner's TWO edges the bay hugs: 'h' lies along the horizontal edge (top/bottom),
- * 'v' stands the same wave on its side against the vertical edge (left/right). Same water, rotated
- * 90° — so a page that has claimed the horizontal edge of a corner can still be given the vertical
- * one, and vice versa.
+ * Which vertical edge the dock stands against.
+ *
+ * It used to be eight docks — four corners times the two edges each corner has — because the dock
+ * was a small capsule that could lie either way. A full-height rail cannot sit in a corner, so the
+ * choice is now the only one the shape admits. The REASON for offering a choice is unchanged: the
+ * dock claims a strip, the one collision left is with whatever occupies that strip, and rather than
+ * guess which side is free, hand it over.
  */
-export type TideAxis = 'h' | 'v';
+export type TideEdge = 'left' | 'right';
 
 export interface TideStation {
   /** Archipelago id — what gets written to <motu-archipelago name>. */
@@ -117,22 +119,12 @@ export interface TideFlow {
   steps: number;
 }
 
-const CORNER_KEY = 'motu:lagoon:tide-corner';
-const CORNERS: TideCorner[] = ['tl', 'tr', 'bl', 'br'];
-const CORNER_LABEL: Record<TideCorner, string> = {
-  tl: 'top left',
-  tr: 'top right',
-  bl: 'bottom left',
-  br: 'bottom right',
-};
-/** Bottom-left: the least contested corner in this project's layouts (top edge = region toolbar,
- *  bottom-right = the mobile filter sheet's Done). A human can move it anywhere. */
-const DEFAULT_CORNER: TideCorner = 'bl';
-const DEFAULT_AXIS: TideAxis = 'h';
-const AXES: TideAxis[] = ['h', 'v'];
-const AXIS_LABEL: Record<TideAxis, string> = { h: 'horizontal', v: 'vertical' };
-
-const AXIS_KEY = 'motu:lagoon:tide-axis';
+const EDGE_KEY = 'motu:lagoon:tide-edge';
+const EDGES: TideEdge[] = ['left', 'right'];
+const EDGE_LABEL: Record<TideEdge, string> = { left: 'left edge', right: 'right edge' };
+/** The right edge: an application's own furniture (nav, toolbar, mobile action row) crowds the top,
+ *  the bottom and the left far more often than it crowds the right. A human can move it. */
+const DEFAULT_EDGE: TideEdge = 'right';
 
 /** Along the docked edge. Longer than the visible water: the inner ~44% is a fade. */
 const PATCH_LONG = 168;
@@ -142,325 +134,406 @@ const PATCH_SHORT = 34;
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
+/* THE DOCK, as a full-height rail standing against a vertical edge.
+ *
+ * It was a small capsule of water that could sit in any of eight docks. That shape had one job --
+ * stay out of the way -- and it did it by being small, which cost it everything else: the states a
+ * region can reach had to share a corner with the region list, the rig and a hint line, so each got
+ * a few square centimetres and none of them could be read at a glance.
+ *
+ * A rail along one vertical edge is the same promise kept differently. It claims a strip rather than
+ * a corner, so the page keeps both horizontal edges -- which is where a real application puts its
+ * toolbar and its mobile action row -- and in exchange the panel gets a full column: the region, the
+ * states under it, and the rig at the foot, each with room to be a list rather than a chip.
+ *
+ * TWO DOCKS, NOT EIGHT. A full-height rail cannot sit in a corner, so the drag that used to choose
+ * between eight now chooses between left and right. The reason for dragging at all is unchanged: the
+ * one collision left is with whatever occupies THAT edge, and rather than guess, hand it over.
+ *
+ * EVERY COLOUR COMES FROM A TOKEN, and that is what makes the dock wear the app's own colour. The
+ * kit derives its ramp from --motu-primary, the host detects that from the artifact's pixels, and so
+ * a greyscale application gets a greyscale dock without this file knowing anything about it. A
+ * literal anywhere in here is a colour that would refuse to follow.
+ */
 #tide {
   position: fixed;
-  z-index: 2147483645;
-  /* Only the bay itself and the open panel take the pointer; the container never covers the page. */
-  pointer-events: none;
-  font: 600 12px/1 "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-  /* Lagoon water, deep → shallow. MOCK is calm still water; HTTP is the same lagoon lit brighter and
-     running faster (live backend); LEGACY fit floods the whole bay amber. --tide-accent is the one
-     colour the CHROME borrows (the sliding pill, splash droplets) so it always matches the water. */
-  /* Tokens, not literals: a project can point motu's chrome at its own primary (see applyMotuChrome),
-     and the ramp shifts hue with it while keeping this shape. Unset, the tuned defaults below stand. */
-  --w-deep: var(--motu-water-deep, #0b6f68);
-  --w-mid: var(--motu-water-mid, #12988f);
-  --w-shallow: var(--motu-water-shallow, #35c2b3);
-  --tide-accent: var(--motu-primary, #0f766e);
-  /* INK, for the same reason the water above is tokens: these were five literals, and two of them
-     were values the framework has since MOVED. #9a9182 is the caption grey MOTU_INK.caption records
-     darkening because it measured 2.87:1 — the dock kept the old one, so the one surface that is
-     always on screen was the one that never got the fix. Defaults preserve the rest exactly. */
-  --ink: var(--motu-ink, #22302c);
-  --ink-soft: var(--motu-ink-soft, #5c6b63);
-  --ink-caption: var(--motu-ink-caption, #6e6659);
-  --ink-faint: var(--motu-ink-faint, #a39a8a);
+  top: 0;
+  bottom: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: stretch;
+  font: 500 13px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  --dock-w: min(340px, 92vw);
+  --rail-w: 46px;
 }
+#tide[data-edge="right"] { right: 0; }
+#tide[data-edge="left"] { left: 0; }
+
+/* THE WATER IS STILL THE READOUT. HTTP is the same lagoon lit brighter and moving faster; the legacy
+ * fit floods it amber. Both are inherited by every surface below, because all of them paint from
+ * these same three stops. */
 #tide[data-transport="http"] {
-  --w-deep: #076b7f;
-  --w-mid: #0fa4b4;
-  --w-shallow: #3fd0d8;
-  --tide-accent: #0e8a92;
+  --w-deep: color-mix(in srgb, var(--motu-water-deep, #0b6f68) 82%, #fff);
+  --w-mid: color-mix(in srgb, var(--motu-water-mid, #12988f) 84%, #fff);
+  --w-shallow: color-mix(in srgb, var(--motu-water-shallow, #35c2b3) 86%, #fff);
 }
 #tide[data-fit="legacy"] {
-  --w-deep: #a4530a;
-  --w-mid: #d97706;
-  --w-shallow: #fbbf24;
-  --tide-accent: #b45309;
+  --w-deep: #8a5a08;
+  --w-mid: #c2870f;
+  --w-shallow: #e8b53c;
+  --tide-accent: #a86f0b;
 }
-/* A DOCK is a corner plus which of that corner's two edges the water lies along. The wave art is
-   identical in all eight; only three numbers change — a rotation (which edge the mass hugs) and two
-   mirror factors (which end is deep, which side the mass is on). Keeping them as CSS custom
-   properties means the eight docks are a table, not eight code paths. */
-/* The capsule FLOATS in its corner rather than sitting flush in it, so its outline is closed on all
-   four sides. Padding on the container, not a margin on the pill: the panel is positioned against
-   this same padding box, so both keep their inset from one number. */
-#tide { --rot: 0deg; --mx: 1; --my: 1; padding: 12px; }
-#tide[data-corner="tl"] { top: 0; left: 0; }
-#tide[data-corner="tr"] { top: 0; right: 0; }
-#tide[data-corner="bl"] { bottom: 0; left: 0; }
-#tide[data-corner="br"] { bottom: 0; right: 0; }
 
-/* Horizontal docks: the water lies along the top or bottom edge. */
-#tide[data-axis="h"][data-corner="tl"] { --rot: 0deg; --mx: -1; --my: 1; }
-#tide[data-axis="h"][data-corner="tr"] { --rot: 0deg; --mx: 1; --my: 1; }
-#tide[data-axis="h"][data-corner="bl"] { --rot: 0deg; --mx: -1; --my: -1; }
-#tide[data-axis="h"][data-corner="br"] { --rot: 0deg; --mx: 1; --my: -1; }
-/* Vertical docks: the SAME wave stood on its side against the left or right edge. The rotation puts
-   the mass against that edge; --mx then decides which end of the long axis is the deep one, so the
-   deep end always faces the outer corner. */
-#tide[data-axis="v"][data-corner="tl"] { --rot: -90deg; --mx: -1; --my: 1; }
-#tide[data-axis="v"][data-corner="bl"] { --rot: -90deg; --mx: 1; --my: 1; }
-#tide[data-axis="v"][data-corner="tr"] { --rot: 90deg; --mx: 1; --my: 1; }
-#tide[data-axis="v"][data-corner="br"] { --rot: 90deg; --mx: -1; --my: 1; }
-
-/* ── the bay ─────────────────────────────────────────────────────────────────────────────── */
-/* A CAPSULE, and the water is its FILL rather than its outline.
- *
- * It used to be the other way round: the wave crest WAS the top edge, the inner end dissolved into a
- * mask fade, and one corner of four was rounded — three unrelated edge treatments and no closed
- * outline, so the eye could not decide where the object ended. Worse, the handle was a 26x3 white
- * capsule centred on a horizontal band, which is the universal mark for a slider THUMB: the loudest
- * signal on the bay pointed at a behaviour (drag me along this track) that does not exist here.
- *
- * So the water moved INSIDE a pill with a definite edge and a shadow, and the chrome became one flex
- * row on a shared baseline — grab dots, then what the bay is reporting. Nothing borrows the shape of
- * a control that does not exist, and the eight docks are untouched: a pill is symmetric, so the same
- * table of rotations and mirrors still serves all of them. */
-#tide .patch {
+/* ── the rail, which is the dock when it is closed ────────────────────────────────────────── */
+#tide .rail-dock {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: ${PATCH_LONG}px;
-  height: ${PATCH_SHORT}px;
-  padding: 0 12px;
-  border-radius: 999px;
-  overflow: hidden;
-  /* The wave only covers what is above its crest; the pill's own body is what makes it a solid
-     object. Same token, so transport and fit recolour the whole capsule, not just the swell. */
-  background: var(--w-deep);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
-  pointer-events: auto;
-  cursor: grab;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 300ms cubic-bezier(.3,1.3,.4,1), filter 200ms;
-}
-/* The row rides ABOVE the water; only the wave and the sheen are allowed underneath it. */
-#tide .patch > *:not(svg):not(.sheen) { position: relative; z-index: 1; min-width: 0; }
-#tide .sheen { z-index: 2; }
-#tide .patch:hover { filter: brightness(1.06); }
-/* Stood on its side: same pill, same row, turned a quarter turn with the water. */
-#tide[data-axis="v"] .patch { width: ${PATCH_SHORT}px; height: ${PATCH_LONG}px; flex-direction: column; padding: 12px 0; }
-#tide[data-dragging="true"] .patch { cursor: grabbing; transition: none; }
-/* Orient the water: it pools against the edge it is docked to, and the DEEP end of the gradient
-   faces the outer corner. The transition makes a re-dock read as the water turning to lie along its
-   new edge rather than as a redraw. */
-/* The wave is always drawn in its own ${PATCH_LONG}x${PATCH_SHORT} space and then placed: centred in
-   the patch, rotated onto the docked edge, mirrored per the table above. Centring is what lets one
-   art asset serve both box shapes — rotating a ${PATCH_LONG}x${PATCH_SHORT} box by 90° lands exactly
-   on the ${PATCH_SHORT}x${PATCH_LONG} one. */
-#tide .patch svg {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: ${PATCH_LONG}px;
-  height: ${PATCH_SHORT}px;
-  transform: translate(-50%, -50%) rotate(var(--rot)) scale(var(--mx), var(--my));
-  transition: transform 420ms cubic-bezier(.3,1.25,.4,1);
-}
-/* The handle: says "grab me", and is the tap target on a touch screen.
-   DOTS, not a bar. A bar on a band is a slider thumb — the one thing this must not promise, because
-   dragging the bay re-docks it rather than sliding anything along it. A dot field is the drag
-   vocabulary that carries no direction at all, and it sits IN the row instead of being placed at a
-   percentage across moving art. */
-#tide .grip {
-  display: grid;
-  grid-template-columns: repeat(2, 3px);
-  gap: 3px;
+  width: var(--rail-w);
   flex: 0 0 auto;
-  pointer-events: none;
-}
-/* Turned with the water: the same six dots, three across instead of two. */
-#tide[data-axis="v"] .grip { grid-template-columns: repeat(3, 3px); }
-#tide .grip i { width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 255, 255, .72); }
-
-/* What the bay is REPORTING, in words. The water's tint has always carried the transport and the fit,
-   but a hue alone has to be learned; with the mask gone there is room to simply say it. */
-#tide .label {
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: .04em;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .35);
-  pointer-events: none;
-}
-/* A vertical pill is 34px across: no room for words, and sideways text is not a readout. The tint
-   still carries the state, and the panel spells it out. */
-#tide[data-axis="v"] .label { display: none; }
-
-/* ── the panel ───────────────────────────────────────────────────────────────────────────── */
-/* Absolutely positioned, so a closed panel adds nothing to the container's footprint — the bay is
-   the whole hit surface at rest. It grows OUT of the bay, away from the screen corner. */
-#tide .bar {
-  position: absolute;
-  width: max-content;
-  max-width: calc(100vw - 20px);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(247, 253, 252, .94), rgba(232, 248, 246, .92));
-  backdrop-filter: blur(14px) saturate(1.35);
-  -webkit-backdrop-filter: blur(14px) saturate(1.35);
-  box-shadow: 0 14px 40px rgba(11, 111, 104, .18);
-  opacity: 0;
-  visibility: hidden;
-  transform: scale(.94);
-  transition: opacity 180ms ease, transform 220ms cubic-bezier(.22,1.2,.36,1), visibility 0s 220ms;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border: 0;
+  cursor: pointer;
+  color: var(--motu-on-primary, #fff);
+  background: linear-gradient(180deg, var(--w-deep), var(--w-mid) 46%, var(--w-shallow));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--w-deep) 22%, transparent),
+    0 10px 30px color-mix(in srgb, var(--w-deep) 26%, transparent);
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(.22,.9,.3,1);
 }
-#tide[data-open="true"] .bar {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  pointer-events: auto;
-  transition: opacity 180ms ease, transform 260ms cubic-bezier(.22,1.2,.36,1), visibility 0s;
-}
-#tide[data-corner="tl"] .bar { transform-origin: top left; }
-#tide[data-corner="tr"] .bar { transform-origin: top right; }
-#tide[data-corner="bl"] .bar { transform-origin: bottom left; }
-#tide[data-corner="br"] .bar { transform-origin: bottom right; }
-/* Grow away from the docked edge: past the water's depth on a horizontal dock, past its width on a
-   vertical one. */
-#tide[data-axis="h"][data-corner="tl"] .bar { top: calc(${PATCH_SHORT}px + 8px); left: 10px; }
-#tide[data-axis="h"][data-corner="tr"] .bar { top: calc(${PATCH_SHORT}px + 8px); right: 10px; }
-#tide[data-axis="h"][data-corner="bl"] .bar { bottom: calc(${PATCH_SHORT}px + 8px); left: 10px; }
-#tide[data-axis="h"][data-corner="br"] .bar { bottom: calc(${PATCH_SHORT}px + 8px); right: 10px; }
-#tide[data-axis="v"][data-corner="tl"] .bar { top: 10px; left: calc(${PATCH_SHORT}px + 8px); }
-#tide[data-axis="v"][data-corner="tr"] .bar { top: 10px; right: calc(${PATCH_SHORT}px + 8px); }
-#tide[data-axis="v"][data-corner="bl"] .bar { bottom: 10px; left: calc(${PATCH_SHORT}px + 8px); }
-#tide[data-axis="v"][data-corner="br"] .bar { bottom: 10px; right: calc(${PATCH_SHORT}px + 8px); }
-
-#tide .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-#tide .col { display: flex; flex-direction: column; gap: 6px; align-self: stretch; width: 100%; }
-#tide .col__head { display: flex; align-items: baseline; gap: 8px; }
-#tide .count { font-size: 10px; color: var(--ink-faint); font-weight: 600; margin-left: auto; }
-
-/* ── the archipelago list ─────────────────────────────────────────────────────────────────── */
-/* A segmented pill row is a control for two or three fixed options; a project can ship ten
-   archipelagos, so this is a LIST — it scrolls, it filters once there are enough to warrant it, and
-   it costs one row of height per entry instead of one column of width. */
-#tide .list {
-  position: relative;
-  width: 100%;
-  max-height: 172px;
-  overflow-y: auto;
-  /* Explicit, and not redundant: setting ONE axis to auto makes the other compute to auto too, so the
-     2px hover nudge below pushed a row past the edge and CSS answered with a horizontal scrollbar —
-     a grey bar across the bottom of the list that appeared on hover and vanished off it. A vertical
-     list has nothing to scroll sideways to; say so. */
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  /* Fade the ends so a scrollable list looks scrollable without a scrollbar shouting about it. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
-}
-#tide .list::-webkit-scrollbar { width: 6px; }
-#tide .list::-webkit-scrollbar-thumb { background: rgba(15, 118, 110, .22); border-radius: 999px; }
-/* The 3px of side padding is the room the hover nudge moves into. Without it the nudge is clipped by
-   the overflow rule above instead of overflowing it — same bug, quieter. */
-#tide .list__inner { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 6px 3px; }
-/* The rail is the vertical cousin of the segmented thumb: it SLIDES to the selected row rather than
-   blinking on, so a switch has a direction you can follow. It lives inside the scrolled content, so
-   it tracks the row it marks without any scroll bookkeeping. */
-
-
-
-/* A depth lamp: lit for the mounted archipelago, dark for the rest. */
-#tide .lamp {
-  width: 6px;
-  height: 6px;
+#tide .rail-dock:hover { filter: brightness(1.06); }
+#tide .rail-dock:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: -4px; }
+#tide .rail-dock .mark { width: 20px; height: 20px; flex: 0 0 auto; }
+#tide .rail-dock .lamp {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #cdd6d2;
+  background: var(--motu-on-primary, #fff);
+  opacity: .85;
   flex: 0 0 auto;
-  transition: background 220ms, box-shadow 220ms;
 }
-#tide .motu-opt[aria-current="true"] .lamp {
-  background: var(--tide-accent);
-  box-shadow: 0 0 9px color-mix(in srgb, var(--tide-accent) 85%, transparent);
+/* The region's name, standing up along the rail. This is the one place the dock says what it is
+ * showing while closed, so it takes the whole middle and truncates rather than wraps. */
+#tide .rail-dock .stand {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: lowercase;
+  opacity: .92;
 }
-/* Rows swim in from the edge each time the panel opens — staggered, so the list assembles rather
-   than appearing. Scoped to the open state so it replays on every reveal. */
-#tide[data-open="true"] .opt { animation: tide-swim 260ms cubic-bezier(.2,.9,.3,1) both; }
-@keyframes tide-swim { from { opacity: 0; transform: translateX(-8px); } }
-#tide .filter {
+#tide[data-edge="left"] .rail-dock .stand { rotate: 180deg; }
+#tide .rail-dock .chev { font-size: 12px; opacity: .8; flex: 0 0 auto; }
+#tide[data-open="true"] .rail-dock { display: none; }
+
+/* ── the panel ─────────────────────────────────────────────────────────────────────────────── */
+#tide .panel {
+  width: var(--dock-w);
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-page);
+  box-shadow: 0 0 0 1px var(--line), 0 18px 50px color-mix(in srgb, var(--w-deep) 22%, transparent);
+}
+#tide[data-open="true"] .panel { display: flex; }
+
+/* The masthead is the kit's, waves and all — the same header the host's own pages wear, so the dock
+ * and the pages around it cannot drift apart. */
+#tide .panel > .motu-bay {
+  flex: 0 0 auto;
+  /* The bottom padding is the shoreline's room. The swell is 40px of absolutely-positioned water
+   * along the foot of the header, so anything less than that here puts the title in the sea. */
+  padding: 18px 16px 30px;
+  border-radius: 0;
+}
+/* THE SWELL IS A LAYER, NOT A ROW. Moved in from the old pill, the wave svg arrived as a flex child
+ * and took a strip of height at the top of the masthead, pushing the title down and leaving a seam.
+ * It is decoration: absolute, across the foot of the header where a shoreline belongs, behind
+ * everything that has to be read. */
+#tide .panel > .motu-bay { position: relative; overflow: hidden; }
+#tide .panel > .motu-bay > svg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
   width: 100%;
-  border: 1px solid rgba(0, 0, 0, .10);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, .75);
-  padding: 6px 9px;
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink);
-  outline: none;
+  height: 40px;
+  z-index: 0;
+  pointer-events: none;
 }
-#tide .filter:focus { border-color: var(--tide-accent); }
-/* THE EMPTY STATE IS THE KIT'S (.motu-empty) — italic, --ink-soft, "the tool talking". The dock's
-   copy was upright and --ink-faint, which is the same sentence said two ways on two motu surfaces. */
-
-/* The debug lens' trigger is NOT here any more. It used to be a buoy moored in the bay: a 17px ring
-   floating on the water, under every touch-target minimum, competing with the foam stroke behind it,
-   and belonging to no row. It now lives on the lens itself, as a tab on the edge of its own panel
-   (@motu/debug-overlay) — so opening and closing happen in the same place, and the lens stops being
-   summoned from another element's body. What stays here is the palette command, which is the
-   keyboard way in. */
-
-/* A sheen sweeping the bay: what the water does when something actually changed. */
-#tide .sheen {
+#tide .panel > .motu-bay > .sheen {
   position: absolute;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
+  background: linear-gradient(var(--sheen-angle, 90deg), transparent, color-mix(in srgb, #fff 38%, transparent), transparent);
   opacity: 0;
-  background: linear-gradient(var(--sheen-angle, 90deg), transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
 }
-/* THE CAP IS THE KIT'S (.motu-cap). What stays is the one thing that is about this dock: a label
-   column wide enough that the rows beside it line up. */
-#tide .motu-cap { min-width: 62px; }
+#tide .bay-row { display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
+#tide .bay-row .mark { width: 22px; height: 22px; flex: 0 0 auto; }
+#tide .bay-txt { min-width: 0; flex: 1 1 auto; }
+#tide .bay-txt b {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--motu-on-primary, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#tide .bay-txt small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--motu-on-primary, #fff) 78%, transparent);
+}
+#tide .fold {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  border: 0;
+  cursor: pointer;
+  color: var(--motu-on-primary, #fff);
+  background: color-mix(in srgb, var(--motu-on-primary, #fff) 18%, transparent);
+}
+#tide .fold:hover { background: color-mix(in srgb, var(--motu-on-primary, #fff) 28%, transparent); }
+#tide .fold:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
 
+/* ── the searchable body ───────────────────────────────────────────────────────────────────── */
+#tide .find { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; flex: 0 0 auto; }
+#tide .find .motu-search { flex: 1 1 auto; min-width: 0; }
+#tide .scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+#tide .sect { display: flex; flex-direction: column; gap: 6px; }
+#tide .sect__head { display: flex; align-items: center; gap: 7px; padding: 0 2px 2px; }
+#tide .sect__head .motu-cap { flex: 1 1 auto; }
+#tide .sect__head .count {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+#tide .list { position: relative; display: flex; flex-direction: column; gap: 6px; }
+/* A CARD PER ROW, not a dense line. These are the states somebody wrote down; a flow's name is a
+ * sentence and needs to wrap rather than be clipped to a chip. */
+#tide .motu-opt {
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  background: var(--surface-row);
+  border: 1px solid var(--line);
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
+}
+#tide .motu-opt:hover { border-color: var(--tide-accent); }
+#tide .motu-opt[aria-current="true"], #tide .motu-opt.on {
+  background: color-mix(in srgb, var(--tide-accent) 10%, #fff);
+  border-color: color-mix(in srgb, var(--tide-accent) 42%, transparent);
+}
+/* The lit edge marking the row that is showing. */
+#tide .motu-opt[aria-current="true"]::before, #tide .motu-opt.on::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 9999px;
+  background: var(--tide-accent);
+}
+#tide .motu-opt { position: relative; }
+#tide .motu-opt .lamp {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--ink-faint) 55%, transparent);
+}
+#tide .motu-opt[aria-current="true"] .lamp, #tide .motu-opt.on .lamp { background: var(--tide-accent); }
+#tide .motu-opt .sub { display: block; font-size: 10.5px; color: var(--ink-muted); font-weight: 500; }
+#tide[data-open="true"] .motu-opt { animation: tide-swim 260ms cubic-bezier(.2,.9,.3,1) both; }
 
-/* The lit pill slides between options instead of blinking on — the one bit of state that moves. */
-
-
-/* THE KEY CAP IS THE KIT'S (.motu-kbd). The dock's copy hardcoded #6b7280 — a Tailwind grey, not a
-   motu colour at all, on the one surface that is always on screen. */
-
-/* The shared toolbar (transport / fit / debug chips) is adopted into this slot. */
-#tide .slot { display: flex; align-items: center; }
+/* ── the rig ───────────────────────────────────────────────────────────────────────────────── */
+#tide .rig {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  padding: 10px 14px 12px;
+  background: var(--surface-panel);
+}
+#tide .rig__head { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
+#tide .rig__head .motu-cap { flex: 1 1 auto; }
+#tide .rig__step {
+  width: 24px;
+  height: 22px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+#tide .rig__step:hover { border-color: var(--tide-accent); color: var(--tide-accent); }
+#tide .rig__step:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
+/* The chips the toolbar mounts land in here beside the dock's own, so a control added by another
+ * package is styled and reachable with no registration. */
+#tide .rig__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+#tide .rig__pills .slot { display: contents; }
+/* ONE FAMILY OF PILLS, whoever mounted them. The transport and fit chips come from @motu/core's
+ * toolbar and the Baselines link and the lens are the dock's own, so without this the rig is three
+ * different button designs in one row. Styled by POSITION rather than by class for the same reason
+ * the palette reads the chips rather than registering them: a control another package adds later
+ * should look right without this file being told about it. */
+#tide .rig__pills > button,
+#tide .rig__pills > a,
+#tide .rig__pills .slot > button,
+#tide .rig__pills .slot > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font: 600 11.5px/1 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: .01em;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#tide .rig__pills > button:hover,
+#tide .rig__pills > a:hover,
+#tide .rig__pills .slot > button:hover,
+#tide .rig__pills .slot > a:hover { border-color: var(--tide-accent); color: var(--tide-accent); }
+#tide .rig__pills [aria-pressed="true"],
+#tide .rig__pills [aria-current="true"] {
+  background: var(--tide-accent);
+  border-color: var(--tide-accent);
+  color: var(--motu-on-primary, #fff);
+}
+/* The view toggle keeps its sliding thumb — it is a fixed pair, which is what a segmented control is
+ * for — but it has to read at the same weight as the pills beside it. */
+#tide .rig__pills .motu-segmented { background: #fff; border: 1px solid var(--line); }
+#tide .rig__pills .motu-segmented button { color: var(--ink-muted); font-weight: 600; }
+#tide .rig__pills .motu-segmented button[aria-current="true"] { color: var(--motu-on-primary, #fff); }
 #tide .hint { color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
 
-/* ── drag targets ────────────────────────────────────────────────────────────────────────── */
-/* Shown only while dragging: where the bay can land, and which one it will snap to on release. */
+/* ── mobile: a sheet from the bottom, and a handle to pull it ─────────────────────────────── */
+/*
+ * A full-height rail is a desktop shape. On a phone it would eat a tenth of the width permanently,
+ * and the panel at 92vw is a page rather than a panel — so below this width the dock becomes what a
+ * phone expects: a handle on the bottom edge, and a sheet that comes up from it.
+ *
+ * IT MUST NOT FIGHT THE LAGOON SWITCHER. The host's shell puts its own sheet on this same edge, and
+ * that one belongs to the page around this frame rather than to the region inside it. Two sheets
+ * arriving from the same edge is one too many, so the shell stamps the frame while its own is open
+ * and the dock stands down -- see the rule at the end.
+ */
+@media (max-width: 760px) {
+  #tide {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: block;
+    --dock-w: auto;
+  }
+  #tide .rail-dock {
+    /* FULL WIDTH, because a handle is something a thumb aims at. Left as auto it shrank to its
+     * content and sat in the bottom-left corner, which reads as a stray chip rather than the edge of
+     * a sheet you can pull. */
+    width: 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+    padding: 9px 14px calc(9px + env(safe-area-inset-bottom, 0px));
+    border-radius: 14px 14px 0 0;
+    background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 52%, var(--w-shallow));
+  }
+  #tide .rail-dock .stand {
+    writing-mode: horizontal-tb;
+    flex: 0 1 auto;
+    rotate: none;
+  }
+  #tide[data-edge="left"] .rail-dock .stand { rotate: none; }
+  #tide .rail-dock .chev { rotate: 90deg; }
+  #tide .panel {
+    width: auto;
+    max-height: min(78vh, 620px);
+    border-radius: 16px 16px 0 0;
+    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #tide .panel > .motu-bay { border-radius: 16px 16px 0 0; }
+}
+
+/* THE SHELL'S SHEET WINS. Same origin, so the host sets this on the frame's own root when it opens
+ * the lagoon switcher; the dock steps aside rather than stacking a second sheet on the same edge. */
+:root[data-motu-shell-sheet="open"] #tide { opacity: 0; pointer-events: none; }
+
+@keyframes tide-swim {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tide *, #tide *::before { animation: none !important; transition: none !important; }
+}
+
+/* ── drag targets: two bands, one per edge ────────────────────────────────────────────────── */
 #tide-targets {
   position: fixed;
   inset: 0;
-  z-index: 2147483644;
-  pointer-events: none;
+  z-index: 2147482999;
   display: none;
+  pointer-events: none;
 }
 #tide-targets[data-on="true"] { display: block; }
 #tide-targets i {
   position: absolute;
-  width: ${PATCH_LONG}px;
-  height: ${PATCH_SHORT}px;
-  border: 1.5px dashed rgba(15, 118, 110, .45);
-  background: rgba(15, 118, 110, .07);
-  transition: background 140ms, border-color 140ms, transform 140ms;
+  top: 0;
+  bottom: 0;
+  width: var(--rail-w, 46px);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--tide-accent) 12%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--tide-accent) 32%, transparent);
+  opacity: .5;
+  transition: opacity 140ms ease, background 140ms ease;
 }
 #tide-targets i[data-near="true"] {
-  background: color-mix(in srgb, var(--tide-accent, #0f766e) 22%, transparent);
-  border-color: var(--tide-accent, #0f766e);
-  transform: scale(1.06);
+  opacity: 1;
+  background: color-mix(in srgb, var(--tide-accent) 22%, transparent);
 }
-#tide-targets i[data-axis="v"] { width: ${PATCH_SHORT}px; height: ${PATCH_LONG}px; }
-#tide-targets i[data-corner="tl"] { top: 0; left: 0; border-bottom-right-radius: 16px; }
-#tide-targets i[data-corner="tr"] { top: 0; right: 0; border-bottom-left-radius: 16px; }
-#tide-targets i[data-corner="bl"] { bottom: 0; left: 0; border-top-right-radius: 16px; }
-#tide-targets i[data-corner="br"] { bottom: 0; right: 0; border-top-left-radius: 16px; }
+#tide-targets i[data-edge="left"] { left: 0; }
+#tide-targets i[data-edge="right"] { right: 0; }
 
 /* ── command palette ─────────────────────────────────────────────────────────────────────── */
 #tide-palette {
@@ -532,9 +605,8 @@ const CSS = `
 #tide-palette .empty { padding: 18px; color: var(--ink-faint); font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
-  /* The wave itself is a WAAPI animation and is skipped in JS (a CSS rule cannot reach it). */
-  #tide .bar, #tide .motu-segmented__thumb, #tide .patch, #tide .motu-rail, #tide .motu-opt { transition: none; }
-  #tide[data-open="true"] .opt { animation: none; }
+  /* The dock's own rule is up with the dock. The wave itself is a WAAPI animation and is skipped in
+   * JS, because a CSS rule cannot reach it. */
   #tide-palette .box, #tide-palette li { animation: none; }
 }
 `;
@@ -654,31 +726,18 @@ function score(hits: number[]): number {
   return -(hits[0]! * 3 + spread);
 }
 
-/**
- * Which of the eight docks a point belongs to. The corner is the quadrant; the AXIS is decided by
- * which edge you are nearer — drift toward the top or bottom of the screen and the water lies down
- * along it, drift toward a side and it stands up against it. That reads as pushing the water against
- * an edge rather than picking from a menu of eight.
- */
-function slotAt(x: number, y: number): { corner: TideCorner; axis: TideAxis } {
-  const vertical = y < window.innerHeight / 2 ? 't' : 'b';
-  const horizontal = x < window.innerWidth / 2 ? 'l' : 'r';
-  const toHorizontalEdge = Math.min(y, window.innerHeight - y);
-  const toVerticalEdge = Math.min(x, window.innerWidth - x);
-  return {
-    corner: `${vertical}${horizontal}` as TideCorner,
-    axis: toHorizontalEdge <= toVerticalEdge ? 'h' : 'v',
-  };
+/** Which edge a point is nearer. One axis, because there are only two docks. */
+function edgeAt(x: number): TideEdge {
+  return x < window.innerWidth / 2 ? 'left' : 'right';
 }
 
-function readCorner(): TideCorner {
-  const stored = localStorage.getItem(CORNER_KEY);
-  return CORNERS.includes(stored as TideCorner) ? (stored as TideCorner) : DEFAULT_CORNER;
-}
-
-function readAxis(): TideAxis {
-  const stored = localStorage.getItem(AXIS_KEY);
-  return AXES.includes(stored as TideAxis) ? (stored as TideAxis) : DEFAULT_AXIS;
+function readEdge(): TideEdge {
+  try {
+    const stored = localStorage.getItem(EDGE_KEY);
+    return EDGES.includes(stored as TideEdge) ? (stored as TideEdge) : DEFAULT_EDGE;
+  } catch {
+    return DEFAULT_EDGE;
+  }
 }
 
 interface Command {
@@ -711,13 +770,17 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   document.head.appendChild(el('style', { id: 'tide-css' }, CSS));
 
   // ── panel ──────────────────────────────────────────────────────────────────────────────────
-  const bar = el('div', { class: 'bar', role: 'group', 'aria-label': 'Lagoon controls' });
+  const bar = el('div', { class: 'panel', role: 'group', 'aria-label': 'Lagoon controls' });
+  /** The rig's pill row — where the hosted toolbar chips and the dock's own toggles sit together. */
+  const rigPills = el('div', { class: 'rig__pills' });
+  /** The two lists, stacked in one scrolling column. */
+  const scroll = el('div', { class: 'scroll' });
 
   /** A segmented pill row — right for a fixed pair like the view toggle, wrong for an open-ended set. */
   function segmented(cap: string): { grp: HTMLElement; thumb: HTMLElement } {
     const thumb = el('span', { class: 'motu-segmented__thumb' });
     const grp = el('div', { class: 'motu-segmented', role: 'group', 'aria-label': cap }, thumb);
-    bar.appendChild(el('div', { class: 'row' }, el('span', { class: 'motu-cap' }, cap), grp));
+    rigPills.appendChild(grp);
     return { grp, thumb };
   }
 
@@ -734,19 +797,25 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   const emptyNote = el('p', { class: 'motu-empty', hidden: '' }, 'No archipelago matches.');
   const listHead = el(
     'div',
-    { class: 'col__head' },
-    el('span', { class: 'motu-cap' }, 'Archipelago'),
+    { class: 'sect__head' },
+    el('span', { class: 'motu-dot' }),
+    el('span', { class: 'motu-cap' }, 'Regions'),
     el('span', { class: 'count' }, `${opts.stations.length}`),
   );
-  const listCol = el('div', { class: 'col' }, listHead);
+  const listCol = el('div', { class: 'sect' }, listHead);
 
-  const filter =
-    opts.stations.length >= FILTER_FROM
-      ? (el('input', { class: 'filter', type: 'text', placeholder: 'Filter…', 'aria-label': 'Filter archipelagos' }) as HTMLInputElement)
-      : null;
-  if (filter) listCol.appendChild(filter);
+  // ONE FILTER, ABOVE BOTH LISTS. It used to appear inside the region column and only past seven
+  // regions, which meant the states — the longer list, and the one whose names are sentences — could
+  // never be searched at all. FILTER_FROM still decides whether the regions list is worth filtering;
+  // what it no longer decides is whether a filter exists.
+  const filter = el('input', {
+    class: 'motu-search',
+    type: 'search',
+    placeholder: 'Filter regions and states…',
+    'aria-label': 'Filter regions and states',
+  }) as HTMLInputElement;
   listCol.append(listBox, emptyNote);
-  bar.appendChild(listCol);
+  scroll.appendChild(listCol);
 
   // A LIST of rows, not a map keyed by id: keying by id silently collapses two entries that share
   // one (a project may well surface the same archipelago under two labels), which would drop rows
@@ -778,7 +847,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   }
   restagger();
 
-  filter?.addEventListener('input', () => {
+  filter.addEventListener('input', () => {
     const q = filter.value.trim();
     let visible = 0;
     for (const { station, btn } of rows) {
@@ -787,6 +856,16 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
       if (hit) visible++;
     }
     emptyNote.hidden = visible > 0;
+    // THE STATES ARE FILTERED BY THE SAME BOX. A region's flows are named in sentences -- "a refused
+    // password is reported, and the form stays usable" -- so they are the list that most needs
+    // searching, and the one that never could be.
+    let flowsVisible = 0;
+    for (const { label: flowLabel, btn } of flowRows) {
+      const hit = !q || fuzzy(flowLabel, q) !== null;
+      btn.hidden = !hit;
+      if (hit) flowsVisible++;
+    }
+    flowNote.hidden = flowsVisible > 0 || !flowRows.length;
     restagger();
   });
 
@@ -812,13 +891,19 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   const flowInner = el('div', { class: 'list__inner' });
   const flowBox = el('div', { class: 'list', role: 'listbox', 'aria-label': 'Flow' }, flowInner);
   const flowCount = el('span', { class: 'count' }, '0');
-  const flowHead = el('div', { class: 'col__head' }, el('span', { class: 'motu-cap' }, 'Flow'), flowCount);
+  const flowHead = el(
+    'div',
+    { class: 'sect__head' },
+    el('span', { class: 'motu-dot' }),
+    el('span', { class: 'motu-cap' }, 'States'),
+    flowCount,
+  );
   const flowNote = el('p', { class: 'motu-empty' }, 'This region declares no flows.');
   const flowStatus = el('p', { class: 'hint', hidden: '' }, '');
-  const flowCol = el('div', { class: 'col' }, flowHead, flowBox, flowNote, flowStatus);
-  if (opts.onFlow) bar.appendChild(flowCol);
+  const flowCol = el('div', { class: 'sect' }, flowHead, flowBox, flowNote, flowStatus);
+  if (opts.onFlow) scroll.appendChild(flowCol);
 
-  let flowRows: { name: string | null; btn: HTMLButtonElement }[] = [];
+  let flowRows: { name: string | null; label: string; btn: HTMLButtonElement }[] = [];
 
   function paintFlows(active: string | null | undefined): void {
     for (const { name, btn } of flowRows) {
@@ -833,6 +918,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     flowInner.replaceChildren();
     flowRows = [];
     flowCount.textContent = `${flows.length}`;
+    baySub.textContent = `${flows.length} state${flows.length === 1 ? '' : 's'}`;
     flowNote.hidden = flows.length > 0;
     flowStatus.hidden = true;
 
@@ -864,7 +950,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
         opts.onFlow?.(row.name);
       });
       flowInner.appendChild(btn);
-      flowRows.push({ name: row.name, btn });
+      flowRows.push({ name: row.name, label: row.label, btn });
     }
     paintFlows(active ?? null);
   }
@@ -915,30 +1001,67 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     typeof document === 'undefined'
       ? null
       : document.querySelector<HTMLMetaElement>('meta[name="motu-repo"]')?.content?.trim() || null;
-  const children: (HTMLElement | string)[] = [slot];
+  // THE RIG: the hosted chips, the view toggle, and the two ways out of this page. Everything that
+  // is a MODE rather than a place, gathered at the foot of the panel instead of scattered through it.
+  rigPills.appendChild(slot);
   if (servedRepo) {
-    const review = el(
-      'a',
-      {
-        class: 'motu-kbd',
-        // RELATIVE TO THE HOST'S ROOT, not to this page: a lagoon is served at
-        // /<repo>/<ref>/<slug> and inside a group at /g/<name>/f/<i>, so only an absolute path
-        // reaches the console from both.
-        href: `/console?repo=${encodeURIComponent(servedRepo)}`,
-        title: `Review baselines for ${servedRepo}`,
-      },
-      '◎ Baselines',
+    rigPills.appendChild(
+      el(
+        'a',
+        {
+          class: 'motu-btn',
+          'data-shape': 'pill',
+          // RELATIVE TO THE HOST'S ROOT, not to this page: a lagoon is served at
+          // /<repo>/<ref>/<slug> and inside a group at /g/<name>/f/<i>, so only an absolute path
+          // reaches the console from both.
+          href: `/console?repo=${encodeURIComponent(servedRepo)}`,
+          title: `Review baselines for ${servedRepo}`,
+        },
+        '◎ Baselines',
+      ),
     );
-    children.push(review);
   }
-  children.push(kbd);
-  bar.appendChild(el('div', { class: 'row' }, ...children));
-  const dragHint = isTouch
-    ? 'Drag the wave to any edge'
-    : 'Drag the wave to any edge — it lies along the one you push it against';
-  bar.appendChild(
-    el('span', { class: 'hint' }, opts.lens ? `${dragHint}. The ⌖ tab on the right opens the seam lens.` : `${dragHint}.`),
+  // THE LENS GETS A PILL, not only a palette entry. It draws its own tab on its own panel, which is
+  // discoverable once you know it exists and invisible until then; the palette entry had the same
+  // problem one layer deeper. The tab still opens it — this is a second door, in the place a person
+  // is already looking when they are choosing how the region is rigged.
+  if (opts.lens) {
+    const theLens = opts.lens;
+    const lensPill = el(
+      'button',
+      { class: 'motu-btn', 'data-shape': 'pill', type: 'button', 'aria-pressed': String(theLens.isOpen()) },
+      '⌖ Seam lens',
+    ) as HTMLButtonElement;
+    lensPill.addEventListener('click', (e) => {
+      splash(e.clientX, e.clientY, accent());
+      theLens.toggle();
+    });
+    theLens.subscribe((openNow) => lensPill.setAttribute('aria-pressed', String(openNow)));
+    rigPills.appendChild(lensPill);
+  }
+
+  // ── the panel, assembled ───────────────────────────────────────────────────────────────────
+  const bayTitle = el('b', {}, '—');
+  const baySub = el('small', {}, '');
+  const fold = el('button', { class: 'fold', type: 'button', title: 'Close', 'aria-label': 'Close lagoon controls' }, '›');
+  const mastMark = el('span', { class: 'mark' });
+  mastMark.innerHTML = MOTU_MARK_SVG;
+  const masthead = el(
+    'div',
+    { class: 'motu-bay', 'data-shape': 'masthead' },
+    el('div', { class: 'bay-row' }, mastMark, el('span', { class: 'bay-txt' }, bayTitle, baySub), fold),
   );
+
+  const rigStepPrev = el('button', { class: 'rig__step', type: 'button', title: 'Previous region', 'aria-label': 'Previous region' }, '‹');
+  const rigStepNext = el('button', { class: 'rig__step', type: 'button', title: 'Next region', 'aria-label': 'Next region' }, '›');
+  const rig = el(
+    'div',
+    { class: 'rig' },
+    el('div', { class: 'rig__head' }, el('span', { class: 'motu-cap' }, 'Rig'), rigStepPrev, rigStepNext),
+    rigPills,
+  );
+
+  bar.append(masthead, el('div', { class: 'find' }, filter, kbd), scroll, rig);
 
   // ── the bay ────────────────────────────────────────────────────────────────────────────────
   const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -996,35 +1119,51 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     svg.appendChild(path);
   }
 
-  // Six dots, not a bar. See the CSS: a bar here reads as a slider thumb and promises a slide.
-  const grip = el('span', { class: 'grip' }, ...Array.from({ length: 6 }, () => el('i')));
   const sheen = el('span', { class: 'sheen' });
   // What the bay is reporting, in words rather than in hue alone. Kept in sync by renderLabel().
   const label = el('span', { class: 'label' });
   const lens = opts.lens;
+  // THE RAIL IS THE DOCK WHEN IT IS CLOSED, and it is a button rather than a decorated div: its whole
+  // job is to be pressed, and a real button is the only version of that a keyboard and a screen
+  // reader both get for free.
+  //
+  // The wave svg goes with it. A 168x34 swell was legible lying along an edge; standing in a 46px
+  // rail it would be a smear, and the panel's masthead already carries the same water with room to
+  // move. What the rail keeps is the part that was doing work: the lamp, and the region's name.
+  const railMark = el('span', { class: 'mark' });
+  railMark.innerHTML = MOTU_MARK_SVG;
   const patch = el(
-    'div',
-    { class: 'patch', role: 'button', tabindex: '0', 'aria-label': 'Lagoon controls — open, or drag to another edge' },
-    svg,
-    sheen,
-    grip,
+    'button',
+    {
+      class: 'rail-dock',
+      type: 'button',
+      'aria-label': 'Lagoon controls — open, or drag to the other edge',
+      'aria-expanded': 'false',
+    },
+    railMark,
+    el('span', { class: 'lamp' }),
     label,
-  );
+    el('span', { class: 'chev' }, '‹'),
+  ) as HTMLButtonElement;
+  label.className = 'stand';
+  const railDock = patch;
+  const panel = bar;
+  // The bay's own water still exists — it is the masthead's, drawn by the kit — so the swell built
+  // above is mounted there rather than thrown away.
+  masthead.insertBefore(svg, masthead.firstChild);
+  masthead.appendChild(sheen);
 
   const tide = el(
     'div',
     { id: 'tide', 'data-open': 'false', 'data-transport': opts.transport },
-    bar,
-    patch,
+    railDock,
+    panel,
   );
-  tide.dataset.corner = readCorner();
-  tide.dataset.axis = readAxis();
+  tide.dataset.edge = readEdge();
   document.body.appendChild(tide);
 
   const targets = el('div', { id: 'tide-targets' });
-  for (const corner of CORNERS) {
-    for (const axis of AXES) targets.appendChild(el('i', { 'data-corner': corner, 'data-axis': axis }));
-  }
+  for (const edge of EDGES) targets.appendChild(el('i', { 'data-edge': edge }));
   document.body.appendChild(targets);
 
   // The chips (transport / fit) come to the panel instead of floating over the content. Debug is not
@@ -1034,7 +1173,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   // Keep the lens' panel on the far side from the bay, so the two never sit on top of each other.
   // Custom properties cross the shadow boundary, which is how the overlay reads these.
   const placeDebugPanel = () => {
-    const onRight = tide.dataset.corner === 'tr' || tide.dataset.corner === 'br';
+    const onRight = tide.dataset.edge !== 'left';
     const root = document.documentElement.style;
     root.setProperty('--motu-debug-right', onRight ? 'auto' : '12px');
     root.setProperty('--motu-debug-left', onRight ? '12px' : 'auto');
@@ -1056,6 +1195,10 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     const state = tide.dataset.fit === 'legacy' ? 'legacy' : opts.transport;
     const next = stationLabel ? `${stationLabel} · ${state}` : state;
     if (label.textContent !== next) label.textContent = next;
+    // The masthead says the REGION and nothing else: the rig below it already shows the transport
+    // and the fit as chips, so repeating them in the title would be the same fact three times.
+    const title = stationLabel || state;
+    if (bayTitle.textContent !== title) bayTitle.textContent = title;
   };
 
   // Fit is flipped live by the toolbar chip, which only ever sets the attribute on the regions —
@@ -1082,15 +1225,13 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   let barAnim: Animation | null = null;
   const floodBar = (dir: 'in' | 'out') => {
     if (REDUCED()) return;
-    const corner = tide.dataset.corner ?? DEFAULT_CORNER;
-    const from: FloodFrom =
-      tide.dataset.axis === 'v'
-        ? corner === 'tl' || corner === 'bl'
-          ? 'left'
-          : 'right'
-        : corner === 'tl' || corner === 'tr'
-          ? 'top'
-          : 'bottom';
+    // The panel is poured out of the edge the rail stands on, so which element owns it is never
+    // in doubt. On a phone the dock IS the bottom edge, and the sheet has to rise from there.
+    const from: FloodFrom = window.matchMedia('(max-width: 760px)').matches
+      ? 'bottom'
+      : tide.dataset.edge === 'left'
+        ? 'left'
+        : 'right';
     const f = flood(from);
     applyFlood(bar, f);
     // One at a time: a close arriving mid-open would otherwise leave the first animation to finish and
@@ -1121,6 +1262,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     // replaying the flood there would make the panel flicker under the cursor.
     if (tide.dataset.open === 'true') return;
     tide.dataset.open = 'true';
+    patch.setAttribute('aria-expanded', 'true');
     floodBar('in');
   };
   const close = (delay = 240) => {
@@ -1131,6 +1273,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
       if (tide.contains(document.activeElement) || !palette.hidden) return;
       if (tide.dataset.open !== 'true') return;
       tide.dataset.open = 'false';
+      patch.setAttribute('aria-expanded', 'false');
       floodBar('out');
     }, delay);
   };
@@ -1139,6 +1282,29 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
    * Open on hover only after a DWELL. The bay is small, but it still sits over whatever is in that
    * corner; brushing across it on the way somewhere else is not a request to open it.
    */
+  fold.addEventListener('click', (e) => {
+    e.stopPropagation();
+    close(0);
+  });
+
+  // THE STEPPER IS FOR THE REGIONS, which is the one list a person moves through rather than searches.
+  // It wraps: with two or three archipelagos, next/next/next is faster than reaching for the filter,
+  // and stopping dead at the end would just be a dead control most of the time.
+  const stepStation = (by: 1 | -1) => {
+    if (opts.stations.length < 2) return;
+    const at = opts.stations.findIndex((x) => x.label === stationLabel);
+    const next = opts.stations[(Math.max(at, 0) + (by === 1 ? 1 : opts.stations.length - 1)) % opts.stations.length];
+    if (next) opts.onStation(next.id);
+  };
+  rigStepPrev.addEventListener('click', () => stepStation(-1));
+  rigStepNext.addEventListener('click', () => stepStation(1));
+  // With one region there is nowhere to step, and a control that cannot do anything is worse than
+  // one that is not there.
+  if (opts.stations.length < 2) {
+    rigStepPrev.hidden = true;
+    rigStepNext.hidden = true;
+  }
+
   const DWELL_MS = 260;
   patch.addEventListener('pointerenter', () => {
     if (dragging) return;
@@ -1173,13 +1339,11 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   let dragging = false;
   let pressed: { x: number; y: number } | null = null;
 
-  const moveTo = (corner: TideCorner, axis: TideAxis) => {
-    tide.dataset.corner = corner;
-    tide.dataset.axis = axis;
+  const moveTo = (edge: TideEdge) => {
+    tide.dataset.edge = edge;
     placeDebugPanel();
     try {
-      localStorage.setItem(CORNER_KEY, corner);
-      localStorage.setItem(AXIS_KEY, axis);
+      localStorage.setItem(EDGE_KEY, edge);
     } catch {
       /* storage disabled — the choice just won't persist */
     }
@@ -1203,9 +1367,9 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     // Follow the pointer as a plain offset from the docked position — no layout involved, so the
     // drag stays cheap and the snap-back is a single transition on the same property.
     patch.style.transform = `translate(${e.clientX - pressed.x}px, ${e.clientY - pressed.y}px)`;
-    const near = slotAt(e.clientX, e.clientY);
+    const near = edgeAt(e.clientX);
     for (const t of targets.querySelectorAll<HTMLElement>('i')) {
-      t.dataset.near = String(t.dataset.corner === near.corner && t.dataset.axis === near.axis);
+      t.dataset.near = String(t.dataset.edge === near);
     }
   });
 
@@ -1222,8 +1386,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
       tide.dataset.open === 'true' ? close(0) : open();
       return;
     }
-    const { corner, axis } = slotAt(e.clientX, e.clientY);
-    moveTo(corner, axis);
+    moveTo(edgeAt(e.clientX));
     splash(e.clientX, e.clientY, accent());
   };
   patch.addEventListener('pointerup', endDrag);
@@ -1259,14 +1422,8 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
       out.push({ label: `${text} — ${chip.title || 'toggle'}`, kind: 'toggle', run: () => chip.click() });
     }
     // The keyboard/pointer-free way to do what dragging does, for anyone who can't drag.
-    for (const corner of CORNERS) {
-      for (const axis of AXES) {
-        out.push({
-          label: `Dock lagoon controls ${CORNER_LABEL[corner]} — ${AXIS_LABEL[axis]}`,
-          kind: 'dock',
-          run: () => moveTo(corner, axis),
-        });
-      }
+    for (const edge of EDGES) {
+      out.push({ label: `Dock lagoon controls on the ${EDGE_LABEL[edge]}`, kind: 'dock', run: () => moveTo(edge) });
     }
     if (lens) out.push({ label: 'Toggle debug seam lens', kind: 'lens', run: () => lens.toggle() });
     out.push({ label: 'About this lagoon', kind: 'help', run: showAbout });
@@ -1373,7 +1530,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   /** Sweep a band of light across the bay — the water noticing that something changed. */
   function sheenSweep(): void {
     if (REDUCED()) return;
-    const along = tide.dataset.axis === 'v' ? 'Y' : 'X';
+    const along = window.matchMedia('(max-width: 760px)').matches ? 'X' : 'Y';
     sheen.style.setProperty('--sheen-angle', along === 'Y' ? '180deg' : '90deg');
     sheen.animate(
       [

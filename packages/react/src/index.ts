@@ -6,7 +6,7 @@ export { resolveTransportMode, mountTransportToggle } from './transport-toggle';
 export type { TransportMode } from './transport-toggle';
 export { resolveFitMode, mountFitToggle } from './fit-toggle';
 export { mountTideLine } from './tideline';
-export type { TideLine, TideLineOptions, TideStation, TideView, TideAxis, TideCorner, TideLens } from './tideline';
+export type { TideLine, TideLineOptions, TideStation, TideView, TideEdge, TideLens } from './tideline';
 export { bootstrapLagoon } from './lagoon-bootstrap';
 export { ArchipelagoProvider, Island, useMotuStore, useRegionValue, useRegion } from './react-island';
 export { createRegion } from './create-region';

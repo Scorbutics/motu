@@ -418,6 +418,36 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   color: var(--motu-caution, #b45309);
 }
 
+#tide .coverage { display: none; }
+#tide .panel[data-tab="coverage"] .coverage {
+  display: flex; flex-direction: column; gap: 7px;
+  flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px 14px 12px;
+}
+#tide .panel[data-tab="coverage"] .scroll,
+#tide .panel[data-tab="coverage"] .seams,
+#tide .panel[data-tab="coverage"] .islands,
+#tide .panel[data-tab="coverage"] .find--filter { display: none; }
+#tide .coverage > * { flex: 0 0 auto; }
+#tide .cov-verdict {
+  padding: 7px 10px; border-radius: 9px; font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: color-mix(in srgb, var(--ink-faint) 12%, #fff); color: var(--ink-muted);
+}
+#tide .cov-verdict[data-verdict="reached"] { background: color-mix(in srgb, var(--tide-accent) 13%, #fff); color: var(--w-deep); }
+#tide .cov-verdict[data-verdict="never-recorded"] { background: color-mix(in srgb, var(--motu-caution, #b45309) 14%, #fff); color: var(--motu-caution, #b45309); }
+/* The fingerprint wraps, because it is the content of this tab rather than a label on it. */
+#tide .cov-fp {
+  font: 500 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-faint); word-break: break-all;
+  padding: 6px 9px; border-radius: 8px; background: var(--surface-row);
+}
+#tide .cov-row {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; align-items: baseline;
+  padding: 5px 7px; border-radius: 7px; background: var(--surface-row);
+  font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#tide .cov-row__s { font-weight: 700; color: var(--tide-accent); text-align: right; }
+#tide .cov-row__d { color: var(--ink-muted); overflow-wrap: anywhere; }
+
 #tide .islands { display: none; }
 #tide .panel[data-tab="islands"] .islands {
   display: flex; flex-direction: column; gap: 8px;
@@ -854,9 +884,15 @@ function motuMountDock(opts) {
   // asks how the region is WIRED; this asks what each island was actually given. The same key answers
   // both from opposite ends — Seams says who reads `shots`, this says whether shot-list got it.
   var islandsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Islands']);
-  tabs.append(tabThumb, statesTab, seamsTab, islandsTab);
+  // COVERAGE IS THE ONLY ONE THAT LOOKS OUTWARD. Seams and Islands both compare the region against
+  // its own declaration; this compares it against what production has actually been recorded doing.
+  // Same region, a different world to measure it against, so it earns its own place rather than
+  // another block of rows under a heading that promises something else.
+  var coverageTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Coverage']);
+  tabs.append(tabThumb, statesTab, seamsTab, islandsTab, coverageTab);
   var seams = el('div', { class: 'seams' });
   var islandsPane = el('div', { class: 'islands' });
+  var coveragePane = el('div', { class: 'coverage' });
   var kbd = el('button', { class: 'motu-kbd', type: 'button', title: 'Command palette' },
     [/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '\u2318K' : 'Ctrl K']);
 
@@ -867,6 +903,7 @@ function motuMountDock(opts) {
     scroll,
     seams,
     islandsPane,
+    coveragePane,
     rig,
   ]);
   var scrim = el('div', { class: 'scrim' });
@@ -919,7 +956,11 @@ function motuMountDock(opts) {
     statesTab.setAttribute('aria-current', String(which === 'states'));
     seamsTab.setAttribute('aria-current', String(which === 'seams'));
     islandsTab.setAttribute('aria-current', String(which === 'islands'));
-    var on = which === 'states' ? statesTab : which === 'seams' ? seamsTab : islandsTab;
+    coverageTab.setAttribute('aria-current', String(which === 'coverage'));
+    var on = which === 'states' ? statesTab
+      : which === 'seams' ? seamsTab
+      : which === 'islands' ? islandsTab
+      : coverageTab;
     tabThumb.style.left = on.offsetLeft + 'px';
     tabThumb.style.width = on.offsetWidth + 'px';
     watchWhileLooking(which);
@@ -931,7 +972,7 @@ function motuMountDock(opts) {
   // store write and a subscription nobody is reading is work the page pays for permanently.
   var unwatch = null;
   var watchWhileLooking = function (which) {
-    var live = which === 'seams' || which === 'islands';
+    var live = which === 'seams' || which === 'islands' || which === 'coverage';
     var ctl = control();
     if (live && !unwatch && ctl && ctl.watch) unwatch = ctl.watch(paint);
     else if (!live && unwatch) { unwatch(); unwatch = null; }
@@ -940,6 +981,7 @@ function motuMountDock(opts) {
   statesTab.addEventListener('click', function () { showTab('states'); });
   seamsTab.addEventListener('click', function () { showTab('seams'); });
   islandsTab.addEventListener('click', function () { showTab('islands'); });
+  coverageTab.addEventListener('click', function () { showTab('coverage'); });
 
   var section = function (cap) {
     var count = el('span', { class: 'count' }, ['0']);
@@ -1215,6 +1257,58 @@ function motuMountDock(opts) {
           body.appendChild(el('p', { class: 'isl__did' }, [did.length ? did.join(' \u00b7 ') : 'reads only']));
           return el('div', { class: 'isl' }, [head, body]);
         }));
+      }
+    }
+
+    // ── coverage ─────────────────────────────────────────────────────────────────────────────
+    if (panel.dataset.tab === 'coverage') {
+      var cov = ctl.coverage ? ctl.coverage() : null;
+      if (!cov) {
+        coveragePane.replaceChildren(el('p', { class: 'motu-empty' },
+          ['No corpus for this region \u2014 nothing has reported what production does with it.']));
+      } else {
+        var nodes = [el('div', { class: 'sect__head' }, [
+          el('span', { class: 'motu-cap' }, ['On screen now']),
+          el('span', { class: 'count' }, [cov.states + ' recorded state' + (cov.states === 1 ? '' : 's') +
+            ' \u00b7 ' + cov.occurrences + ' occurrence' + (cov.occurrences === 1 ? '' : 's')]),
+        ])];
+        if (cov.drift) {
+          // SAID, not silently worked around: a fingerprint over one key set cannot be placed in a
+          // corpus recorded over another, so every verdict here would be confidently wrong.
+          nodes.push(el('p', { class: 'seam-notice' }, [
+            '\u26a0 the corpus was recorded against a different declaration \u2014 ' +
+            cov.drift.gone.length + ' key(s) gone (' + (cov.drift.gone.join(', ') || '\u2014') + '), ' +
+            cov.drift.added.length + ' added (' + (cov.drift.added.join(', ') || '\u2014') + '). ' +
+            'Re-record before trusting this.',
+          ]));
+        }
+        var verdictText = cov.verdict === 'not-comparable' ? 'not comparable'
+          : cov.verdict === 'reached' ? 'production reaches this \u00b7 ' + cov.reached.count + '\u00d7 \u00b7 ' + cov.reached.share
+          : 'never recorded';
+        nodes.push(el('div', { class: 'cov-verdict', 'data-verdict': cov.verdict }, [verdictText]));
+        // The fingerprint on its own line, because it IS the content: in a row it truncates at the
+        // column edge, which hides the very keys a reader came to check.
+        nodes.push(el('div', { class: 'cov-fp' }, [cov.fingerprint]));
+        if (cov.verdict === 'never-recorded') {
+          nodes.push(el('p', { class: 'motu-empty' },
+            ['No beacon has reported this combination \u2014 either it cannot happen, or nobody has reached it yet.']));
+        }
+        if (cov.ranked.length) {
+          nodes.push(el('div', { class: 'sect__head' }, [
+            // THE HEADING CARRIES THE SEMANTICS. Each row shows only what DIFFERS, so a bare
+            // "64% busy:true" would read as "64% of production has busy:true" — a different and much
+            // stronger claim than the true one.
+            el('span', { class: 'motu-cap' }, ['How recorded states differ from this one']),
+            el('span', { class: 'count' }, [String(cov.ranked.length)]),
+          ]));
+          cov.ranked.forEach(function (r) {
+            nodes.push(el('div', { class: 'cov-row' }, [
+              el('span', { class: 'cov-row__s' }, [r.share]),
+              el('span', { class: 'cov-row__d' }, [r.diff]),
+            ]));
+          });
+        }
+        coveragePane.replaceChildren.apply(coveragePane, nodes);
       }
     }
 

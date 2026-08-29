@@ -19,7 +19,10 @@ import {
   launderingSuspects,
   getChannels,
   hostCalls,
+  regionIdOfStore,
+  archipelagoConfigs,
 } from '@motu/core';
+import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
 import { lens } from './store';
 import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';
@@ -68,7 +71,67 @@ function collect() {
  * live.
  */
 export function watchSeams(fn: () => void): () => void {
-  return lens.subscribe(fn);
+  // TWO SOURCES, ONE SUBSCRIPTION. The lens fires on store writes; the corpus arrives separately and
+  // asynchronously from the host. A panel watching only the first shows "no corpus" forever on a page
+  // whose corpus landed a second after it opened.
+  const offLens = lens.subscribe(fn);
+  const offCorpus = subscribeCorpus(fn);
+  return () => {
+    offLens();
+    offCorpus();
+  };
+}
+
+/**
+ * COVERAGE: what production does that you are not looking at.
+ *
+ * A different question from the rest of the lens, and the only one that compares this region against
+ * the world rather than against its own declaration.
+ *
+ * THREE VERDICTS, NOT TWO. Under drift the honest answer is neither "recorded" nor "never recorded":
+ * a state folded over one key list cannot be looked up in a corpus folded over another, so "never
+ * recorded" would be a finding manufactured by the mismatch. It read exactly that way before the
+ * drift notice existed to contradict it.
+ */
+export function currentCoverage() {
+  const islands = getMountedIslands();
+  const store = islands.length ? islands[0].store : null;
+  const regionId = store ? regionIdOfStore(store) : null;
+  // Ask the host once; `watchSeams` re-paints when the answer lands.
+  ensureCorpus(regionId);
+  const corpus = corpusFor(regionId);
+  if (!store || !corpus) return null;
+
+  // THE SAME UNION THE SHEET IS BUILT FROM, so the two cannot disagree about what this region is.
+  const declaredKeys = new Set<string>();
+  for (const info of islands.filter((i) => i.store === store)) {
+    for (const key of writtenKeys(info.spec)) declaredKeys.add(key);
+    for (const key of bindKeys(info)) declaredKeys.add(key);
+  }
+  // THE REGION'S DECLARED ENUMS, not none. A key the archipelago declares a closed set fingerprints
+  // as "= last"; folding without them produces "set" for exactly those keys, so every state would
+  // miss its corpus row and this would read "never recorded" for a region whose coverage is perfect.
+  const enums = archipelagoConfigs().find((c) => c.id === regionId)?.coverage?.enums ?? [];
+  const cov = liveCoverage(corpus, [...declaredKeys].sort(), (k) => store.get(k), enums);
+  const pct = (n: number) => `${(n * 100).toFixed(n >= 0.1 ? 0 : 1)}%`;
+
+  return {
+    states: corpus.entries.length,
+    occurrences: cov.total,
+    fingerprint: cov.id,
+    verdict: cov.drift ? 'not-comparable' : cov.entry ? 'reached' : 'never-recorded',
+    reached: cov.entry ? { count: cov.entry.count, share: pct(cov.share) } : null,
+    drift: cov.drift
+      ? { gone: cov.drift.onlyRecorded, added: cov.drift.onlyDeclared }
+      : null,
+    // Each row shows only the keys that DIFFER from the state on screen, so the heading has to name
+    // the comparison: a bare "64% busy:true" reads as "64% of production has busy:true", which is a
+    // different and much stronger claim than the true one.
+    ranked: cov.ranked
+      .filter((r) => !r.current)
+      .slice(0, 6)
+      .map((r) => ({ share: pct(r.share), diff: r.diff || '— identical to this one' })),
+  };
 }
 
 /**

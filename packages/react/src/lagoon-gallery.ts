@@ -596,6 +596,8 @@ markSandbox();
       islands: () => (lens && lens.islands ? lens.islands() : null),
       /** Per shared key: who touches it, and whether that is coupling worth being deliberate about. */
       coupling: () => (lens && lens.coupling ? lens.coupling() : null),
+      /** How this state compares with what production has been recorded doing. */
+      coverage: () => (lens && lens.coverage ? lens.coverage() : null),
       /** Subscribe to everything the lens reports, so a panel elsewhere does not go stale. */
       watch: (fn: () => void) => (lens && lens.watch ? lens.watch(fn) : () => {}),
       pressChip: (index: number) => {

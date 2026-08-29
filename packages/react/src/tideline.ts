@@ -100,6 +100,8 @@ export interface TideLens {
   islands?(): unknown;
   /** Per shared key: who reads it, who writes it, and whether that is real coupling. */
   coupling?(): unknown;
+  /** What production does that this state is not: the region against the world, not its declaration. */
+  coverage?(): unknown;
   /**
    * Called whenever anything the lens reports has moved.
    *

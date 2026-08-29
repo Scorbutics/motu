@@ -1069,6 +1069,18 @@ function motuMountDock(opts) {
     // RECORDING IS AN ACT, so it sits with the other controls rather than in a tab. It is the one
     // thing here that changes the lagoon instead of reporting on it, and stopping is what writes the
     // fixtures out — so the label says which of those pressing it will do.
+    if (ctl.lensOpen) {
+      // THE PAGE LAYER, which is all the lens still draws for itself: outlines and wires over the
+      // running region. Everything it used to say in a panel is in the tabs above.
+      var lensPill = el('button', {
+        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
+        'aria-pressed': ctl.lensOpen() ? 'true' : 'false',
+        title: 'Outline the islands on the page and wire them to what they read',
+      }, ['\u2316 Seam lens']);
+      lensPill.addEventListener('click', function () { ctl.toggleLens(); paint(); });
+      pills.push(lensPill);
+    }
+
     var rec = ctl.recordingState ? ctl.recordingState() : null;
     if (rec) {
       var recPill = el('button', {

@@ -601,6 +601,14 @@ markSandbox();
       /** Start or stop fixture capture; stopping writes the file out. */
       toggleRecording: () => (lens && lens.toggleRecording ? lens.toggleRecording() : null),
       recordingState: () => (lens && lens.recordingState ? lens.recordingState() : null),
+      /**
+       * The seam lens' PAGE layer — outlines, wires, hit-testing over the running region.
+       *
+       * Its panel is the sidebar now, so this is the half that could not move: it measures the host's
+       * live DOM and only means anything drawn over the page itself.
+       */
+      toggleLens: () => lens?.toggle(),
+      lensOpen: () => Boolean(lens?.isOpen()),
       /** Subscribe to everything the lens reports, so a panel elsewhere does not go stale. */
       watch: (fn: () => void) => (lens && lens.watch ? lens.watch(fn) : () => {}),
       pressChip: (index: number) => {

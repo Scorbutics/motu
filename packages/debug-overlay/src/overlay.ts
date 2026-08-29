@@ -33,7 +33,15 @@ import {
 import { MOTU_VERDICT } from '@motu/chrome/tokens';
 import { STYLES, TAB_H } from './styles';
 import { FLAG, lens, readFlag, writeFlag } from './store';
-import { LensPanel, setPicking } from './panel';
+// THE PANEL IS GONE, and this is what it left behind. `setPicking` flips a mode and sets the page's
+// own cursor — it was in the panel only because the panel had the button. It belongs here, with the
+// layer it actually affects.
+/** Crosshair mode: the page's own cursor says what mode you are in; the overlay layer cannot (it is inert). */
+export function setPicking(on: boolean): void {
+  lens.picking = on;
+  document.body.style.cursor = on ? 'crosshair' : '';
+  lens.changedNow();
+}
 import { computeProps, verdictOf, isolationOf, avg, sourceLabel, type Verdict } from './model';
 import { crosshair, islandAnchor, islandRect, svgDot, svgLabel, wire, type Point } from './geometry';
 
@@ -288,22 +296,30 @@ class Overlay {
     }
   }
 
-  #ensurePanel() {
-    if (this.#panel) return;
-    const panel = document.createElement('div');
-    // The POSITION is the lens' (.panel); the SURFACE is the kit's — the same frosted sheet the
-    // review console's viewer sits on, rather than a second one spelled out in literals here.
-    panel.className = 'panel motu-sheet-panel';
-    panel.dataset.shape = 'window';
-    this.#panel = panel;
-    this.#root.append(panel);
-    this.#applyMinimized();
-    this.#makeDraggable(panel);
-    this.#react = createRoot(panel);
-    this.#react.render(createElement(LensPanel, { onClose: () => this.toggle() }));
-    this.#restorePosition();
-    this.#flood(panel, 'in');
-  }
+  /**
+   * NOTHING TO ENSURE ANY MORE.
+   *
+   * The lens' panel moved into the lagoon's own sidebar — the sheet, the feeds, the calls, the
+   * coupling, coverage, the island scope and the recorder are all tabs there now, drawn by whoever
+   * hosts the lagoon rather than bundled into it. What could NOT move is below: the page layer, which
+   * measures the host's live DOM sixty times a second and only means anything over the running page.
+   *
+   * So the lens keeps its outlines, its wires, its hit-testing and its crosshair, and stops carrying
+   * a second copy of the panel that now lives somewhere better.
+   */
+  /**
+   * NOTHING TO ENSURE ANY MORE.
+   *
+   * The lens' panel moved into the lagoon's own sidebar — the region sheet, the feeds, the calls,
+   * the coupling, coverage, the island scope and the recorder are all tabs there now, drawn by
+   * whoever hosts the lagoon instead of bundled into it.
+   *
+   * What could NOT move is everything else in this file: the page layer measures the host's live DOM
+   * sixty times a second and only means anything over the running page. So the lens keeps its
+   * outlines, its wires, its hit-testing and its crosshair, and stops carrying a second copy of a
+   * panel that now lives somewhere better.
+   */
+  #ensurePanel() {}
 
   /**
    * The minimized class, which React does not own.

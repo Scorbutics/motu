@@ -31,4 +31,5 @@ export const PRIMARY_VAR_NAMES: string[]
 export function rasteriseDocument(doc: Document, opts?: Record<string, number>): Promise<ImageData | null>
 export function detectPrimary(doc: Document, opts?: Record<string, unknown>): Promise<DetectedPrimary | null>
 export function detectPrimarySettled(doc: Document, opts?: Record<string, unknown>): Promise<DetectedPrimary | null>
+export function primaryDetectSource(parts: Record<string, Function>): string
 export const PRIMARY_DETECT_JS: string

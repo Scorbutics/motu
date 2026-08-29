@@ -472,9 +472,10 @@ ${PRIMARY_DETECT_JS}
       detectPrimary(doc).then(function (found) {
         if (current !== i) return;
         if (!found) {
-          // Roughly 0.3s, 0.6s, 1.2s, 2.4s, 4.8s -- about ten seconds in total before giving up on a
-          // frame that never paints anything readable.
-          if (attempt < 5) setTimeout(function () { read(attempt + 1); }, 300 * Math.pow(2, attempt));
+          // About 38s in total, from 300ms doubling. Ten seconds was enough for every lagoon tested
+          // locally and too short for twenty's published artifact -- 19.66 MB and ~25s to first
+          // paint -- which detected in dev and never once in production.
+          if (attempt < 7) setTimeout(function () { read(attempt + 1); }, 300 * Math.pow(2, attempt));
           return;
         }
         try { sessionStorage.setItem(key, JSON.stringify(found)); } catch (e) { /* private mode */ }
@@ -493,7 +494,14 @@ ${PRIMARY_DETECT_JS}
       f.dataset.motuBound = '1';
       f.addEventListener('load', function () { f.dataset.motuLoaded = '1'; settle(); });
     }
-    if (f.dataset.motuLoaded) settle();
+    // ALREADY LOADED COUNTS AS LOADED. motuLoaded is only set by the handler, so a frame whose load
+    // fired before the handler was bound -- a cached artifact, which is the common case on a second
+    // visit -- had the flag unset AND the event gone. The shell wore the cached colour and the dock
+    // inside the frame stayed motu teal, which reads as "the frame is not being painted" and is
+    // really "the frame was painted before anyone was listening".
+    var ready = false;
+    try { ready = !!(f.contentDocument && f.contentDocument.readyState === 'complete' && f.contentDocument.body); } catch (e) { /* not ours */ }
+    if (f.dataset.motuLoaded || ready) settle();
   }
   // --- the sheet, on a phone --------------------------------------------------------------------
   // Desktop never opens it: the rail is always visible there and these handlers simply never fire,

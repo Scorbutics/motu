@@ -6,9 +6,11 @@
 // ground around it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import {
   dominantPrimary, normalisePrimary, primaryVars, PRIMARY_VAR_NAMES,
   parseHex, hexOf, rgbToHsl, hslToRgb, contrastRatio,
+  PRIMARY_DETECT_JS, primaryDetectSource,
 } from '../src/primary.mjs';
 
 /** One 8-bit channel step, as an HSL tolerance -- see the too-light-brand test for why it is here. */
@@ -163,4 +165,33 @@ test('the var map is the ramp applyMotuChrome builds', () => {
     if (name === '--motu-on-primary') continue;
     assert.ok(PRIMARY_VAR_NAMES.includes(name), name + ' is set but not in PRIMARY_VAR_NAMES');
   }
+});
+
+test('the browser bundle defines the names the page calls', () => {
+  const ctx = {};
+  vm.createContext(ctx);
+  new vm.Script(PRIMARY_DETECT_JS).runInContext(ctx);
+  for (const name of ['detectPrimary', 'detectPrimarySettled', 'primaryVars', 'dominantPrimary']) {
+    assert.equal(typeof ctx[name], 'function', name + ' is missing from the bundle');
+  }
+});
+
+test('a bundler that renames the functions cannot break the caller', () => {
+  // THE PRODUCTION BUG, reproduced. The host app is minified, so the serialised functions arrive
+  // under mangled names while the page's own script -- a template literal -- still calls the real
+  // ones. Every check passed and the deployed page threw "detectPrimary is not defined" on the
+  // first frame it tried to read.
+  function fe(x) { return x * 2; }
+  function ge(x) { return fe(x) + 1; }
+  const src = primaryDetectSource({ dominantPrimary: fe, detectPrimary: ge });
+  const ctx = {};
+  vm.createContext(ctx);
+  new vm.Script(src).runInContext(ctx);
+  assert.equal(typeof ctx.detectPrimary, 'function', 'the caller\'s name has to resolve');
+  assert.equal(ctx.detectPrimary(3), 7, 'and it has to be the right function');
+});
+
+test('nothing is aliased when nothing was renamed', () => {
+  function detectPrimary(x) { return x; }
+  assert.equal(primaryDetectSource({ detectPrimary }).includes('var detectPrimary ='), false);
 });

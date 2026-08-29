@@ -304,7 +304,11 @@ export async function detectPrimary(doc, opts = {}) {
  * slow raster cannot paint the chrome for a lagoon nobody is looking at any more.
  */
 export async function detectPrimarySettled(doc, opts = {}) {
-  const { attempts = 6, baseDelayMs = 300, shouldContinue = null } = opts;
+  // EIGHT, because a big artifact is slow. Exponential from 300ms, so the budget is about 38s in
+  // total while only ~3 rasters actually land during a 25s load. Six attempts (9.3s) was enough for
+  // every lagoon tested locally and silently too short for twenty's published one -- 19.66 MB, ~25s
+  // to first paint -- which detected in dev and never detected in production.
+  const { attempts = 8, baseDelayMs = 300, shouldContinue = null } = opts;
   const win = (doc && doc.defaultView) || globalThis;
   for (let n = 0; n < attempts; n++) {
     if (shouldContinue && !shouldContinue()) return null;
@@ -330,8 +334,38 @@ export async function detectPrimarySettled(doc, opts = {}) {
  * the serialisation valid on its own. Keep it that way -- a module-level constant referenced from one
  * of these bodies would serialise to a ReferenceError in the page, and nothing in node would notice.
  */
-export const PRIMARY_DETECT_JS = [
+const PRIMARY_DETECT_PARTS = {
   hexOf, parseHex, rgbToHsl, hslToRgb, relativeLuminance, contrastRatio,
   dominantPrimary, normalisePrimary, primaryVars, rasteriseDocument, detectPrimary,
   detectPrimarySettled,
-].map((f) => f.toString()).join('\n');
+};
+
+/**
+ * Serialise a set of named functions into source a plain <script> can run.
+ *
+ * Exported so the RENAMING rule below can be tested with functions that are actually renamed --
+ * everything in this file is unminified when the tests run, so a test over PRIMARY_DETECT_JS alone
+ * cannot reach the case that broke production.
+ */
+export function primaryDetectSource(parts) {
+  return [
+    // The functions as authored -- or as a MINIFIER left them, which is the whole reason for the
+    // aliases below.
+    ...Object.values(parts).map((f) => f.toString()),
+    // STABLE NAMES, because a bundler renames these and the caller is a string.
+    //
+    // The host app is bundled and minified for production, so detectPrimary.toString() comes back as
+    // "function fe(...)". The functions still call EACH OTHER correctly (the minifier renamed both
+    // sides), but the page's own script is a template literal that minification never touches, so it
+    // went on calling detectPrimary -- a name that no longer existed. Live, and only live: dev builds
+    // are not minified, so every check passed right up until it was deployed.
+    //
+    // f.name is whatever the function ended up called, so this maps the name the caller uses onto the
+    // name the function actually has, and emits nothing when nothing was renamed.
+    ...Object.entries(parts)
+      .filter(([name, f]) => f.name && f.name !== name)
+      .map(([name, f]) => `var ${name} = ${f.name};`),
+  ].join('\n');
+}
+
+export const PRIMARY_DETECT_JS = primaryDetectSource(PRIMARY_DETECT_PARTS);

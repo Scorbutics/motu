@@ -358,7 +358,7 @@ markSandbox();
   // A REQUESTED FLOW CHOOSES THE STATION. `?flow=<name>` is an address for a state, and a state
   // belongs to exactly one region — making the visitor also know (and type) which region declares it
   // would be asking for the one thing the catalogue already knows.
-  publishStates(opts.evidence);
+  publishStates(opts.evidence, stations.map((s) => ({ id: s.id, label: s.label })));
   const request = readStateRequest();
   let flowRegion: string | undefined;
   if (request.flow) {
@@ -430,6 +430,9 @@ markSandbox();
     if (!id) return;
     current = id;
     localStorage.setItem(STORAGE_KEY, id);
+    // A host rendering this lagoon's chrome from outside follows the same changes the in-page panel
+    // does, and finds out the same way: by being told, not by polling the DOM for what changed.
+    controlChanged();
 
     if (react) {
       // Same path the host application and `motu island verify` use, so the surface a human judges
@@ -539,19 +542,48 @@ markSandbox();
       steps: (f.steps ?? []).length,
     }));
 
-  const tide = mountTideLine({
-    stations,
-    transport: mode,
-    about: config.about ?? DEFAULT_ABOUT,
-    // mountFindings comes across too, so the dock can show a Seams tab without importing the dev-only
-    // package to find out what a finding is. Forwarded rather than spread, because everything else on
-    // a LagoonLens (its own mount) is the app's business and not the dock's.
-    lens: lens
-      ? { toggle: lens.toggle, isOpen: lens.isOpen, subscribe: lens.subscribe, mountFindings: lens.mountFindings }
-      : undefined,
+  /**
+   * THE CONTROL SURFACE, so the chrome does not have to live in here.
+   *
+   * The catalogue (`__motuLagoonStates`) already says what this build can be opened in; this says how
+   * to open it. Together they are everything a host needs to render the lagoon's chrome OUTSIDE the
+   * artifact — which is the point: the dock is bundled into every published page today, so changing
+   * it means republishing every lagoon, and it overlays an application it is only supposed to be
+   * looking at.
+   *
+   * DRIVEN, NOT NAVIGATED. The alternative is for a host to reload the frame with `?region=…&flow=…`,
+   * which works and is what the addresses are for — but it is a full reload of an artifact that can
+   * be 19 MB, per click. These are the same handlers the in-page dock calls, so a host driving them
+   * gets exactly what pressing the dock gets, including the URL rewrite that keeps the address
+   * pasteable.
+   *
+   * Installed on `window` rather than passed anywhere, because the consumer is in another document.
+   */
+  const publishControl = (): void => {
+    (window as unknown as { __motuLagoonControl?: unknown }).__motuLagoonControl = {
+      regions: () => stations.map((x) => ({ id: x.id, label: x.label })),
+      current: () => ({ region: current, view, island: island ?? null }),
+      show: (id: string) => onStation(id),
+      setView: (next: TideView) => onView(next),
+      runFlow: (name: string | null) => onFlow(name),
+      /** Told whenever the mounted region, view or flow changes, so a host's chrome can follow. */
+      subscribe: (fn: () => void) => {
+        controlWatchers.add(fn);
+        return () => controlWatchers.delete(fn);
+      },
+    };
+  };
+  const controlWatchers = new Set<() => void>();
+  const controlChanged = () => {
+    for (const fn of controlWatchers) fn();
+  };
+
+  // HOISTED OUT OF THE PANEL'S OPTIONS so there is exactly one definition of each. The in-page dock
+  // and a host driving this page from outside it must do the SAME thing — a second copy of "pick a
+  // region" is the kind of duplicate that stays correct until one of them is fixed.
     // Picking a station LEAVES an island address, and takes it out of the URL: leaving it there
     // would hand someone a link that reopens the island they navigated away from.
-    onStation: (id) => {
+  const onStation = (id: string) => {
       if (island) {
         const url = new URL(location.href);
         url.searchParams.delete('target');
@@ -561,20 +593,22 @@ markSandbox();
         reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
       }
       mount(id);
-    },
-    onView: (next) => {
+  };
+
+  const onView = (next: TideView) => {
       view = next;
       localStorage.setItem(VIEW_KEY, next);
       if (island) mountIsland(island);
       else mount(current);
-    },
+  };
+
     // RUNNING A FLOW FROM THE PANEL, and leaving an address behind.
     //
     // The URL is rewritten to the one that reaches this state, so what a person is looking at can be
     // pasted to someone else — the same address `motu lagoon states` prints. Picking "As seeded" is a
     // remount: a flow leaves the region where its last step put it, and going back to what the page
     // establishes is a state too.
-    onFlow: (name) => {
+  const onFlow = (name: string | null) => {
       const url = new URL(location.href);
       url.searchParams.set('region', current);
       if (name) url.searchParams.set('flow', name);
@@ -609,7 +643,23 @@ markSandbox();
           outcome.ok,
         );
       });
-    },
+  };
+
+  publishControl();
+
+  const tide = mountTideLine({
+    stations,
+    transport: mode,
+    about: config.about ?? DEFAULT_ABOUT,
+    // mountFindings comes across too, so the dock can show a Seams tab without importing the dev-only
+    // package to find out what a finding is. Forwarded rather than spread, because everything else on
+    // a LagoonLens (its own mount) is the app's business and not the dock's.
+    lens: lens
+      ? { toggle: lens.toggle, isOpen: lens.isOpen, subscribe: lens.subscribe, mountFindings: lens.mountFindings }
+      : undefined,
+    onStation,
+    onView,
+    onFlow,
   });
 
   if (island) {

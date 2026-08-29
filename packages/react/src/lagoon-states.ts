@@ -27,8 +27,23 @@
 // named. So an unresolvable state is a banner and a refusal to mount, never a fallback.
 import type { RegionScenario, RegionStep, Scenario } from '@motu/runtime/mock';
 
+/** One archipelago this build can be opened on, as the catalogue lists it. */
+export interface LagoonRegionEntry {
+  id: string;
+  label: string;
+}
+
 /** Everything addressable in this build, gathered from the project's evidence files by the entry. */
 export interface LagoonEvidence {
+  /**
+   * Every archipelago, in the order the panel shows them.
+   *
+   * NOT DERIVABLE FROM `flows`, which is why it is listed separately: a region with no declared flows
+   * has no key there and would simply be missing from a catalogue built by reading it. A reader that
+   * cannot see a region cannot offer to open it, and "the tool showed fewer regions than exist" is
+   * the quiet kind of wrong this module was written to refuse elsewhere.
+   */
+  archipelagos?: LagoonRegionEntry[];
   /** Island scenarios by element tag (`x-week-actions`), from `<kebab>.evidence.ts`. */
   scenarios?: Record<string, Scenario[]>;
   /** Region flows by archipelago id, from `<id>.evidence.ts` beside the archipelago. */
@@ -240,9 +255,13 @@ export function reportState(outcome: StateOutcome): void {
 }
 
 /** Publish the catalogue, so a page can be asked what it can be opened in without loading a file. */
-export function publishStates(evidence: LagoonEvidence | undefined): void {
+export function publishStates(evidence: LagoonEvidence | undefined, archipelagos: LagoonRegionEntry[] = []): void {
   if (typeof window === 'undefined') return;
-  window.__motuLagoonStates = { scenarios: evidence?.scenarios ?? {}, flows: evidence?.flows ?? {} };
+  window.__motuLagoonStates = {
+    scenarios: evidence?.scenarios ?? {},
+    flows: evidence?.flows ?? {},
+    archipelagos,
+  };
 }
 
 // --- replaying a flow -------------------------------------------------------------------------

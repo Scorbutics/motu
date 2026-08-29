@@ -197,6 +197,10 @@ function lagoonUrl(server, target, view) {
   // opening the page, and a flaky visual baseline for `island snapshot`, which pictures islands
   // through this same boot. The harness always sees motu's declared colour.
   q.set('autoPrimary', 'off');
+  // AND NO PAGE-INSET. `responsive` measures the APPLICATION at each declared viewport; the dock is
+  // not part of the application, so reserving its strip during that run would measure the app 46px
+  // narrower than the viewport it declares and report an overflow the app does not have.
+  q.set('dockInset', 'off');
   return `http://localhost:${server.port}/lagoon.html?${q}`;
 }
 

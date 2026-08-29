@@ -196,6 +196,27 @@ const CSS = `
   --tide-accent: #a86f0b;
 }
 
+/* ── the page keeps the strip the dock stands on ──────────────────────────────────────────── */
+/*
+ * THE RAIL USED TO SIT ON TOP OF THE PAGE, and a full-height rail that overlays is worse than the
+ * capsule it replaced: the capsule could only ever cover one corner, this covers the whole edge, on
+ * every screen, permanently. On a real region that is a clipped "Edit my page" button and a filter
+ * control you cannot reach.
+ *
+ * So the page is inset instead, which is what a docked devtool does: reserve, do not cover.
+ *
+ * THE RESERVE IS THE RAIL'S WIDTH, NEVER THE PANEL'S. Insetting by the open panel would reflow the
+ * whole application every time the dock is opened and closed — a layout thrash on a tool whose job is
+ * to let you look at a layout. The panel is a deliberate, temporary act and is allowed to overlay;
+ * the rail is permanent and is not.
+ */
+html[data-motu-dock="right"] { padding-right: var(--motu-dock-rail, 46px); }
+html[data-motu-dock="left"] { padding-left: var(--motu-dock-rail, 46px); }
+html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
+/* An application's own fixed furniture is positioned against the VIEWPORT, which no padding here can
+ * move. Nothing inside a page can reach that — resizing the viewport is the host's job, and it does
+ * it whenever the artifact is framed. Called out because it is the one case this does not cover. */
+
 /* ── the rail, which is the dock when it is closed ────────────────────────────────────────── */
 #tide .rail-dock {
   position: relative;
@@ -1274,6 +1295,32 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   masthead.insertBefore(svg, masthead.firstChild);
   masthead.appendChild(sheen);
 
+  // The harness turns the page-inset off; see `reserve` for why that is the correct behaviour rather
+  // than a special case.
+  let noDockInset = false;
+  try {
+    noDockInset = new URLSearchParams(window.location.search).get('dockInset') === 'off';
+  } catch {
+    /* a page with no parsable search string is a page nobody is driving */
+  }
+
+  /**
+   * Reserve the strip, or do not.
+   *
+   * NOT WHILE THE CHECKS ARE DRIVING, and that is correctness rather than a fudge: `responsive`
+   * measures the APPLICATION at each declared viewport, and the dock is not part of the application.
+   * Insetting the page during that run would measure the app in a viewport 46px narrower than the one
+   * declared, and report an overflow the app does not have. `lagoonUrl()` turns it off for the same
+   * reason it turns off the inferred colour.
+   */
+  const reserve = () => {
+    const root = document.documentElement;
+    if (noDockInset) return root.removeAttribute('data-motu-dock');
+    root.dataset.motuDock = window.matchMedia('(max-width: 760px)').matches
+      ? 'bottom'
+      : (tide.dataset.edge ?? DEFAULT_EDGE);
+  };
+
   const tide = el(
     'div',
     { id: 'tide', 'data-open': 'false', 'data-transport': opts.transport },
@@ -1282,6 +1329,9 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   );
   tide.dataset.edge = readEdge();
   document.body.appendChild(tide);
+  reserve();
+  // The reserve flips between an edge and the bottom at the same breakpoint the dock does.
+  window.matchMedia('(max-width: 760px)').addEventListener('change', reserve);
 
   const targets = el('div', { id: 'tide-targets' });
   for (const edge of EDGES) targets.appendChild(el('i', { 'data-edge': edge }));
@@ -1462,6 +1512,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
 
   const moveTo = (edge: TideEdge) => {
     tide.dataset.edge = edge;
+    reserve();
     placeDebugPanel();
     try {
       localStorage.setItem(EDGE_KEY, edge);

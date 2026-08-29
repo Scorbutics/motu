@@ -35,6 +35,7 @@ import {
   PRIMARY_DETECT_JS,
   PRIMARY_VAR_NAMES,
 } from '@motu/chrome';
+import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
 
 /** kB / MB, whichever reads. Sizes here are artifact sizes, and 431 kB is more useful than 0.4 MB. */
 function size(bytes) {
@@ -342,7 +343,9 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
   </aside>
   <main class="stage" id="stage"></main>
 </div>
+<style>${motuDockCss()}</style>
 <script>
+${motuDockJs()}
 ${PRIMARY_DETECT_JS}
 (function () {
   var PRIMARY_VARS = ${JSON.stringify(PRIMARY_VAR_NAMES)};
@@ -396,6 +399,58 @@ ${PRIMARY_DETECT_JS}
     }
     if (history.replaceState) history.replaceState(null, '', '#' + i);
     wearTheLagoonsColour(i);
+    driveTheLagoon(i);
+  }
+  // --- the dock, drawn out here rather than inside the artifact -----------------------------------
+  //
+  // The artifact still ships its own, because a lagoon opened directly has no host to draw one for
+  // it. When there IS a host, that copy is hidden and this one takes over: it reads the same
+  // catalogue and drives the same control surface, and it lives in this document, so it cannot
+  // overlay the application the way an in-page dock has to.
+  var unmountDock = null;
+  function driveTheLagoon(i) {
+    var f = frames[i];
+    if (!f) return;
+    if (unmountDock) { unmountDock(); unmountDock = null; }
+    unmountDock = motuMountDock({
+      mount: document.body,
+      lagoonWindow: function () { return f.contentWindow; },
+    });
+    var tide = document.getElementById('tide');
+    // ONLY HUSH A LAGOON THIS DOCK CAN ACTUALLY DRIVE.
+    //
+    // Every artifact published before the control surface existed has no __motuLagoonControl, so
+    // the dock out here can list nothing and switch nothing. Hiding the artifact's own dock in that
+    // case would take the controls away and put nothing in their place — every lagoon already
+    // published, left with no way to change region until somebody republished it. The transition has
+    // to be the other way round: the old dock stays until the new one can replace it, per artifact.
+    var hush = function () {
+      try {
+        var d = f.contentDocument;
+        if (!d) return;
+        var driveable = !!(f.contentWindow && f.contentWindow.__motuLagoonControl);
+        tide.hidden = !driveable;
+        // AND THIS DOCUMENT KEEPS THE STRIP. The rule lives in the dock's own stylesheet, which is
+        // loaded here now, so the shell only has to say that a dock is standing there — and only
+        // while one actually is, since a hidden dock must not reserve anything.
+        if (driveable) document.documentElement.dataset.motuDock = 'right';
+        else document.documentElement.removeAttribute('data-motu-dock');
+        var had = d.getElementById('motu-dock-hush');
+        if (!driveable) { if (had) had.remove(); return; }
+        if (had) return;
+        var st = d.createElement('style');
+        st.id = 'motu-dock-hush';
+        // Hidden, not removed: the artifact owns that element and may still be using it for its own
+        // state. What it must stop doing is drawing a second dock over the first.
+        st.textContent = '#tide{display:none!important}html[data-motu-dock]{padding:0!important}';
+        d.head.appendChild(st);
+      } catch (e) { /* not ours */ }
+    };
+    hush();
+    f.addEventListener('load', hush);
+    // The lagoon boots asynchronously, so the answer to "can this be driven" changes after load.
+    var settle = 0;
+    var watch = setInterval(function () { if (settle++ > 40) return clearInterval(watch); hush(); }, 250);
   }
   // --- the chrome wears the lagoon's own colour ---------------------------------------------------
   // Read from the artifact's PIXELS rather than from a config parameter somebody has to remember.

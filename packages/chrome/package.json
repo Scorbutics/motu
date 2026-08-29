@@ -17,7 +17,8 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
-    }
+    },
+    "./primary": "./src/primary.mjs"
   },
   "types": "src/index.d.ts",
   "files": [

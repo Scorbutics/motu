@@ -21,6 +21,14 @@ export type RailMember = {
   sha: string | null
   live: string | null
   /**
+   * The colour the project DECLARED, or null.
+   *
+   * The shell detects a lagoon's colour from its own pixels, so this is not needed to make the chrome
+   * follow a project. It is here so that a project which went to the trouble of saying what it is
+   * still WINS: inference is what you get when nobody decided, not an override of somebody who did.
+   */
+  brand: string | null
+  /**
    * The member's own bare address.
    *
    * A GROUP's frames are relative (`f/<i>`) because a group is a named thing with a URL to be
@@ -41,7 +49,7 @@ export type RailMember = {
  */
 export async function railMembers(visible: Visible): Promise<RailMember[]> {
   const s = store()
-  const repos = s.listRepos() as Array<{ repo: string; slugs: string[] }>
+  const repos = s.listRepos() as Array<{ repo: string; slugs: string[]; brand: string | null }>
   const keep = await Promise.all(repos.map((r) => visible(r.repo)))
   const out: RailMember[] = []
   for (const [i, r] of repos.entries()) {
@@ -57,6 +65,7 @@ export async function railMembers(visible: Visible): Promise<RailMember[]> {
         title: rec.title || slug,
         sha: rec.sha ?? null,
         live: null,
+        brand: r.brand ?? null,
         frameHref: `/${r.repo}/latest/${slug}/__motu_frame`,
       })
     }

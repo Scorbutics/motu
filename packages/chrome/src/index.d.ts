@@ -18,6 +18,7 @@ export * from './css.mjs'
 export * from './html.mjs'
 export * from './kit.mjs'
 export * from './splash.mjs'
+export * from './primary.mjs'
 
 /**
  * The page shell's own CSS — the centred column and the server-row shape.

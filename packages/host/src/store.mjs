@@ -444,6 +444,9 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
         title: rec?.title ?? m.slug,
         sha: rec?.sha ?? null,
         live: liveUrl,
+        // Same declared colour the rail carries, so a group view and a direct lagoon view of the same
+        // project cannot disagree about what colour that project is.
+        brand: index.repos[m.repo]?.brand ?? null,
       });
     }
     return out;

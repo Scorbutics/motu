@@ -8,3 +8,4 @@ export * from './kit.mjs';
 export * from './css.mjs';
 export * from './html.mjs';
 export * from './splash.mjs';
+export * from './primary.mjs';

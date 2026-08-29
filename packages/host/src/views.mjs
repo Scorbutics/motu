@@ -32,6 +32,8 @@ import {
   motuRow,
   motuRailedList,
   escapeHtml,
+  PRIMARY_DETECT_JS,
+  PRIMARY_VAR_NAMES,
 } from '@motu/chrome';
 
 /** kB / MB, whichever reads. Sizes here are artifact sizes, and 431 kB is more useful than 0.4 MB. */
@@ -260,6 +262,7 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
               // and pointing each frame at its own bare page means no index has to agree with
               // anything — the class of bug that made the shell and the frames move together.
               (m.frameHref ? ` data-href="${escapeHtml(m.frameHref)}"` : '') +
+              (m.brand ? ` data-brand="${escapeHtml(m.brand)}"` : '') +
               ` data-repo="${escapeHtml(m.repo)}"` +
               `>` +
               `<span class="gauge" aria-hidden="true"></span>` +
@@ -340,7 +343,9 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
   <main class="stage" id="stage"></main>
 </div>
 <script>
+${PRIMARY_DETECT_JS}
 (function () {
+  var PRIMARY_VARS = ${JSON.stringify(PRIMARY_VAR_NAMES)};
   var FOCUS = ${Number(focus) || 0};
   // Whether the header names the SELECTION or the view. A group's bay names the group — a stable
   // thing that does not change as you move inside it. A lagoon's rail is a switcher between whole
@@ -390,6 +395,105 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
       review.href = '/console?repo=' + encodeURIComponent(chosen.dataset.repo);
     }
     if (history.replaceState) history.replaceState(null, '', '#' + i);
+    wearTheLagoonsColour(i);
+  }
+  // --- the chrome wears the lagoon's own colour ---------------------------------------------------
+  // Read from the artifact's PIXELS rather than from a config parameter somebody has to remember.
+  // See @motu/chrome/primary for why the stylesheet cannot answer this and why a grey answer is a
+  // real answer rather than a failure.
+  // BOTH ROOTS, because the dock is not in this document. The tide line lives INSIDE the artifact,
+  // and the kit deliberately scopes its variables onto #tide rather than :root so that injecting the
+  // kit into somebody's application cannot repaint that application. That isolation is why setting
+  // --motu-primary out here does nothing to the overlay in there. What makes it reachable anyway is
+  // that the kit derives its ramp -- --tide-accent is var(--motu-primary, <fallback>) -- so the
+  // property only has to be set somewhere ABOVE #tide in its own document. The frame is same-origin
+  // (the host proxies it), so that is one setProperty on the frame's documentElement.
+  function rootsFor(frame) {
+    var roots = [document.documentElement];
+    try { if (frame && frame.contentDocument) roots.push(frame.contentDocument.documentElement); } catch (e) { /* not ours */ }
+    return roots;
+  }
+  function applyPrimary(found, frame) {
+    var vars = primaryVars(found.primary, found.onPrimary);
+    var roots = rootsFor(frame);
+    for (var n = 0; n < roots.length; n++) {
+      for (var k in vars) roots[n].style.setProperty(k, vars[k]);
+    }
+  }
+  function clearPrimary(frame) {
+    var roots = rootsFor(frame);
+    for (var n = 0; n < roots.length; n++) {
+      for (var v = 0; v < PRIMARY_VARS.length; v++) roots[n].style.removeProperty(PRIMARY_VARS[v]);
+      roots[n].style.removeProperty('--motu-on-primary');
+    }
+  }
+  function wearTheLagoonsColour(i) {
+    var f = frames[i];
+    if (!f) return;
+    // CLEAR FIRST. applyPrimary only ever sets, so switching from a gold lagoon to one that cannot be
+    // read would leave the shell gold and attribute one project's colour to another.
+    clearPrimary(f);
+    var btn = document.querySelector('button.member[data-i="' + i + '"]');
+    // A DECLARED COLOUR WINS, and costs nothing to honour. Detection exists so that nobody HAS to set
+    // chrome.brand, not to overrule the projects that did -- peps tuned its gold by hand (a 25%
+    // darkening of its own control colour), and inferring over the top of that would be replacing a
+    // decision with a guess.
+    var declared = btn && btn.dataset.brand ? { primary: btn.dataset.brand } : null;
+    var key = 'motu-primary:' + f.src;
+    var cached = null;
+    if (!declared) {
+      try { cached = JSON.parse(sessionStorage.getItem(key)); } catch (e) { /* private mode, or nothing stored */ }
+    }
+    var known = declared || cached;
+    var paint = function (found) { if (current === i) applyPrimary(found, f); };
+
+    // LOAD IS NOT PAINTED, and this is the whole reason the reader retries. A lagoon renders itself
+    // client-side, so at the frame's load event the document exists and the screen is still blank
+    // white -- which rasterises to no chromatic pixels and no neutral in band, so detection correctly
+    // answers "nothing here" and the shell keeps motu's colour forever. It looked like the detector
+    // failing on real pages; it was the detector being asked too early. Poll until the artifact has
+    // something to say, then stop.
+    var read = function (attempt) {
+      if (current !== i) return;
+      var doc = null;
+      // A frame the host proxies is same-origin; one that somehow is not simply keeps motu's colour.
+      try { doc = f.contentDocument; } catch (e) { return; }
+      if (!doc || !doc.body) return;
+      // THE ARTIFACT MAY HAVE ALREADY DECIDED. A published lagoon detects its own colour at boot and
+      // publishes it on its window -- from a raster that excluded its own dock, and knowing whether
+      // the project declared a colour. That answer is better than the one out here and it is already
+      // paid for, so prefer it and only rasterise for an artifact too old to have done it.
+      var own = null;
+      try { own = f.contentWindow && f.contentWindow.__motuPrimary; } catch (e) { /* not ours */ }
+      if (own && own.primary) {
+        try { sessionStorage.setItem(key, JSON.stringify(own)); } catch (e) { /* private mode */ }
+        return paint(own);
+      }
+      detectPrimary(doc).then(function (found) {
+        if (current !== i) return;
+        if (!found) {
+          // Roughly 0.3s, 0.6s, 1.2s, 2.4s, 4.8s -- about ten seconds in total before giving up on a
+          // frame that never paints anything readable.
+          if (attempt < 5) setTimeout(function () { read(attempt + 1); }, 300 * Math.pow(2, attempt));
+          return;
+        }
+        try { sessionStorage.setItem(key, JSON.stringify(found)); } catch (e) { /* private mode */ }
+        paint(found);
+      });
+    };
+
+    // The shell can wear a colour it already knows immediately; the frame cannot be painted until it
+    // has a document of its own.
+    if (known) paint(known);
+    var settle = function () { if (known) paint(known); else read(0); };
+    // ON EVERY LOAD, not just the first. A live lagoon reloads itself, and the new document arrives
+    // with none of the properties the last one was given -- the dock would go back to motu teal
+    // halfway through a session and nothing would put it back.
+    if (!f.dataset.motuBound) {
+      f.dataset.motuBound = '1';
+      f.addEventListener('load', function () { f.dataset.motuLoaded = '1'; settle(); });
+    }
+    if (f.dataset.motuLoaded) settle();
   }
   // --- the sheet, on a phone --------------------------------------------------------------------
   // Desktop never opens it: the rail is always visible there and these handlers simply never fire,

@@ -192,6 +192,11 @@ function lagoonUrl(server, target, view) {
   if (server.forceError) q.set('forceError', String(server.forceError));
   // Verify mounts an island on its OWN defaults; the region's seed is for a human looking at the page.
   if (String(target ?? '').startsWith('island:')) q.set('seed', 'off');
+  // NO INFERRED COLOUR WHILE THE CHECKS ARE DRIVING. A published lagoon detects its own primary from
+  // its pixels, which depends on what has painted by the time the raster runs — fine for a person
+  // opening the page, and a flaky visual baseline for `island snapshot`, which pictures islands
+  // through this same boot. The harness always sees motu's declared colour.
+  q.set('autoPrimary', 'off');
   return `http://localhost:${server.port}/lagoon.html?${q}`;
 }
 

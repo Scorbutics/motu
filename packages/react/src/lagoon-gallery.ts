@@ -16,6 +16,7 @@ import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { setDefaultIsolation, applyMotuChrome, markSandbox } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import { PAGE_SHELL_CSS } from '@motu/chrome/html';
+import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
@@ -203,6 +204,51 @@ function installLagoonShell(): void {
   document.head.prepend(style);
 }
 
+/**
+ * THE ARTIFACT FINDS ITS OWN COLOUR, so a lagoon opened directly is not motu-teal.
+ *
+ * The host's shell already detects the colour of a lagoon it frames and pushes it in. That covers the
+ * shell and nothing else: a published artifact opened at its own URL -- the link you hand somebody --
+ * had no one to do it for it, so the page and the dock stayed motu's colour over somebody else's
+ * application. Doing it here covers every way the page can be reached, and the shell can then just
+ * read the answer instead of computing it again.
+ *
+ * THREE THINGS IT REFUSES TO DO.
+ *
+ * It never overrules a DECLARED colour: a project that set `chrome.primary` decided, and inference is
+ * for the projects that did not.
+ *
+ * It never runs when the CHECKS are driving. `motu island snapshot` pictures islands through this
+ * exact boot, so a colour derived from whatever had painted by the time the raster ran would put a
+ * timing-dependent value into a visual baseline -- the definition of a flaky snapshot, on the system
+ * whose whole job is to tell a real change from noise. `lagoonUrl()` sets `autoPrimary=off` on every
+ * page the harness opens, so checks stay deterministic and only humans get the inferred colour.
+ *
+ * And it never blocks the boot: detection is asynchronous and the page renders motu's colour until an
+ * answer arrives, which is a moment of default chrome rather than a delay in seeing the region.
+ */
+function wearOwnColour(config: LagoonConfig): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  // A declared colour is a decision; this is only for its absence.
+  if (config.chrome?.primary) return;
+  try {
+    if (new URLSearchParams(window.location.search).get('autoPrimary') === 'off') return;
+  } catch {
+    // A page with no parsable search string is a page nobody is driving.
+  }
+  void detectPrimarySettled(document).then((found) => {
+    if (!found) return;
+    const vars = primaryVars(found.primary, found.onPrimary);
+    for (const [name, value] of Object.entries(vars)) {
+      document.documentElement.style.setProperty(name, value);
+    }
+    // WHAT THE SHELL READS. The artifact is the better place to have decided this -- it excludes its
+    // own dock from the raster and it knows whether a colour was declared -- so publishing the answer
+    // here lets a host that frames this page use it instead of rasterising the same pixels again.
+    (window as unknown as { __motuPrimary?: unknown }).__motuPrimary = found;
+  });
+}
+
 export function startLagoon(opts: StartLagoonOptions): void {
   const config = opts.config ?? {};
   const overrides = opts.overrides ?? {};
@@ -232,6 +278,7 @@ markSandbox();
   installLagoonShell();
   // Before anything paints, so the chrome never flashes motu's default over the host's palette.
   applyMotuChrome(config.chrome ?? {});
+  wearOwnColour(config);
   overrides.setup?.();
 
   const mode = resolveTransportMode(typeof opts.transport === 'string' ? opts.transport : config.transport ?? '');

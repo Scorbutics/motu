@@ -17,6 +17,6 @@ export {
   watchSeams,
 } from './findings-view';
 export { toggleRecording, recordingState } from './recording';
-export { setPicking } from './overlay';
+export { setPicking, setCoupling, couplingOn } from './overlay';
 export { findingsOf, tallyOf } from './findings';
 export type { Finding, FindingSeam } from './findings';

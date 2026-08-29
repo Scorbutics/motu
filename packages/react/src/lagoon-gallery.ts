@@ -629,6 +629,22 @@ markSandbox();
         return picking;
       },
       pickingOn: () => picking,
+      /**
+       * The coupling graph, the last of the old header's page-layer switches.
+       *
+       * Same rule as picking — wires drawn under a hidden layer are wires nobody sees — so turning it
+       * on opens the lens layer too. Unlike picking it is PERSISTED by the lens, so the state is read
+       * back from there rather than mirrored here; a stale local copy would light the switch on a
+       * graph the page is not drawing.
+       */
+      toggleCoupling: () => {
+        const on = !(lens?.couplingOn?.() ?? false);
+        if (on && lens && !lens.isOpen()) lens.toggle();
+        lens?.setCoupling?.(on);
+        controlChanged();
+        return on;
+      },
+      couplingOn: () => Boolean(lens?.couplingOn?.()),
       toggleLens: () => lens?.toggle(),
       lensOpen: () => Boolean(lens?.isOpen()),
       /** Subscribe to everything the lens reports, so a panel elsewhere does not go stale. */

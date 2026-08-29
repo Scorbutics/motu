@@ -115,6 +115,9 @@ export interface TideLens {
    * you are pointing at.
    */
   setPicking?(on: boolean): void;
+  /** The coupling graph on the page layer — wires between islands that share a region key. */
+  setCoupling?(on: boolean): void;
+  couplingOn?(): boolean;
   /**
    * Called whenever anything the lens reports has moved.
    *

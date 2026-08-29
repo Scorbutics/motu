@@ -1151,6 +1151,19 @@ function motuMountDock(opts) {
       pills.push(lensPill);
     }
 
+    // The coupling graph, beside the layer it draws on. Two islands sharing a region key is the one
+    // thing on this page that no list shows as well as a line does, so it stays a page-layer switch
+    // rather than becoming a tab.
+    if (ctl.toggleCoupling) {
+      var cplPill = el('button', {
+        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
+        'aria-pressed': ctl.couplingOn && ctl.couplingOn() ? 'true' : 'false',
+        title: 'Draw a wire between islands that share a region key',
+      }, ['\u2325 Coupling']);
+      cplPill.addEventListener('click', function () { ctl.toggleCoupling(); paint(); });
+      pills.push(cplPill);
+    }
+
     var rec = ctl.recordingState ? ctl.recordingState() : null;
     if (rec) {
       var recPill = el('button', {

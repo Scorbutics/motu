@@ -42,6 +42,22 @@ export function setPicking(on: boolean): void {
   document.body.style.cursor = on ? 'crosshair' : '';
   lens.changedNow();
 }
+/**
+ * The coupling graph: wires between islands that share a region key, and their outlines lit.
+ *
+ * Persisted, like it was on the old header — it is a way of LOOKING at the page you keep while you
+ * work on it, not a per-open preference. `showCoupling` is read back from the same flag at mount.
+ */
+export function setCoupling(on: boolean): void {
+  lens.showCoupling = on;
+  writeFlag(FLAG.coupling, on);
+  lens.changedNow();
+}
+
+/** What the rig's toggle mirrors — the graph survives a reload, so the switch has to read it back. */
+export function couplingOn(): boolean {
+  return lens.showCoupling;
+}
 import { computeProps, verdictOf, isolationOf, avg, sourceLabel, type Verdict } from './model';
 import { crosshair, islandAnchor, islandRect, svgDot, svgLabel, wire, type Point } from './geometry';
 

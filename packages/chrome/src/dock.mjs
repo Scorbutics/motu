@@ -678,6 +678,11 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .rig__pills .motu-segmented button { color: var(--ink-muted); font-weight: 600; }
 #tide .rig__pills .motu-segmented button[aria-current="true"] { color: var(--motu-on-primary, #fff); }
 #tide .hint { color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
+#tide .rig__status:empty { display: none; }
+#tide .rig__status {
+  margin: 7px 0 0; font: 500 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-muted); overflow-wrap: anywhere;
+}
 
 /* ── mobile: a sheet from the bottom, and a handle to pull it ─────────────────────────────── */
 /*
@@ -870,9 +875,11 @@ function motuMountDock(opts) {
   // fit chips belong to whoever mounted them and are read rather than reimplemented, so a control a
   // future package appends shows up here with nothing to keep in sync.
   var rigPills = el('div', { class: 'rig__pills' });
+  var recStatus = el('p', { class: 'rig__status' });
   var rig = el('div', { class: 'rig' }, [
     el('div', { class: 'rig__head' }, [el('span', { class: 'motu-cap' }, ['Rig'])]),
     rigPills,
+    recStatus,
   ]);
   // STATES is where the region is; SEAMS is what the lens has noticed about it. The same region
   // looked at two ways, which is why they are tabs in one panel rather than two surfaces.
@@ -1059,6 +1066,29 @@ function motuMountDock(opts) {
       b.addEventListener('click', function () { ctl.setView(v); });
       pills.push(b);
     });
+    // RECORDING IS AN ACT, so it sits with the other controls rather than in a tab. It is the one
+    // thing here that changes the lagoon instead of reporting on it, and stopping is what writes the
+    // fixtures out — so the label says which of those pressing it will do.
+    var rec = ctl.recordingState ? ctl.recordingState() : null;
+    if (rec) {
+      var recPill = el('button', {
+        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
+        'aria-pressed': rec.recording ? 'true' : 'false',
+        title: rec.recording
+          ? 'Stop capturing and write fixtures.recorded.ts'
+          : 'Capture the calls and host-fed writes this region makes',
+      }, [rec.recording ? '\u25a0 Stop & export' : '\u25cf Record']);
+      recPill.addEventListener('click', function () {
+        var next = ctl.toggleRecording();
+        // Say what came out. A capture that produced nothing is the case worth reporting loudest —
+        // it looks identical to success from the button alone.
+        if (next && next.status) recStatus.textContent = next.status;
+        else recStatus.textContent = '';
+        paint();
+      });
+      pills.push(recPill);
+    }
+
     (ctl.chips ? ctl.chips() : []).forEach(function (c) {
       if (!c.label) return;
       var b = el('button', {

@@ -103,6 +103,12 @@ export interface TideLens {
   /** What production does that this state is not: the region against the world, not its declaration. */
   coverage?(): unknown;
   /**
+   * Fixture capture, which is an ACT rather than a view — the first thing the panel asks the lagoon
+   * to DO rather than to report. Start it, stop it, and stopping writes the fixtures out.
+   */
+  toggleRecording?(): { recording: boolean; status: string };
+  recordingState?(): { recording: boolean; status: string };
+  /**
    * Called whenever anything the lens reports has moved.
    *
    * Without it a panel in another document paints once and then describes a region that has moved

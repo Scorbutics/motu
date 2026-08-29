@@ -598,6 +598,9 @@ markSandbox();
       coupling: () => (lens && lens.coupling ? lens.coupling() : null),
       /** How this state compares with what production has been recorded doing. */
       coverage: () => (lens && lens.coverage ? lens.coverage() : null),
+      /** Start or stop fixture capture; stopping writes the file out. */
+      toggleRecording: () => (lens && lens.toggleRecording ? lens.toggleRecording() : null),
+      recordingState: () => (lens && lens.recordingState ? lens.recordingState() : null),
       /** Subscribe to everything the lens reports, so a panel elsewhere does not go stale. */
       watch: (fn: () => void) => (lens && lens.watch ? lens.watch(fn) : () => {}),
       pressChip: (index: number) => {

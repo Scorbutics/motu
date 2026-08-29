@@ -6,6 +6,16 @@
 
 export { mountDebugOverlay, toggleDebugOverlay, isDebugOverlayOpen, subscribeDebugOverlay } from './overlay';
 export type { DebugOverlayOptions } from './overlay';
-export { mountFindings, currentFindings, currentSheet, currentSeams, currentIslands, currentCoupling, currentCoverage, watchSeams } from './findings-view';
+export {
+  mountFindings,
+  currentFindings,
+  currentSheet,
+  currentSeams,
+  currentIslands,
+  currentCoupling,
+  currentCoverage,
+  watchSeams,
+} from './findings-view';
+export { toggleRecording, recordingState } from './recording';
 export { findingsOf, tallyOf } from './findings';
 export type { Finding, FindingSeam } from './findings';

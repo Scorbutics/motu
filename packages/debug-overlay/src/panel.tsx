@@ -34,7 +34,14 @@ import {
   Trail,
   type MotuDotTone,
 } from '@motu/chrome/react';
-import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus, corpusVersion } from './coverage';
+import {
+  corpusFor,
+  liveCoverage,
+  ensureCorpus,
+  subscribeCorpus,
+  corpusVersion,
+} from './coverage';
+import { toggleRecording as toggleRecordingAct } from './recording';
 import {
   getMountedIslands,
   regionIdOfStore,
@@ -47,23 +54,19 @@ import {
   launderingSuspects,
   unattributedWrites,
   foreignObservations,
-  startSeedRecording,
-  stopSeedRecording,
-  type RecordedSeed,
   type ChannelInfo,
   type HostCall,
   type HostIntent,
   type MountedIslandInfo,
   type Store,
 } from '@motu/core';
-import { startRecording, stopRecording, type RecordedCall } from '@motu/runtime';
+
 import {
   ago,
   bindKeys,
   computeProps,
   isolationOf,
   preview,
-  renderRecordedFixtures,
   sourceLabel,
   type CallRecord,
   type PropState,
@@ -1170,52 +1173,8 @@ function setPicking(on: boolean): void {
  * downloads it and copies it to the clipboard (the browser can't write into the workspace).
  */
 function toggleRecording(): void {
-  if (!lens.recording) {
-    startRecording();
-    startSeedRecording();
-    lens.recording = true;
-    lens.recStatus = '';
-  } else {
-    const calls = stopRecording();
-    const seedWrites = stopSeedRecording();
-    lens.recording = false;
-    lens.recStatus = exportFixtures(calls, seedWrites);
-  }
-  lens.changedNow();
-}
-
-function exportFixtures(calls: RecordedCall[], seedWrites: RecordedSeed[]): string {
-  const seen = new Set<string>();
-  const unique: RecordedCall[] = [];
-  for (const c of calls) {
-    const key = `${c.service}.${c.method}(${JSON.stringify(c.args)})`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(c);
-  }
-  // Host-fed writes (channels + provide) reduced to a last-wins seed of REAL host config.
-  const seed: Record<string, unknown> = {};
-  for (const w of seedWrites) seed[w.key] = w.value;
-  const seedKeys = Object.keys(seed);
-  if (!unique.length && !seedKeys.length) return 'nothing captured (no calls, no host-fed writes)';
-
-  const text = renderRecordedFixtures(unique, seed);
-  try {
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'fixtures.recorded.ts';
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch {
-    /* download unsupported — clipboard still carries it */
-  }
-  navigator.clipboard?.writeText(text).catch(() => {});
-  const parts: string[] = [];
-  if (unique.length) parts.push(`${unique.length} call(s)`);
-  if (seedKeys.length) parts.push(`${seedKeys.length} seed key(s)`);
-  return `${parts.join(' + ')} → fixtures.recorded.ts (downloaded + copied)`;
+  // The act itself lives in ./recording, so the panel's button and the dock's do the same thing.
+  toggleRecordingAct();
 }
 
 export { setPicking };

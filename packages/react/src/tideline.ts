@@ -98,6 +98,15 @@ export interface TideLens {
   seams?(): unknown;
   /** One entry per mounted island: what it was given, what it reads, writes and emits. */
   islands?(): unknown;
+  /** Per shared key: who reads it, who writes it, and whether that is real coupling. */
+  coupling?(): unknown;
+  /**
+   * Called whenever anything the lens reports has moved.
+   *
+   * Without it a panel in another document paints once and then describes a region that has moved
+   * on — a stale answer that looks live, which is worse than showing nothing.
+   */
+  watch?(fn: () => void): () => void;
 }
 
 export interface TideLineOptions {

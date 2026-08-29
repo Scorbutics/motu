@@ -594,6 +594,10 @@ markSandbox();
       seams: () => (lens && lens.seams ? lens.seams() : null),
       /** What each mounted island was actually given. */
       islands: () => (lens && lens.islands ? lens.islands() : null),
+      /** Per shared key: who touches it, and whether that is coupling worth being deliberate about. */
+      coupling: () => (lens && lens.coupling ? lens.coupling() : null),
+      /** Subscribe to everything the lens reports, so a panel elsewhere does not go stale. */
+      watch: (fn: () => void) => (lens && lens.watch ? lens.watch(fn) : () => {}),
       pressChip: (index: number) => {
         const bar = document.getElementById('motu-toolbar');
         (bar?.querySelectorAll('button')[index] as HTMLButtonElement | undefined)?.click();

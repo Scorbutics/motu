@@ -922,8 +922,21 @@ function motuMountDock(opts) {
     var on = which === 'states' ? statesTab : which === 'seams' ? seamsTab : islandsTab;
     tabThumb.style.left = on.offsetLeft + 'px';
     tabThumb.style.width = on.offsetWidth + 'px';
+    watchWhileLooking(which);
     paint();
   };
+  // LIVE WHILE A LENS TAB IS SHOWING, and not otherwise. Everything Seams and Islands report is a
+  // snapshot of a moving thing, so without this the panel paints once and then describes a region
+  // that has moved on. Subscribed only while one of those tabs is up, because the lens fires on every
+  // store write and a subscription nobody is reading is work the page pays for permanently.
+  var unwatch = null;
+  var watchWhileLooking = function (which) {
+    var live = which === 'seams' || which === 'islands';
+    var ctl = control();
+    if (live && !unwatch && ctl && ctl.watch) unwatch = ctl.watch(paint);
+    else if (!live && unwatch) { unwatch(); unwatch = null; }
+  };
+
   statesTab.addEventListener('click', function () { showTab('states'); });
   seamsTab.addEventListener('click', function () { showTab('seams'); });
   islandsTab.addEventListener('click', function () { showTab('islands'); });
@@ -1109,6 +1122,33 @@ function motuMountDock(opts) {
         }), 'No intents pushed.');
       }
 
+      // ── coupling ─────────────────────────────────────────────────────────────────────────────
+      var coupling = ctl.coupling ? ctl.coupling() : null;
+      if (coupling && coupling.length) {
+        sheetNodes.push(el('div', { class: 'sect__head' }, [
+          el('span', { class: 'motu-cap' }, ['Coupling']),
+          el('span', { class: 'count' }, [String(coupling.length)]),
+        ]));
+        coupling.forEach(function (c) {
+          sheetNodes.push(el('div', {
+            class: 'seam-row',
+            'data-tone': c.tag === 'coupled' ? 'broken' : c.tag ? 'warn' : 'ok',
+            title: c.key + ' \u2014 ' + c.reads + ' reader(s), ' + c.writes + ' writer(s)',
+          }, [
+            el('i', { class: 'seam-row__dot' }),
+            el('span', { class: 'seam-row__l' }, [c.key]),
+            el('span', { class: 'seam-row__d' }, [c.reads + 'r/' + c.writes + 'w']),
+            // NAMING THE ISLANDS is the point: "1r/1w" is the same string whether one island reads a
+            // key nobody else touches or one island writes what another one reads.
+            el('span', { class: 'seam-row__r' }, [
+              (c.from.length ? c.from.join(',') + ' \u2192 ' : '') +
+              (c.readers.length ? c.readers.join(',') : '\u2205') +
+              (c.tag ? '  [' + c.tag + ']' : ''),
+            ]),
+          ]));
+        });
+      }
+
       var report = ctl.findings ? ctl.findings() : null;
       if (!report) {
         seams.replaceChildren.apply(seams, sheetNodes.concat([
@@ -1273,6 +1313,7 @@ function motuMountDock(opts) {
 
   return function () {
     clearInterval(poll);
+    if (unwatch) unwatch();
     if (stop) stop();
     palette.remove();
     tide.remove();

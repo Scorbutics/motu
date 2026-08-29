@@ -59,6 +59,64 @@ function collect() {
 }
 
 /**
+ * TELL ME WHEN ANY OF THIS CHANGES.
+ *
+ * Everything the lens exports is a snapshot of a moving thing — a store write, a channel firing, a
+ * call landing. Inside the artifact the panel re-rendered on each of those. A panel in ANOTHER
+ * document has no such subscription, so without this it paints once and then quietly describes a
+ * region that has moved on, which is worse than showing nothing: it is a stale answer that looks
+ * live.
+ */
+export function watchSeams(fn: () => void): () => void {
+  return lens.subscribe(fn);
+}
+
+/**
+ * THE COUPLING TABLE, as data.
+ *
+ * Naming the islands is the whole point: "1r/1w" is the same string whether one island reads a key
+ * nobody else touches or one island writes what ANOTHER one reads — and the second is the only
+ * genuine coupling an archipelago has. Counts alone made that case read as a demotion candidate, so
+ * the view flagged the one real coupling on the page as removable.
+ */
+export function currentCoupling() {
+  const islands = getMountedIslands();
+  if (!islands.length) return [];
+  const store = islands[0].store;
+  const here = islands.filter((i) => i.store === store);
+
+  const readers = new Map<string, Set<string>>();
+  for (const info of here) {
+    for (const key of bindKeys(info)) {
+      const set = readers.get(key) ?? new Set<string>();
+      set.add(info.slot);
+      readers.set(key, set);
+    }
+  }
+  const writes = lens.writes.get(store) ?? new Map<string, Set<string>>();
+  const keys = [...new Set<string>([...readers.keys(), ...writes.keys()])].sort();
+
+  return keys.map((key) => {
+    const rd = readers.get(key) ?? new Set<string>();
+    const wr = writes.get(key) ?? new Set<string>();
+    // Host- and channel-origin writes are the OCEAN feeding the region, not an island: they say the
+    // key is externally fed, never that two islands are entangled.
+    const islandWriters = [...wr].filter((w) => w !== 'host' && w !== 'channel');
+    const external = wr.size > islandWriters.length;
+    const touchers = new Set<string>([...rd, ...islandWriters]);
+    return {
+      key,
+      reads: rd.size,
+      writes: wr.size,
+      from: external ? ['host'] : islandWriters,
+      readers: [...rd],
+      // An externally fed key is not a demotion candidate: bind IS how the ocean reaches one island.
+      tag: touchers.size >= 3 ? 'coupled' : touchers.size <= 1 && !external ? 'demote?' : '',
+    };
+  });
+}
+
+/**
  * WHAT IS MOUNTED, per island — the lens's island scope, as data.
  *
  * A different question from the region sheet, which is why it earns its own tab rather than more

@@ -7,12 +7,14 @@ import './coverage.generated';
 import type { ArchipelagoConfig } from '@motu/core';
 import { corpusArchipelago } from './corpus/corpus.archipelago';
 import { indexArchipelago } from './index/index.archipelago';
+import { lagoonViewArchipelago } from './lagoon-view/lagoon-view.archipelago';
 import { reviewArchipelago } from './review/review.archipelago';
 import { signinArchipelago } from './signin/signin.archipelago';
 
 export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   [corpusArchipelago.id]: corpusArchipelago,
   [indexArchipelago.id]: indexArchipelago,
+  [lagoonViewArchipelago.id]: lagoonViewArchipelago,
   [reviewArchipelago.id]: reviewArchipelago,
   [signinArchipelago.id]: signinArchipelago,
 };

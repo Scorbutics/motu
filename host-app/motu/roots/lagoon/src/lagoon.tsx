@@ -7,6 +7,7 @@
 import type { LagoonOverrides } from '@motu/react';
 import { corpusRegion } from './regions/corpus.js';
 import { indexRegion } from './regions/index.js';
+import { lagoonViewRegion } from './regions/lagoon-view.js';
 import { reviewRegion } from './regions/review.js';
 import { signinRegion } from './regions/signin.js';
 
@@ -16,4 +17,10 @@ import { signinRegion } from './regions/signin.js';
  * An array, not a map: `overridesFor(signinArchipelago, …)` carries its own id, so the region's name
  * is written once, in the archipelago, and nothing here can disagree with it.
  */
-export const regions: LagoonOverrides['regions'] = [corpusRegion, indexRegion, reviewRegion, signinRegion];
+export const regions: LagoonOverrides['regions'] = [
+  corpusRegion,
+  indexRegion,
+  lagoonViewRegion,
+  reviewRegion,
+  signinRegion,
+];

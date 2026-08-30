@@ -12,6 +12,8 @@ import type { AcceptBar as C_accept_bar } from '@/components/review/accept-bar/A
 import type { CorpusFilter as C_corpus_filter } from '@/components/corpus/corpus-filter';
 import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus-states';
 import type { DiffViewer as C_diff_viewer } from '@/components/review/diff-viewer/DiffViewer';
+import type { DockRegions as C_dock_regions } from '@/components/lagoon/dock-regions';
+import type { DockStates as C_dock_states } from '@/components/lagoon/dock-states';
 import type { GithubSignIn as C_github_sign_in } from '@/components/auth/github-sign-in';
 import type { LagoonFilter as C_lagoon_filter } from '@/components/lagoon/lagoon-filter';
 import type { LagoonPalette as C_lagoon_palette } from '@/components/lagoon/lagoon-palette';
@@ -41,6 +43,16 @@ export const CONTRACTS = {
   'x-diff-viewer': {
     input: ['shot', 'mode', 'shots', 'shotUrl'],
     output: { onViewChanged: 'view-changed' },
+    ambient: [],
+  },
+  'x-dock-regions': {
+    input: ['regions', 'region'],
+    output: { onRegionChange: 'region-change' },
+    ambient: [],
+  },
+  'x-dock-states': {
+    input: ['states', 'flow', 'compact'],
+    output: { onFlowChange: 'flow-change' },
     ambient: [],
   },
   'x-github-sign-in': {
@@ -122,6 +134,10 @@ const _corpus_states: ContractFitsComponent<typeof C_corpus_states, 'x-corpus-st
 void _corpus_states;
 const _diff_viewer: ContractFitsComponent<typeof C_diff_viewer, 'x-diff-viewer'> = true;
 void _diff_viewer;
+const _dock_regions: ContractFitsComponent<typeof C_dock_regions, 'x-dock-regions'> = true;
+void _dock_regions;
+const _dock_states: ContractFitsComponent<typeof C_dock_states, 'x-dock-states'> = true;
+void _dock_states;
 const _github_sign_in: ContractFitsComponent<typeof C_github_sign_in, 'x-github-sign-in'> = true;
 void _github_sign_in;
 const _lagoon_filter: ContractFitsComponent<typeof C_lagoon_filter, 'x-lagoon-filter'> = true;

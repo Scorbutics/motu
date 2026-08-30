@@ -57,7 +57,14 @@ export function DockStates({ states = [], flow = null, compact = false, onFlowCh
 
   const rows: Array<{ key: string; label: string; value: string | null }> = [
     { key: "__seeded", label: SEEDED, value: null },
-    ...list.map((s) => ({ key: s.name, label: s.name, value: s.name })),
+    // A NAMELESS ENTRY IS STILL A ROW, not a hole. Same reasoning as the array guard above: what
+    // arrives here came off a framed artifact's globals, so an entry within it can be malformed the
+    // same way the whole thing can — a transient shape mid-transition between two artifacts, seen
+    // (harmlessly, for what renders) only in a run that re-aims one page across many islands in a
+    // row. `i` alone would not be STABLE across re-renders if the list itself reorders, but a
+    // nameless entry has nothing else to be keyed by, and disappears again as soon as a real name
+    // does — this only ever backstops the one render that would otherwise warn.
+    ...list.map((s, i) => ({ key: s?.name ?? `__row_${i}`, label: s?.name ?? "", value: s?.name ?? null })),
   ]
 
   return (

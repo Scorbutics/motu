@@ -769,6 +769,12 @@ markSandbox();
       // the store moved, and the one prop that was supposed to look different never did. Remounting
       // (`mount`, always FROM the seed) both re-runs it correctly and picks up the derived prop —
       // `applyRequestedFlow`, called from inside it, is what now runs the flow and reports outcome.
+      //
+      // `reset()` FIRST, still. The remount re-renders the React tree with the SAME region id, and
+      // the store behind it is a module-scoped singleton keyed by that id — a fresh component tree
+      // does not imply a fresh store. Without this a second flow's steps land on the first one's
+      // leftovers and get reported under the second one's name, same as before this remount existed.
+      window.__motuLagoon?.reset?.();
       currentFlowName = name;
       currentFlowStep = null;
       flowRegion = current;

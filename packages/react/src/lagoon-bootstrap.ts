@@ -404,6 +404,19 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   const seed = wanted ? wanted.seed : translateRegionSeed(opts.seed ?? regionSeed, target, regionId, opts);
   const channels = opts.channels ?? forRegion.channels;
 
+  // The requested FLOW's own seed, resolved here (synchronously, read-only) rather than waited for
+  // from `applyFlow` below — a root prop derived from it (see `hostProps`'s function form) has to be
+  // right on the FIRST paint, not after the flow's async replay lands. Falls back to the region's own
+  // seed, exactly as a flow that seeds nothing would leave it.
+  const wantedFlow =
+    target.kind === 'archipelago' && opts.state?.flow
+      ? pickState(opts.evidence?.flows?.[target.config.id], opts.state.flow)
+      : null;
+  const hostProps =
+    typeof forRegion.hostProps === 'function'
+      ? forRegion.hostProps({ ...regionSeed, ...wantedFlow?.seed })
+      : forRegion.hostProps;
+
   if (opts.mount === 'react') {
     const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed });
     mountReactLagoon(mountEl, config, {
@@ -417,7 +430,7 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
       // NOT gated on the view the way `layout` is: providers are what an island cannot render
       // without, so a single-slot mount needs them exactly as much as the region does.
       providers: forRegion.providers,
-      hostProps: forRegion.hostProps,
+      hostProps,
       // Per-slot props the page supplies and the region does not carry — re-keyed for a lone island.
       props: propsFor(target, regionId, opts),
       fit: target.kind === 'island' ? target.fit : undefined,

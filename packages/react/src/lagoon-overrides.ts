@@ -43,8 +43,17 @@ export interface RegionOverrides {
    *
    * DATA ONLY, and that is the constraint that matters: the components are the application's, named
    * in the archipelago, so the lagoon supplies who is looking and never what it looks like.
+   *
+   * A plain object is fixed for the region's whole life, which is right for most of these props —
+   * but a root that branches on a value describing WHO is looking (an ownership flag, a role) cannot
+   * be demoed both ways from one mount: `RegionRoot` never spreads the live store onto the root's
+   * props, so a `?flow=` switch that only replays the store leaves such a prop frozen at whatever the
+   * override said, and two flows meant to show opposite branches render identically. The function
+   * form receives the ACTIVE seed — the requested flow's `seed` when the URL names one, else the
+   * region's own — so a root prop can be DERIVED from the same seed the flow already declares,
+   * without inventing a second place to say `isOwnPage: true`.
    */
-  hostProps?: Record<string, unknown>;
+  hostProps?: Record<string, unknown> | ((seed: Record<string, unknown>) => Record<string, unknown>);
 }
 
 /** The fields of a region override, so a reader cannot forget one the writer supplied. */
@@ -126,11 +135,22 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
     providers?: (children: ReactNode, slot: SlotsOf<A>) => ReactNode;
     /** Per slot: what the PAGE passes on the island element, for what is not region state. */
     props?: Partial<Record<SlotsOf<A>, Record<string, unknown>>>;
-    /** Per root prop the islands do not fill: a host slot's props, or a plain prop's value. */
-    hostProps?: (A extends { hostSlots?: infer H }
-      ? { [K in keyof H]?: H[K] extends (p: infer P) => unknown ? P : Record<string, unknown> }
-      : object) &
-      Record<string, unknown>;
+    /**
+     * Per root prop the islands do not fill: a host slot's props, or a plain prop's value.
+     *
+     * The function form is called with the ACTIVE seed (the requested flow's, else the region's own)
+     * — see `RegionOverrides.hostProps` for why a root prop sometimes needs to move with the flow
+     * rather than stay fixed for the region's whole life.
+     */
+    hostProps?:
+      | ((A extends { hostSlots?: infer H }
+          ? { [K in keyof H]?: H[K] extends (p: infer P) => unknown ? P : Record<string, unknown> }
+          : object) &
+          Record<string, unknown>)
+      | ((seed: Partial<RegionOf<A>>) => (A extends { hostSlots?: infer H }
+          ? { [K in keyof H]?: H[K] extends (p: infer P) => unknown ? P : Record<string, unknown> }
+          : object) &
+          Record<string, unknown>);
     /** Inbound seams. Each must have been built against THIS archipelago. */
     channels?: readonly DeclaredChannel<A['id']>[];
   },

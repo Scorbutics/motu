@@ -694,14 +694,25 @@ markSandbox();
     // Picking a station LEAVES an island address, and takes it out of the URL: leaving it there
     // would hand someone a link that reopens the island they navigated away from.
   const onStation = (id: string) => {
+      // THE ADDRESS FOLLOWS THE SCREEN, all of it.
+      //
+      // This cleared `target`/`scenario` and left `region`/`flow` alone, so switching region after
+      // running a flow left the URL claiming the region you had LEFT and a flow that was no longer
+      // showing. Nothing looked wrong — until the page was reloaded or the link was handed to
+      // somebody, and then it opened a different screen from the one it was copied off. `step` goes
+      // for the same reason it goes in `onFlow`: it addresses a point inside a flow that is over.
+      const url = new URL(location.href);
+      url.searchParams.delete('target');
+      url.searchParams.delete('scenario');
+      url.searchParams.set('region', id);
+      url.searchParams.delete('flow');
+      url.searchParams.delete('step');
+      history.replaceState(null, '', url);
       if (island) {
-        const url = new URL(location.href);
-        url.searchParams.delete('target');
-        url.searchParams.delete('scenario');
-        history.replaceState(null, '', url);
         island = undefined;
         reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
       }
+      shownFlow = null;
       mount(id);
   };
 

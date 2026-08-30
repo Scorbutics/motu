@@ -211,6 +211,51 @@ test('switching a flow records which state is showing, and puts it in the addres
   assert.ok(!seen.search.includes('step='), `a stale step survived into ${seen.search}`);
 });
 
+test('switching a region after a flow leaves an address that opens the same screen', async (t) => {
+  if (guard(t)) return;
+  // Reported as "switch a state, then changing region does nothing" — two separate bugs behind one
+  // sentence. The other was the dock holding a control from a document the reload had destroyed; this
+  // is the one that survives it: the address kept naming the region you had LEFT and a flow that was
+  // no longer showing. Nothing looks wrong until the page is reloaded or the link is handed on, and
+  // then it opens a different screen from the one it was copied off.
+  await openFresh(`${BASE}?region=${REGION}`);
+  const flows = await page.evaluate(
+    (region) => (window.__motuLagoonStates?.flows?.[region] ?? []).map((f) => f.name ?? f),
+    REGION,
+  );
+  if (!flows.length) {
+    t.skip(`${REGION} declares no flows to switch away from`);
+    return;
+  }
+
+  const other = await page.evaluate(
+    (region) => window.__motuLagoonControl.regions().map((r) => r.id).find((id) => id !== region),
+    REGION,
+  );
+  if (!other) {
+    t.skip('this lagoon declares a single region, so there is nowhere to switch to');
+    return;
+  }
+
+  const after = await page.evaluate(
+    async ([flow, target]) => {
+      const ctl = window.__motuLagoonControl;
+      ctl.runFlow(flow);
+      await new Promise((r) => setTimeout(r, 1500));
+      ctl.show(target);
+      await new Promise((r) => setTimeout(r, 1200));
+      return { search: location.search, current: ctl.current() };
+    },
+    [flows[0], other],
+  );
+
+  assert.equal(after.current.region, other, 'the region did not change');
+  const params = new URLSearchParams(after.search);
+  assert.equal(params.get('region'), other, `the address still names the region we left: ${after.search}`);
+  assert.equal(params.get('flow'), null, `the address still names a flow that is not showing: ${after.search}`);
+  assert.equal(after.current.flow, null, 'the control surface still reports the previous flow');
+});
+
 test('a second flow starts from the seeded state, not on top of the first', async (t) => {
   if (guard(t)) return;
   // Flows are sequences and the region keeps what the last one left. Without `__motuLagoon.reset()`

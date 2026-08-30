@@ -139,6 +139,27 @@ test('hiding the states strip beats showing it', async () => {
   assert.ok(hidden > shown, 'the [hidden] rule must come after the rule that shows the strip');
 });
 
+test('no dock handler captures the lagoon control it was painted with', async () => {
+  // THE BUG THIS PINS: pick a state, then the next region click does nothing and the one after it
+  // works. Every row, chip and rig pill used to close over the `ctl` that `paint()` resolved, and the
+  // artifact reloads on its own — "As seeded" is a reload by design, and so is a live-push. After one,
+  // the captured object belongs to a destroyed document and calling `show()` on it fails silently.
+  //
+  // Asserted on the SOURCE because the failure needs two documents to reproduce: in `lagoon serve` the
+  // dock is injected into the artifact's own page, so a reload takes the dock with it and the stale
+  // reference cannot happen. Only the host, which draws the dock around an iframe, can hold one.
+  const { motuDockJs } = await import('../src/dock.mjs');
+  const js = motuDockJs();
+  const captured = js.match(/function \(\)\s*\{[^{}]*\bctl\.(show|runFlow|setView|toggleLens|toggleCoupling|toggleRecording|pressChip)\b/g);
+  assert.equal(
+    captured,
+    null,
+    'a handler closes over the painted control instead of resolving it on click: ' + (captured ?? []).join(' | '),
+  );
+  // And the resolver the handlers are supposed to go through still exists.
+  assert.match(js, /var drive = function \(fn\)/, 'the click-time control resolver is gone');
+});
+
 test('the dock asks for no safe-area inset', async () => {
   // TWICE NOW, IN TWO CODEBASES. On Firefox for Android env(safe-area-inset-bottom) comes back
   // non-zero even though nothing here sets viewport-fit=cover, and a bottom bar that folds it into

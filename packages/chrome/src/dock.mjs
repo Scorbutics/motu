@@ -1094,6 +1094,22 @@ function motuMountDock(opts) {
   /** The lagoon's own two globals — absent until it has booted, so everything here re-reads them. */
   var catalogue = function () { try { return lagoonWindow().__motuLagoonStates || null; } catch (e) { return null; } };
   var control = function () { try { return lagoonWindow().__motuLagoonControl || null; } catch (e) { return null; } };
+  /**
+   * RESOLVE THE CONTROL WHEN THE CLICK HAPPENS, never when the row was drawn.
+   *
+   * Every row, chip and palette entry used to close over the `ctl` that `paint()` had resolved. The
+   * artifact reloads on its own — choosing "As seeded" is a reload by design, and so is a live-push —
+   * and after one, that captured object belongs to a destroyed document: calling `show()` on it does
+   * nothing, silently. The symptom is precise and baffling to report: pick a state, then the NEXT
+   * region click is swallowed and the one after it works, because the failed click's repaint is what
+   * rebinds the reference.
+   */
+  var drive = function (fn) {
+    return function () {
+      var live = control();
+      if (live) fn(live);
+    };
+  };
 
   var showTab = function (which) {
     panel.dataset.tab = which;
@@ -1244,7 +1260,7 @@ function motuMountDock(opts) {
     var list = (cat.archipelagos || []).filter(function (r) { return hit(r.label); });
     regions.count.textContent = String(list.length);
     regions.list.replaceChildren.apply(regions.list, list.map(function (r) {
-      return row(r.label, r.id === now.region, function () { ctl.show(r.id); });
+      return row(r.label, r.id === now.region, drive(function (c) { c.show(r.id); }));
     }));
 
     var flows = (cat.flows && cat.flows[now.region]) || [];
@@ -1253,19 +1269,19 @@ function motuMountDock(opts) {
     // seeded" as current and every flow as not — so pressing a state ran it and the list went on
     // showing the same row lit, which reads as the click having done nothing.
     var showing = now.flow || null;
-    var rows = [row('As seeded', showing === null, function () { ctl.runFlow(null); })];
+    var rows = [row('As seeded', showing === null, drive(function (c) { c.runFlow(null); }))];
     flows.forEach(function (f) {
       if (!hit(f.name)) return;
-      rows.push(row(f.name, showing === f.name, function () { ctl.runFlow(f.name); }));
+      rows.push(row(f.name, showing === f.name, drive(function (c) { c.runFlow(f.name); })));
     });
     states.list.replaceChildren.apply(states.list, rows);
 
     // The same states, as chips on the bar. NOT filtered by the panel's search box: the box is in
     // the panel and the strip is reachable with the panel shut, so filtering it from an input nobody
     // can see would silently hide states with no way to tell why.
-    var chips = [stateChip('As seeded', showing === null, function () { ctl.runFlow(null); })];
+    var chips = [stateChip('As seeded', showing === null, drive(function (c) { c.runFlow(null); }))];
     flows.forEach(function (f) {
-      chips.push(stateChip(f.name, showing === f.name, function () { ctl.runFlow(f.name); }));
+      chips.push(stateChip(f.name, showing === f.name, drive(function (c) { c.runFlow(f.name); })));
     });
     railStates.replaceChildren.apply(railStates, chips);
     // A region with no flows has one state, which is the one you are looking at. An "As seeded" chip
@@ -1282,7 +1298,7 @@ function motuMountDock(opts) {
         class: 'motu-btn', 'data-shape': 'pill', type: 'button',
         'aria-current': now.view === v ? 'true' : 'false',
       }, [v === 'region' ? 'Region' : 'Mountpoints']);
-      b.addEventListener('click', function () { ctl.setView(v); });
+      b.addEventListener('click', drive(function (c) { c.setView(v); }));
       pills.push(b);
     });
     // RECORDING IS AN ACT, so it sits with the other controls rather than in a tab. It is the one
@@ -1296,7 +1312,7 @@ function motuMountDock(opts) {
         'aria-pressed': ctl.lensOpen() ? 'true' : 'false',
         title: 'Outline the islands on the page and wire them to what they read',
       }, ['\u2316 Seam lens']);
-      lensPill.addEventListener('click', function () { ctl.toggleLens(); paint(); });
+      lensPill.addEventListener('click', drive(function (c) { c.toggleLens(); paint(); }));
       pills.push(lensPill);
     }
 
@@ -1309,7 +1325,7 @@ function motuMountDock(opts) {
         'aria-pressed': ctl.couplingOn && ctl.couplingOn() ? 'true' : 'false',
         title: 'Draw a wire between islands that share a region key',
       }, ['\u2325 Coupling']);
-      cplPill.addEventListener('click', function () { ctl.toggleCoupling(); paint(); });
+      cplPill.addEventListener('click', drive(function (c) { c.toggleCoupling(); paint(); }));
       pills.push(cplPill);
     }
 
@@ -1323,7 +1339,9 @@ function motuMountDock(opts) {
           : 'Capture the calls and host-fed writes this region makes',
       }, [rec.recording ? '\u25a0 Stop & export' : '\u25cf Record']);
       recPill.addEventListener('click', function () {
-        var next = ctl.toggleRecording();
+        var live = control();
+        if (!live) return; // the artifact reloaded under us; the next paint rebinds
+        var next = live.toggleRecording();
         // Say what came out. A capture that produced nothing is the case worth reporting loudest —
         // it looks identical to success from the button alone.
         if (next && next.status) recStatus.textContent = next.status;
@@ -1339,7 +1357,7 @@ function motuMountDock(opts) {
         class: 'motu-btn', 'data-shape': 'pill', type: 'button',
         title: c.title || '', 'aria-pressed': c.pressed ? 'true' : 'false',
       }, [c.label]);
-      b.addEventListener('click', function () { ctl.pressChip(c.index); });
+      b.addEventListener('click', drive(function (live) { live.pressChip(c.index); }));
       pills.push(b);
     });
     rigPills.replaceChildren.apply(rigPills, pills);
@@ -1634,16 +1652,16 @@ function motuMountDock(opts) {
     if (!ctl || !cat) return [];
     var now = ctl.current();
     var out = (cat.archipelagos || []).map(function (r) {
-      return { label: r.label, kind: 'region', run: function () { ctl.show(r.id); } };
+      return { label: r.label, kind: 'region', run: drive(function (c) { c.show(r.id); }) };
     });
     ((cat.flows && cat.flows[now.region]) || []).forEach(function (f) {
-      out.push({ label: f.name, kind: 'state', run: function () { ctl.runFlow(f.name); } });
+      out.push({ label: f.name, kind: 'state', run: drive(function (c) { c.runFlow(f.name); }) });
     });
-    out.push({ label: 'As seeded', kind: 'state', run: function () { ctl.runFlow(null); } });
-    out.push({ label: 'Region', kind: 'view', run: function () { ctl.setView('region'); } });
-    out.push({ label: 'Mountpoints', kind: 'view', run: function () { ctl.setView('mountpoints'); } });
+    out.push({ label: 'As seeded', kind: 'state', run: drive(function (c) { c.runFlow(null); }) });
+    out.push({ label: 'Region', kind: 'view', run: drive(function (c) { c.setView('region'); }) });
+    out.push({ label: 'Mountpoints', kind: 'view', run: drive(function (c) { c.setView('mountpoints'); }) });
     (ctl.chips ? ctl.chips() : []).forEach(function (c) {
-      if (c.label) out.push({ label: c.label + ' \u2014 ' + (c.title || 'toggle'), kind: 'toggle', run: function () { ctl.pressChip(c.index); } });
+      if (c.label) out.push({ label: c.label + ' \u2014 ' + (c.title || 'toggle'), kind: 'toggle', run: drive(function (live) { live.pressChip(c.index); }) });
     });
     return out;
   };

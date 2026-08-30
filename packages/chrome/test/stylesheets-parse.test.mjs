@@ -103,6 +103,18 @@ test('the closed panel takes the dock out of the page', async () => {
   assert.match(block, /position:\s*fixed/, 'the panel must be out of flow, or it occupies the page while closed');
 });
 
+test('the phone sheet is measured from the bottom, not the top', async () => {
+  // The edge-docked panel is anchored `top: 0; bottom: 0` to keep it out of flow. On a phone that
+  // rule is inherited into the sheet, where top+bottom+max-height is over-constrained: the browser
+  // keeps `top`, so the sheet climbed to the top of the screen and left a gap beneath it.
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
+  const panel = phone.slice(phone.indexOf('#tide .panel {'));
+  const block = panel.slice(0, panel.indexOf('}'));
+  assert.match(block, /top:\s*auto/, 'the phone sheet must clear the docked panel top anchor');
+});
+
 test('the dock asks for no safe-area inset', async () => {
   // TWICE NOW, IN TWO CODEBASES. On Firefox for Android env(safe-area-inset-bottom) comes back
   // non-zero even though nothing here sets viewport-fit=cover, and a bottom bar that folds it into

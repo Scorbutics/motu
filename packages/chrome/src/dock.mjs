@@ -789,6 +789,11 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   #tide .rail-dock .chev { rotate: 90deg; }
   #tide .panel {
     position: fixed;
+    /* RESET THE TOP the edge-docked rule sets. It anchors the panel top 0 / bottom 0 so the desktop
+     * panel spans its edge without being in flow — inherited here that over-constrains the box, which
+     * resolves by honouring the top and dropping the bottom, so the sheet grew from the TOP of the
+     * screen with 24vh of empty gradient under it. A sheet is measured from the bottom edge up. */
+    top: auto;
     left: 0;
     right: 0;
     bottom: 0;

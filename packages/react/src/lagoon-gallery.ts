@@ -361,6 +361,12 @@ markSandbox();
   publishStates(opts.evidence, stations.map((s) => ({ id: s.id, label: s.label })));
   const request = readStateRequest();
   let flowRegion: string | undefined;
+  // Mutable so `onFlow` (switching flows FROM the dock, no reload) can move these forward — unlike
+  // `request`, which is only ever what the URL said at load. `activeFlowName` and
+  // `applyRequestedFlow` read these, never `request.flow`/`request.step` directly, so both the
+  // address that opened this page and a later click in the dock resolve through one path.
+  let currentFlowName: string | null = request.flow;
+  let currentFlowStep: number | null = request.step;
   if (request.flow) {
     const resolved = resolveFlowRegion(opts.evidence, request);
     if ('region' in resolved && ids.includes(resolved.region)) flowRegion = resolved.region;
@@ -437,12 +443,20 @@ markSandbox();
     controlChanged();
 
     if (react) {
+      const ov = regionOverrides(overrides, id);
+      // The requested flow's own seed — resolved here, synchronously, so a root prop DERIVED from it
+      // (`hostProps`'s function form) lands on THIS mount rather than waiting for `applyRequestedFlow`
+      // below, which only ever writes to the store. See that field's doc comment for why some root
+      // props (an ownership flag, a role) cannot be demoed by a store write alone.
+      const activeFlow = currentFlowName && flowRegion === id ? pickState(opts.evidence?.flows?.[id], currentFlowName) : null;
+      const hostProps = typeof ov.hostProps === 'function' ? ov.hostProps({ ...ov.seed, ...activeFlow?.seed }) : ov.hostProps;
       // Same path the host application and `motu island verify` use, so the surface a human judges
       // here is the one that ships and the one that was verified.
       mountReactLagoon(root, opts.archipelagos[id]!, {
         elements: opts.elements,
         host,
-        ...regionOverrides(overrides, id),
+        ...ov,
+        hostProps,
         view,
       });
       tide.setActive(current, view);
@@ -506,16 +520,21 @@ markSandbox();
    * leaving the previous verdict standing, which would outlive the region it described.
    */
   function applyRequestedFlow(id: string): void {
-    if (!request.flow || !flowRegion) return;
+    if (!currentFlowName || !flowRegion) return;
     if (id !== flowRegion) {
       reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
       return;
     }
-    const flow = pickState(opts.evidence?.flows?.[id], request.flow);
+    const flow = pickState(opts.evidence?.flows?.[id], currentFlowName);
     if (!flow) return; // reported at boot, with the whole catalogue
-    void replayFlow(flow, request.step).then((outcome) =>
-      reportState({ ...outcome, target: `archipelago:${id}` }),
-    );
+    tide.setFlowOutcome('running…');
+    void replayFlow(flow, currentFlowStep).then((outcome) => {
+      reportState({ ...outcome, target: `archipelago:${id}` });
+      tide.setFlowOutcome(
+        outcome.ok ? `applied ${outcome.applied}/${outcome.of} step(s)` : (outcome.error ?? 'could not run'),
+        outcome.ok,
+      );
+    });
   }
 
   // The lens mounts BEFORE the chrome — it restores its own open state, so it remembers being on
@@ -539,8 +558,8 @@ markSandbox();
    * the state was applied and the panel said no state was.
    */
   const activeFlowName = (id: string): string | null => {
-    if (!request.flow || id !== flowRegion) return null;
-    const flow = pickState(opts.evidence?.flows?.[id], request.flow);
+    if (!currentFlowName || id !== flowRegion) return null;
+    const flow = pickState(opts.evidence?.flows?.[id], currentFlowName);
     return flow?.name ?? null;
   };
 
@@ -724,21 +743,36 @@ markSandbox();
       }
       const flow = pickState(opts.evidence?.flows?.[current], name);
       if (!flow) {
-        tide.setFlowOutcome(`no flow "${name}" in ${current}`, false);
+        // REFUSE THROUGH THE SAME CHANNEL AN UNREACHABLE ADDRESS DOES — banner, console error, and
+        // `__motuLagoonState.ok: false` — not through the tideline.
+        //
+        // This used to report only via `setFlowOutcome`, which the in-page dock drew. The dock moved
+        // into the host and that call became a no-op shim, so a flow name that resolves to nothing
+        // went completely silent: nothing on screen, nothing for a driver to read, and the URL and
+        // the highlighted row both still claiming the name. Being handed some other state while
+        // believing it is the one you named is the exact failure this project engineers against, so
+        // the refusal belongs on the channel that cannot be shimmed away.
+        reportState({
+          ok: false,
+          target: `archipelago:${current}`,
+          kind: 'flow',
+          error: `no flow "${name}" in ${current}`,
+          available: stateNames(opts.evidence?.flows?.[current]),
+        });
         return;
       }
-      tide.setFlowOutcome('running…');
-      // FROM THE STATE THE PAGE SEEDS, every time. Flows are sequences and the region keeps what the
-      // last one left; running two in a row without this would show the second one's steps applied on
-      // top of the first one's result, under the second one's name.
-      window.__motuLagoon?.reset?.();
-      void replayFlow(flow, null).then((outcome) => {
-        reportState({ ...outcome, target: `archipelago:${current}` });
-        tide.setFlowOutcome(
-          outcome.ok ? `applied ${outcome.applied}/${outcome.of} step(s)` : (outcome.error ?? 'could not run'),
-          outcome.ok,
-        );
-      });
+      // A REMOUNT, not a store write on top of the live mount. `replayFlow` alone used to be enough —
+      // it fires an island's declared `emit`, which is how a flow moves the STORE — but a root prop
+      // derived from the flow's own seed (`hostProps`'s function form: an ownership flag, a role) is
+      // handed to the root once, at mount, and `RegionRoot` never re-derives it from a later write.
+      // Two flows differing only in such a prop rendered identically before this: `replayFlow` ran,
+      // the store moved, and the one prop that was supposed to look different never did. Remounting
+      // (`mount`, always FROM the seed) both re-runs it correctly and picks up the derived prop —
+      // `applyRequestedFlow`, called from inside it, is what now runs the flow and reports outcome.
+      currentFlowName = name;
+      currentFlowStep = null;
+      flowRegion = current;
+      mount(current);
   };
 
   publishControl();

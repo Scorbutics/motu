@@ -41,8 +41,11 @@ export function LagoonViewLayout({
       </header>
 
       {/* THE ARTIFACT, framed. Its own document — its own React, its own stylesheet — which is the
-          isolation that makes composing somebody else's lagoon possible at all. */}
-      <main className="dock-stage">{frame}</main>
+          isolation that makes composing somebody else's lagoon possible at all.
+          RENDERED ONLY IF THERE IS ONE: in the lagoon this region has no artifact to frame, and an
+          empty <main> with a border and a min-height is a large blank box that reads as a broken
+          frame rather than as an absent one. */}
+      {frame ? <main className="dock-stage">{frame}</main> : null}
 
       {/* The phone bar's strip: first among the controls because it is the one you reach without
           opening anything, and a reader tabbing through the dock should meet it before the panel. */}

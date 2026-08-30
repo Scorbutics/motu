@@ -446,3 +446,100 @@ code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
   .dv-modes { margin-left: 0; width: 100%; }
   .dv-modes .motu-btn { flex: 1 1 0; padding: 8px 6px; }
 }
+
+/* --- THE LAGOON VIEW ------------------------------------------------------------------------------
+   The dock, as a region. Two lists and a strip, over the artifact being framed.
+
+   These rendered UNSTYLED at first, and that is what forced the `▸` marker into the row's TEXT: with
+   no sheet, the current row differed by `aria-current` alone and `data-flow` correctly reported six
+   scenarios producing five distinct renders. The marker stays now that there IS colour, because
+   colour alone is not a state a person can perceive reliably — it is the same rule axe applies to a
+   link that is only blue. */
+.dock-view { display: flex; flex-direction: column; min-height: 0; gap: 12px; }
+
+/* The bay. The water gradient is the dock's own, so the region reads as part of the chrome it is. */
+.dock-bay {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: var(--_radius);
+  /* Both ends DERIVED from the accent, so a host that reskins the tide gets a bay that follows. The
+     deep end was a second literal of the same green, which is the beginning of the second palette
+     this sheet exists to prevent — `css-tokens` said so by line number. */
+  background: linear-gradient(120deg, var(--_accent), color-mix(in srgb, var(--_accent) 72%, var(--_text)));
+  color: var(--_on-accent);
+}
+.dock-bay b { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.dock-bay small { font-size: 11.5px; opacity: .82; }
+
+/* THE ARTIFACT. A frame with a floor under it: a transparent iframe over the page's own background
+   reads as part of this document, which is the one thing it is not. */
+.dock-stage { flex: 1; min-height: 220px; display: flex; border-radius: var(--_radius); overflow: hidden; border: 1px solid var(--_border); }
+.dock-frame { flex: 1; width: 100%; border: 0; background: var(--_surface); }
+
+/* --- the two lists ------------------------------------------------------------------------------- */
+.dock-panes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.dock-pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dock-pane-title {
+  margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--_muted);
+}
+
+/* A ROW. Full width and left-aligned, because these are places you can go rather than buttons you
+   press — the reading order is the list, not each control. */
+.dock-opt {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border: 1px solid var(--_border); border-radius: var(--_radius);
+  background: var(--_surface); color: var(--_text);
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.dock-opt:hover { background: color-mix(in srgb, var(--_accent) 7%, var(--_surface)); }
+.dock-opt:focus-visible { outline: 2px solid var(--_accent); outline-offset: 2px; }
+.dock-opt[aria-current="true"] {
+  border-color: color-mix(in srgb, var(--_accent) 42%, transparent);
+  background: color-mix(in srgb, var(--_accent) 10%, var(--_surface));
+  font-weight: 650;
+}
+
+/* The marker. A fixed box whether or not it holds the glyph, so the labels of a list stay on one
+   left edge instead of stepping in and out as the selection moves. */
+.dock-lamp {
+  flex: 0 0 auto; width: 9px; text-align: center;
+  color: var(--_accent); font-size: 11px; line-height: 1;
+}
+
+/* --- the strip ----------------------------------------------------------------------------------- */
+.dock-strip { min-width: 0; }
+/* `.dock-strip .motu-list`, not `.dock-strip > *`: the kit's own `.motu-list` rule has the same
+   specificity and is injected after this sheet, so the one-class selector lost and the chips stacked
+   into a column of full-width rows instead of one scrolling line. Two classes wins on specificity
+   rather than on load order, which is not something to leave to chance across two packages. */
+.dock-strip .motu-list {
+  /* `flex-direction: row` STATED. The kit's own list is a flex COLUMN, so setting `display: flex`
+     here changed nothing anyone could see and the chips went on stacking — a rule that looks applied,
+     computes as applied, and does the opposite of what it says. The direction is the whole point of
+     a strip. */
+  display: flex; flex-direction: row; gap: 6px; flex-wrap: nowrap;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  margin: 0; padding: 0 0 2px; list-style: none;
+}
+.dock-strip .motu-list > li { flex: 0 0 auto; }
+.dock-strip .motu-list::-webkit-scrollbar { display: none; }
+.dock-chip {
+  flex: 0 0 auto; max-width: 46vw;
+  padding: 0 11px; height: 27px; border: 1px solid var(--_border); border-radius: 999px;
+  background: var(--_surface); color: var(--_text);
+  font: inherit; font-size: 12px; font-weight: 600; line-height: 25px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+}
+.dock-chip[aria-current="true"] { background: var(--_accent); border-color: var(--_accent); color: var(--_on-accent); }
+.dock-chip:focus-visible { outline: 2px solid var(--_accent); outline-offset: 2px; }
+
+/* The sentence that says WHICH empty this is — see dock-regions.tsx for why the two cases are worth
+   telling apart. */
+.dock-empty { margin: 0; padding: 10px; color: var(--_muted); font-size: 12.5px; font-style: italic; }
+
+@media (max-width: 760px) {
+  /* One column: two lists of long flow names side by side on a phone are two columns of ellipsis. */
+  .dock-panes { grid-template-columns: 1fr; }
+}

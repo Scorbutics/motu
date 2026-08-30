@@ -12,7 +12,7 @@
 // is a presentation decision made here; the region never holds a state by that name, which is why
 // nothing can fail to find it.
 import { useCallback } from "react"
-import { List } from "@motu/chrome/react"
+import { List, ListItem, Row } from "@motu/chrome/react"
 import type { LagoonState } from "@/app/lagoon-view-region"
 
 export interface DockStatesProps {
@@ -48,26 +48,30 @@ export function DockStates({ states = [], flow = null, compact = false, onFlowCh
 
   return (
     <List aria-label="States" data-compact={compact ? "true" : "false"}>
-      {rows.map((row) => (
-        <button
-          key={row.key}
-          type="button"
-          className={compact ? "dock-chip" : "dock-opt"}
-          title={row.label}
-          aria-current={row.value === flow ? "true" : "false"}
-          onClick={pick(row.value)}
-        >
-          {/* WHICH ONE IS SHOWING, VISIBLY. `aria-current` is an attribute — a screen reader
-              announces it and nothing a person LOOKS at changes, and these controls have no
-              stylesheet of their own yet, so the lit row was distinguishable by nothing at all.
-              `data-flow` caught it: six scenarios producing five distinct renders, because "as
-              seeded" and "a flow is showing" render the same words. An aria-label saying "(showing)"
-              did NOT fix it — the captured surface prefers a control's text when it has some, which
-              is the right call and means the marker has to be text too. */}
-          {!compact && <span className="dock-lamp" aria-hidden="true">{row.value === flow ? "▸" : ""}</span>}
-          {compact && row.value === flow ? "▸ " : ""}
-          {row.label}
-        </button>
+      {rows.map((row, i) => (
+        // A LIST ITEM, because `List` is a <ul> and a <ul> may only contain <li>. Buttons dropped
+        // straight in were a SERIOUS axe finding in every scenario of both islands — invisible until
+        // the sheet existed and `--audit` had something to measure.
+        <ListItem key={row.key} index={i}>
+          <Row
+            as="button"
+            className={compact ? "dock-chip" : "dock-opt"}
+            surface="card"
+            current={row.value === flow}
+            title={row.label}
+            onClick={pick(row.value)}
+          >
+            {/* WHICH ONE IS SHOWING, VISIBLY — and in TEXT rather than in colour alone. `aria-current`
+                is an attribute a screen reader announces and nothing a person LOOKS at; an aria-label
+                saying "(showing)" did not fix it either, because the captured surface prefers a
+                control's own text. `data-flow` found it as six scenarios producing five distinct
+                renders. It stays now that there is colour, for the reason axe rejects a link that is
+                only blue. */}
+            {!compact && <span className="dock-lamp" aria-hidden="true">{row.value === flow ? "\u25b8" : ""}</span>}
+            {compact && row.value === flow ? "\u25b8 " : ""}
+            {row.label}
+          </Row>
+        </ListItem>
       ))}
     </List>
   )

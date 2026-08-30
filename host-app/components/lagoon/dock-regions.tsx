@@ -10,7 +10,7 @@
 // id somebody asked for. What that means for the page is the page's business, which is the coupling
 // the region exists to declare.
 import { useCallback } from "react"
-import { List } from "@motu/chrome/react"
+import { List, ListItem, Row } from "@motu/chrome/react"
 import type { LagoonStation } from "@/app/lagoon-view-region"
 
 export interface DockRegionsProps {
@@ -34,29 +34,30 @@ export function DockRegions({ regions = [], region = "", onRegionChange }: DockR
   // sentence for the second case.
   if (list.length === 0) {
     return (
-      <List aria-label="Regions">
-        <p className="dock-empty">Waiting for the lagoon to say what it declares…</p>
-      </List>
+      // NOT a <List>: a <ul> whose only child is a <p> is the same axe violation as a <ul> of
+      // buttons, and an empty list is not a list of one sentence anyway.
+      <p className="dock-empty">Waiting for the lagoon to say what it declares…</p>
     )
   }
 
   return (
     <List aria-label="Regions">
-      {list.map((station) => (
-        <button
-          key={station.id}
-          type="button"
-          className="dock-opt"
-          // `aria-current`, not `aria-pressed`: these are places you can be, and exactly one of them
-          // is where you are. A pressed toggle would say each row is independently on or off.
-          aria-current={station.id === region ? "true" : "false"}
-
-          onClick={pick(station.id)}
-        >
-          {/* The framed one, marked in TEXT — see dock-states for why an attribute was not enough. */}
-          <span className="dock-lamp" aria-hidden="true">{station.id === region ? "▸" : ""}</span>
-          {station.label}
-        </button>
+      {list.map((station, i) => (
+        // <li>, because `List` is a <ul> — see dock-states for the axe finding this was.
+        <ListItem key={station.id} index={i}>
+          <Row
+            as="button"
+            className="dock-opt"
+            surface="card"
+            current={station.id === region}
+            title={station.label}
+            onClick={pick(station.id)}
+          >
+            {/* The framed one, marked in TEXT — see dock-states for why an attribute was not enough. */}
+            <span className="dock-lamp" aria-hidden="true">{station.id === region ? "\u25b8" : ""}</span>
+            {station.label}
+          </Row>
+        </ListItem>
       ))}
     </List>
   )

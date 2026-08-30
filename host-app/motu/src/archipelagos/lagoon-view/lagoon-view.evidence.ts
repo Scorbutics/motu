@@ -96,6 +96,38 @@ export const scenarios: RegionScenario[] = [
     ],
   },
   {
+    // THE ORDERING THE DOCK GOT WRONG, as a region flow rather than a browser test.
+    //
+    // Reported as "switch a state, then changing region does nothing". Two of the three bugs behind
+    // that sentence live outside any region — a control captured from a document that had reloaded,
+    // and an address that stopped describing the screen — and no flow can reach either. THIS one is
+    // region state and belongs here: a state belongs to the region that declares it, so arriving
+    // somewhere new means arriving at ITS seeded state, never still showing the last region's.
+    //
+    // Asserted on the MARKER, which is why it had to be text. "As seeded" is on screen either way;
+    // what changes is which row carries the arrow, and an assertion on the label alone would hold
+    // whatever the region did.
+    name: "switching a region comes back to that region's seeded state",
+    seed: {
+      regions: STATIONS,
+      region: 'review',
+      states: REVIEW_STATES,
+      flow: 'arriving scoped to one project',
+    },
+    steps: [
+      { expectRender: { statesStrip: '\u25b8 arriving scoped to one project' } },
+      {
+        emit: { slot: 'stations', event: 'region-changed', detail: 'corpus' },
+        expect: { region: 'corpus' },
+      },
+      {
+        // The catalogue answers with the new region's states, the way the page answers it.
+        provide: { states: CORPUS_STATES },
+        expectRender: { statesStrip: '\u25b8 As seeded' },
+      },
+    ],
+  },
+  {
     // A REGION THAT DECLARES NO FLOWS. The strip stands down — it renders nothing rather than a lone
     // "As seeded" chip that cannot act — while the panel's list still offers the seeded state.
     name: 'a region with nothing to switch to',

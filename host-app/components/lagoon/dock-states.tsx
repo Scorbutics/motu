@@ -36,6 +36,20 @@ export function DockStates({ states = [], flow = null, compact = false, onFlowCh
   // `flow-mutation` caught exactly that, reporting the slot as never mounted rather than as wrong.
   const list = Array.isArray(states) ? states : []
 
+  // A STATE BELONGS TO THE REGION THAT DECLARES IT.
+  //
+  // `flow` naming something this region does not declare means no declared state is showing — which
+  // IS the seeded state, so that is what reads as current. Without this, switching region left the
+  // strip holding the previous region's state name: every row unmarked, including "As seeded", so
+  // the screen showed a set of states with none of them current and no way to see which you were in.
+  //
+  // A COMPONENT RULE RATHER THAN A SECOND WRITER, deliberately. The obvious fix is to have the
+  // station list clear `flow` when it changes `region` — and that is two islands writing one key,
+  // which the ownership guard refuses and is right to: "either of these writes it" is not a producer.
+  // Validity against the current list is derivable from what this island already has, so nothing has
+  // to be owned twice.
+  const showing = list.some((s) => s.name === flow) ? flow : null
+
   // A REGION WITH NO FLOWS HAS ONE STATE, and it is the one you are looking at. On the phone strip
   // that means standing down entirely rather than drawing a lone "As seeded" chip that cannot do
   // anything — a control whose only act is the state you are already in.
@@ -57,7 +71,7 @@ export function DockStates({ states = [], flow = null, compact = false, onFlowCh
             as="button"
             className={compact ? "dock-chip" : "dock-opt"}
             surface="card"
-            current={row.value === flow}
+            current={row.value === showing}
             title={row.label}
             onClick={pick(row.value)}
           >
@@ -67,8 +81,8 @@ export function DockStates({ states = [], flow = null, compact = false, onFlowCh
                 control's own text. `data-flow` found it as six scenarios producing five distinct
                 renders. It stays now that there is colour, for the reason axe rejects a link that is
                 only blue. */}
-            {!compact && <span className="dock-lamp" aria-hidden="true">{row.value === flow ? "\u25b8" : ""}</span>}
-            {compact && row.value === flow ? "\u25b8 " : ""}
+            {!compact && <span className="dock-lamp" aria-hidden="true">{row.value === showing ? "\u25b8" : ""}</span>}
+            {compact && row.value === showing ? "\u25b8 " : ""}
             {row.label}
           </Row>
         </ListItem>

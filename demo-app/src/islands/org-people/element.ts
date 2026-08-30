@@ -6,7 +6,7 @@ export const orgPeopleElement: ElementSpec = {
   component: OrgPeople,
   options: {
     contract: {
-      input: ['department', 'personId'],
+      input: ['department', 'person'],
       output: { onPersonSelected: 'person-selected' },
     },
     legacy: 'fill',

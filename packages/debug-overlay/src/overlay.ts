@@ -461,6 +461,22 @@ class Overlay {
   // render it at this width (`lg:hidden`) — and requiring both ends on screen was hiding the graph
   // exactly when it explains the most: the surviving end lit up as "coupled" with nothing to couple to.
   #drawCoupling() {
+    // TWO PASSES, because a hub's honest position collides with its neighbours'.
+    //
+    // A hub sits at the centroid of the islands that touch its key. On a screen whose islands are a
+    // ROW — a drill-down, a toolbar, three columns — every key's centroid lands within a few pixels
+    // of every other, so the rings stack and the labels overprint: the graph draws four couplings and
+    // a reader can make out two. Collect them first, spread them second, and the picture says what
+    // the region actually declares.
+    const hubs: Array<{
+      key: string;
+      color: string;
+      anchors: Point[];
+      boxless: MountedIslandInfo[];
+      x: number;
+      y: number;
+    }> = [];
+
     for (const [, byKey] of lens.couplingByStore()) {
       for (const [key, islands] of byKey) {
         if (islands.size < 2) continue;
@@ -473,25 +489,56 @@ class Overlay {
         }
         if (!anchors.length) continue;
         // With one end on screen there is no midpoint to sit on, so the hub parks just above it.
-        const hub =
+        const seat =
           anchors.length > 1
             ? { x: avg(anchors.map((a) => a.x)), y: avg(anchors.map((a) => a.y)) }
             : { x: anchors[0].x, y: Math.max(16, anchors[0].y - 52) };
-        const color = islands.size >= 3 ? '#b91c1c' : '#b45309';
-        for (const a of anchors) this.#wires.append(wire(hub.x, hub.y, a.x, a.y, color));
-        boxless.forEach((info, n) => {
-          const ghost = { x: hub.x, y: Math.max(12, hub.y - 34 - n * 30) };
-          const spoke = wire(hub.x, hub.y, ghost.x, ghost.y, color);
-          spoke.setAttribute('stroke-opacity', '.4');
-          this.#wires.append(spoke);
-          this.#wires.append(svgLabel(ghost.x, ghost.y, `${info.slot} · not rendered`, color));
+        hubs.push({
+          key,
+          color: islands.size >= 3 ? '#b91c1c' : '#b45309',
+          anchors,
+          boxless,
+          x: seat.x,
+          y: seat.y,
         });
-        const ring = svgDot(hub.x, hub.y, color, 5);
-        ring.setAttribute('stroke', '#fffefb');
-        ring.setAttribute('stroke-width', '2');
-        this.#wires.append(ring);
-        this.#wires.append(svgLabel(hub.x, hub.y - 9, key, color));
       }
+    }
+
+    // SPREAD. Deterministic — sorted, then each hub takes the nearest free seat above or below its
+    // own — so the same screen draws the same graph twice and a screenshot can be compared.
+    const GAP = 30;
+    const NEAR_X = 120;
+    const placed: Array<{ x: number; y: number }> = [];
+    const taken = (x: number, y: number) =>
+      placed.some((p) => Math.abs(p.x - x) < NEAR_X && Math.abs(p.y - y) < GAP);
+    hubs.sort((a, b) => a.y - b.y || a.x - b.x || a.key.localeCompare(b.key));
+    for (const h of hubs) {
+      if (taken(h.x, h.y)) {
+        for (let n = 1; n <= 12; n++) {
+          // Up first: above a row of islands is usually empty page, below it is the next island.
+          const up = h.y - n * GAP;
+          const down = h.y + n * GAP;
+          if (up > 16 && !taken(h.x, up)) { h.y = up; break; }
+          if (!taken(h.x, down)) { h.y = down; break; }
+        }
+      }
+      placed.push({ x: h.x, y: h.y });
+    }
+
+    for (const h of hubs) {
+      for (const a of h.anchors) this.#wires.append(wire(h.x, h.y, a.x, a.y, h.color));
+      h.boxless.forEach((info, n) => {
+        const ghost = { x: h.x, y: Math.max(12, h.y - 34 - n * 30) };
+        const spoke = wire(h.x, h.y, ghost.x, ghost.y, h.color);
+        spoke.setAttribute('stroke-opacity', '.4');
+        this.#wires.append(spoke);
+        this.#wires.append(svgLabel(ghost.x, ghost.y, `${info.slot} · not rendered`, h.color));
+      });
+      const ring = svgDot(h.x, h.y, h.color, 5);
+      ring.setAttribute('stroke', '#fffefb');
+      ring.setAttribute('stroke-width', '2');
+      this.#wires.append(ring);
+      this.#wires.append(svgLabel(h.x, h.y - 9, h.key, h.color));
     }
   }
 

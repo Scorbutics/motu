@@ -707,3 +707,5 @@
 @media (max-width: 760px) {
   .org-screen__cols { grid-template-columns: 1fr; }
 }
+
+.org-tree__company { font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--_text); }

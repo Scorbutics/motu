@@ -4,10 +4,15 @@
 // shared key, one reader, nothing an archipelago is needed for. What makes a region worth declaring
 // is a key several islands read and exactly one writes, and this screen has three of them:
 //
-//   selectedCompany     written by x-company-lookup   read by selected-company, headcount
+//   selectedCompany     written by x-company-lookup   read by selected-company
 //   chart               HOST-WRITTEN (answered below) read by org-tree, headcount
-//   selectedDepartment  written by x-org-tree         read by org-people, org-person, headcount
-//   selectedPerson      written by x-org-people       read by org-person
+//   companyLabel        HOST-WRITTEN                  read by org-tree, headcount
+//   selectedDepartment  written by x-org-tree         read by org-tree, org-people, org-person, headcount
+//   selectedPerson      written by x-org-people       read by org-people, org-person
+//
+// NO `id` KEYS BESIDE THE OBJECTS THEY IDENTIFY. `selectedDepartmentId` and `selectedPersonId` were
+// here and are gone: a mirror of one fact is two keys to keep in step, and it SPLITS the coupling —
+// each half shows one reader, so the graph drew two hubs where the region has one real one.
 //
 // Nothing here is wired island-to-island. The tree does not know the people list exists; the card
 // does not know who picked the person. That is the whole claim, and the coupling graph is what makes
@@ -53,12 +58,11 @@ export const adminArchipelago: ArchipelagoConfig = {
     {
       slot: 'org-tree',
       element: 'x-org-tree',
-      bind: { chart: 'chart', departmentId: 'selectedDepartmentId' },
+      bind: { chart: 'chart', department: 'selectedDepartment', companyLabel: 'companyLabel' },
       on: {
         'department-selected': (detail, { store }) => {
           const department = detail as OrgDepartment;
           store.set('selectedDepartment', department);
-          store.set('selectedDepartmentId', department?.id ?? null);
           // Opening a different department drops the person, for the same reason as above: they are
           // not in the department that is now open.
           store.set('selectedPerson', null);
@@ -68,12 +72,10 @@ export const adminArchipelago: ArchipelagoConfig = {
     {
       slot: 'org-people',
       element: 'x-org-people',
-      bind: { department: 'selectedDepartment', personId: 'selectedPersonId' },
+      bind: { department: 'selectedDepartment', person: 'selectedPerson' },
       on: {
         'person-selected': (detail, { store }) => {
-          const person = detail as { id?: string };
-          store.set('selectedPerson', person);
-          store.set('selectedPersonId', person?.id ?? null);
+          store.set('selectedPerson', detail);
         },
       },
     },

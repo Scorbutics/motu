@@ -3,12 +3,13 @@ import type { OrgDepartment, OrgPerson } from '../../shared/org-types.js';
 export interface OrgPeopleProps {
   /** The open department. Read from the region — this island never picks it. */
   department?: OrgDepartment | null;
-  personId?: string | null;
+  /** The selected person — the same object the card reads, not a mirror of their id. */
+  person?: OrgPerson | null;
   onPersonSelected?: (person: OrgPerson) => void;
 }
 
 /** Who is in the open department. Owns the selected person, reads the department it was given. */
-export function OrgPeople({ department = null, personId = null, onPersonSelected }: OrgPeopleProps) {
+export function OrgPeople({ department = null, person = null, onPersonSelected }: OrgPeopleProps) {
   if (!department) {
     return <div className="motu-note">Pick a department to see who is in it.</div>;
   }
@@ -19,7 +20,7 @@ export function OrgPeople({ department = null, personId = null, onPersonSelected
           <button
             type="button"
             className="org-people__row"
-            aria-current={p.id === personId ? 'true' : 'false'}
+            aria-current={p.id === person?.id ? 'true' : 'false'}
             onClick={() => onPersonSelected?.(p)}
           >
             <span className="org-people__name">{p.name}</span>

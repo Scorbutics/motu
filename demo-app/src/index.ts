@@ -12,4 +12,6 @@ export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry.js';
 export { ALL_FIXTURES, ALL_ROLES } from './fixtures.js';
 
 export type { MemberRow, MemberCriteria } from './shared/member-types.js';
+export { ATLAS_CHART, HELIOS_CHART, ATLAS_COMPANY, HELIOS_COMPANY, orgChartFor, companyName } from './shared/org-types.js';
+export type { OrgChart, OrgDepartment, OrgPerson } from './shared/org-types.js';
 export type { MotuTheme, MotuFit, LegacyStrategy } from '@motu/core';

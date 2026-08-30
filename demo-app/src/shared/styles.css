@@ -655,3 +655,55 @@
 }
 
 
+
+/* --- ORG LOOKUP -----------------------------------------------------------------------------------
+   A drill-down: the lookup and its totals across the top, then structure -> people -> person. */
+.org-screen { display: flex; flex-direction: column; gap: 16px; }
+.org-screen__bar { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.org-screen__lookup { flex: 1 1 320px; min-width: 0; }
+.org-screen__cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: start; }
+.org-screen__col { min-width: 0; }
+.org-screen__title {
+  margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--_muted);
+}
+
+.org-tree, .org-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.org-tree__row, .org-people__row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  padding: 8px 10px; border: 1px solid var(--_border, rgba(0,0,0,.08)); border-radius: var(--_radius-sm, 8px);
+  background: var(--_surface, #fff); color: var(--_text); font: inherit; font-size: 13px;
+  text-align: left; cursor: pointer;
+}
+.org-tree__row:hover, .org-people__row:hover { background: color-mix(in srgb, var(--_primary) 10%, transparent); }
+.org-tree__row[aria-current="true"], .org-people__row[aria-current="true"] {
+  background: color-mix(in srgb, var(--_primary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--_primary) 45%, transparent);
+  font-weight: 650;
+}
+.org-tree__name, .org-people__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-tree__count { flex: 0 0 auto; font-size: 11px; color: var(--_muted); }
+.org-people__role { flex: 0 0 auto; font-size: 11.5px; color: var(--_muted); }
+.org-people__lead {
+  flex: 0 0 auto; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--_primary) 18%, transparent);
+}
+
+.org-person {
+  padding: 12px 14px; border: 1px solid var(--_border, rgba(0,0,0,.08));
+  border-radius: var(--_radius-sm, 8px); background: var(--_surface, #fff);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.org-person__name { font-size: 15px; font-weight: 700; }
+.org-person__role { font-size: 12.5px; color: var(--_muted); }
+.org-person__dept { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--_muted); margin-top: 4px; }
+.org-person__mail { font-size: 12px; margin-top: 6px; }
+
+.org-headcount { display: flex; gap: 18px; flex: 0 0 auto; }
+.org-headcount__stat { display: flex; flex-direction: column; line-height: 1.15; }
+.org-headcount__stat b { font-size: 22px; font-weight: 800; }
+.org-headcount__stat span { font-size: 11px; color: var(--_muted); }
+
+@media (max-width: 760px) {
+  .org-screen__cols { grid-template-columns: 1fr; }
+}

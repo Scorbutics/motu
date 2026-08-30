@@ -11,6 +11,10 @@ import { memberFilterChipsElement } from './member-filter-chips/element.js';
 import { memberActionsElement } from './member-actions/element.js';
 import { memberHeaderElement } from './member-header/element.js';
 import { userSearchElement } from './user-search/element.js';
+import { orgTreeElement } from './org-tree/element.js';
+import { orgPeopleElement } from './org-people/element.js';
+import { orgPersonElement } from './org-person/element.js';
+import { orgHeadcountElement } from './org-headcount/element.js';
 
 export const ELEMENT_REGISTRY: ElementSpec[] = [
   companyLookupElement,
@@ -21,4 +25,8 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [
   memberActionsElement,
   memberHeaderElement,
   userSearchElement,
+  orgTreeElement,
+  orgPeopleElement,
+  orgPersonElement,
+  orgHeadcountElement,
 ];

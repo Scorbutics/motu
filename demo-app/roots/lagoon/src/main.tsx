@@ -34,8 +34,11 @@ import {
   watchSeams,
   toggleRecording,
   recordingState,
+  setPicking,
+  setCoupling,
+  couplingOn,
 } from '@motu/debug-overlay';
-import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
+import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, adminArchipelago, ATLAS_CHART, ATLAS_COMPANY, companyName, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
 import css from 'demo-app/styles.css?inline';
 import config from '../lagoon.config.json';
 import { setupLagoonAngularHost } from './angular-host.js';
@@ -116,6 +119,22 @@ startLagoon({
         channels: [angularHostScopeChannel({ key: 'hostSearchConfig', into: 'searchConfig' })],
       }),
       overridesFor(usersArchipelago, { seed: { criteria: {} } }),
+      // ORG LOOKUP, seeded to a company already picked.
+      //
+      // Seeded rather than empty because the empty state is one click away and has its own address,
+      // while the state worth OPENING on is the screen doing its job — three lists agreeing about
+      // one company, which is what the region exists to keep true.
+      overridesFor(adminArchipelago, {
+        seed: {
+          selectedCompany: ATLAS_COMPANY,
+          companyLabel: companyName(ATLAS_COMPANY),
+          chart: ATLAS_CHART,
+          selectedDepartment: ATLAS_CHART[2],
+          selectedDepartmentId: ATLAS_CHART[2].id,
+          selectedPerson: ATLAS_CHART[2].people[0],
+          selectedPersonId: ATLAS_CHART[2].people[0].id,
+        },
+      }),
     ],
   },
   // The seam lens, handed in rather than imported: @motu/react must not depend on the dev-only
@@ -135,6 +154,9 @@ startLagoon({
         coverage: currentCoverage,
         toggleRecording,
         recordingState,
+        setPicking,
+        setCoupling,
+        couplingOn,
         watch: watchSeams,
       }
     : undefined,

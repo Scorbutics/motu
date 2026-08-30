@@ -97,6 +97,11 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
  * move. Nothing inside a page can reach that — resizing the viewport is the host's job, and it does
  * it whenever the artifact is framed. Called out because it is the one case this does not cover. */
 
+/* The phone-only states strip. Declared OFF here, ABOVE the media queries, because a bare display
+ * rule written after them wins on every width — which is how this stylesheet has twice shipped a
+ * phone rule that also applied to desktop. The max-width block turns it on. */
+#tide .rail-states { display: none; }
+
 /* ── the rail, which is the dock when it is closed ────────────────────────────────────────── */
 #tide .rail-dock {
   position: relative;
@@ -759,9 +764,15 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
      * content and sat in the bottom-left corner, which reads as a stray chip rather than the edge of
      * a sheet you can pull. */
     width: 100%;
-    flex-direction: row;
-    justify-content: center;
-    gap: 10px;
+    /* TWO ROWS: the handle, and the states strip under it. A grid rather than a column of flex rows
+     * so the handle and the picker stay side by side without a wrapper element — which would have to
+     * be display:contents on desktop to keep this rail's layout untouched. */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'open pick' 'states states';
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
     /* A DETERMINISTIC BAR, AND NO SAFE-AREA INSET AT ALL.
      *
      * On Firefox for Android this arrived about twice as tall as anywhere else, because its height
@@ -779,7 +790,46 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     border-radius: 14px 14px 0 0;
     background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 52%, var(--w-shallow));
   }
-  #tide .rail-open { flex-direction: row; gap: 10px; width: auto; }
+  #tide .rail-open { flex-direction: row; gap: 10px; width: auto; grid-area: open; }
+  #tide .rail-act { grid-area: pick; }
+  #tide .rail-states {
+    grid-area: states;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* ONE ROW THAT SCROLLS, never a wrap: a strip that reflows to two lines changes the bar's height
+     * with the region you are looking at, and the page's reserve would chase it. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    height: 30px;
+    padding-bottom: 4px;
+  }
+  #tide .rail-states::-webkit-scrollbar { display: none; }
+  /* After the display rule, so hiding actually hides: a bare [hidden] loses to #tide .rail-states. */
+  #tide .rail-states[hidden] { display: none; }
+  #tide .rail-chip {
+    flex: 0 0 auto;
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    height: 26px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 999px;
+    font: 600 12px/26px ui-sans-serif, system-ui, sans-serif;
+    color: var(--motu-on-primary, #fff);
+    background: color-mix(in srgb, var(--motu-on-primary, #fff) 18%, transparent);
+    cursor: pointer;
+  }
+  #tide .rail-chip[aria-pressed="true"] {
+    background: var(--motu-on-primary, #fff);
+    color: var(--w-deep);
+  }
+  #tide .rail-chip:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
   #tide .rail-dock .stand {
     writing-mode: horizontal-tb;
     flex: 0 1 auto;
@@ -926,7 +976,19 @@ function motuMountDock(opts) {
     title: 'Point at an island on the page to inspect it (Esc to stop)',
     'aria-label': 'Pick an island on the page',
   }, ['⌖']);
-  var rail = el('div', { class: 'rail-dock' }, [railOpen, pick]);
+  /**
+   * THE STATES, ON THE PHONE BAR — switching a flow without opening anything.
+   *
+   * The sheet is 76vh. On a phone that means the only way to change state was to cover the screen
+   * you are trying to look at, pick a flow, and dismiss the sheet to see what it did — three
+   * gestures around a glimpse. The states are the one list you use WHILE watching the page, so on a
+   * phone they ride on the bar itself and the panel keeps everything you read rather than steer.
+   *
+   * Hidden outright on desktop, where the panel sits beside the page instead of over it and this
+   * problem does not exist.
+   */
+  var railStates = el('div', { class: 'rail-states', role: 'group', 'aria-label': 'Switch state' });
+  var rail = el('div', { class: 'rail-dock' }, [railOpen, pick, railStates]);
 
   var bayTitle = el('b', {}, ['—']);
   var baySub = el('small', {}, ['']);
@@ -1078,6 +1140,73 @@ function motuMountDock(opts) {
   var regions = section('Regions');
   var states = section('States');
 
+  /**
+   * A state as a chip on the phone bar. Same act as a row in the panel's list, same lit-on-press
+   * rule: a flow takes as long as its steps take, and a strip that does not move for a second reads
+   * as a tap that missed.
+   */
+  var stateChip = function (label, on, run) {
+    var b = el('button', {
+      class: 'rail-chip', type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label,
+    }, [label]);
+    b.addEventListener('click', function () {
+      var siblings = b.parentNode ? b.parentNode.children : [];
+      for (var i = 0; i < siblings.length; i++) siblings[i].setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-pressed', 'true');
+      run();
+    });
+    return b;
+  };
+
+  /**
+   * Scroll the lit chip into view — ONLY when the selection actually changed.
+   *
+   * The strip repaints on everything the lagoon reports, and scrolling on every paint would drag the
+   * strip back under the reader's thumb mid-swipe. What matters is the case where the state changed
+   * from somewhere else (the panel's list, an address, a reload) and the chip for it is off-screen.
+   */
+  var lastLit = undefined;
+  var keepSelectedVisible = function (showing) {
+    if (showing === lastLit) return;
+    lastLit = showing;
+    var lit = railStates.querySelector('[aria-pressed="true"]');
+    if (!lit || !lit.scrollIntoView) return;
+    try {
+      lit.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    } catch (e) {
+      /* an engine without the options form; the strip is still usable, just not auto-scrolled */
+    }
+  };
+
+  /**
+   * WHAT THE PAGE RESERVES HAS TO BE WHAT THE BAR OCCUPIES.
+   *
+   * `html[data-motu-dock="bottom"]` reserves `--motu-dock-handle`, which nothing ever set — it lived
+   * on its 44px default, correct only while the bar was exactly one row. The strip makes the bar
+   * taller, and an unreserved bar sits on top of the application's last rows, which is the same
+   * defect the closed desktop panel had.
+   *
+   * Measured rather than stated because the bar is two stated rows plus its gaps, and the sum is the
+   * thing that has to be true. Only in phone layout: at any other width this variable addresses a
+   * dock that is not at the bottom, and the rail there is the height of the viewport.
+   */
+  var syncBottomReserve = function () {
+    var root = document.documentElement;
+    var phone = false;
+    try {
+      phone = window.matchMedia('(max-width: 760px)').matches;
+    } catch (e) {
+      phone = false;
+    }
+    if (!phone) {
+      root.style.removeProperty('--motu-dock-handle');
+      return;
+    }
+    var h = Math.round(rail.getBoundingClientRect().height);
+    if (h > 0) root.style.setProperty('--motu-dock-handle', h + 'px');
+  };
+  window.addEventListener('resize', function () { syncBottomReserve(); });
+
   var row = function (label, on, run) {
     var b = el('button', { class: 'motu-opt', type: 'button', role: 'option', 'aria-current': on ? 'true' : 'false' }, [
       el('span', { class: 'lamp' }),
@@ -1130,6 +1259,21 @@ function motuMountDock(opts) {
       rows.push(row(f.name, showing === f.name, function () { ctl.runFlow(f.name); }));
     });
     states.list.replaceChildren.apply(states.list, rows);
+
+    // The same states, as chips on the bar. NOT filtered by the panel's search box: the box is in
+    // the panel and the strip is reachable with the panel shut, so filtering it from an input nobody
+    // can see would silently hide states with no way to tell why.
+    var chips = [stateChip('As seeded', showing === null, function () { ctl.runFlow(null); })];
+    flows.forEach(function (f) {
+      chips.push(stateChip(f.name, showing === f.name, function () { ctl.runFlow(f.name); }));
+    });
+    railStates.replaceChildren.apply(railStates, chips);
+    // A region with no flows has one state, which is the one you are looking at. An "As seeded" chip
+    // alone is a control that cannot do anything, so the strip stands down and the bar keeps its
+    // original height.
+    railStates.hidden = flows.length === 0;
+    keepSelectedVisible(showing);
+    syncBottomReserve();
 
     // ── the rig ──────────────────────────────────────────────────────────────────────────────
     var pills = [];

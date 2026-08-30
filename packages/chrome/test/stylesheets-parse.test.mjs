@@ -115,6 +115,30 @@ test('the phone sheet is measured from the bottom, not the top', async () => {
   assert.match(block, /top:\s*auto/, 'the phone sheet must clear the docked panel top anchor');
 });
 
+test('the phone states strip is declared off above the media queries', async () => {
+  // Twice now this stylesheet has shipped a phone rule that also applied to desktop, because a bare
+  // `display` written after the media blocks wins at every width. The strip is desktop-hostile — it
+  // would sit in the vertical rail — so its OFF state has to be stated before any query.
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  const off = css.indexOf('#tide .rail-states { display: none; }');
+  const firstMedia = css.indexOf('@media');
+  assert.ok(off > 0, 'the strip has no base rule at all');
+  assert.ok(off < firstMedia, 'the strip is switched off after a media query, so desktop keeps it');
+});
+
+test('hiding the states strip beats showing it', async () => {
+  // `railStates.hidden = true` is how a region with no flows keeps the bar one row tall. A bare
+  // [hidden] loses to `#tide .rail-states { display: flex }` on specificity, so the rule only works
+  // where it is written later — which is the kind of thing that survives review and not a refactor.
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  const shown = css.indexOf('grid-area: states;');
+  const hidden = css.indexOf('#tide .rail-states[hidden]');
+  assert.ok(shown > 0 && hidden > 0, 'the strip lost one of its display rules');
+  assert.ok(hidden > shown, 'the [hidden] rule must come after the rule that shows the strip');
+});
+
 test('the dock asks for no safe-area inset', async () => {
   // TWICE NOW, IN TWO CODEBASES. On Firefox for Android env(safe-area-inset-bottom) comes back
   // non-zero even though nothing here sets viewport-fit=cover, and a bottom bar that folds it into

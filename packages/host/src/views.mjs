@@ -458,6 +458,13 @@ ${PRIMARY_DETECT_JS}
     // The lagoon boots asynchronously, so the answer to "can this be driven" changes after load.
     var settle = 0;
     var watch = setInterval(function () { if (settle++ > 40) return clearInterval(watch); hush(); }, 250);
+    // AND WHEN THE BREAKPOINT MOVES, which the poll above cannot cover — it stops after ten seconds,
+    // and a window resize or a rotation happens whenever the reader feels like it. The reserve flips
+    // between an edge and the bottom at the same width the dock does, so leaving it stale reserves a
+    // strip along an edge the bar is no longer standing on: measured after resizing a phone-width
+    // page back to 1280, the page kept 44px at the bottom and gave the 46px rail on the right none.
+    // The artifact's own dock has listened for this since the inset existed; this one had not.
+    phone.addEventListener('change', hush);
   }
   // --- the chrome wears the lagoon's own colour ---------------------------------------------------
   // Read from the artifact's PIXELS rather than from a config parameter somebody has to remember.

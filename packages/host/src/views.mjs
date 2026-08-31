@@ -267,6 +267,7 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
               (m.frameHref ? ` data-href="${escapeHtml(m.frameHref)}"` : '') +
               (m.brand ? ` data-brand="${escapeHtml(m.brand)}"` : '') +
               ` data-repo="${escapeHtml(m.repo)}"` +
+              ` data-slug="${escapeHtml(m.slug)}"` +
               `>` +
               `<span class="gauge" aria-hidden="true"></span>` +
               `<span class="body"><span class="name">${escapeHtml(m.title || m.slug)}` +
@@ -527,9 +528,16 @@ ${PRIMARY_DETECT_JS}
     // darkening of its own control colour), and inferring over the top of that would be replacing a
     // decision with a guess.
     var declared = btn && btn.dataset.brand ? { primary: btn.dataset.brand } : null;
-    var key = 'motu-primary:' + f.src;
+    // KEYED BY THE LAGOON, NOT BY THE URL IT WAS REACHED THROUGH. This was f.src, which meant one
+    // lagoon cached under as many entries as it has spellings -- and, more to the point, an entry the
+    // host's boot splash could not predict, because the splash is written server-side before any
+    // frame src exists. repo/slug is the identity both sides already have.
+    // A member with no button (or no slug -- a GROUP's frames are positional) has no stable identity
+    // to cache under, so it simply does not cache rather than sharing one bucket with its neighbours.
+    var ident = btn && btn.dataset.repo && btn.dataset.slug ? btn.dataset.repo + '/' + btn.dataset.slug : null;
+    var key = ident ? 'motu-primary:' + ident : null;
     var cached = null;
-    if (!declared) {
+    if (!declared && key) {
       try { cached = JSON.parse(sessionStorage.getItem(key)); } catch (e) { /* private mode, or nothing stored */ }
     }
     var known = declared || cached;
@@ -554,7 +562,7 @@ ${PRIMARY_DETECT_JS}
       var own = null;
       try { own = f.contentWindow && f.contentWindow.__motuPrimary; } catch (e) { /* not ours */ }
       if (own && own.primary) {
-        try { sessionStorage.setItem(key, JSON.stringify(own)); } catch (e) { /* private mode */ }
+        try { if (key) sessionStorage.setItem(key, JSON.stringify(own)); } catch (e) { /* private mode */ }
         return paint(own);
       }
       detectPrimary(doc).then(function (found) {
@@ -566,7 +574,7 @@ ${PRIMARY_DETECT_JS}
           if (attempt < 7) setTimeout(function () { read(attempt + 1); }, 300 * Math.pow(2, attempt));
           return;
         }
-        try { sessionStorage.setItem(key, JSON.stringify(found)); } catch (e) { /* private mode */ }
+        try { if (key) sessionStorage.setItem(key, JSON.stringify(found)); } catch (e) { /* private mode */ }
         paint(found);
       });
     };

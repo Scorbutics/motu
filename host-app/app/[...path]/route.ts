@@ -36,6 +36,8 @@ import { store, access, normalizeRepo } from '@/src/host/store';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { visibilityFor } from '@/src/host/visibility';
 import { canRead } from '@motu/host/src/access.mjs';
+// The SAME ramp every other motu surface wears — see bootSplashFor.
+import { primaryVars } from '@motu/chrome/primary';
 import {
   apiHealth, apiRepos, apiGroups, apiBaselines, shot, repoListing, record as serveRecord,
 } from '@/src/host/read-routes';
@@ -328,7 +330,7 @@ const serve = async (request: Request) => {
   // is most of this host today -- patching only the decided path left twenty, the very artifact the
   // loader exists for, without one.
   if (decision.outcome === 'abstain') {
-    return withBootSplash(await proxyToHost(request, { rewritePath: bareRewrite }));
+    return withBootSplash(await proxyToHost(request, { rewritePath: bareRewrite }), record);
   }
 
   // ALLOWED. `public` needs no credential — the host will serve it to anyone, and adding a bearer
@@ -356,7 +358,7 @@ const serve = async (request: Request) => {
   // comes back off before the hop — the host answers the page exactly as it did, live or stored.
   // THE ARTIFACT ONLY. The shell around a lagoon is rendered by this app and paints at once; a
   // loader over it would be a regression, so the splash goes on the framed document and nothing else.
-  const response = withBootSplash(await proxyToHost(request, { setHeaders: cred, rewritePath: bareRewrite }));
+  const response = withBootSplash(await proxyToHost(request, { setHeaders: cred, rewritePath: bareRewrite }), record);
 
   // NEVER BEHIND A SHARED CACHE. This response was computed for one viewer; `private, no-store` is
   // what stops a proxy between here and them handing it to the next person. Set for the allowed path
@@ -383,22 +385,84 @@ const serve = async (request: Request) => {
  * IT REMOVES ITSELF TWICE OVER. A published lagoon renders into the body and takes this with it --
  * the same thing that made `motu-repo` have to live in the <head> -- so it usually disappears at the
  * exact moment there is something to see. The listener is for the artifacts that do not.
+ *
+ * AND IT WEARS THE PROJECT'S COLOUR, not motu's. The shell around this frame already follows the
+ * lagoon -- peps' rail is gold -- so a teal loader inside a gold shell was the one moment the host
+ * attributed its own colour to somebody else's application, and it was the FIRST thing anyone saw of
+ * that project. The ramp is built by `primaryVars`, the same function `applyMotuChrome` and the
+ * shell's detector use, so there is no second set of percentages to drift.
+ *
+ * Two ways to know the colour, in the order the rest of the host already ranks them:
+ *
+ *   1. DECLARED (`chrome.brand`) -- known on the server, so it is in the first bytes and the splash
+ *      is never briefly teal. peps tuned its gold by hand; that decision wins, verbatim.
+ *   2. DETECTED -- read from the artifact's own pixels, which cannot happen until the artifact has
+ *      painted, which is precisely what this splash is covering. So it can only come from a PREVIOUS
+ *      visit, via the same sessionStorage entry the shell writes.
+ *
+ * Neither available -- a lagoon with no declared colour, seen for the first time -- and it stays
+ * motu teal, which is honest: the host is the only thing on screen that anybody has heard of yet.
+ *
+ * This cannot poison detection. `rasteriseDocument` excludes `#motu-boot` by name, for exactly this
+ * reason: a full-viewport gradient in the project's own colour would otherwise BE the answer on any
+ * artifact slow enough to still be showing it.
  */
-const BOOT_SPLASH = [
-  '<div id="motu-boot" role="status" aria-live="polite" style="position:fixed;inset:0;z-index:2147483646;',
-  'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;',
-  'background:#eef8f6;transition:opacity .26s ease;font:500 13px/1.55 ui-sans-serif,system-ui,\'Segoe UI\',Roboto,sans-serif;color:#5f716c">',
-  '<div style="width:180px;height:6px;border-radius:9999px;overflow:hidden;background:rgba(11,111,104,.12)">',
-  '<div style="width:45%;height:100%;border-radius:9999px;background:linear-gradient(90deg,#0b6f68,#12988f 55%,#35c2b3);',
-  'animation:motu-boot-swim 1.15s cubic-bezier(.45,.05,.55,.95) infinite"></div></div>',
-  '<div>opening the lagoon…</div>',
-  '<style>@keyframes motu-boot-swim{0%{transform:translateX(-100%)}100%{transform:translateX(322%)}}',
-  '@media (prefers-reduced-motion:reduce){#motu-boot [style*="motu-boot-swim"]{animation:none;width:100%}}</style>',
-  '</div>',
-  '<script>(function(){var g=function(){var e=document.getElementById("motu-boot");if(!e)return;',
-  'e.style.opacity="0";setTimeout(function(){e.remove()},260)};',
-  'if(document.readyState==="complete")g();else addEventListener("load",g);setTimeout(g,60000)})();</script>',
-].join('');
+const MOTU_TEAL = '#12988f';
+
+/**
+ * The ramp, expressed against a CSS variable rather than a colour.
+ *
+ * `primaryVars`' mix helper only concatenates strings, so handing it `var(--mb)` yields valid CSS --
+ * `color-mix(in srgb, var(--mb) 84%, #000)`. That is what lets the splash be REPAINTED by setting one
+ * property, instead of a second copy of these percentages living in the inline script where it would
+ * quietly drift from the one every other surface uses.
+ */
+const BOOT_RAMP = primaryVars('var(--mb)') as Record<string, string>;
+
+/**
+ * A DECLARED COLOUR IS NOT A HEX, and assuming it was is what made the first version of this ship
+ * teal. peps declares `color-mix(in srgb, hsl(55 90% 48%) 75%, #000)` — the console's own contract
+ * says any self-contained CSS colour, and `normalisePrimary` parses hex only, so it answered null and
+ * the splash fell straight back to motu's teal on the one project that had bothered to say otherwise.
+ *
+ * Nothing needs to parse it. The ramp above is `color-mix(in srgb, var(--mb) N%, …)`, so the browser
+ * does the mixing and a nested color-mix, an hsl() or a hex all work identically. The clamp exists
+ * for DETECTED colours, which arrive already normalised from the detector that read the pixels.
+ *
+ * Safe in the attribute because the host constrains it at publish (`[;{}<>]` rejected, 120 chars) —
+ * quotes are escaped here anyway, since that filter was written to protect a stylesheet, not an
+ * attribute, and relying on someone else's threat model is how the next one gets through.
+ */
+const bootSplashFor = (primary: string | null, key: string): string => {
+  const mb = (primary ?? MOTU_TEAL).replace(/["&<>]/g, '');
+  return [
+    `<div id="motu-boot" role="status" aria-live="polite" style="--mb:${mb};position:fixed;inset:0;z-index:2147483646;`,
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;',
+    `background:${BOOT_RAMP['--motu-surface-page']};transition:opacity .26s ease;`,
+    // THE CAPTION TOO. #5f716c is a desaturated TEAL grey -- invisible as motu's colour until the rest
+    // of the splash stops being teal, at which point it is the one cool thing on a warm screen. A
+    // small mix rather than a ramp entry: this is the splash's own text, not a token any other
+    // surface shares, and adding it to `primaryVars` would put it on chrome that never asked for it.
+    'font:500 13px/1.55 ui-sans-serif,system-ui,\'Segoe UI\',Roboto,sans-serif;',
+    'color:color-mix(in srgb, var(--mb) 22%, #5a625f)">',
+    `<div style="width:180px;height:6px;border-radius:9999px;overflow:hidden;background:${BOOT_RAMP['--motu-line']}">`,
+    '<div style="width:45%;height:100%;border-radius:9999px;',
+    `background:linear-gradient(90deg,${BOOT_RAMP['--motu-water-deep']},${BOOT_RAMP['--motu-water-mid']} 55%,${BOOT_RAMP['--motu-water-shallow']});`,
+    'animation:motu-boot-swim 1.15s cubic-bezier(.45,.05,.55,.95) infinite"></div></div>',
+    '<div>opening the lagoon…</div>',
+    '<style>@keyframes motu-boot-swim{0%{transform:translateX(-100%)}100%{transform:translateX(322%)}}',
+    '@media (prefers-reduced-motion:reduce){#motu-boot [style*="motu-boot-swim"]{animation:none;width:100%}}</style>',
+    '</div>',
+    '<script>(function(){var e=document.getElementById("motu-boot");',
+    // TIER 2, and only when the server had nothing. A declared colour is a decision and must not be
+    // overruled by an inference -- the same precedence the shell's detector already applies.
+    `var d=${primary ? 'true' : 'false'};`,
+    `if(!d&&e){try{var c=JSON.parse(sessionStorage.getItem(${JSON.stringify('motu-primary:' + key)}));`,
+    'if(c&&c.primary)e.style.setProperty("--mb",c.primary)}catch(x){}}',
+    'var g=function(){if(!e)return;e.style.opacity="0";setTimeout(function(){e.remove()},260)};',
+    'if(document.readyState==="complete")g();else addEventListener("load",g);setTimeout(g,60000)})();</script>',
+  ].join('');
+};
 
 /**
  * Inject the splash after the first <body>, without waiting for the document to finish.
@@ -406,10 +470,16 @@ const BOOT_SPLASH = [
  * Buffers only until <body> is found (or 64 kB, whichever comes first) so a tag straddling a chunk
  * boundary is still matched, then gets out of the way and passes every later chunk straight through.
  */
-const withBootSplash = (response: Response): Response => {
+const withBootSplash = (response: Response, record: { repo: string; slug: string }): Response => {
   const body = response.body;
   if (!body) return response;
   if (!/^text\/html/i.test(response.headers.get('content-type') ?? '')) return response;
+
+  // THE COLOUR THE PROJECT DECLARED, read from the index the store already holds in memory. Null for
+  // a repo that declared none, which is the tier-2 case the splash handles for itself.
+  const declared = (store().listRepos() as Array<{ repo: string; brand: string | null }>)
+    .find((r) => r.repo === record.repo)?.brand ?? null;
+  const splash = bootSplashFor(declared, `${record.repo}/${record.slug}`);
 
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -424,7 +494,7 @@ const withBootSplash = (response: Response): Response => {
       if (at) {
         const cut = at.index + at[0].length;
         injected = true;
-        controller.enqueue(encoder.encode(held.slice(0, cut) + BOOT_SPLASH + held.slice(cut)));
+        controller.enqueue(encoder.encode(held.slice(0, cut) + splash + held.slice(cut)));
         held = '';
       } else if (held.length > 65536) {
         // No <body> in the first 64 kB: this is not a document worth waiting on.

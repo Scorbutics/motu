@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@motu/adapter-next": "workspace:*",
+    "@motu/chrome": "workspace:*",
     "@motu/core": "workspace:*",
     "@motu/host": "workspace:*",
     "@motu/react": "workspace:*",

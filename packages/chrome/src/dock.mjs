@@ -534,6 +534,10 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .isl__slot { font-weight: 700; color: var(--ink); }
 #tide .isl__tag, #tide .isl__meta { color: var(--ink-muted); font-weight: 500; }
 #tide .isl__meta { font-size: 10px; }
+#tide .isl__scn { margin-left: auto; flex: 0 0 auto; min-width: 18px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; text-align: center;
+  background: var(--tide-accent, #0f766e); color: var(--motu-on-primary, #fff); }
+#tide .isl__scn--none { background: none; color: var(--ink-muted); font-weight: 500; }
 #tide .isl__body { padding: 7px 10px 9px; display: flex; flex-direction: column; gap: 3px; }
 #tide .isl__prop {
   display: grid; grid-template-columns: minmax(0, 0.9fr) 64px minmax(0, 1.4fr);
@@ -1265,6 +1269,14 @@ function motuMountDock(opts) {
   };
   window.addEventListener('resize', function () { syncBottomReserve(); });
 
+  // SCENARIOS DECLARED FOR A TAG, excluding nothing — the seeded default is not one of them, it is
+  // what an island shows with no scenario at all, so the number here is exactly what scoping buys.
+  var scenarioCount = function (tag) {
+    var cat = catalogue();
+    var list = cat && cat.scenarios ? cat.scenarios[tag] : null;
+    return list ? list.length : 0;
+  };
+
   var row = function (label, on, run) {
     var b = el('button', { class: 'motu-opt', type: 'button', role: 'option', 'aria-current': on ? 'true' : 'false' }, [
       el('span', { class: 'lamp' }),
@@ -1315,7 +1327,10 @@ function motuMountDock(opts) {
     islands.count.textContent = String(islandRows.length);
     islands.box.hidden = islandRows.length === 0;
     islands.list.replaceChildren.apply(islands.list, islandRows.map(function (i) {
-      return row(i.slot || i.tag, i.tag === scopedTag, drive(function (c) { c.openIsland(i.tag); }));
+      var n = scenarioCount(i.tag);
+      // The count rides in the label: `row` renders one, and a badge here would need its own layout
+      // in a list whose rows are already a lamp plus text.
+      return row((i.slot || i.tag) + (n ? '  ' + n : ''), i.tag === scopedTag, drive(function (c) { c.openIsland(i.tag); }));
     }));
 
     // AN ISLAND'S STATES ARE ITS SCENARIOS, a region's are its flows — one list, whichever applies.
@@ -1608,6 +1623,11 @@ function motuMountDock(opts) {
             el('span', { class: 'isl__slot' }, [isl.slot]),
             el('span', { class: 'isl__tag' }, [isl.tag]),
             el('span', { class: 'isl__meta' }, [isl.isolation]),
+            // HOW MUCH IS BEHIND SCOPING THIS, before you spend a click finding out. Without it every
+            // island looks equally worth opening, and most have nothing but their default mount.
+            scenarioCount(isl.tag)
+              ? el('span', { class: 'isl__scn', title: scenarioCount(isl.tag) + ' declared scenario(s)' }, [String(scenarioCount(isl.tag))])
+              : el('span', { class: 'isl__scn isl__scn--none', title: 'no declared scenarios' }, ['—']),
           ]);
           head.addEventListener('click', drive(function (c) { if (c.openIsland) c.openIsland(isl.tag); }));
           var body = el('div', { class: 'isl__body' });

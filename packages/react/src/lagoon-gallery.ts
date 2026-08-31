@@ -990,6 +990,14 @@ markSandbox();
   // the lens, so pointing at an island told the lens what you meant and left the view showing the
   // whole region — the one gesture that is literally "this one" was the one that did not focus it.
   lens?.onPicked?.((tag) => {
+    // THE CROSSHAIR IS SPENT ONCE IT HAS PICKED. The overlay already stops its own picking on the
+    // pointerdown, but this mirror did not follow — so the ⌖ chip stayed lit over a mode that was
+    // over, and the next press turned "picking" OFF, meaning every second aim did nothing. Put the
+    // layer away too: it was opened to aim with, and leaving it over the island you just scoped to is
+    // the thing you have to dismiss before you can look at what you asked for.
+    picking = false;
+    if (lens?.isOpen?.()) lens.toggle();
+    controlChanged();
     if (island?.tag === tag) return; // already there; a pick is not a toggle
     (window as unknown as { __motuLagoonControl?: { openIsland?: (t: string) => void } }).__motuLagoonControl?.openIsland?.(tag);
   });

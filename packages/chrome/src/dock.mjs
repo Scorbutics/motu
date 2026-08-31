@@ -1263,31 +1263,52 @@ function motuMountDock(opts) {
       return row(r.label, r.id === now.region, drive(function (c) { c.show(r.id); }));
     }));
 
-    var flows = (cat.flows && cat.flows[now.region]) || [];
-    states.count.textContent = String(flows.length);
+    // AN ISLAND'S STATES ARE ITS SCENARIOS, a region's are its flows — one list, whichever applies.
+    //
+    // The two are the same idea (a declared state with a name and an address) and they are never both
+    // in play: an `island:` target mounts one island alone, with no region for a flow to move. Listing
+    // them in the same box is what makes a scenario reachable without knowing its URL, which is the
+    // gap that left the states a project writes the MOST of as the only ones a human could not find.
+    var onIsland = !!now.island;
+    var scenarios = onIsland && ctl.scenarios ? ctl.scenarios() : [];
+    var flows = onIsland ? [] : (cat.flows && cat.flows[now.region]) || [];
+    var entries = onIsland
+      ? scenarios.map(function (sc) {
+          // An interaction count is the difference between a state that simply IS and one the lagoon
+          // has to PLAY to reach — worth showing, because only the latter has `&step=<n>`.
+          return { name: sc.name, sub: sc.steps ? sc.steps + ' interaction' + (sc.steps === 1 ? '' : 's') : '' };
+        })
+      : flows.map(function (f) { return { name: f.name, sub: '' }; });
+    // The "back to nothing" row: a region's seeded state, or an island on its own defaults.
+    var baseLabel = onIsland ? 'Default mount' : 'As seeded';
+    var go = function (name) {
+      return drive(function (c) { onIsland ? c.openScenario(name) : c.runFlow(name); });
+    };
+
+    states.count.textContent = String(entries.length);
     // WHICH ONE IS SHOWING, from the lagoon rather than from a guess. This used to hardcode "As
     // seeded" as current and every flow as not — so pressing a state ran it and the list went on
     // showing the same row lit, which reads as the click having done nothing.
-    var showing = now.flow || null;
-    var rows = [row('As seeded', showing === null, drive(function (c) { c.runFlow(null); }))];
-    flows.forEach(function (f) {
-      if (!hit(f.name)) return;
-      rows.push(row(f.name, showing === f.name, drive(function (c) { c.runFlow(f.name); })));
+    var showing = onIsland ? now.scenario || null : now.flow || null;
+    var rows = [row(baseLabel, showing === null, go(null))];
+    entries.forEach(function (e) {
+      if (!hit(e.name)) return;
+      rows.push(row(e.name, showing === e.name, go(e.name)));
     });
     states.list.replaceChildren.apply(states.list, rows);
 
     // The same states, as chips on the bar. NOT filtered by the panel's search box: the box is in
     // the panel and the strip is reachable with the panel shut, so filtering it from an input nobody
     // can see would silently hide states with no way to tell why.
-    var chips = [stateChip('As seeded', showing === null, drive(function (c) { c.runFlow(null); }))];
-    flows.forEach(function (f) {
-      chips.push(stateChip(f.name, showing === f.name, drive(function (c) { c.runFlow(f.name); })));
+    var chips = [stateChip(baseLabel, showing === null, go(null))];
+    entries.forEach(function (e) {
+      chips.push(stateChip(e.name, showing === e.name, go(e.name)));
     });
     railStates.replaceChildren.apply(railStates, chips);
-    // A region with no flows has one state, which is the one you are looking at. An "As seeded" chip
-    // alone is a control that cannot do anything, so the strip stands down and the bar keeps its
+    // A target with no declared states has one state, which is the one you are looking at. A lone
+    // base chip is a control that cannot do anything, so the strip stands down and the bar keeps its
     // original height.
-    railStates.hidden = flows.length === 0;
+    railStates.hidden = entries.length === 0;
     keepSelectedVisible(showing);
     syncBottomReserve();
 

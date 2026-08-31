@@ -607,10 +607,49 @@ markSandbox();
   const publishControl = (): void => {
     (window as unknown as { __motuLagoonControl?: unknown }).__motuLagoonControl = {
       regions: () => stations.map((x) => ({ id: x.id, label: x.label })),
-      current: () => ({ region: current, view, island: island ?? null, flow: shownFlow }),
+      // `scenario` alongside `flow` for the same reason the dock needs both: an island target's
+      // showing-state is its scenario, and without it the list could not light the current row.
+      current: () => ({
+        region: current,
+        view,
+        island: island ?? null,
+        flow: shownFlow,
+        scenario: request.scenario ?? null,
+      }),
       show: (id: string) => onStation(id),
       setView: (next: TideView) => onView(next),
       runFlow: (name: string | null) => onFlow(name),
+      /**
+       * The mounted ISLAND's declared scenarios, and how to open one. Empty for a region target,
+       * which has no scenarios — the dock hides the list rather than showing an empty one.
+       */
+      scenarios: () =>
+        island
+          ? (opts.evidence?.scenarios?.[island.tag] ?? []).map((sc, i) => ({
+              name: sc.name ?? `#${i + 1}`,
+              steps: (sc.interactions ?? []).length,
+            }))
+          : [],
+      /**
+       * NAVIGATES, where `runFlow` drives in place — and the difference is not laziness.
+       *
+       * A flow accumulates steps on a live region, so running one has to happen where it already is.
+       * A scenario is a whole mount: its seed, a remount so a fetch-on-mount island re-reads it, and
+       * now its interactions replayed. Re-entering through the ADDRESS runs exactly the boot path
+       * that URL runs, so the dock cannot reach a state the address could not — and it leaves the
+       * address in the bar, which is the point of making these reachable at all.
+       */
+      openScenario: (name: string | null) => {
+        if (!island) return;
+        const url = new URL(location.href);
+        url.searchParams.set('target', `island:${island.tag}`);
+        if (name) url.searchParams.set('scenario', name);
+        else url.searchParams.delete('scenario');
+        // A step belongs to the scenario that was showing; carrying it onto another one addresses a
+        // point inside a replay that is not running.
+        url.searchParams.delete('step');
+        location.href = url.toString();
+      },
       /**
        * The transport and fit chips, for a panel drawn outside this page.
        *

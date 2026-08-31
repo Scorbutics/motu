@@ -143,6 +143,15 @@ export interface TideLineOptions {
    * reachable only by editing a URL. Omit this and the column does not appear.
    */
   onFlow?(name: string | null): void;
+  /**
+   * Open one of the mounted ISLAND's declared scenarios, or `null` for its plain default mount.
+   *
+   * The flows column made a REGION's declared states reachable without editing a URL; an island's
+   * were still URL-only, which meant the states a project writes the most of were the ones a human
+   * could not find. Omit this and the column does not appear (it is also hidden whenever the target
+   * is a region, which has scenarios nowhere to belong to).
+   */
+  onScenario?(name: string | null): void;
   /** Wire the palette's lens entry to a debug lens. Omit it and the palette has no lens command. */
   lens?: TideLens;
 }
@@ -164,6 +173,19 @@ export interface TideLine {
   setFlows(flows: TideFlow[], active?: string | null): void;
   /** Say how the last run went, under the list. */
   setFlowOutcome(text: string | null, ok?: boolean): void;
+  /**
+   * The scenarios of whichever ISLAND is mounted, and which one is showing. An empty list hides the
+   * column — a region target has none, and saying "0 scenarios" there would be noise about a
+   * vocabulary that does not apply.
+   */
+  setScenarios(scenarios: TideScenario[], active?: string | null): void;
+}
+
+/** One declared island scenario, as the panel lists it. `steps` is its interaction count (0 = a
+ *  plain seeded state, which is most of them). */
+export interface TideScenario {
+  name: string;
+  steps: number;
 }
 
 /** One declared flow, as the panel lists it. */
@@ -609,6 +631,77 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
       flowRows.push({ name: row.name, label: row.label, btn });
     }
     paintFlows(active ?? null);
+  }
+
+  // AN ISLAND'S DECLARED STATES, beside the region's. Same shape as the flows column above and for
+  // the same reason: written down, driven by the checks, and until now reachable only by knowing the
+  // URL. Hidden entirely for a region target — scenarios belong to an island.
+  //
+  // A row NAVIGATES rather than re-seeding in place. A flow accumulates steps on a live region, so
+  // running one there is the only option; a scenario is a whole mount (seed, remount, and now its
+  // interactions replayed), and re-entering through the address runs exactly the boot path the URL
+  // would — no second code path that could reach a state the address cannot. It also leaves the
+  // address in the bar, which is the point of the column.
+  const scenInner = el('div', { class: 'list__inner' });
+  const scenBox = el('div', { class: 'list', role: 'listbox', 'aria-label': 'Scenario' }, scenInner);
+  const scenCount = el('span', { class: 'count' }, '0');
+  const scenHead = el(
+    'div',
+    { class: 'sect__head' },
+    el('span', { class: 'motu-dot' }),
+    el('span', { class: 'motu-cap' }, 'Scenarios'),
+    scenCount,
+  );
+  const scenCol = el('div', { class: 'sect' }, scenHead, scenBox);
+  if (opts.onScenario) scroll.appendChild(scenCol);
+
+  let scenRows: { name: string | null; btn: HTMLButtonElement }[] = [];
+
+  function paintScenarios(active: string | null | undefined): void {
+    for (const { name, btn } of scenRows) {
+      const on = (name ?? null) === (active ?? null);
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+  }
+
+  function setScenarios(scenarios: TideScenario[], active?: string | null): void {
+    if (!opts.onScenario) return;
+    scenInner.replaceChildren();
+    scenRows = [];
+    scenCount.textContent = `${scenarios.length}`;
+    // Nothing to say about scenarios on a region — hide the column rather than show an empty one.
+    scenCol.hidden = scenarios.length === 0;
+    if (!scenarios.length) return;
+
+    type Row = { name: string | null; label: string; sub: string };
+    const rows: Row[] = [
+      { name: null, label: 'Default mount', sub: 'the island on its own defaults' },
+      ...scenarios.map<Row>((sc) => ({
+        name: sc.name,
+        label: sc.name,
+        // An interaction count is worth showing: it is the difference between a state that simply IS
+        // and one the lagoon has to play to reach, and `&step=<n>` stops it early.
+        sub: sc.steps ? `${sc.steps} interaction${sc.steps === 1 ? '' : 's'}` : 'seeded state',
+      })),
+    ];
+
+    for (const row of rows) {
+      const btn = el(
+        'button',
+        { class: 'motu-opt', type: 'button', role: 'option', title: row.sub },
+        el('span', { class: 'lamp' }),
+        row.label,
+      ) as HTMLButtonElement;
+      btn.addEventListener('click', (e) => {
+        splash(e.clientX, e.clientY, accent());
+        paintScenarios(row.name);
+        opts.onScenario?.(row.name);
+      });
+      scenInner.appendChild(btn);
+      scenRows.push({ name: row.name, btn });
+    }
+    paintScenarios(active ?? null);
   }
 
   function setFlowOutcome(text: string | null, ok = true): void {
@@ -1314,5 +1407,5 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     window.setTimeout(() => close(0), 3200);
   }
 
-  return { setActive, setFlows, setFlowOutcome };
+  return { setActive, setFlows, setFlowOutcome, setScenarios };
 }

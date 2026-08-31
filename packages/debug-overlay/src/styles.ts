@@ -49,6 +49,11 @@ ${motuShadowCss('mock')}
 .tag.ok { background: var(--ok); } .tag.warn { background: var(--warn); }
 .tag.broken { background: var(--broken); } .tag.neutral { background: var(--neutral); }
 .tag .iso { opacity: .8; font-weight: 500; }
+/* The scenario count, on the end of the label. Its own pill rather than more prose: the eye is
+   scanning these while the crosshair moves, and a number in a chip reads at a glance where
+   "4 scenarios" does not. */
+.tag .scn { margin-left: 2px; padding: 0 5px; border-radius: 999px; font-weight: 700;
+  background: rgba(255,255,255,.28); }
 
 /* --- THE PANEL'S POSITION ----------------------------------------------------------------------
    Its SURFACE is the kit's .motu-sheet-panel. What is here is only where it sits: opposite the

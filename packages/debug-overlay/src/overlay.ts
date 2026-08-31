@@ -138,6 +138,15 @@ export function subscribeDebugOverlay(fn: (open: boolean) => void): () => void {
 
 // --- The overlay controller ----------------------------------------------------------------------
 
+/** Scenarios declared for a tag, from the artifact's own catalogue. 0 when it publishes none —
+ *  an older artifact, or a lagoon with no evidence, simply shows no count. */
+function scenarioCountFor(tag: string): number {
+  const states = (window as unknown as { __motuLagoonStates?: { scenarios?: Record<string, unknown[]> } })
+    .__motuLagoonStates;
+  const list = states?.scenarios?.[tag];
+  return Array.isArray(list) ? list.length : 0;
+}
+
 class Overlay {
   #root: ShadowRoot;
   #layer: HTMLElement;
@@ -453,6 +462,19 @@ class Overlay {
       iso.className = 'iso';
       iso.textContent = `${info.slot} · ${isolationOf(info.el)}`;
       tag.append(name, iso);
+      // HOW MUCH IS BEHIND SCOPING THIS ONE, on the label you are already pointing at. The badge said
+      // what an island IS; the question in front of someone holding the crosshair is whether opening
+      // it alone is worth the click, and most islands have nothing but their default mount. Read from
+      // the catalogue the artifact publishes — the same list the dock counts — so the two cannot
+      // disagree, and absent (an older artifact, or a lagoon with no evidence) simply shows nothing.
+      const n = scenarioCountFor(info.element);
+      if (n) {
+        const scn = document.createElement('span');
+        scn.className = 'scn';
+        scn.textContent = String(n);
+        scn.title = `${n} declared scenario${n === 1 ? '' : 's'}`;
+        tag.append(scn);
+      }
     }
   }
 

@@ -639,6 +639,24 @@ markSandbox();
        * that URL runs, so the dock cannot reach a state the address could not — and it leaves the
        * address in the bar, which is the point of making these reachable at all.
        */
+      /**
+       * Open a MOUNTED island on its own, which is how its scenarios become reachable at all.
+       *
+       * The islands pane could inspect what a region had mounted (props, writes, emits) and could not
+       * OPEN one, so the only way onto an island target was to type `?target=island:<tag>` — and the
+       * scenarios column only exists on an island target. The state list and the island list were
+       * each half of a feature neither could finish. Clicking a region afterwards clears it
+       * (`onStation`), so this is not a one-way door.
+       */
+      openIsland: (tag: string) => {
+        const url = new URL(location.href);
+        url.searchParams.set('target', `island:${tag}`);
+        // Whatever was addressed belonged to the region being left behind.
+        url.searchParams.delete('scenario');
+        url.searchParams.delete('flow');
+        url.searchParams.delete('step');
+        location.href = url.toString();
+      },
       openScenario: (name: string | null) => {
         if (!island) return;
         const url = new URL(location.href);

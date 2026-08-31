@@ -504,6 +504,9 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .cov-row__d { color: var(--ink-muted); overflow-wrap: anywhere; }
 
 #tide .islands { display: none; }
+#tide .isl__head { width: 100%; background: none; border: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; }
+#tide .isl__head:hover { background: var(--tide-hover, rgba(127,127,127,.12)); }
 #tide .panel[data-tab="islands"] .islands {
   display: flex; flex-direction: column; gap: 8px;
   flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px 14px 12px;
@@ -1541,12 +1544,20 @@ function motuMountDock(opts) {
         islandsPane.replaceChildren(el('p', { class: 'motu-empty' }, ['No island is mounted.']));
       } else {
         islandsPane.replaceChildren.apply(islandsPane, mounted.map(function (isl) {
-          var head = el('div', { class: 'isl__head' }, [
+          // THE HEAD IS A BUTTON, because inspecting an island and OPENING one were split across two
+          // halves of the panel that could not reach each other: this pane could say what a region had
+          // mounted, and the states list shows an island's scenarios only on an island target — which
+          // nothing here could reach. `?target=island:<tag>` typed by hand was the only way in.
+          var head = el('button', {
+            class: 'isl__head', type: 'button',
+            title: 'Open ' + isl.tag + ' on its own — its scenarios appear under States',
+          }, [
             el('i', { class: 'isl__dot', 'data-tone': isl.verdict }),
             el('span', { class: 'isl__slot' }, [isl.slot]),
             el('span', { class: 'isl__tag' }, [isl.tag]),
             el('span', { class: 'isl__meta' }, [isl.isolation]),
           ]);
+          head.addEventListener('click', drive(function (c) { if (c.openIsland) c.openIsland(isl.tag); }));
           var body = el('div', { class: 'isl__body' });
           if (isl.risk) body.appendChild(el('p', { class: 'seam-notice' }, ['\u26a0 ' + isl.risk]));
           if (!isl.props.length) {

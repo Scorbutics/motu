@@ -101,6 +101,14 @@ export interface StartLagoonOptions {
   /** Build-time transport default (`MOTU_TRANSPORT`), '' when unset. */
   transport?: string;
   /**
+   * Whether this host HAS a legacy skin to switch to (injected from `motu.config.json`).
+   *
+   * Without it the fit chip is a choice with one option — `motu island verify` already reports "no
+   * legacy fit on host 'next' — nothing to fit to" while the dock went on offering the switch.
+   * Defaults to true so an older entry that does not pass it keeps the chip it has always had.
+   */
+  legacyFit?: boolean;
+  /**
    * Build-time target (`MOTU_TARGET`), e.g. "archipelago:actions". `motu lagoon serve/publish
    * --archipelago X` sets it so the artifact opens on that region instead of whatever the last
    * visitor happened to select.
@@ -1048,7 +1056,13 @@ markSandbox();
       'create &lt;id&gt;</code>, then <code>motu island create &lt;name&gt;</code>.</p>';
   }
 
-  // Chips adopted into the tide bar: the transport calls run through, and the fit the region wears.
-  mountTransportToggle(mode);
-  mountFitToggle();
+  // Chips adopted into the tide bar — each only where it is a real choice.
+  //
+  // MOCK/HTTP needs somewhere for http to GO. With no `httpBase` and no `transportFor`, flipping it
+  // points the lagoon at the default dispatcher path, which for a project that has none means the
+  // region simply stops answering: a switch whose other position is "broken" is not a choice.
+  const canSwitchTransport = Boolean(config.httpBase || opts.overrides?.transportFor || config.transport === 'http');
+  if (canSwitchTransport) mountTransportToggle(mode);
+  // And the fit needs a legacy skin to fit TO.
+  if (opts.legacyFit !== false) mountFitToggle();
 }

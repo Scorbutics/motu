@@ -55,6 +55,7 @@ declare const __MOTU_TRANSPORT__: string;
 declare const __MOTU_DEBUG__: boolean;
 // Project-wide default isolation, injected from motu.config.json by vite.
 declare const __MOTU_ISOLATION__: 'shadow' | 'light';
+declare const __MOTU_LEGACY_FIT__: boolean;
 
 // BEFORE anything mounts, so the lagoon previews the project's real isolation posture.
 setDefaultIsolation(__MOTU_ISOLATION__);
@@ -92,6 +93,8 @@ startLagoon({
   config,
   frames,
   isolation: __MOTU_ISOLATION__,
+  // EJECTED ENTRY: the scaffold gained this, so it only arrives here by hand.
+  legacyFit: __MOTU_LEGACY_FIT__,
   transport: typeof __MOTU_TRANSPORT__ === 'string' ? __MOTU_TRANSPORT__ : '',
   debug: __MOTU_DEBUG__,
   overrides: {

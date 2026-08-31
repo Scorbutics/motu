@@ -334,6 +334,7 @@ declare const __MOTU_TARGET__: string; // "island:{{tagPrefix}}some-tag" | "arch
 declare const __MOTU_FIT__: string; //    "native" | "legacy"
 declare const __MOTU_FORCE_ERROR__: string; // "" | "500" | "403" — verify's error-resilience mount
 declare const __MOTU_ISOLATION__: 'shadow' | 'light';
+declare const __MOTU_LEGACY_FIT__: boolean;
 
 // Set BEFORE bootstrapLagoon so single-target verify exercises the project's real isolation posture.
 setDefaultIsolation(__MOTU_ISOLATION__);
@@ -450,6 +451,7 @@ import config from '{{lagoonConfigImport}}';
 import * as overrides from '{{overridesImport}}';
 {{hostImport}}{{hostGlobalCss}}
 declare const __MOTU_ISOLATION__: 'shadow' | 'light';
+declare const __MOTU_LEGACY_FIT__: boolean;
 declare const __MOTU_TRANSPORT__: string;
 // "archipelago:<id>" when the artifact was built for one region; '' for the whole gallery.
 declare const __MOTU_TARGET__: string;
@@ -465,6 +467,8 @@ startLagoon({
   config,
   overrides,
   isolation: __MOTU_ISOLATION__,
+  // Whether this host HAS a legacy skin — the fit chip is a choice with one option without it.
+  legacyFit: __MOTU_LEGACY_FIT__,
   transport: __MOTU_TRANSPORT__,
   target: __MOTU_TARGET__,
   debug: __MOTU_DEBUG__,

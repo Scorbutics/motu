@@ -277,6 +277,12 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // The lagoon is the sandbox — the overlay is present by default; MOTU_DEBUG=0 strips it.
       __MOTU_DEBUG__: JSON.stringify(env.MOTU_DEBUG !== '0'),
       __MOTU_ISOLATION__: JSON.stringify(paths.isolation),
+      // WHETHER A LEGACY FIT EXISTS TO SWITCH TO. Injected for the same reason isolation is: it is a
+      // fact about the PROJECT (its host), and the lagoon config cannot restate it without the two
+      // drifting. A React-only host has no legacy skin, so the fit chip there offers a choice with
+      // one option — `motu island verify` already says as much ("no legacy fit on host 'next' —
+      // nothing to fit to") while the dock went on showing the switch.
+      __MOTU_LEGACY_FIT__: JSON.stringify(Boolean(paths.legacyFit)),
       // THE CORPUS, BAKED IN — what the region has actually been in, so the lens can say whether the
       // state on screen is one production reaches.
       //

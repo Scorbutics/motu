@@ -567,10 +567,13 @@ markSandbox();
   // across a reload. No chip in the toolbar: the lens draws its own tab on the edge of its panel, so
   // opening and closing happen in one place instead of from inside a popup that closes behind it.
   const lens = opts.debug === false ? undefined : opts.lens;
-  // NO CHIP AND NO TAB. The overlay draws its own edge tab whenever the toolbar chip is off, on the
-  // reasoning that a root which took the chip away must not be left without a way in — true when it
-  // was written, and no longer true here: the dock's rig has a Seam lens toggle. Two triggers for one
-  // thing, one of them floating over the application, is exactly the clutter this move was about.
+  // NO CHIP AND NO TAB, and now no rig pill either — so nothing opens the lens on purpose any more.
+  //
+  // That is the intent rather than an oversight. The layer is a MEANS: the crosshair opens it to aim
+  // with and closes it once it has picked, and Coupling opens it to draw on. A switch for something
+  // that turns itself on and off is a pressed-looking control that says nothing about the region.
+  // If a manual way back in is ever wanted, it is `tab: true` here — the overlay's own edge tab —
+  // rather than a third trigger somewhere else.
   //
   // The LAYER it toggles stays. Outlines, wires and hit-testing measure the host's live DOM and only
   // mean anything drawn over the running page — the one part of the lens a sidebar cannot be.

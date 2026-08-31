@@ -1395,17 +1395,13 @@ function motuMountDock(opts) {
     // RECORDING IS AN ACT, so it sits with the other controls rather than in a tab. It is the one
     // thing here that changes the lagoon instead of reporting on it, and stopping is what writes the
     // fixtures out — so the label says which of those pressing it will do.
-    if (ctl.lensOpen) {
-      // THE PAGE LAYER, which is all the lens still draws for itself: outlines and wires over the
-      // running region. Everything it used to say in a panel is in the tabs above.
-      var lensPill = el('button', {
-        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
-        'aria-pressed': ctl.lensOpen() ? 'true' : 'false',
-        title: 'Outline the islands on the page and wire them to what they read',
-      }, ['\u2316 Seam lens']);
-      lensPill.addEventListener('click', drive(function (c) { c.toggleLens(); paint(); }));
-      pills.push(lensPill);
-    }
+    // NO SEAM LENS PILL. The layer is a means, not a thing to manage: everything that needs it opens
+    // it — the crosshair to aim with, Coupling to draw on — and the crosshair now puts it away again
+    // when it has picked. A switch for a layer that turns itself on and off is one more pressed-looking
+    // control saying nothing about the region, in a rig whose other chips all change what you see.
+    //
+    // Everything the lens used to SAY lives in the tabs above; only the outlines and wires over the
+    // running page are still its own, and those arrive with whatever asked for them.
 
     // The coupling graph, beside the layer it draws on. Two islands sharing a region key is the one
     // thing on this page that no list shows as well as a line does, so it stays a page-layer switch

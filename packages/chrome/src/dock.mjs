@@ -753,6 +753,26 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
  * arriving from the same edge is one too many, so the shell stamps the frame while its own is open
  * and the dock stands down -- see the rule at the end.
  */
+/* BESIDE THE DOCK, NOT INSIDE IT. In the masthead this vanished with the panel — and a scope you
+   cannot see is one you cannot tell you are in, which was the original complaint. Fixed to the page
+   at the bottom of the rail's edge, so it is on screen whether the panel is open, shut or sliding,
+   and it is the one control that is always reachable on a phone. Clear of the rail by its width. */
+#tide .scope { position: fixed; bottom: 12px; right: calc(var(--rail-w) + 10px); z-index: 4;
+  display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 10px;
+  border-radius: 999px; background: var(--motu-primary, #0f766e); color: var(--motu-on-primary, #fff);
+  font-size: 12px; font-weight: 600; max-width: min(60vw, 320px);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--w-deep, #000) 30%, transparent); }
+/* Docked left: mirror it, or it sits under the rail. */
+#tide[data-edge="left"] .scope { right: auto; left: calc(var(--rail-w) + 10px); }
+#tide .scope[hidden] { display: none; }
+#tide .scope__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; opacity: .8; }
+#tide .scope__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tide .scope__x { margin-left: auto; flex: 0 0 auto; width: 18px; height: 18px; line-height: 1;
+  border: 0; border-radius: 50%; cursor: pointer; font-size: 14px;
+  background: rgba(255,255,255,.22); color: inherit; }
+#tide .scope__x:hover { background: rgba(255,255,255,.38); }
+#tide .scope__x:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
+
 @media (max-width: 760px) {
   #tide {
     top: auto;
@@ -762,6 +782,10 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
     display: block;
     --dock-w: auto;
   }
+  /* ON A PHONE THE DOCK IS A BOTTOM BAR, so "beside the rail" is above it, not left of it. Anchored
+     to the bar rather than a guessed height: the rail is the bar, so sit on its top edge. */
+  #tide .scope { right: 10px; left: auto; bottom: calc(100% + 10px); position: absolute; }
+
   #tide .rail-dock {
     /* FULL WIDTH, because a handle is something a thumb aims at. Left as auto it shrank to its
      * content and sat in the bottom-left corner, which reads as a stray chip rather than the edge of
@@ -813,17 +837,6 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   #tide .rail-states::-webkit-scrollbar { display: none; }
   /* After the display rule, so hiding actually hides: a bare [hidden] loses to #tide .rail-states. */
   #tide .rail-states[hidden] { display: none; }
-  #tide .scope { display: flex; align-items: center; gap: 6px; margin: 6px 10px 0; padding: 4px 6px 4px 8px;
-    border-radius: 999px; background: var(--motu-primary, #0f766e); color: var(--motu-on-primary, #fff);
-    font-size: 12px; font-weight: 600; max-width: calc(100% - 20px); }
-  #tide .scope[hidden] { display: none; }
-  #tide .scope__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; opacity: .8; }
-  #tide .scope__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #tide .scope__x { margin-left: auto; flex: 0 0 auto; width: 18px; height: 18px; line-height: 1;
-    border: 0; border-radius: 50%; cursor: pointer; font-size: 14px;
-    background: rgba(255,255,255,.22); color: inherit; }
-  #tide .scope__x:hover { background: rgba(255,255,255,.38); }
-  #tide .scope__x:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
   #tide .rail-chip {
     flex: 0 0 auto;
     max-width: 46vw;
@@ -1021,7 +1034,6 @@ function motuMountDock(opts) {
   var masthead = el('div', { class: 'motu-bay', 'data-shape': 'masthead' }, [
     grab,
     el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), fold]),
-    scopeChip,
   ]);
 
   var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
@@ -1069,7 +1081,9 @@ function motuMountDock(opts) {
     rig,
   ]);
   var scrim = el('div', { class: 'scrim' });
-  tide.append(scrim, rail, panel);
+  // AFTER the panel, so the chip stacks above the sliding surface rather than under it. A sibling of
+  // the panel, not a child: it must survive the panel being shut.
+  tide.append(scrim, rail, panel, scopeChip);
   mountEl.appendChild(tide);
   tide.dataset.edge = 'right';
 

@@ -400,6 +400,9 @@ markSandbox();
   // A REFUSAL MOUNTS NOTHING. The banner alone is not the refusal: leaving the first region on screen
   // under it is the substitution being refused, and a screenshot of it looks like a working lagoon.
   let refused = false;
+  /** The island scenario currently showing. Not read off `request`: that is only ever what the URL
+   *  said at LOAD, and switching in place has to move it. */
+  let currentScenario: string | null = null;
   if (wantedIsland && !opts.elements.some((e) => e.tag === wantedIsland)) {
     reportState({
       ok: false,
@@ -415,8 +418,11 @@ markSandbox();
     // AN UNRESOLVABLE STATE MUST NOT RENDER SOMETHING ELSE. The focused entry refuses to mount on a
     // scenario it could not resolve; this entry has to refuse identically, or the same address means
     // "refused" on one and "here is some other state" on the other.
-    if (wanted.outcome.ok) island = { tag: wantedIsland, seed: wanted.seed };
-    else refused = true;
+    if (wanted.outcome.ok) {
+      island = { tag: wantedIsland, seed: wanted.seed };
+      // What the URL asked for IS what is showing, at this one moment. From here `openScenario` owns it.
+      currentScenario = wanted.outcome.name ?? request.scenario;
+    } else refused = true;
   } else if (wantedIsland) {
     reportState({ ok: true, target: `island:${wantedIsland}`, kind: 'none' });
     island = { tag: wantedIsland };
@@ -521,14 +527,17 @@ markSandbox();
    * leaving the previous verdict standing, which would outlive the region it described.
    */
   /** Play a requested island scenario's interactions, and say how far they got. */
-  async function applyRequestedInteractions(tag: string): Promise<void> {
-    if (!request.scenario) return;
-    const found = pickState(opts.evidence?.scenarios?.[tag], request.scenario);
+  async function applyRequestedInteractions(tag: string, name?: string | null, step?: number | null): Promise<void> {
+    // Named explicitly when switching in place; falling back to the URL only for the boot path, which
+    // is the one moment `request` IS the truth.
+    const wanted = name === undefined ? request.scenario : name;
+    if (!wanted) return;
+    const found = pickState(opts.evidence?.scenarios?.[tag], wanted);
     // No interactions means the seed already IS the state — `resolveIslandScenario` reported it, and
     // overwriting a correct outcome with a second one would only lose the name it resolved.
     if (!found?.interactions?.length) return;
     tide.setFlowOutcome('running…');
-    const outcome = await replayInteractions(found, request.step);
+    const outcome = await replayInteractions(found, step === undefined ? request.step : step);
     reportState({ ...outcome, target: `island:${tag}` });
     tide.setFlowOutcome(
       outcome.ok ? `played ${outcome.applied}/${outcome.of} interaction(s)` : (outcome.error ?? 'could not run'),
@@ -614,7 +623,7 @@ markSandbox();
         view,
         island: island ?? null,
         flow: shownFlow,
-        scenario: request.scenario ?? null,
+        scenario: currentScenario,
       }),
       show: (id: string) => onStation(id),
       setView: (next: TideView) => onView(next),
@@ -648,25 +657,91 @@ markSandbox();
        * each half of a feature neither could finish. Clicking a region afterwards clears it
        * (`onStation`), so this is not a one-way door.
        */
+      /**
+       * The islands the CURRENT REGION declares — the picker's list, and deliberately not
+       * `islands()`, which reports what is mounted right now.
+       *
+       * Scoping to one island unmounts the rest, so a picker built from the mounted set emptied the
+       * moment it was used and took the way back out with it: nothing left to press again. Declared
+       * membership does not move when the view narrows, so the list stays put and the scoped row
+       * stays pressable.
+       */
+      regionIslands: () =>
+        (opts.archipelagos?.[current]?.islands ?? []).map((i) => ({ slot: i.slot ?? i.element, tag: i.element })),
       openIsland: (tag: string) => {
+        // A TOGGLE. Pressing the island you are already scoped to takes the scope off, because that
+        // is what pressing a lit control means everywhere else in this panel — and without it the
+        // only way back to the region was to pick one from the list, which is a different intent
+        // (choose a region) wearing the same gesture (leave this island).
+        if (island && island.tag === tag) {
+          island = undefined;
+          currentScenario = null;
+          shownFlow = null;
+          const back = new URL(location.href);
+          back.searchParams.delete('target');
+          back.searchParams.delete('scenario');
+          back.searchParams.delete('step');
+          history.replaceState(null, '', back.toString());
+          reportState({ ok: true, target: `archipelago:${current}`, kind: 'none' });
+          mount(current);
+          controlChanged();
+          return;
+        }
+        island = { tag };
+        currentScenario = null;
+        reportState({ ok: true, target: `island:${tag}`, kind: 'none' });
+        mountIsland(island);
         const url = new URL(location.href);
         url.searchParams.set('target', `island:${tag}`);
         // Whatever was addressed belonged to the region being left behind.
         url.searchParams.delete('scenario');
         url.searchParams.delete('flow');
         url.searchParams.delete('step');
-        location.href = url.toString();
+        history.replaceState(null, '', url.toString());
+        controlChanged();
       },
       openScenario: (name: string | null) => {
         if (!island) return;
+        const tag = island.tag;
+        // IN PLACE, not a reload — and it is safe for a reason worth writing down. `mountIsland`
+        // builds a SYNTHESISED archipelago and `defineArchipelago` does `new Store(seed)` per mount,
+        // replacing the `lagoon` entry, so every switch gets a store seeded with exactly this
+        // scenario and nothing left over from the last one. That is what `provideScenario` has to
+        // achieve by resetting owned keys first; here the fresh mount gives it for free.
+        //
+        // Navigating was the first version and it worked, but a full reload to move between four
+        // states of one island is a lot of waiting to compare two renders — which is the thing the
+        // list exists for.
+        const found = name ? pickState(opts.evidence?.scenarios?.[tag], name) : null;
+        if (name && !found) {
+          reportState({
+            ok: false, target: `island:${tag}`, kind: 'scenario',
+            error: `no scenario "${name}" in ${tag}'s evidence`,
+            available: stateNames(opts.evidence?.scenarios?.[tag]),
+          });
+          return;
+        }
+        currentScenario = found ? (found.name ?? name) : null;
+        island = { tag, seed: found?.seed };
+        reportState(
+          found
+            ? { ok: true, target: `island:${tag}`, kind: 'scenario', name: currentScenario ?? undefined }
+            : { ok: true, target: `island:${tag}`, kind: 'none' },
+        );
+        mountIsland(island);
+        // THE ADDRESS STILL FOLLOWS THE SCREEN. `replaceState` rather than a navigation: the URL is
+        // what a person copies and what a check opens, so it must say what is showing — it just does
+        // not have to be the thing that CAUSES it.
         const url = new URL(location.href);
-        url.searchParams.set('target', `island:${island.tag}`);
-        if (name) url.searchParams.set('scenario', name);
+        url.searchParams.set('target', `island:${tag}`);
+        if (currentScenario) url.searchParams.set('scenario', currentScenario);
         else url.searchParams.delete('scenario');
         // A step belongs to the scenario that was showing; carrying it onto another one addresses a
         // point inside a replay that is not running.
         url.searchParams.delete('step');
-        location.href = url.toString();
+        history.replaceState(null, '', url.toString());
+        controlChanged();
+        if (found?.interactions?.length) void applyRequestedInteractions(tag, currentScenario, null);
       },
       /**
        * The transport and fit chips, for a panel drawn outside this page.

@@ -1157,6 +1157,11 @@ function motuMountDock(opts) {
     return { list: list, count: count, box: box };
   };
   var regions = section('Regions');
+  // ISLANDS BESIDE THE STATES THEY BELONG TO. Selecting an island lived in another tab, so reaching
+  // one of its scenarios meant: Islands tab, pick an island, back to States, pick a scenario — three
+  // moves across two panes for one intent. The Islands TAB keeps the inspector (props, writes, what
+  // it called); this is only the picker, next to the list it changes.
+  var islands = section('Islands');
   var states = section('States');
 
   /**
@@ -1264,6 +1269,19 @@ function motuMountDock(opts) {
     regions.count.textContent = String(list.length);
     regions.list.replaceChildren.apply(regions.list, list.map(function (r) {
       return row(r.label, r.id === now.region, drive(function (c) { c.show(r.id); }));
+    }));
+
+    // The region's islands, as a picker. Lit when scoped, and pressing the lit one lets go — the
+    // toggle is what makes this a scope control rather than a one-way door.
+    // DECLARED membership, not mounted: scoping unmounts the others, and a list built from what is
+    // mounted empties exactly when you need it to let go again. `islands()` stays the inspector's.
+    var mountedIslands = (ctl.regionIslands ? ctl.regionIslands() : (ctl.islands ? ctl.islands() : [])) || [];
+    var scopedTag = now.island && now.island.tag;
+    var islandRows = mountedIslands.filter(function (i) { return hit(i.tag) || hit(i.slot || ''); });
+    islands.count.textContent = String(islandRows.length);
+    islands.box.hidden = islandRows.length === 0;
+    islands.list.replaceChildren.apply(islands.list, islandRows.map(function (i) {
+      return row(i.slot || i.tag, i.tag === scopedTag, drive(function (c) { c.openIsland(i.tag); }));
     }));
 
     // AN ISLAND'S STATES ARE ITS SCENARIOS, a region's are its flows — one list, whichever applies.
@@ -1640,9 +1658,21 @@ function motuMountDock(opts) {
     pick.hidden = !ctl.togglePicking;
     if (ctl.pickingOn) pick.setAttribute('aria-pressed', ctl.pickingOn() ? 'true' : 'false');
 
-    bayTitle.textContent = now.region || '—';
-    baySub.textContent = flows.length + (flows.length === 1 ? ' state' : ' states');
-    railLabel.textContent = now.region || 'lagoon';
+    // SAY WHEN THE VIEW IS SCOPED. The bay read the region name whatever was mounted, so an island
+    // opened alone looked like the whole region with a suspiciously empty page — "it is hard to see
+    // that the lagoon is scoped to an island" was exactly right. The island's own name, and the way
+    // out spelled out, both in the panel and on the collapsed rail.
+    if (scopedTag) {
+      bayTitle.textContent = scopedTag;
+      baySub.textContent =
+        'island only · ' + entries.length + (entries.length === 1 ? ' scenario' : ' scenarios') +
+        ' · press it again in Islands to leave';
+      railLabel.textContent = scopedTag;
+    } else {
+      bayTitle.textContent = now.region || '—';
+      baySub.textContent = entries.length + (entries.length === 1 ? ' state' : ' states');
+      railLabel.textContent = now.region || 'lagoon';
+    }
   };
 
   filter.addEventListener('input', paint);

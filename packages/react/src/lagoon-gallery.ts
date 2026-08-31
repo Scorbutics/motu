@@ -738,16 +738,42 @@ markSandbox();
         //
         // Reset first, over every key ANY of this island's scenarios sets: a scenario is a state, so
         // what it does not mention it must not inherit from the one before it.
-        const lagoon = window.__motuLagoon;
+        // BOTH MOUNT PATHS, resolved the way `provideScenario` resolves them. `window.__motuLagoon` is
+        // installed by the REACT mount; on the element path the same seam lives on
+        // <motu-archipelago>. Reaching only for the window one worked on a react host and silently
+        // did nothing on an element host — optional chaining turned "no seam here" into "no-op", so
+        // the state was reported, the URL moved, and the screen kept the boot scenario.
+        const archEl = document.querySelector('motu-archipelago') as unknown as {
+          provide?: (k: string, v: unknown) => void;
+          seed?: (k: string, v: unknown) => void;
+          reset?: (keys?: readonly string[]) => void;
+          remount?: () => void;
+        } | null;
+        const seam = archEl && typeof archEl.provide === 'function' ? archEl : window.__motuLagoon;
         const owned = new Set<string>();
         for (const sc of opts.evidence?.scenarios?.[tag] ?? []) {
           for (const k of Object.keys(sc.seed ?? {})) owned.add(k);
         }
-        lagoon?.reset?.([...owned]);
-        for (const [k, v] of Object.entries(found?.seed ?? {})) lagoon?.seed?.(k, v);
+        seam?.reset?.([...owned]);
+        // `seed` ESTABLISHES where `provide` updates — the distinction the react seam draws for the
+        // ownership guard. Not every seam has both, so fall back rather than skip the value.
+        for (const [k, v] of Object.entries(found?.seed ?? {})) {
+          if (seam?.seed) seam.seed(k, v);
+          else seam?.provide?.(k, v);
+        }
         // A fetch-on-mount island has already run its effect; without this the new seed is a value
-        // nothing re-reads (the reason `provideScenario` calls it "not optional").
-        lagoon?.remount?.();
+        // nothing re-reads (the reason `provideScenario` calls it "not optional"). The element path
+        // has no `remount`, so re-insert the markers — disconnect disposes, connect mounts afresh.
+        if (seam && typeof (seam as { remount?: () => void }).remount === 'function') {
+          (seam as { remount: () => void }).remount();
+        } else {
+          for (const el of Array.from(document.querySelectorAll('motu-island'))) {
+            const parent = el.parentNode;
+            const next = el.nextSibling;
+            parent?.removeChild(el);
+            parent?.insertBefore(el, next);
+          }
+        }
         // THE ADDRESS STILL FOLLOWS THE SCREEN. `replaceState` rather than a navigation: the URL is
         // what a person copies and what a check opens, so it must say what is showing — it just does
         // not have to be the thing that CAUSES it.

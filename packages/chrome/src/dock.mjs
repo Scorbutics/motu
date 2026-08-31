@@ -1739,7 +1739,13 @@ function motuMountDock(opts) {
   attach();
   // FOREVER, not until the first success. The lagoon boots asynchronously (the original reason for
   // this poll) and can also be replaced at any later moment, which the old `tries` cap could not see.
-  setInterval(attach, 400);
+  //
+  // KEPT, because the unmount below clears it. Dropping the handle when this stopped being a
+  // self-clearing poll left `clearInterval(poll)` referring to nothing — so unmounting THREW, and a
+  // host that swaps lagoons (`driveTheLagoon` unmounts before it mounts the next) never got past it:
+  // the dock stayed bound to the lagoon you arrived on and described it with total confidence while
+  // the frame showed another. An interval that outlives its dock also keeps painting one that is gone.
+  var poll = setInterval(attach, 400);
 
   // ── the command palette ──────────────────────────────────────────────────────────────────────
   //

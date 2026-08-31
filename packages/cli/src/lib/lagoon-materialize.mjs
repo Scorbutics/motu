@@ -11,7 +11,7 @@
 //
 // So `motu lagoon eject` is not a special code path: it is this module writing into the project
 // instead of into the cache.
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import {
   render,
@@ -102,4 +102,70 @@ export function materializeLagoon(paths, outDir) {
 export function resolveLagoonRoot(paths) {
   if (projectOwnsLagoon(paths)) return paths.lagoonDir;
   return materializeLagoon(paths, resolve(paths.cacheDir, 'lagoon'));
+}
+
+/**
+ * WHAT AN EJECTED ENTRY IS MISSING, compared with the one motu would write today.
+ *
+ * Ejecting hands the project its entry and stops the materializer: "the project now owns these —
+ * motu will not regenerate them." That is the point of the escape hatch, and it has a cost nobody was
+ * told about. Every capability added to the scaffold afterwards reaches an ejected project only if
+ * somebody edits that file by hand, and nothing said when they had not.
+ *
+ * It has already happened twice in this repo's own demo-app: `evidence` (so `?scenario=` addressed a
+ * catalogue that was never handed over — every declared state unreachable in a browser) and
+ * `lens.onPicked` (so the crosshair could not scope). Both were silent: the entry compiled, the
+ * lagoon booted, and the feature simply was not there.
+ *
+ * DERIVED FROM THE TEMPLATE, never a hand-kept list, or this check becomes the next thing that goes
+ * stale. Compares the option keys `startLagoon({...})` is given, and the keys of the `lens` object
+ * inside it — the two places options actually arrive.
+ */
+export function ejectedEntryGaps(paths) {
+  const entry = resolve(paths.lagoonDir, 'src', 'main.tsx');
+  if (!projectOwnsLagoon(paths) || !existsSync(entry)) return null;
+
+  // NAME-PRESENCE, not shape. Parsing both sides was the first attempt and it was wrong twice over:
+  // it read an `import.meta.glob` options object as lagoon options, and it missed demo-app's
+  // `lens: __MOTU_DEBUG__ ? {…} : undefined` because that is not a literal `lens: {`. An ejected entry
+  // is a file somebody has been editing — it may wrap, rename or conditionalise anything — so the
+  // only question worth asking cheaply is whether the capability is MENTIONED at all. That is enough
+  // to catch what actually goes wrong here (an option added upstream that nobody copied down), and it
+  // cannot cry wolf over formatting.
+  // FULL-LINE COMMENTS ONLY. Stripping block comments with a regex ate real code here (a `/*` in a
+  // string closed against a later `*/`), and prose is where a key name would otherwise be mistaken
+  // for a use — this file's own comments mention `target` and `scenario` while explaining them.
+  const strip = (t) => t.replace(/^\s*\/\/.*$/gm, '');
+  const mine = strip(readFileSync(entry, 'utf8'));
+  const template = strip(LAGOON_GALLERY_ENTRY);
+
+  const optionNames = (text, opener) => {
+    const at = text.indexOf(opener);
+    if (at === -1) return [];
+    const out = new Set();
+    let depth = 0;
+    for (let i = at + opener.length - 1; i < text.length; i++) {
+      const c = text[i];
+      if (c === '{' || c === '(' || c === '[') depth++;
+      else if (c === '}' || c === ')' || c === ']') {
+        if (--depth === 0) break;
+      } else if (depth === 1 && /[A-Za-z_$]/.test(c)) {
+        const before = text.slice(0, i).replace(/\s+$/, '').slice(-1);
+        const m = /^[A-Za-z_$][\w$]*/.exec(text.slice(i));
+        if (m && (before === '{' || before === ',')) {
+          const after = text.slice(i + m[0].length).replace(/^\s+/, '').slice(0, 1);
+          if (after === ':' || after === ',' || after === '}') out.add(m[0]);
+          i += m[0].length - 1;
+        }
+      }
+    }
+    return [...out];
+  };
+
+  const mentions = (name) => new RegExp(`\\b${name}\\b`).test(mine);
+  const expected = [...optionNames(template, 'startLagoon({'), ...optionNames(template, 'lens: {')];
+  return {
+    entry: relative(process.cwd(), entry),
+    missing: [...new Set(expected)].filter((k) => !mentions(k)).sort(),
+  };
 }

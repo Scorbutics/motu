@@ -17,6 +17,7 @@ import { color, paths, hostStrictBoundaries } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
+import { ejectedEntryGaps } from '../lib/lagoon-materialize.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
 import { renderCoverageModule, COVERAGE_MODULE } from '../lib/archipelagos.mjs';
@@ -113,6 +114,28 @@ export async function checkCommand(argv) {
           color.dim('  no island or region changed — this run proves nothing about the project'),
       );
       process.exit(2);
+    }
+  }
+
+  // AN EJECTED ENTRY DOES NOT FOLLOW THE FRAMEWORK, and nothing said so until now. `lagoon eject`
+  // hands the project its entry and stops regenerating it, which is the point — and it means every
+  // option added to the scaffold afterwards reaches that project only if somebody copies it down.
+  // Twice in this repo's own demo-app the answer was "nobody did": `evidence` (every declared state
+  // unreachable in a browser) and `lens.onPicked` (the crosshair could not scope). Both silent.
+  const gaps = ejectedEntryGaps(paths);
+  if (gaps) {
+    console.log(color.bold('\nmotu check — ejected entry\n'));
+    if (!gaps.missing.length) {
+      console.log(`  ${color.green('✓')} ${color.dim('entry-current'.padEnd(20))}${color.dim(`${gaps.entry} passes every option the scaffold does`)}`);
+    } else {
+      // A WARNING: an entry may legitimately drop an option (a project with no frames, say), and a
+      // check that turns an ejected project red for exercising the escape hatch it was given is one
+      // people switch off. What it cannot do is stay quiet.
+      console.log(
+        `  ${color.yellow('!')} ${color.dim('entry-current'.padEnd(20))}` +
+          `${gaps.entry} never mentions ${gaps.missing.map((m) => `\`${m}\``).join(', ')} — ` +
+          color.dim('the scaffold passes these; an ejected entry only gets them by hand'),
+      );
     }
   }
 

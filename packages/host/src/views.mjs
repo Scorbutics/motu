@@ -399,7 +399,26 @@ ${PRIMARY_DETECT_JS}
     if (chosen && review && chosen.dataset.repo) {
       review.href = '/console?repo=' + encodeURIComponent(chosen.dataset.repo);
     }
-    if (history.replaceState) history.replaceState(null, '', '#' + i);
+    // THE ADDRESS FOLLOWS THE RAIL, where the rail switches between whole lagoons.
+    //
+    // A hash index is an index into THIS page's member list: the right address for a GROUP (a named
+    // thing whose members have no page of their own) and the wrong one for a lagoon, where every
+    // member has its own URL. So picking one left the bar naming the lagoon you arrived at; copy that
+    // link and it reopens the first one. Same staleness the bay and the review link were already
+    // fixed for — this was the last thing on the page still pointing at where you came in.
+    //
+    // Derived from the frame's own address by dropping the frame suffix, so the page and the frame
+    // cannot disagree about which lagoon is showing.
+    //
+    // split(), not a regex: THIS WHOLE SCRIPT IS A TEMPLATE LITERAL in views.mjs, so a backslash is
+    // an escape before it is ever code — the regex form emitted as a line comment and took the rest
+    // of the function with it. Backticks are the same trap (one ended the literal here an edit
+    // earlier). Prefer forms that need neither.
+    var pageHref = null;
+    if (chosen && FOLLOWS_MEMBER && chosen.dataset.href) {
+      pageHref = chosen.dataset.href.split('/__motu_frame')[0];
+    }
+    if (history.replaceState) history.replaceState(null, '', pageHref || '#' + i);
     wearTheLagoonsColour(i);
     driveTheLagoon(i);
   }

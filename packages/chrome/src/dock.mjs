@@ -813,6 +813,17 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   #tide .rail-states::-webkit-scrollbar { display: none; }
   /* After the display rule, so hiding actually hides: a bare [hidden] loses to #tide .rail-states. */
   #tide .rail-states[hidden] { display: none; }
+  #tide .scope { display: flex; align-items: center; gap: 6px; margin: 6px 10px 0; padding: 4px 6px 4px 8px;
+    border-radius: 999px; background: var(--motu-primary, #0f766e); color: var(--motu-on-primary, #fff);
+    font-size: 12px; font-weight: 600; max-width: calc(100% - 20px); }
+  #tide .scope[hidden] { display: none; }
+  #tide .scope__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; opacity: .8; }
+  #tide .scope__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tide .scope__x { margin-left: auto; flex: 0 0 auto; width: 18px; height: 18px; line-height: 1;
+    border: 0; border-radius: 50%; cursor: pointer; font-size: 14px;
+    background: rgba(255,255,255,.22); color: inherit; }
+  #tide .scope__x:hover { background: rgba(255,255,255,.38); }
+  #tide .scope__x:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
   #tide .rail-chip {
     flex: 0 0 auto;
     max-width: 46vw;
@@ -999,9 +1010,18 @@ function motuMountDock(opts) {
   // INSIDE the bay, not above it. The handle is white, so on the panel's pale surface it was
   // invisible and the sheet read as having none; on the water it reads exactly as the switcher's does.
   var grab = el('span', { class: 'grab' }, [el('i')]);
+  // THE SCOPE, AS A THING YOU CAN CLOSE. Prose in the subtitle ("press it again in Islands to leave")
+  // told you the rule and still made you go find the row. A chip states what the view is narrowed to
+  // and carries its own way out, which is what a person reaches for — and on a phone it is the only
+  // way out that is on screen, since the islands list is a scroll away inside the panel.
+  var scopeName = el('span', { class: 'scope__name' }, ['']);
+  var scopeClose = el('button', { class: 'scope__x', type: 'button', title: 'Leave this island', 'aria-label': 'Leave this island and show the whole region' }, ['\u00d7']);
+  var scopeChip = el('div', { class: 'scope', hidden: '' }, [el('span', { class: 'scope__dot' }), scopeName, scopeClose]);
+
   var masthead = el('div', { class: 'motu-bay', 'data-shape': 'masthead' }, [
     grab,
     el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), fold]),
+    scopeChip,
   ]);
 
   var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
@@ -1664,11 +1684,15 @@ function motuMountDock(opts) {
     // out spelled out, both in the panel and on the collapsed rail.
     if (scopedTag) {
       bayTitle.textContent = scopedTag;
-      baySub.textContent =
-        'island only · ' + entries.length + (entries.length === 1 ? ' scenario' : ' scenarios') +
-        ' · press it again in Islands to leave';
+      baySub.textContent = 'island only · ' + entries.length + (entries.length === 1 ? ' scenario' : ' scenarios');
       railLabel.textContent = scopedTag;
+      scopeChip.hidden = false;
+      scopeName.textContent = scopedTag;
+      // Rebound every paint: the tag it must let go of is whichever one is scoped now.
+      scopeClose.onclick = drive(function (c) { c.openIsland(scopedTag); });
     } else {
+      scopeChip.hidden = true;
+      scopeClose.onclick = null;
       bayTitle.textContent = now.region || '—';
       baySub.textContent = entries.length + (entries.length === 1 ? ' state' : ' states');
       railLabel.textContent = now.region || 'lagoon';

@@ -728,7 +728,26 @@ markSandbox();
             ? { ok: true, target: `island:${tag}`, kind: 'scenario', name: currentScenario ?? undefined }
             : { ok: true, target: `island:${tag}`, kind: 'none' },
         );
-        mountIsland(island);
+        // SEED THE LIVE MOUNT AND REMOUNT IT — the seam `provideScenario` drives, which is what
+        // `data-flow` has always used to move between scenarios in one page.
+        //
+        // Re-running `mountIsland` looked equivalent and is not: the second call installed a new
+        // `window.__motuLagoon` but `getArchipelagoStore` went on answering from the FIRST store, so
+        // every switch after the first re-rendered with the boot scenario's seed still in place —
+        // the dock lit the row it was told to and the screen did not move.
+        //
+        // Reset first, over every key ANY of this island's scenarios sets: a scenario is a state, so
+        // what it does not mention it must not inherit from the one before it.
+        const lagoon = window.__motuLagoon;
+        const owned = new Set<string>();
+        for (const sc of opts.evidence?.scenarios?.[tag] ?? []) {
+          for (const k of Object.keys(sc.seed ?? {})) owned.add(k);
+        }
+        lagoon?.reset?.([...owned]);
+        for (const [k, v] of Object.entries(found?.seed ?? {})) lagoon?.seed?.(k, v);
+        // A fetch-on-mount island has already run its effect; without this the new seed is a value
+        // nothing re-reads (the reason `provideScenario` calls it "not optional").
+        lagoon?.remount?.();
         // THE ADDRESS STILL FOLLOWS THE SCREEN. `replaceState` rather than a navigation: the URL is
         // what a person copies and what a check opens, so it must say what is showing — it just does
         // not have to be the thing that CAUSES it.

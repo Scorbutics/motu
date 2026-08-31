@@ -115,6 +115,13 @@ export interface TideLens {
    * you are pointing at.
    */
   setPicking?(on: boolean): void;
+  /**
+   * Told when a person aimed the crosshair at an island and chose it.
+   *
+   * The lens selects for itself; this is how anything else learns. Optional, because a lens that only
+   * observes is still a valid lens — the dock simply does not scope on a pick when it is absent.
+   */
+  onPicked?(fn: (tag: string) => void): () => void;
   /** The coupling graph on the page layer — wires between islands that share a region key. */
   setCoupling?(on: boolean): void;
   couplingOn?(): boolean;

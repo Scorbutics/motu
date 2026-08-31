@@ -986,6 +986,14 @@ markSandbox();
       mount(current);
   };
 
+  // THE CROSSHAIR SCOPES, like every other way of choosing an island. It used to only select inside
+  // the lens, so pointing at an island told the lens what you meant and left the view showing the
+  // whole region — the one gesture that is literally "this one" was the one that did not focus it.
+  lens?.onPicked?.((tag) => {
+    if (island?.tag === tag) return; // already there; a pick is not a toggle
+    (window as unknown as { __motuLagoonControl?: { openIsland?: (t: string) => void } }).__motuLagoonControl?.openIsland?.(tag);
+  });
+
   publishControl();
 
   /**

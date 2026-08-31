@@ -37,6 +37,15 @@ import { FLAG, lens, readFlag, writeFlag } from './store';
 // own cursor — it was in the panel only because the panel had the button. It belongs here, with the
 // layer it actually affects.
 /** Crosshair mode: the page's own cursor says what mode you are in; the overlay layer cannot (it is inert). */
+/** Who wants to know that a person pointed at an island and chose it. */
+const pickedListeners = new Set<(tag: string) => void>();
+
+/** Subscribe to crosshair picks. Returns an unsubscribe, like every other watcher here. */
+export function onIslandPicked(fn: (tag: string) => void): () => void {
+  pickedListeners.add(fn);
+  return () => pickedListeners.delete(fn);
+}
+
 export function setPicking(on: boolean): void {
   lens.picking = on;
   document.body.style.cursor = on ? 'crosshair' : '';
@@ -198,9 +207,16 @@ class Overlay {
         e.preventDefault();
         e.stopPropagation();
         this.#swallowNextClick();
+        const wasPicking = lens.picking;
         if (lens.picking) setPicking(false);
         lens.selected = info;
         lens.changedNow();
+        // A DELIBERATE PICK, told to whoever is listening. The lens selects for ITSELF here — it is a
+        // read-only observer of the page — but the crosshair is the one gesture where a person has
+        // aimed at an island and said "this one", and the dock wants to scope the lagoon to it.
+        // Reported only for a real pick, not for the alt-click inspect below it, so a shortcut for
+        // looking at something cannot silently narrow the whole view.
+        if (wasPicking && info) for (const fn of pickedListeners) fn(info.element);
       },
       true,
     );

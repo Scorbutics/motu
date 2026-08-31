@@ -35,6 +35,7 @@ import {
   toggleRecording,
   recordingState,
   setPicking,
+  onIslandPicked,
   setCoupling,
   couplingOn,
 } from '@motu/debug-overlay';
@@ -158,6 +159,9 @@ startLagoon({
         toggleRecording,
         recordingState,
         setPicking,
+        // EJECTED ENTRY: a capability added to the scaffold reaches this app only by being added
+        // here — which is how this file came to be missing `evidence` too.
+        onPicked: onIslandPicked,
         setCoupling,
         couplingOn,
         watch: watchSeams,

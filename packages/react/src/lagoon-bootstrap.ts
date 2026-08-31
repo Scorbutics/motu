@@ -20,6 +20,7 @@ import {
   readStateRequest,
   resolveIslandScenario,
   replayFlow,
+  replayInteractions,
   reportState,
   stateNames,
   type LagoonEvidence,
@@ -324,7 +325,23 @@ markSandbox();
   // first — this cannot ride along with the initial render the way a scenario's seed does. Nothing
   // here awaits it: the outcome lands in `window.__motuLagoonState`, which is what a driver reads.
   if (request.flow) void applyFlow(request, opts);
+  // AND NEITHER ARE A SCENARIO'S INTERACTIONS. Same reason, same shape: they drive the mounted
+  // island's own handlers, so they cannot ride along with the seed either. Without this the state a
+  // scenario NAMES and the state its URL opens in were different things, silently — see
+  // `replayInteractions`.
+  else if (request.scenario) void applyInteractions(request, opts);
   return el;
+}
+
+/** Play a requested scenario's interactions against the island that just mounted. */
+async function applyInteractions(request: StateRequest, opts: LagoonBootstrapOptions): Promise<void> {
+  const target = resolveTarget(opts);
+  if (target.kind !== 'island') return; // the seed path already refused this
+  const found = pickState(opts.evidence?.scenarios?.[target.tag], request.scenario!);
+  // A scenario with no interactions is complete the moment its seed lands — `render` already
+  // reported it, and saying anything else here would overwrite a correct outcome with a louder one.
+  if (!found?.interactions?.length) return;
+  reportState({ ...(await replayInteractions(found, request.step)), target: `island:${target.tag}` });
 }
 
 /** Replay a requested flow against the region that just mounted, and say what happened either way. */

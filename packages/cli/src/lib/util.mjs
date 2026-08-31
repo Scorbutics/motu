@@ -275,6 +275,30 @@ export function lagoonA11y() {
 }
 
 /**
+ * The modules this project stands down in the lagoon — the ONE definition of "ambient".
+ *
+ * There were two, and they agreed only by luck. The generator derived ambient from hardcoded path
+ * patterns (`@/lib/services/…`, `@/hooks/…`); the `ambient` check derived it from these alias keys.
+ * Both answered the same while every matching module happened to be aliased. Move a project's mock
+ * boundary — stub the Supabase client at the wire instead of each service module — and they split:
+ * the generator keeps emitting a service that no longer needs standing down, and the check calls that
+ * emission stale. Neither is broken on its own terms, and `island sync` cannot reconcile them.
+ *
+ * The alias map wins because it is what ambient MEANS: not "a module matching a path convention" but
+ * "a capability the host must provide, which the lagoon has to stand in for". Returns null when there
+ * is no lagoon config, so a project without one keeps the pattern-only behaviour.
+ */
+export function lagoonAliases() {
+  const file = resolve(cfg.lagoonDir, 'lagoon.config.json');
+  if (!existsSync(file)) return null;
+  try {
+    return Object.keys(JSON.parse(readFileSync(file, 'utf8')).alias ?? {});
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The name of the component an island mounts, as EXPORTED by the component's own file.
  *
  * Not the name derived from the island's own kebab: on a modern host an island wraps a component the

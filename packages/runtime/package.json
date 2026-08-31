@@ -12,6 +12,10 @@
     "./mock": {
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"
+    },
+    "./postgrest-fetch": {
+      "types": "./dist/postgrest-fetch.d.ts",
+      "default": "./dist/postgrest-fetch.js"
     }
   },
   "dependencies": {

@@ -34,6 +34,7 @@ import {
   readStateRequest,
   readTarget,
   replayFlow,
+  replayInteractions,
   reportState,
   resolveFlowRegion,
   resolveIslandScenario,
@@ -519,6 +520,22 @@ markSandbox();
    * does not survive that. Mounting any OTHER region records that no state is applied rather than
    * leaving the previous verdict standing, which would outlive the region it described.
    */
+  /** Play a requested island scenario's interactions, and say how far they got. */
+  async function applyRequestedInteractions(tag: string): Promise<void> {
+    if (!request.scenario) return;
+    const found = pickState(opts.evidence?.scenarios?.[tag], request.scenario);
+    // No interactions means the seed already IS the state — `resolveIslandScenario` reported it, and
+    // overwriting a correct outcome with a second one would only lose the name it resolved.
+    if (!found?.interactions?.length) return;
+    tide.setFlowOutcome('running…');
+    const outcome = await replayInteractions(found, request.step);
+    reportState({ ...outcome, target: `island:${tag}` });
+    tide.setFlowOutcome(
+      outcome.ok ? `played ${outcome.applied}/${outcome.of} interaction(s)` : (outcome.error ?? 'could not run'),
+      outcome.ok,
+    );
+  }
+
   function applyRequestedFlow(id: string): void {
     if (!currentFlowName || !flowRegion) return;
     if (id !== flowRegion) {
@@ -817,6 +834,13 @@ markSandbox();
 
   if (island) {
     mountIsland(island);
+    // AND THEN PLAY ITS INTERACTIONS. The seed alone is not the state the scenario names: a scenario
+    // carrying `interactions` promises what the island reaches AFTER them, and mounting the seed
+    // under that name — reporting `ok: true` — is the silent substitution the whole top of
+    // `lagoon-states.ts` exists to refuse. Both entries have to do this, for the reason the island
+    // refusal above is duplicated: the same address must mean the same thing on the gallery a human
+    // opens and on the focused entry the checks drive.
+    void applyRequestedInteractions(island.tag);
   } else if (refused) {
     // Said above, in the banner and in `window.__motuLagoonState`. Nothing renders under it.
     root.replaceChildren();

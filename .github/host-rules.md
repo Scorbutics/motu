@@ -381,10 +381,12 @@ precedence in a prefill, the slower of two submits not overwriting the faster. `
 actions-week-source.test.ts` is the shape. A flow drives a source through the screen; a unit test
 drives it directly, and you want both for the same reason you want `expectRender` as well as `expect`.
 
-`sources-tested` says so: a region whose declared source no test imports gets a warning naming it. A
-warning, not an error — the rule is new and regions predate it — and only for sources given as an
-OBJECT, because `{ module: '@/lib/…', produces: [...] }` is a claim about somebody else's code rather
-than a unit anyone here wrote.
+THERE IS NO CHECK FOR THIS, deliberately. A `sources-tested` warning used to fire when no test file
+imported a declared source, and it was removed: whether the application's own code has unit tests is
+not motu's judgement to make. Nothing else in the framework opines on a host's test suite, and it
+could only fire once a source already existed — so it encouraged TESTING an extraction, never the
+extraction itself. What produces the pattern is structural: the lagoon renders a region WITHOUT the
+page, so orchestration left in page effects cannot be previewed at all.
 
 And the adapter itself — the few lines that turn the backend's shape into the port's — belongs to
 whatever proves this app against a real backend. Where the call goes through one of the app's own

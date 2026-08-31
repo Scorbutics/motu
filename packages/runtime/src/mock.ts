@@ -21,6 +21,23 @@ interface FixtureCall {
    * over the fallback when it matches.
    */
   match?: unknown[];
+  /**
+   * Applies from the Nth call to this `service`/`method` onward (1-indexed) instead of every call.
+   *
+   * WHY THIS DID NOT EXIST. Matching was by ARGUMENTS only, so "the first read succeeds, a later one
+   * fails" had no fixture to write: a refetch after a mutation typically repeats the EXACT SAME
+   * arguments as the read that preceded it, so `match` cannot tell them apart — only their ORDER
+   * differs. That made a whole class of property untestable: does a component correctly IGNORE a
+   * failed refresh and keep what it already had, instead of clobbering good data with nothing? That is
+   * not a state a seed can jump to — it is a transition, provable only by actually running the success
+   * then the failure, in that order, on the same instance.
+   *
+   * Two fixtures for the same call — one plain, one `{ status: 500, after: 2 }` — now say exactly
+   * that: succeed, then fail from the second call on. `after`-guarded fixtures are eligible once
+   * `callIndex >= after` and, among otherwise-equal candidates, the one with the highest SATISFIED
+   * `after` wins — the more specific temporal rule beats a call-count-agnostic one once it applies.
+   */
+  after?: number;
 }
 
 /** A call that answers with data. */
@@ -87,6 +104,48 @@ export interface Scenario {
   name?: string;
   /** Store seed for this case, e.g. `{ criteria: { login: 'brice' } }`. */
   seed?: Record<string, unknown>;
+  /**
+   * A scripted interaction, run after the seed settles and before the render is read.
+   *
+   * NOT the same rule as `RegionStep` — that model bans synthetic clicks because a FLOW tests region
+   * coupling GIVEN an island's declared output already fired (`emit` simulates the outcome, on
+   * purpose, so a flow never runs real component code). A scenario is the opposite kind of claim: it
+   * IS the island's own code running, so there is nothing to simulate around. What a click here proves
+   * is exactly what `emit` cannot: whether the component's OWN internal handler — a retry, a catch
+   * block, a debounce — behaves correctly when actually invoked, not merely when its outcome is
+   * assumed.
+   *
+   * USE IT FOR A TRANSITION NO SEED CAN DESCRIBE, and nothing else. A state is a seed's job; this is
+   * for "succeeded, THEN failed" on one live instance — the shape a seed cannot reach because the
+   * second half only exists after the first half ran. If you can write the end state as a seed, do.
+   *
+   * THE CONSTRAINTS ARE THE POINT, because the objection they answer is real: a harness that accepts
+   * arbitrary DOM scripting becomes a second, untyped test suite that no longer derives from the
+   * declarations. So this stays deliberately too weak to be one —
+   *
+   *   - CLICK ONLY. No typing, no waits, no conditionals, no navigation. Adding those is how a
+   *     stimulus turns into a script.
+   *   - ACCESSIBLE NAME ONLY. Never a CSS selector — the same vocabulary `expectRender` reads FROM,
+   *     so an interaction can only reach what a person could perceive and act on.
+   *   - NO ASSERTIONS HERE. A scenario's claim stays its rendered output; interactions are stimulus,
+   *     never expectation. There is deliberately nowhere in this type to put one.
+   *   - SHORT. Enough clicks to reach the transition, not to walk a user journey.
+   *
+   * And it must EARN its place: `interaction-effective` fails an interaction that moved neither the
+   * render nor any request — the sibling of `flow-mutation`'s "a step that cannot fail is not a
+   * check". Note that it deliberately does NOT require the render to change, because the properties
+   * this exists for often assert that it must not.
+   */
+  interactions?: ScenarioInteraction[];
+}
+
+export interface ScenarioInteraction {
+  /**
+   * Click the first visible control (button/checkbox/link/etc.) whose ACCESSIBLE NAME matches
+   * (substring, case-sensitive). Roles are tried most-specific first, so a checkbox wins over a
+   * button wrapping it. Deliberately the only verb this type has — see `Scenario.interactions`.
+   */
+  click: string;
 }
 
 /**
@@ -155,6 +214,9 @@ function argsMatch(pattern: unknown[], args: unknown[]): boolean {
  * request (request-keyed fixtures), falling back to a match-less fixture for the same method.
  */
 export class MockTransport implements Transport {
+  /** How many times each `service/method` has been called — what `after` counts against. */
+  private readonly callCounts = new Map<string, number>();
+
   constructor(
     private readonly fixtures: Fixture[],
     private currentRoles: string[] = [],
@@ -165,13 +227,24 @@ export class MockTransport implements Transport {
   }
 
   async call<T>(service: string, method: string, args: unknown[]): Promise<T> {
-    const candidates = this.fixtures.filter((f) => f.service === service && f.method === method);
+    const key = `${service}/${method}`;
+    const callIndex = (this.callCounts.get(key) ?? 0) + 1;
+    this.callCounts.set(key, callIndex);
+
+    const candidates = this.fixtures.filter(
+      (f) => f.service === service && f.method === method && (f.after === undefined || callIndex >= f.after),
+    );
     if (!candidates.length) {
       throw new MotuError(404, `mock: no fixture for ${service}/${method}`);
     }
     // Prefer a request-keyed fixture whose `match` fits these args; else the request-agnostic fallback.
+    // Within either tier, break ties toward the highest SATISFIED `after` — the fixture guarding "from
+    // call N on" is the more specific rule once it applies, and should win over one that fires always.
+    const mostRelevant = (fs: Fixture[]): Fixture | undefined =>
+      [...fs].sort((a, b) => (b.after ?? -1) - (a.after ?? -1))[0];
     const fixture =
-      candidates.find((f) => f.match && argsMatch(f.match, args)) ?? candidates.find((f) => !f.match);
+      mostRelevant(candidates.filter((f) => f.match && argsMatch(f.match, args))) ??
+      mostRelevant(candidates.filter((f) => !f.match));
     if (!fixture) {
       throw new MotuError(404, `mock: no fixture for ${service}/${method} matching these arguments`);
     }

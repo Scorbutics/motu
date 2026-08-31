@@ -8,8 +8,16 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { SyntaxKind } from 'ts-morph';
 import { sourceFileAt } from './ts-project.mjs';
+import { lagoonAliases } from './util.mjs';
 
-/** Host capabilities an island reaches for without being handed them — declared as `contract.ambient`. */
+/**
+ * Host capabilities an island reaches for without being handed them — declared as `contract.ambient`.
+ *
+ * CANDIDATES ONLY. These patterns are a heuristic for "looks like a host capability"; what makes one
+ * ACTUALLY ambient is that the lagoon has to stand it in (`lagoonAliases()`), and the derivation
+ * below intersects with that whenever a lagoon config exists. Keeping the patterns as the fallback
+ * means a project with no lagoon still gets a sensible contract.
+ */
 const AMBIENT = [/^@\/lib\/contexts\//, /^@\/hooks\//, /^@\/lib\/services\//, /^@\/contexts\//, /^@\/services\//];
 
 /** `onWeekProgress` -> `week-progress`. The author renames it if the region has a better word. */
@@ -105,12 +113,17 @@ function readComponentContractUncached(file, exportName) {
 
   // A TYPE import is not a capability: it erases, the island never calls it, and declaring it as
   // ambient would ask the lagoon to stand in for a module nothing reaches at runtime.
+  //
+  // Intersected with what the lagoon actually stands down, so this agrees with the `ambient` check by
+  // construction rather than by coincidence — see `lagoonAliases()` for the split this closed.
+  const stoodDown = lagoonAliases();
   const ambient = [...new Set(
     readFileSync(file, 'utf8')
       .split('\n')
       .filter((l) => !/^\s*import\s+type\b/.test(l))
       .map((l) => l.match(/from\s*['"]([^'"]+)['"]/)?.[1])
-      .filter((spec) => spec && AMBIENT.some((re) => re.test(spec))),
+      .filter((spec) => spec && AMBIENT.some((re) => re.test(spec)))
+      .filter((spec) => stoodDown === null || stoodDown.includes(spec)),
   )].sort();
 
   return {

@@ -723,6 +723,77 @@ function reportRuntimeDiagnostics(report, r, label) {
     report.error('remount-stable', `re-mount changed the output (${label}) — likely accidental module-level state`);
   }
   // remountIdentical == null → the island never rendered; the mount error already covers it.
+
+  // Only present when the lagoon's fake fetch (`@motu/runtime/postgrest-fetch`) is in play — a project
+  // still on module-alias stubs never populates this, so `undefined` skips it rather than reporting a
+  // false pass for a mechanism that never ran. `seen` is the TOTAL request count, not the unscoped
+  // one: a run that made zero requests has zero unscoped requests too, and `report.ok`'s own "0 seen
+  // is a skip, not an ok" rule is what tells those two apart, the same as every other check here.
+  if (r?.fixtureCoverage !== undefined) {
+    const { unscoped, seen } = r.fixtureCoverage;
+    if (unscoped.length === 0) {
+      report.ok('fixture-coverage', `every request the fake fetch saw matched a declared table/fixture (${label})`, seen);
+    } else {
+      const first = unscoped[0];
+      report.error(
+        'fixture-coverage',
+        `${unscoped.length} request(s) matched no declared table/fixture (${label}): ` +
+          `${first.method} ${first.path} — ${first.reason}`,
+      );
+    }
+  }
+
+  // WHAT DOES THIS ISLAND NEED FROM THE BACKEND? Observed, not declared — see `DataReach` in
+  // `@motu/runtime/postgrest-fetch` for why this exists at all: mocking at the wire made an island's
+  // data dependency transitive, so `ambient` (direct imports only) stopped being able to see it. A
+  // table-and-RPC list is a better answer than the module name it replaces, and it is already the
+  // vocabulary `.assay/operations.json` uses — which is where a motu↔assay drift check would compare.
+  //
+  // REPORTED, NOT CHECKED, on purpose: there is nothing to compare against yet. Declaring a per-island
+  // table list before assay's comparison exists would invent a format that then has to survive contact
+  // with it. This makes the dependency legible now and leaves the declaration for when it has a peer.
+  if (r?.fixtureCoverage?.reach !== undefined) {
+    const { tables, rpcs, functions = [], routes = [] } = r.fixtureCoverage.reach;
+    const tableNames = Object.keys(tables).sort();
+    const parts = [
+      ...tableNames.map((t) => `${t}(${[...tables[t]].sort().join('/')})`),
+      ...[...rpcs].sort().map((fn) => `rpc:${fn}`),
+      // Named apart from `rpc:` because they are different things to whatever compares this against
+      // a backend ledger: an edge function is its own deployable, an app route its own handler.
+      ...[...functions].sort().map((fn) => `fn:${fn}`),
+      ...[...routes].sort().map((r2) => `route:${r2}`),
+    ];
+    report.ok('data-reach', `reaches ${parts.join(', ')} (${label})`, {
+      n: tableNames.length + rpcs.length + functions.length + routes.length,
+      of: 'backend dependencies',
+    });
+  }
+
+  // DID ANYTHING LEAVE THE MACHINE? The counterpart to `fixture-coverage`: that one asks whether the
+  // requests the fake fetch SAW were declared, this one asks whether any request got past the stubs
+  // entirely. Both must hold for "self-contained" to mean anything, and this half applies to every
+  // project — including one still on module-alias stubs, where a missing stub is otherwise invisible
+  // (the request fails, the island catches it, an empty state renders, and `NOISE` silences the
+  // console line that would have said so).
+  if (r?.networkEscapes !== undefined) {
+    const escapes = r.networkEscapes;
+    if (escapes.length > 0) {
+      const first = escapes[0];
+      const hosts = [...new Set(escapes.map((e) => { try { return new URL(e.url).host; } catch { return e.url; } }))];
+      report.error(
+        'network-sealed',
+        `${escapes.length} request(s) escaped the lagoon to ${hosts.join(', ')} (${label}): ` +
+          `${first.method} ${first.url} — a host module reached a real backend, so this island is not ` +
+          `standing on its stubs. The failure is normally invisible: the island catches it and renders empty`,
+      );
+    } else {
+      // `seen` is the FAKE-FETCH request count, not the escape count: zero escapes proves nothing on
+      // its own (an island that made no backend call at all also escapes nothing). Passing the count
+      // of requests actually answered lets `report.ok`'s "0 examined is a skip" rule tell the two
+      // apart — which is precisely "is the fake fetch wired, or is this check vacuous?".
+      report.ok('network-sealed', `nothing escaped the lagoon — every backend call was answered locally (${label})`, r.fixtureCoverage?.seen);
+    }
+  }
 }
 
 
@@ -863,8 +934,43 @@ async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast
   }
 }
 
+/**
+ * A scenario's scripted interactions must have DONE something — the guard that keeps
+ * `Scenario.interactions` from becoming the untyped browser-test suite the region-flow model
+ * deliberately refuses (see `RegionStep`'s doc comment in `@motu/runtime/mock`).
+ *
+ * Sibling of `flow-mutation`'s "a step that cannot fail is not a check". The rule here is NOT "did
+ * the render change?" — the properties interactions exist for often assert that it did NOT (a panel
+ * keeping its last-good data through a failed refetch renders identically on purpose). Load-bearing
+ * means the render moved OR the interaction caused work. Neither means somebody clicked a journey
+ * whose end state a plain seed could have described, and it should be a seed.
+ *
+ * A WARNING, not an error: with no fake-fetch in play there is no request signal, so an interaction
+ * that legitimately only moves state the capture cannot see is indistinguishable from a decorative
+ * one, and the report says which case it could not tell apart.
+ */
+function reportInteractions(report, r) {
+  const inert = r.inertInteractions;
+  if (!inert) return; // the `--fast` lane runs no interactions — nothing to judge
+  if (inert.length === 0) {
+    report.ok('interaction-effective', 'every scripted interaction moved the render or caused work');
+    return;
+  }
+  for (const { name, requestsObservable } of inert) {
+    report.warn(
+      'interaction-effective',
+      `"${name}" scripted an interaction that changed nothing observable — ` +
+        (requestsObservable
+          ? 'no render change and no request. A seed describing the same end state is the honest form'
+          : 'no render change, and this project has no fake-fetch request signal to check against. ' +
+            'Either it is decorative, or what it moved is not captured — assert on what it produced'),
+    );
+  }
+}
+
 function reportDifferentiation(report, r) {
   if (!r || r.differentiates == null) return;
+  reportInteractions(report, r);
   if (r.differentiates) {
     // Duplicates are not a failure — two seeds may legitimately normalise to one output — but they are
     // not evidence either, and the ok line used to cover for them.
@@ -2756,104 +2862,6 @@ function channelSourceCheck(report, id, region) {
 }
 
 /**
- * A SOURCE THE APPLICATION AUTHORED, and whether anything drives it directly.
- *
- * This is the honest edge of what a green region claims. In the lagoon the source is the application's
- * OWN object — its timeout, its precedence rules, its generation guard, its error mapping all run —
- * and only its PORT is a stand-in. So a flow proves the page's logic behaves against answers a human
- * chose. What a flow cannot reach is every branch that no rendered state distinguishes: a lookup that
- * THREW versus one that answered null, a deadline, the slower of two submits not overwriting the
- * faster. Those are unit tests over a hand-made port, in the host's own runner, and a source is
- * framework-free precisely so they are cheap to write.
- *
- * A WARNING, and deliberately: the rule is new, plenty of regions predate it, and a check that turns
- * a project red wholesale teaches people to ignore the report rather than to fix it.
- *
- * Only sources given as an OBJECT are asked for: `{ module: '@/lib/…', produces: [...] }` declares
- * that a host module feeds some keys, which is a claim about somebody else's code, not a unit anyone
- * here wrote.
- */
-function sourcesTestedCheck(report, id) {
-  const file = paths.archipelagoFile(id);
-  if (!existsSync(file)) return;
-  const text = stripComments(readFileSync(file, 'utf8'));
-
-  const block = text.match(/\bsources\s*:\s*\{([\s\S]*?)\n\s*\}/);
-  if (!block) return;
-  // `week: weekSource` — an identifier. The object-literal form (`revenue: { module: … }`) has a `{`
-  // where this wants a name, so it simply does not match.
-  const named = [...block[1].matchAll(/(\w+)\s*:\s*([A-Za-z_$][\w$]*)\s*,/g)].map((m) => ({
-    key: m[1],
-    binding: m[2],
-  }));
-  if (!named.length) {
-    report.ok('sources-tested', 'no application-authored source to cover', 0);
-    return;
-  }
-
-  /** Where a binding was imported from, resolved to a host path. */
-  const moduleOf = (binding) => {
-    for (const imp of text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
-      const imported = imp[1].split(',').map((n) => n.trim().split(/\s+as\s+/).pop().trim());
-      if (imported.includes(binding)) return resolveAppImport(file, imp[2]);
-    }
-    return null;
-  };
-
-  const tests = hostTestFiles();
-  const uncovered = [];
-  for (const { key, binding } of named) {
-    const target = moduleOf(binding);
-    // A source whose module cannot be resolved is one this cannot judge — say nothing rather than
-    // report a project for a path we failed to follow.
-    if (!target) continue;
-    const stem = basename(target);
-    const covered = tests.some((t) => t.text.includes(stem));
-    if (!covered) uncovered.push({ key, stem });
-  }
-
-  if (!uncovered.length) {
-    report.ok('sources-tested', `every declared source is driven by a test`, named.length);
-    return;
-  }
-  report.warn(
-    'sources-tested',
-    `${uncovered.length}/${named.length} source(s) no test drives: ${uncovered.map((u) => u.key).join(', ')} — a flow ` +
-      `drives a source through the SCREEN, so it reaches only the branches a rendered state tells apart. ` +
-      `The rest (a lookup that threw vs one that answered nothing, a deadline, two submits racing) needs a ` +
-      `unit test over a hand-made port. The source is framework-free so that test is cheap.`,
-  );
-}
-
-/** Every test file the host owns, read once. */
-function hostTestFiles() {
-  const out = [];
-  const walk = (dir) => {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      const full = resolve(dir, e.name);
-      if (e.isDirectory()) {
-        if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-        walk(full);
-      } else if (/\.(test|spec)\.(t|j)sx?$/.test(e.name)) {
-        try {
-          out.push({ file: full, text: readFileSync(full, 'utf8') });
-        } catch {
-          /* unreadable is not a finding about the project */
-        }
-      }
-    }
-  };
-  walk(HOST_ROOT);
-  return out;
-}
-
-/**
  * DID THE COMPONENT ACTUALLY EMIT? The half no CLI check could reach until now.
  *
  * `wiring-live` fires each declared output itself, and a flow's `emit` goes through the same seam, so
@@ -3157,7 +3165,6 @@ export async function runArchipelagoVerify(argv, id) {
 
   // The other half of what a source is worth: a flow drives it through the screen, and the branches
   // no screen tells apart need a test that drives it directly.
-  sourcesTestedCheck(report, id);
 
   // Static, so an uncovered slot shows up in the fast loop rather than behind a browser.
   renderCoverageCheck(report, id);

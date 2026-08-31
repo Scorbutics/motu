@@ -292,11 +292,12 @@ claims, and it is routinely read backwards.
 **So a source that carries logic gets unit tests, in the host's own runner, over a hand-made port**
 (`host-rules.md:376-381`) — that is the only place branches no rendered state distinguishes can be
 reached: a lookup that *threw* versus one that answered null, a deadline, the slower of two submits
-not overwriting the faster. `motu island verify` reports this as `sources-tested`, a **warning**
-naming each source no test file mentions, and only for sources given as an identifier — an
-object-literal `{ module, produces }` is "a claim about somebody else's code rather than a unit
-anyone here wrote" (`host-rules.md:383-385`; implementation
-`packages/cli/src/commands/verify.mjs:2725-2773`).
+not overwriting the faster. **No check enforces this.** A `sources-tested` warning used to name each
+declared source no test file mentioned, and it was removed: whether the application's own code has
+unit tests is not motu's judgement to make, nothing else in the framework opines on a host's test
+suite, and it could only fire once a source already existed — so it encouraged testing an extraction,
+never the extraction itself. What produces the pattern is structural, not a check: the lagoon renders
+a region without the page, so orchestration hidden in page effects cannot be previewed at all.
 
 The known gap, stated rather than hidden: a client that talks to the database or the auth service
 directly is not a declared operation, so no tool pins its shape — "that adapter is the last unproven
@@ -757,7 +758,7 @@ Writes `fixtures.recorded.ts` with request-keyed rows and any host-fed `seed`
 **6 — Check it.**
 
 ```
-motu island verify member-results     # no-bare-fetch, contract-only-io, host-stubs, sources-tested
+motu island verify member-results     # no-bare-fetch, contract-only-io, host-stubs
 motu check                            # contracts.generated.ts matches the components
 motu contract check                   # the boundary + coupling graph is what was committed
 ```
@@ -774,7 +775,7 @@ report, and `--update` is the acknowledgement (`packages/cli/src/commands/contra
 - [03 — CLI reference](03-cli-reference.md) — `contract check`, `codegen`, `fixtures record` among the rest.
 - [04 — Configuration](04-configuration.md) — `manifest`, `contract`, and the rest of `motu.config.json`.
 - [05 — Archipelagos and regions](05-archipelagos-and-regions.md) — `sources`, `channels`, `bind`/`writes` (what the coupling graph is derived from).
-- [07 — Checks and verification](07-checks-and-verification.md) — `no-bare-fetch`, `contract-only-io`, `host-stubs`, `sources-tested`.
+- [07 — Checks and verification](07-checks-and-verification.md) — `no-bare-fetch`, `contract-only-io`, `host-stubs`.
 - [08 — The lagoon](08-lagoon.md) — the transport toggle, forced-error states, `lagoon.config.json`'s `alias` table.
 - [10 — Evidence and testing](10-evidence-and-testing.md) — scenarios, flows, and the unit tests a source still needs.
 - [12 — Hosts and adapters](12-hosts-and-adapters.md) — `@motu/adapter-next`, `createMotuRoute`, the AngularJS bridge.

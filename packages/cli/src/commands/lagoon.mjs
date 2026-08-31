@@ -983,6 +983,7 @@ export async function lagoonStatesCommand(argv) {
         target: `island:${tag}`,
         states: scenarios.map((s, i) => {
           const name = s.name ?? `#${i + 1}`;
+          const steps = (s.interactions ?? []).length;
           return {
             name,
             // The gallery, like the region rows below — NOT lagoon.html. `lagoon serve` and
@@ -990,6 +991,12 @@ export async function lagoonStatesCommand(argv) {
             // land on the gallery with a `target` it ignored: the first region rendered, no banner,
             // and the URL looked like it had worked. The gallery reads an `island:` target now.
             url: `${base}/?${q({ target: `island:${tag}`, scenario: address(name, i) })}`,
+            // A scenario with interactions is not ONE state. Reported exactly as a region's flow
+            // reports its own — a COUNT, which the printer already turns into "&step=<n> stops
+            // earlier" — so the states BETWEEN the clicks are as findable here as a flow's are, and
+            // the last one stops looking like the only one there is. Omitted (not 0) when a scenario
+            // has none, so a plain seeded state does not advertise a step vocabulary it cannot use.
+            ...(steps ? { steps } : {}),
           };
         }),
       };

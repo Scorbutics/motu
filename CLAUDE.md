@@ -387,6 +387,24 @@ components in app files that wrap them in `<R.Island>`. The lagoon installs the 
 
 Worth being exact about, because it decides how much a green region actually claims.
 
+MOTU DOES NOT PRESCRIBE THE SOURCE PATTERN, and it does not need to. The lagoon renders a region
+WITHOUT the page, so orchestration left in page effects cannot be previewed: the host keys arrive
+empty, `lagoon-render` says the region renders nothing, and the only way out is hand-writing a channel
+that re-implements what the page does — a second copy, which drifts. Extraction is what makes that go
+away. The pressure is emergent from a constraint motu imposes for its own reasons; no field blesses
+the pattern and none should. What `sources` declares is narrower and is ordinary key ownership: WHICH
+MODULE feeds a host-fed key, so `channelFrom` can install the application's own object rather than a
+copy of it. Same principle as faking the wire instead of the service — run the app's code, replace
+only what is beneath it.
+
+So whether a given fetch deserves a source object is an APPLICATION decision, not a motu rule. What
+earns one is orchestration ACROSS calls — a generation guard discarding a stale in-flight response, a
+debounce, reset-on-new-search, the slower of two submits not overwriting the faster. What does not is
+"this component fetches something". Note that mocking at the wire (`@motu/runtime/postgrest-fetch`)
+already removed the other half of the old justification: a port existed partly so the lagoon could
+substitute data, and the fake fetch now does that beneath the real service. Only the orchestration
+half is left.
+
 When a flow runs, the source is the APPLICATION'S OWN OBJECT. Its timeout, its precedence rules, its
 generation guard, its error mapping, its intent dispatch — all of that executes. What is swapped is
 the PORT: production hands it Supabase and the services, the lagoon hands it fixtures. So a region
@@ -406,10 +424,18 @@ precedence in a prefill, the slower of two submits not overwriting the faster. `
 actions-week-source.test.ts` is the shape. A flow drives a source through the screen; a unit test
 drives it directly, and you want both for the same reason you want `expectRender` as well as `expect`.
 
-`sources-tested` says so: a region whose declared source no test imports gets a warning naming it. A
-warning, not an error — the rule is new and regions predate it — and only for sources given as an
-OBJECT, because `{ module: '@/lib/…', produces: [...] }` is a claim about somebody else's code rather
-than a unit anyone here wrote.
+THERE IS NO CHECK FOR THIS, deliberately. A `sources-tested` warning used to fire when no test file
+imported a declared source, and it was removed: whether the application's own code has unit tests is
+not motu's judgement to make. Nothing else in the framework opines on a host's test suite, and the
+check did not even produce the behaviour it appeared to — it could only fire once a source already
+existed, so it encouraged TESTING an extraction, never the extraction itself. The thing that actually
+does the work is the paragraph at the top of this section, and it costs no machinery.
+
+Two properties this leaves reachable without a source at all, both newer than that check: an
+INTERACTION scenario (`Scenario.interactions`) drives a real click through the component's own
+handler, which reaches a catch block or a retry that no seed can describe; and `data-reach` reports
+which tables and RPCs an island actually touched. Between them, "restructure the component so it can
+be tested" is much more rarely the answer than it was when sources were introduced.
 
 And the adapter itself — the few lines that turn the backend's shape into the port's — belongs to
 whatever proves this app against a real backend. Where the call goes through one of the app's own

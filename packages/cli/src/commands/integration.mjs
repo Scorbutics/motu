@@ -199,7 +199,7 @@ function checkRegion(region, sources) {
   // from wherever it likes — it is the ARCHIPELAGO's path that has to be short.
   //
   // A WARNING, not an error: the rule is new, regions predate it, and a project whose islands never
-  // reach a page is genuinely fine. `sources-tested` was introduced the same way.
+  // reach a page is genuinely fine.
   const bindingSrc = code(readFileSync(bindingFile, 'utf8'));
   const archImport = bindingSrc.match(new RegExp(`import\\s*\\{([^}]*\\b${constName}\\b[^}]*)\\}\\s*from\\s*['"]([^'"]+)['"]`));
   if (archImport && /\bELEMENT_REGISTRY\b|\bREGISTRY\b/.test(archImport[1])) {

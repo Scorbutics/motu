@@ -527,7 +527,7 @@ motu archipelago verify <id|--all> [--runtime] [--audit] [--fast] [--verbose] [-
 | `--verbose` | Name each step with its cost | off (`:3093`) |
 | `--json` | Machine-readable findings | off (`:2607`, `:2616`) |
 
-Static checks run regardless of the flags: channel source, frame-is-page, sources-tested,
+Static checks run regardless of the flags: channel source, frame-is-page,
 render-coverage, writes-covered, catalogue membership, and the shared stylesheet lint
 (`:3094-3118`).
 

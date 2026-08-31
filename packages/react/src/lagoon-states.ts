@@ -295,6 +295,91 @@ async function waitForQuiet(stillMs = 200, budgetMs = 2000): Promise<void> {
   }
 }
 
+/**
+ * PLAY AN ISLAND SCENARIO'S INTERACTIONS, so the state a name PROMISES is the state a URL opens in.
+ *
+ * Without this, a scenario carrying `interactions` was addressable and unfaithful: the lagoon applied
+ * the seed, ran nothing, and reported `ok: true` under the scenario's own name. Opening peps'
+ * "une sélection réelle survit à un refetch qui échoue" showed the plain seeded panel — no selection
+ * made, no refetch failed, identical to the scenario before it — while the one signal a viewer is
+ * told to trust before believing a screenshot vouched for it. A snapshot baseline took the picture
+ * under that name too. That is exactly the failure `render`'s "AN UNRESOLVABLE STATE MUST NOT RENDER
+ * SOMETHING ELSE" refusal exists for, one layer further in: the state resolved, and then did not
+ * happen.
+ *
+ * The same `?step=` vocabulary a region flow already uses, and for the same reason — the states
+ * BETWEEN the clicks are worth opening, not just the last one.
+ *
+ * Accessible name, never a selector: the vocabulary `expectRender` reads FROM and `Scenario.click`
+ * declares. This resolver is deliberately smaller than Playwright's (no full ARIA name computation) —
+ * it is the same rule stated twice, and if the two ever disagree the check is the one that decides.
+ */
+function accessibleName(el: Element): string {
+  const aria = el.getAttribute('aria-label') ?? el.getAttribute('title') ?? el.getAttribute('alt');
+  return `${aria ?? ''} ${(el as HTMLElement).innerText ?? el.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
+}
+
+const CLICKABLE = 'button, [role="button"], input[type="checkbox"], [role="checkbox"], [role="switch"], [role="radio"], [role="menuitem"], [role="tab"], a[href], label, summary';
+
+/** The control a `click` names, or null. Portals are why this searches the DOCUMENT, not the island:
+ *  a dialog opened by an earlier step renders as a sibling of the island, not inside it. */
+function findClickable(name: string): HTMLElement | null {
+  const wanted = name.trim();
+  const candidates = [...document.querySelectorAll<HTMLElement>(CLICKABLE)].filter(
+    (el) => el.offsetParent !== null || el.getClientRects().length > 0,
+  );
+  // Exact first, so a short name is not stolen by a longer control that merely contains it; then the
+  // narrowest containing match, which is the innermost control rather than a wrapper around it.
+  return (
+    candidates.find((el) => accessibleName(el) === wanted) ??
+    candidates
+      .filter((el) => accessibleName(el).includes(wanted))
+      .sort((a, b) => accessibleName(a).length - accessibleName(b).length)[0] ??
+    null
+  );
+}
+
+/**
+ * Settle on the DOM, not the store — `waitForQuiet` watches region KEYS, and an island's own click
+ * handler (a fetch, a catch block, a dialog opening) can move the whole screen without writing one.
+ * Using the store version here would return after the first tick and click into a page still filling
+ * in, which is precisely the race `waitForStableRender` exists for on the check side.
+ */
+async function waitForDomQuiet(stillMs = 120, budgetMs = 4000): Promise<void> {
+  const snapshot = () => document.body.innerHTML.length;
+  const until = Date.now() + budgetMs;
+  let last = -1;
+  while (Date.now() < until) {
+    const now = snapshot();
+    if (now === last) return;
+    last = now;
+    await settle(stillMs);
+  }
+}
+
+export async function replayInteractions(scenario: Scenario, upTo: number | null): Promise<StateOutcome> {
+  const steps = scenario.interactions ?? [];
+  const base: StateOutcome = { ok: false, target: '', kind: 'scenario', name: scenario.name, of: steps.length };
+  const limit = upTo === null ? steps.length : Math.min(upTo, steps.length);
+  if (upTo !== null && upTo > steps.length) {
+    return { ...base, applied: 0, error: `step ${upTo} does not exist — "${scenario.name ?? 'scenario'}" has ${steps.length} interaction(s)` };
+  }
+  for (let i = 0; i < limit; i++) {
+    const { click } = steps[i];
+    if (!click) continue;
+    // Each click can reveal the control the next one names, so settle between them rather than
+    // resolving the whole list up front.
+    await waitForDomQuiet();
+    const el = findClickable(click);
+    if (!el) {
+      return { ...base, applied: i, error: `step ${i + 1}: nothing clickable is named "${click}"` };
+    }
+    el.click();
+  }
+  await waitForDomQuiet();
+  return { ...base, ok: true, applied: limit };
+}
+
 /** Wait until the region has mounted something, so step 1 does not fire into an empty page. */
 async function waitForRegion(timeoutMs = 10_000): Promise<boolean> {
   const until = Date.now() + timeoutMs;

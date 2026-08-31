@@ -132,6 +132,24 @@ const PAINT_TIMEOUT_WARM = 3000;
 let paintTimeout = PAINT_TIMEOUT_COLD;
 /** Diagnostics of the CHECK currently running — console/pageerror listeners are per page, not per check. */
 let diagnosticSink = [];
+/**
+ * Requests that LEFT the machine during the check currently running — same per-page-listener,
+ * per-check-sink shape as `diagnosticSink`.
+ *
+ * A lagoon is supposed to be self-contained: every backend call answered by a stub or the fake fetch,
+ * nothing reaching a real host. Nothing checked that. Worse, the one signal that would have shown it
+ * is deliberately silenced — `NOISE` filters `net::ERR` and `Failed to load resource` out of console
+ * diagnostics, which is right for a dev server's own chatter and exactly wrong for an island quietly
+ * trying to reach the ocean and swallowing the failure in its own catch block. That renders as an
+ * empty state and passes every check.
+ */
+let networkSink = [];
+
+/** Loopback = the lagoon's own dev server (and its reload poll, which can name a different loopback
+ *  host than the page). Anything else is the page reaching for the world. */
+function isLoopback(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+}
 
 /** The page for a build posture, opened on first use. */
 /** The view each pooled page is currently showing, so a check never inherits the previous one's. */
@@ -175,12 +193,15 @@ async function onLagoonPage({ target, fit, forceError, transport, port, viewport
   const server = await startLagoon({ target, fit, forceError, transport, port });
   const page = await lagoonPage(server, target, view);
   const previousSink = diagnosticSink;
+  const previousNetwork = networkSink;
   diagnosticSink = diagnostics ?? [];
+  networkSink = [];
   try {
     if (viewport) await page.setViewportSize(viewport);
     return await fn(page, server);
   } finally {
     diagnosticSink = previousSink;
+    networkSink = previousNetwork;
   }
 }
 
@@ -325,6 +346,47 @@ async function setupPageDiagnostics(page, diagnostics) {
     const m = String(err?.message || err);
     if (!NOISE.test(m)) sink.push(`pageerror: ${m}`);
   });
+  // Every request the page issues, whether it succeeded or not — a stub gap usually FAILS (the lagoon
+  // points the app at an unresolvable host), and a failed request is exactly what `NOISE` hides.
+  page.on('request', (req) => {
+    const url = req.url();
+    if (!/^https?:/i.test(url)) return; // data:, blob:, about: — not the network
+    try {
+      if (!isLoopback(new URL(url).hostname)) networkSink.push({ method: req.method(), url });
+    } catch {
+      /* unparseable URL — not something to fail a check over */
+    }
+  });
+}
+
+/** What has escaped during the check currently running. Read from inside an `onLagoonPage` callback. */
+function currentNetworkEscapes() {
+  return networkSink.slice();
+}
+
+/**
+ * Requests the lagoon's fake fetch (`@motu/runtime/postgrest-fetch`) could not resolve against any
+ * declared table/fixture — accumulated in `window.__motuUnscopedRequests` by the fake itself. Read
+ * the same way `window.__motuRejections` is: a call that ran against nothing scoped for it is exactly
+ * as much a finding as an unhandled rejection, and both are populated by code running IN the page.
+ *
+ * Paired with the TOTAL request count the fake saw (`window.__motuFakeFetchRequestCount`) — a run
+ * that made zero requests has zero unscoped ones too, and that is not the same claim as "every
+ * request was covered". `undefined` when the fake never ran at all (a project still on module-alias
+ * stubs), so the caller can skip reporting the check rather than fabricate a count of 0.
+ */
+async function readUnscopedRequests(page) {
+  return page
+    .evaluate(() => {
+      if (window.__motuUnscopedRequests === undefined && window.__motuFakeFetchRequestCount === undefined) {
+        return undefined;
+      }
+      const unscoped = window.__motuUnscopedRequests || [];
+      const seen = window.__motuFakeFetchRequestCount || 0;
+      const reach = window.__motuDataReach || { tables: {}, rpcs: [] };
+      return { unscoped, seen, reach };
+    })
+    .catch(() => undefined);
 }
 
 /**
@@ -444,8 +506,10 @@ export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPa
 
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
+    const fixtureCoverage = await readUnscopedRequests(page);
+    const networkEscapes = currentNetworkEscapes();
 
-    return { ok: result.mounted && result.shadowLength > 0, ...result, diagnostics, remountIdentical };
+    return { ok: result.mounted && result.shadowLength > 0, ...result, diagnostics, remountIdentical, fixtureCoverage, networkEscapes };
   });
 }
 
@@ -1199,9 +1263,11 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
 
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
+    const fixtureCoverage = await readUnscopedRequests(page);
+    const networkEscapes = currentNetworkEscapes();
 
     const ok = result.region && result.islands.length > 0 && result.islands.every((i) => i.tag);
-    return { ok, ...result, diagnostics };
+    return { ok, ...result, diagnostics, fixtureCoverage, networkEscapes };
   });
 }
 
@@ -1292,6 +1358,42 @@ async function provideScenario(page, seed, { settleMs = 150, tag, remount = true
   else await sleep(settleMs);
 }
 
+/** Interactive roles worth trying, most-specific first — a checkbox's accessible name and a button's
+ *  often collide (e.g. a labelled tile), so a narrower role tried first wins over a generic one. */
+const CLICKABLE_ROLES = ['checkbox', 'switch', 'radio', 'menuitem', 'tab', 'link', 'button'];
+
+/**
+ * Run a scenario's scripted interactions against the ALREADY-MOUNTED island — real Playwright
+ * locators, scoped to the island's own element (its custom-element tag, or its React-path wrapper),
+ * matched by ACCESSIBLE NAME rather than a CSS selector into the component's internals. See
+ * `Scenario.interactions`'s doc comment (`@motu/runtime/mock`) for why this is a different claim
+ * than a region flow's `emit`, and therefore not the same "no synthetic clicks" rule.
+ *
+ * Playwright's locators pierce open shadow roots by default, so this works unchanged whether the
+ * island rendered under its own shadow root (`fit=native`, standalone) or light DOM (nested in an
+ * archipelago / the React mount path).
+ */
+async function runInteractions(page, tag, interactions) {
+  // NOT scoped to the island's own element. A dialog/popover/dropdown built on a portal (Radix,
+  // every shadcn component on it) renders as a SIBLING of the island in the DOM, not a descendant —
+  // scoping the search to the island's subtree made every interaction past the one that opens such a
+  // thing unfindable. `differentiateLagoon` mounts exactly one island alone, so page-wide search has
+  // no ambiguity to avoid here; it would need scoping again if this ever drives a multi-island region.
+  for (const step of interactions ?? []) {
+    if (!step.click) continue;
+    let target = null;
+    for (const role of CLICKABLE_ROLES) {
+      const candidate = page.getByRole(role, { name: step.click, exact: false });
+      if ((await candidate.count()) > 0) {
+        target = candidate.first();
+        break;
+      }
+    }
+    if (!target) target = page.getByText(step.click, { exact: false }).first();
+    await target.click({ timeout: 5000 });
+  }
+}
+
 /**
  * Data-flow differentiation in the real-browser lagoon. Mounts the island once, then drives each
  * declared scenario's seed into the store via the archipelago's `provide()` seam (the same inbound
@@ -1327,13 +1429,45 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     // Drive each scenario's seed through the archipelago boundary and capture rendered output.
     const outputs = [];
     const owned = scenarioKeys(scenarios);
-    for (const scenario of scenarios) {
+    // Scenarios whose interactions changed NOTHING observable — see `inertInteractions` below.
+    const inertInteractions = [];
+    const requestCount = () =>
+      page.evaluate(() => window.__motuFakeFetchRequestCount).catch(() => undefined);
+
+    for (const [i, scenario] of scenarios.entries()) {
       await provideScenario(page, scenario.seed, { owned });
-      outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
+      if (!scenario.interactions?.length) {
+        outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
+        continue;
+      }
+
+      // AN INTERACTION MUST BE LOAD-BEARING, and "did the render change?" is the WRONG test for it.
+      //
+      // The properties interactions exist for are often exactly the ones where nothing visible moves:
+      // "the panel keeps its last-good data when a later refetch fails" asserts that the render is
+      // UNCHANGED. Comparing before/after alone would flag that scenario as decorative — the one case
+      // the primitive was added for. So an interaction counts as load-bearing if it moved the render
+      // OR caused work (a request through the lagoon's fake fetch). Only when it did neither is it a
+      // journey somebody clicked through whose end state a plain seed could have described.
+      const before = normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 }));
+      const requestsBefore = await requestCount();
+      await runInteractions(page, tag, scenario.interactions);
+      const after = normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 }));
+      const requestsAfter = await requestCount();
+
+      const renderMoved = before !== after;
+      const known = requestsBefore !== undefined && requestsAfter !== undefined;
+      const requestsMoved = known && requestsAfter > requestsBefore;
+      if (!renderMoved && !requestsMoved) {
+        inertInteractions.push({ name: scenario.name ?? `#${i + 1}`, requestsObservable: known });
+      }
+      outputs.push(after);
     }
 
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
+    const fixtureCoverage = await readUnscopedRequests(page);
+    const networkEscapes = currentNetworkEscapes();
 
     // TWO FAILURES, REPORTED AS ONE. `differentiates` folds "every scenario rendered" and "at least two
     // differ" into a boolean, and the caller could only say "rendered identically" — which is a lie
@@ -1342,7 +1476,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     const empty = outputs.map((o, i) => (o.trim().length ? null : (scenarios[i]?.name ?? `#${i + 1}`))).filter(Boolean);
     const distinctOutputs = new Set(outputs).size;
     const differentiates = empty.length === 0 && distinctOutputs > 1;
-    return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics };
+    return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics, fixtureCoverage, inertInteractions, networkEscapes };
   });
 }
 
@@ -1420,8 +1554,10 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
 
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
     for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
+    const fixtureCoverage = await readUnscopedRequests(page);
+    const networkEscapes = currentNetworkEscapes();
 
-    return { calls, seedWrites, mounted, diagnostics };
+    return { calls, seedWrites, mounted, diagnostics, fixtureCoverage, networkEscapes };
   });
 }
 

@@ -1652,19 +1652,26 @@ function motuMountDock(opts) {
   // or a check driving it, and chrome that only updated on its own clicks would go stale and say the
   // wrong region with total confidence.
   var stop = null;
+  // WHICH control object `stop` belongs to. Identity, not a boolean: the lagoon can be REPLACED under
+  // this dock — it is a separate document when the host frames it — and the old control goes with it.
+  var bound = null;
   var attach = function () {
     var ctl = control();
-    if (!ctl || stop) return;
+    if (!ctl || ctl === bound) return;
+    // A DIFFERENT OBJECT means a new lagoon document. Subscribing once and stopping (which is what
+    // this did) left the dock holding a subscription to a page that no longer exists: the frame
+    // navigated, the lagoon was correctly on its new state, and the dock went on drawing the old one
+    // with total confidence. Invisible until something made the frame navigate — opening an island
+    // from the islands pane is the first control that does.
+    if (stop) { try { stop(); } catch (e) { /* the page it belonged to is gone; nothing to release */ } }
+    bound = ctl;
     stop = ctl.subscribe(paint);
     paint();
   };
   attach();
-  // The lagoon boots asynchronously, so keep looking until it is there.
-  var tries = 0;
-  var poll = setInterval(function () {
-    if (stop || tries++ > 40) return clearInterval(poll);
-    attach();
-  }, 250);
+  // FOREVER, not until the first success. The lagoon boots asynchronously (the original reason for
+  // this poll) and can also be replaced at any later moment, which the old `tries` cap could not see.
+  setInterval(attach, 400);
 
   // ── the command palette ──────────────────────────────────────────────────────────────────────
   //

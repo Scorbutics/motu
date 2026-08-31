@@ -9,7 +9,7 @@ export type { MembersArchipelagoOptions } from './archipelagos/members/members.a
 export { usersArchipelago } from './archipelagos/users/users.archipelago.js';
 export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry.js';
 
-export { ALL_FIXTURES, ALL_ROLES } from './fixtures.js';
+export { ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from './fixtures.js';
 
 export type { MemberRow, MemberCriteria } from './shared/member-types.js';
 export { ATLAS_CHART, HELIOS_CHART, ATLAS_COMPANY, HELIOS_COMPANY, orgChartFor, companyName } from './shared/org-types.js';

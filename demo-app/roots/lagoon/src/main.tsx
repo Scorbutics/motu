@@ -38,7 +38,7 @@ import {
   setCoupling,
   couplingOn,
 } from '@motu/debug-overlay';
-import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, adminArchipelago, ATLAS_CHART, ATLAS_COMPANY, companyName, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
+import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, adminArchipelago, ATLAS_CHART, ATLAS_COMPANY, companyName, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
 import css from 'demo-app/styles.css?inline';
 import config from '../lagoon.config.json';
 import { setupLagoonAngularHost } from './angular-host.js';
@@ -82,6 +82,11 @@ startLagoon({
   archipelagos: ARCHIPELAGOS,
   fixtures: ALL_FIXTURES,
   roles: ALL_ROLES,
+  // The declared states, so `?target=island:<tag>&scenario=<name>` is an ADDRESS here too. This entry
+  // is EJECTED — the project owns it and motu will not regenerate it — so a capability added to the
+  // scaffold after the eject reaches this app only by being added here. That is exactly what had
+  // happened: the framework's own demo could not open a state the framework advertises.
+  evidence: { scenarios: ALL_SCENARIOS, flows: ALL_FLOWS },
   css,
   config,
   frames,

@@ -448,7 +448,7 @@ Two models. Pick one per project and do not mix them.
 | Blessing a change | `--update` overwrites | `--accept`, a separate command |
 
 `<islands>` is the `islands` key of `motu.config.json`, default `src/islands`
-(`packages/cli/src/lib/config.mjs:18`, `:205`). The scenario slug is lowercased with non-alphanumerics
+(`packages/cli/src/lib/config.mjs:33`, `:327`). The scenario slug is lowercased with non-alphanumerics
 collapsed to `-`, empty → `default`; the viewport is its NAME, not its width
 (`packages/cli/src/lib/snapshots.mjs:20-27`; viewports default `{ mobile: 390, desktop: 1280 }`,
 `packages/cli/src/lib/util.mjs:255-260`).

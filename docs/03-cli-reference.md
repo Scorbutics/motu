@@ -56,27 +56,27 @@ re-parse with the argument list shifted, so their positional lands in `argv._[0]
 
 ## How the CLI locates a project
 
-`loadMotuConfig()` (`packages/cli/src/lib/config.mjs:100`) walks **up** from a start directory looking
+`loadMotuConfig()` (`packages/cli/src/lib/config.mjs:176`) walks **up** from a start directory looking
 for the first `motu.config.json`, or a `package.json` carrying a `motu` key
-(`packages/cli/src/lib/config.mjs:71-95`). That file's directory is the **project root**. A malformed
+(`packages/cli/src/lib/config.mjs:147-171`). That file's directory is the **project root**. A malformed
 `motu.config.json` throws with its path; an unreadable `package.json` is skipped and the walk
 continues.
 
 The start directory is `$MOTU_PROJECT_ROOT` when set, otherwise `process.cwd()`
-(`packages/cli/src/lib/config.mjs:102`). That variable exists because the runtime harness is spawned
+(`packages/cli/src/lib/config.mjs:178`). That variable exists because the runtime harness is spawned
 with its cwd inside the CLI package — it has to be, or `--import tsx` does not resolve — so without it
 a `--runtime` verify in someone else's project walked up into motu's own config
-(`packages/cli/src/lib/config.mjs:60-70`). The CLI sets it on every child it spawns
+(`packages/cli/src/lib/config.mjs:139-146`). The CLI sets it on every child it spawns
 (`packages/cli/src/commands/verify.mjs:746`, `:764`, `:820`, `:1447`).
 
 If no config is found anywhere above the cwd, the cwd itself becomes the root and every path falls back
-to the reference layout (`packages/cli/src/lib/config.mjs:16-36`, `:103`). See
+to the reference layout (`packages/cli/src/lib/config.mjs:23-109`, `:179`). See
 [configuration](04-configuration.md) for the key-by-key meaning of the file.
 
 Where the **framework checkout** lives is derived from the running binary — `packages/cli/src/lib` up
 four levels, verified by the presence of `packages/core/src/index.ts`
-(`packages/cli/src/lib/config.mjs:59-61`). `$MOTU_ROOT` is the only override
-(`packages/cli/src/lib/config.mjs:202`). There is no `motuRoot` config key — it was removed, because a
+(`packages/cli/src/lib/config.mjs:131-133`). `$MOTU_ROOT` is the only override
+(`packages/cli/src/lib/config.mjs:308`). There is no `motuRoot` config key — it was removed, because a
 machine-specific path the CLI already knows has no business in a committed file.
 
 ### Environment variables
@@ -85,8 +85,8 @@ Read by the CLI itself:
 
 | Variable | Read at | Meaning |
 | --- | --- | --- |
-| `MOTU_PROJECT_ROOT` | `lib/config.mjs:102` | Where to start the walk for `motu.config.json`. Set by the CLI on its own child processes. |
-| `MOTU_ROOT` | `lib/config.mjs:202` | The framework checkout, overriding the derived one. Never written into a generated config — it stays in the environment. |
+| `MOTU_PROJECT_ROOT` | `lib/config.mjs:178` | Where to start the walk for `motu.config.json`. Set by the CLI on its own child processes. |
+| `MOTU_ROOT` | `lib/config.mjs:308` | The framework checkout, overriding the derived one. Never written into a generated config — it stays in the environment. |
 | `MOTU_HOST_URL` | `commands/lagoon.mjs:184`, `:198`, `:518`; `commands/region-coverage.mjs:377`, `:413`; `lib/baselines.mjs:21` | Default lagoon host for `publish --remote`, snapshot baselines, coverage accept/forget, and live-gallery registration. |
 | `MOTU_HOST_TOKEN` | `commands/lagoon.mjs:255`, `:519`; `commands/region-coverage.mjs:378`, `:414`; `lib/baselines.mjs:22` | Bearer token for the same host. |
 | `MOTU_COVERAGE_TOKEN` | `commands/region-coverage.mjs:239` | Token for fetching a coverage corpus over HTTP. Deliberately not a config key — config is baked into the generated registry the lagoon publishes. |

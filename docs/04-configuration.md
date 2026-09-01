@@ -12,11 +12,11 @@ a project that matches it needs no config at all.
 ## The rule that bites first: the config surface is an ALLOWLIST
 
 `loadMotuConfig()` does not merge your file into the CLI. It hand-builds a result object, key by key
-(`packages/cli/src/lib/config.mjs:107-215`). **A key absent from that object is silently dropped,
+(`packages/cli/src/lib/config.mjs:183-338`). **A key absent from that object is silently dropped,
 whatever the project wrote.** No warning, no error, no unknown-key report — the value simply never
 reaches any command.
 
-The source says so at `packages/cli/src/lib/config.mjs:115-122`, about the one time it cost a day:
+The source says so at `packages/cli/src/lib/config.mjs:209-216`, about the one time it cost a day:
 
 > This whitelist is the config surface: a key absent from it is silently dropped, whatever the project
 > wrote. `hostSources` was added to removal-check with a comment telling users to set it, and it did
@@ -35,31 +35,31 @@ So: if a key you set appears to do nothing, the first thing to check is that it 
 `config.mjs`'s returned object *and* on `paths` in `util.mjs`. If you are adding a key, add it in both
 places and then reproduce the original bug and watch the fix refuse it.
 
-The one escape valve: `raw` (`config.mjs:203-204`) carries the parsed config object verbatim, "for
+The one escape valve: `raw` (`config.mjs:311-324`) carries the parsed config object verbatim, "for
 keys the CLI does not model". Nothing in `packages/cli/src` reads it today.
 
 ---
 
 ## Where the file lives, and how it is found
 
-`findConfig()` (`config.mjs:71-95`) walks **UP** from a start directory. At each level:
+`findConfig()` (`config.mjs:147-171`) walks **UP** from a start directory. At each level:
 
 1. `motu.config.json` — if present, that directory is the PROJECT ROOT. Invalid JSON is fatal:
-   `motu: invalid <path>: <message>` (`config.mjs:79`).
+   `motu: invalid <path>: <message>` (`config.mjs:155`).
 2. otherwise `package.json` with a top-level `motu` key — same effect, that directory is the root
-   (`config.mjs:82-90`). An unreadable `package.json` is ignored and the walk continues.
+   (`config.mjs:158-162`). An unreadable `package.json` is ignored and the walk continues.
 3. otherwise go up one directory, until the filesystem root; if nothing is found, the project root is
-   the cwd and `configPath` is `null` (`config.mjs:92, 103, 214`).
+   the cwd and `configPath` is `null` (`config.mjs:168`, `:179`, `:338`).
 
-The result is cached for the life of the process (`config.mjs:97-101`).
+The result is cached for the life of the process (`config.mjs:173`, `:177`).
 
 | Environment variable | Read at | Effect |
 | --- | --- | --- |
-| `MOTU_PROJECT_ROOT` | `config.mjs:102` | The walk starts HERE instead of `process.cwd()`. |
-| `MOTU_ROOT` | `config.mjs:202` | Where the framework checkout is — the ONLY override for the derived value. There is no config key. |
+| `MOTU_PROJECT_ROOT` | `config.mjs:178` | The walk starts HERE instead of `process.cwd()`. |
+| `MOTU_ROOT` | `config.mjs:308` | Where the framework checkout is — the ONLY override for the derived value. There is no config key. |
 
 `MOTU_PROJECT_ROOT` exists because the cwd is not always the project's
-(`config.mjs:62-70`): the runtime harness is spawned with `cwd` set to the CLI package — it has to be,
+(`config.mjs:139-146`): the runtime harness is spawned with `cwd` set to the CLI package — it has to be,
 or `--import tsx` does not resolve — and the walk went straight up into motu's OWN `motu.config.json`.
 `motu island verify <name> --runtime --fast`, run in any project, loaded motu's demo app and verified
 that instead, failing on a file the user's project had never heard of. If you spawn the CLI, set it.
@@ -69,7 +69,7 @@ existing one without `--force` (`init.mjs:152-155`). See [docs/02-getting-starte
 
 ### How a config value becomes a path
 
-Everything is resolved to an absolute path once, at load (`config.mjs:105-106, 205-214`):
+Everything is resolved to an absolute path once, at load (`config.mjs:181-182`, `:327-338`):
 
     root     = the directory holding motu.config.json
     appRoot  = resolve(root, app)
@@ -89,33 +89,33 @@ resolves against.
 
 | Key | Type | Default | What it changes | Read by |
 | --- | --- | --- | --- | --- |
-| `app` | string, relative to project root | `"."` (`config.mjs:17`) | The frontend app root. Base for every path below marked *app root* (`config.mjs:105-106`). | everything; `APP_ROOT` (`util.mjs:19`) |
-| `host` | `"angularjs" \| "next" \| "vite" \| "none"` | `"angularjs"` (`config.mjs:33, 114`) | Selects the adapter and the host-specific gates; drives `legacyFit`. | lagoon build (`lagoon-vite.mjs:219`), lagoon scaffolding (`lagoon-materialize.mjs:86-96`), `HOST` (`util.mjs:23`) |
-| `hostRoot` | string, relative to project root | value of `app` (`config.mjs:36, 188`) | Where the HOST application lives — its `tsconfig` path aliases, Tailwind config, component library. | host alias reading (`util.mjs:163-184`), `resolveAppImport` (`util.mjs:363`), `hostStrictBoundaries` (`util.mjs:474`), `removal-check`, `lagoon`, `init` |
+| `app` | string, relative to project root | `"."` (`config.mjs:27`) | The frontend app root. Base for every path below marked *app root* (`config.mjs:181-182`). | everything; `APP_ROOT` (`util.mjs:19`) |
+| `host` | `"angularjs" \| "next" \| "vite" \| "none"` | `"angularjs"` (`config.mjs:105`, `:208`) | Selects the adapter and the host-specific gates; drives `legacyFit`. | lagoon build (`lagoon-vite.mjs:219`), lagoon scaffolding (`lagoon-materialize.mjs:86-96`), `HOST` (`util.mjs:23`) |
+| `hostRoot` | string, relative to project root | value of `app` (`config.mjs:108`, `:298`) | Where the HOST application lives — its `tsconfig` path aliases, Tailwind config, component library. | host alias reading (`util.mjs:163-184`), `resolveAppImport` (`util.mjs:363`), `hostStrictBoundaries` (`util.mjs:474`), `removal-check`, `lagoon`, `init` |
 | `hostSources` | string[], relative to `hostRoot` | *unset* → the host's tsconfig, then a guess (`host-sources.mjs:97-109`) | Overrides both, for a layout neither gets right. | `removal-check` and `integrate check`, both through `hostSourceFiles()` (`lib/host-sources.mjs`) |
-| `islands` | string, app root | `"src/islands"` (`config.mjs:18`) | Island mount points + `registry.ts` + `contracts.generated.ts`. | `island create/sync/verify/snapshot`, `check`, `changed` |
-| `ui` | string, app root | `"src/ui"` (`config.mjs:19`) | `ui/<kebab>/<Pascal>.tsx` — the components islands mount, kept OUTSIDE `islands/` so mount points cannot import each other (`util.mjs:29-31`). | `island create`, `verify`, `integrate check` |
-| `archipelagos` | string, app root | `"src/archipelagos"` (`config.mjs:20`) | Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. | `archipelago create/verify/sync/snapshot`, `archipelago coverage`, `lagoon` |
-| `shared` | string, app root | `"src/shared"` (`config.mjs:21`) | Only `<shared>/styles.css`, the one shared island stylesheet (`util.mjs:110-111`). | lagoon build (`lagoon-vite.mjs`) |
-| `barrel` | string, app root | `"src/index.ts"` (`config.mjs:22`) | The module exporting `ELEMENT_REGISTRY`. | runtime harness (`runtime-harness.mjs`), lagoon alias, `island sync`, `archipelago`, `init` |
-| `contract` | string, app root | `"contract/src"` (`config.mjs:23`) | Output directory of `motu codegen`; `contract/src/index.ts` is the contract entry (`util.mjs:78`). | `motu codegen` (`codegen.mjs:10`) — see [docs/11-contract-and-backend.md](11-contract-and-backend.md) |
-| `lagoon` | string, app root | `"roots/lagoon"` (`config.mjs:24`) | The lagoon root: its entries, `lagoon.config.json` (viewports + a11y policy, `util.mjs:255-275`), the vite install search starts here (`util.mjs:309-317`). | every `lagoon` command, all `--runtime` checks, `archipelago coverage` |
-| `bridge` | string, app root | `"roots/bridge"` (`config.mjs:25`) | Resolved to `paths.bridgeDir` and **read by nothing** today (see *Gaps*). | — |
-| `manifest` | string, **relative to project root** | `"target/motu-manifest.json"` (`config.mjs:26, 213`) | Default input to `motu codegen` — the backend build output, which usually sits outside the frontend app. | `motu codegen` (`codegen.mjs:9`) |
-| `appPackage` | string | `basename(appRoot)` (`config.mjs:111`) | The npm package name whose barrel exports `ELEMENT_REGISTRY`. | runtime harness, lagoon alias (`lagoon-vite.mjs`), `archipelago init` (`archipelago-init.mjs`), `init` |
-| `tagPrefix` | string | `"x-"` (`config.mjs:27`) | Prefix of every custom element tag: `names(x).tag = tagPrefix + kebab` (`util.mjs:335`). | `island create`, `verify`, lagoon materialize, `init` |
-| `isolation` | `"shadow" \| "light"` | `"shadow"`; anything not `"light"` becomes `"shadow"` (`config.mjs:113`) | Baked into the generated island registry as `setDefaultIsolation(...)` (`islands.mjs:78-92`). | `island sync`, lagoon, `create`, `defaults`, `archipelago-element.ts:63-66` |
-| `regionRoot` | `"encouraged" \| "required"` | `"encouraged"`; anything but `"required"` is `"encouraged"` (`config.mjs:135`) | Whether a hand-written lagoon frame is a nudge or an error. | `archipelago verify` (`verify.mjs:2244-2250`) |
-| `removable` | boolean | `true`; only an explicit `false` opts out (`config.mjs:171`) | Whether this project CLAIMS motu is deletable. `false` turns `removal-check` into a visible SKIP. | `removal-check` (`removal-check.mjs:285-292`), `check` (`check.mjs:218-228`) |
-| `legacyFit` | boolean | `host === 'angularjs'` (`config.mjs:59-60, 187`) | Whether `legacy` is a required fit strategy and a verified runtime mount. | `island create` (`create.mjs:50`), `island verify` (`verify.mjs:393, 1130`) |
-| `publishAs.repo` | string | `null` → the git remote (`config.mjs:183`) | The repository identity used on a lagoon host. | `lagoon publish` (`lagoon.mjs:250, 525`), `archipelago coverage` (`region-coverage.mjs:384, 415`) |
-| `publishAs.slug` | string | `null` → derived (`config.mjs:184`) | The project slug on the lagoon host. | `lagoon publish/serve` (`lagoon.mjs:159, 407`) |
-| `coverage.enabled` | boolean | **`false`**; only `true` enables (`config.mjs:149`) | Whether the coverage fold runs at all. Emits `configureCoverage(...)` into `archipelagos/coverage.generated.ts`; off emits an empty module (`archipelagos.mjs:30-65`). | `archipelago sync`, `check` (`check.mjs:46-52, 190`) |
-| `coverage.corpusUrl` | string | `null` (`config.mjs:154`) | Where `motu archipelago coverage <id>` fetches the corpus from, on a DEVELOPER's machine. Never reaches a browser. | `archipelago coverage` (`region-coverage.mjs:214-223`) |
-| `coverage.regions` | string[] | `null` → every region (`config.mjs:155`) | Region ids to watch. `"*"` also means every region (`packages/coverage/src/index.ts:744-746`). | `archipelago sync` (`archipelago-sync.mjs:15-18`), baked into `coverage.generated.ts` |
+| `islands` | string, app root | `"src/islands"` (`config.mjs:33`) | Island mount points + `registry.ts` + `contracts.generated.ts`. | `island create/sync/verify/snapshot`, `check`, `changed` |
+| `ui` | string, app root | `"src/ui"` (`config.mjs:38`) | `ui/<kebab>/<Pascal>.tsx` — the components islands mount, kept OUTSIDE `islands/` so mount points cannot import each other (`util.mjs:29-31`). | `island create`, `verify`, `integrate check` |
+| `archipelagos` | string, app root | `"src/archipelagos"` (`config.mjs:43`) | Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. | `archipelago create/verify/sync/snapshot`, `archipelago coverage`, `lagoon` |
+| `shared` | string, app root | `"src/shared"` (`config.mjs:47`) | Only `<shared>/styles.css`, the one shared island stylesheet (`util.mjs:110-111`). | lagoon build (`lagoon-vite.mjs`) |
+| `barrel` | string, app root | `"src/index.ts"` (`config.mjs:52`) | The module exporting `ELEMENT_REGISTRY`. | runtime harness (`runtime-harness.mjs`), lagoon alias, `island sync`, `archipelago`, `init` |
+| `contract` | string, app root | `"contract/src"` (`config.mjs:56`) | Output directory of `motu codegen`; `contract/src/index.ts` is the contract entry (`util.mjs:78`). | `motu codegen` (`codegen.mjs:10`) — see [docs/11-contract-and-backend.md](11-contract-and-backend.md) |
+| `lagoon` | string, app root | `"roots/lagoon"` (`config.mjs:61`) | The lagoon root: its entries, `lagoon.config.json` (viewports + a11y policy, `util.mjs:255-275`), the vite install search starts here (`util.mjs:309-317`). | every `lagoon` command, all `--runtime` checks, `archipelago coverage` |
+| `bridge` | string, app root | `"roots/bridge"` (`config.mjs:71`) | Resolved to `paths.bridgeDir`; declared for the layout's sake, read by no CLI command (`config.mjs:62-71`). | — |
+| `manifest` | string, **relative to project root** | `"target/motu-manifest.json"` (`config.mjs:76`, `:337`) | Default input to `motu codegen` — the backend build output, which usually sits outside the frontend app. | `motu codegen` (`codegen.mjs:9`) |
+| `appPackage` | string | `basename(appRoot)` (`config.mjs:205`) | The npm package name whose barrel exports `ELEMENT_REGISTRY`. | runtime harness, lagoon alias (`lagoon-vite.mjs`), `archipelago init` (`archipelago-init.mjs`), `init` |
+| `tagPrefix` | string | `"x-"` (`config.mjs:85`) | Prefix of every custom element tag: `names(x).tag = tagPrefix + kebab` (`util.mjs:359`). | `island create`, `verify`, lagoon materialize, `init` |
+| `isolation` | `"shadow" \| "light"` | `"shadow"`; anything not `"light"` becomes `"shadow"` (`config.mjs:207`) | Baked into the generated island registry as `setDefaultIsolation(...)` (`islands.mjs:78-92`). | `island sync`, lagoon, `create`, `defaults`, `archipelago-element.ts:63-66` |
+| `regionRoot` | `"encouraged" \| "required"` | `"encouraged"`; anything but `"required"` is `"encouraged"` (`config.mjs:229`) | Whether a hand-written lagoon frame is a nudge or an error. | `archipelago verify` (`verify.mjs:2244-2250`) |
+| `removable` | boolean | `true`; only an explicit `false` opts out (`config.mjs:265`) | Whether this project CLAIMS motu is deletable. `false` turns `removal-check` into a visible SKIP. | `removal-check` (`removal-check.mjs:285-292`), `check` (`check.mjs:218-228`) |
+| `legacyFit` | boolean | `host === 'angularjs'` (`config.mjs:136`, `:297`) | Whether `legacy` is a required fit strategy and a verified runtime mount. | `island create` (`create.mjs:50`), `island verify` (`verify.mjs:393, 1130`) |
+| `publishAs.repo` | string | `null` → the git remote (`config.mjs:277`) | The repository identity used on a lagoon host. | `lagoon publish` (`lagoon.mjs:250, 525`), `archipelago coverage` (`region-coverage.mjs:384, 415`) |
+| `publishAs.slug` | string | `null` → derived (`config.mjs:278`) | The project slug on the lagoon host. | `lagoon publish/serve` (`lagoon.mjs:159, 407`) |
+| `coverage.enabled` | boolean | **`false`**; only `true` enables (`config.mjs:243`) | Whether the coverage fold runs at all. Emits `configureCoverage(...)` into `archipelagos/coverage.generated.ts`; off emits an empty module (`archipelagos.mjs:30-65`). | `archipelago sync`, `check` (`check.mjs:46-52, 190`) |
+| `coverage.corpusUrl` | string | `null` (`config.mjs:248`) | Where `motu archipelago coverage <id>` fetches the corpus from, on a DEVELOPER's machine. Never reaches a browser. | `archipelago coverage` (`region-coverage.mjs:214-223`) |
+| `coverage.regions` | string[] | `null` → every region (`config.mjs:249`) | Region ids to watch. `"*"` also means every region (`packages/coverage/src/index.ts:744-746`). | `archipelago sync` (`archipelago-sync.mjs:15-18`), baked into `coverage.generated.ts` |
 
 Derived values, not settable: `root`, `appRoot`, `cacheDir` (`resolve(root, '.motu/cache')`, gitignored —
-`config.mjs:201-202`), `configPath`, and the resolved `*Dir` paths.
+`config.mjs:309-310`), `configPath`, and the resolved `*Dir` paths.
 
 **Not in the allowlist, therefore inert:** `coverage.endpoint`, `coverage.known`, `coverage.knownUrl`,
 `coverage.maxReports` — they exist on the runtime `CoverageConfig` interface
@@ -131,7 +131,7 @@ Derived values, not settable: `root`, `appRoot`, `cacheDir` (`resolve(root, '.mo
 PATH rather than through `node_modules` — that is what lets a project adopt motu with no install step.
 
 **Where the checkout is, is derived, not asked for.** `packages/cli/src/lib` → up four → the checkout
-root, taken from the file that is currently executing (`config.mjs:38-61`):
+root, taken from the file that is currently executing (`config.mjs:112-133`):
 
 > Which made `motuRoot` in every adopting project's config a bug rather than a configuration: two
 > modules of the same package disagreed about a knowable fact, and the one that asked put a
@@ -139,10 +139,10 @@ root, taken from the file that is currently executing (`config.mjs:38-61`):
 > that made a clone fail on someone else's machine.
 
 The derivation is verified rather than assumed: if that directory holds no `packages/core/src/index.ts`,
-`FRAMEWORK_ROOT` is `null` and the fallback is the project root (`config.mjs:61`, `:202`).
+`FRAMEWORK_ROOT` is `null` and the fallback is the project root (`config.mjs:133`, `:308`).
 
 Precedence is now two deep: **`$MOTU_ROOT` → the derived checkout → the project root**
-(`config.mjs:202`).
+(`config.mjs:308`).
 
 **The config key was removed.** It survived for a while as an override "for a differently-placed
 checkout or a CI image" — but `$MOTU_ROOT` already answers both, and answers them better. The one
@@ -153,7 +153,7 @@ set for that init (`init.mjs:189-196`) — that took an override correct for ONE
 into the file every other machine reads.
 
 **If your config still has the line**, motu says so rather than dropping it quietly — the silent-drop
-behaviour this page opens with is exactly what a removal must not repeat (`config.mjs:219-233`):
+behaviour this page opens with is exactly what a removal must not repeat (`config.mjs:341-355`):
 
 ```
 MotuDeprecationWarning: motu: `motuRoot` was removed and is being ignored (/path/motu.config.json).
@@ -167,7 +167,7 @@ Delete the line. Set `$MOTU_ROOT` in the environment only if the derivation is g
 ## `removable` — a claim, and the reason it is not a switch
 
 `removal-check` asks one question: delete motu, does the application still compile? The comment at
-`config.mjs:158-170` is the whole argument:
+`config.mjs:252-264` is the whole argument:
 
 > It is the right question for a host that ADOPTED motu: the promise is that islands leave no runtime
 > trace. It is not a question motu's own tools can answer. The baseline review console composes regions
@@ -260,7 +260,7 @@ is the ocean's: one shadow root per region, so a legacy page's global CSS cannot
 
 ## `host` and `legacyFit`
 
-`host` is the stack the islands are embedded INTO (`config.mjs:29-33`). It selects the adapter
+`host` is the stack the islands are embedded INTO (`config.mjs:101-105`). It selects the adapter
 (`packages/adapters/{angularjs,next,vite}`, chosen at `lagoon-vite.mjs:219`) and decides whether the
 legacy-fit gate applies:
 
@@ -268,7 +268,7 @@ legacy-fit gate applies:
 > reference ocean; `'next'`/`'none'` = a modern React host, where an island is mounted directly and there
 > is nothing to fit to.
 
-`legacyFit` derives from it — `true` only for `angularjs` (`config.mjs:59-60, 187`) — and controls whether
+`legacyFit` derives from it — `true` only for `angularjs` (`config.mjs:136`, `:297`) — and controls whether
 `island create` scaffolds `legacy: 'fill'` (`create.mjs:50`) and whether `island verify` requires the
 `legacy` strategy and drives a second runtime mount (`verify.mjs:393, 1130`). Override it explicitly only
 when your host has a legacy skin motu does not know about.
@@ -293,7 +293,7 @@ that is not the application.
 ## `publishAs` — who this project is on a lagoon host
 
 Publishing normally identifies a project by its git remote, which is right until a repository holds more
-than one publishable app (`config.mjs:172-181`):
+than one publishable app (`config.mjs:266-275`):
 
 > motu's own demo-app and the baseline review console both live in `Scorbutics/motu` and would land on the
 > same `repo:slug`, each overwriting the other — and a gallery that takes one lagoon per repo would show
@@ -318,7 +318,7 @@ pins both, for a monorepo publishing several lagoons from one remote.
 
 A region composes either from its archipelago's `root`, which is safe by construction, or from a
 hand-written lagoon frame, which is a second description of the page and only as safe as the checks
-comparing it (`config.mjs:124-134`). Both work. The default SAYS SO and passes; a project that has
+comparing it (`config.mjs:218-228`). Both work. The default SAYS SO and passes; a project that has
 finished migrating sets `"required"` and the frame becomes an error (`verify.mjs:2244-2250`) — which is
 what stops the old shape creeping back in. Setting it before you have migrated fails a project on its
 first day, which is "a tool nobody adopts".
@@ -335,16 +335,16 @@ lets a project adopt motu without refactoring its pages on day one.
 
 ## `coverage` — deployment facts only, and no addresses
 
-`coverage` is the one part of motu designed to run in production (`config.mjs:136-147`). Three rules are
+`coverage` is the one part of motu designed to run in production (`config.mjs:230-241`). Three rules are
 encoded in the loader:
 
 **1. `enabled` defaults to FALSE.** `cfg.coverage?.enabled === true` — anything else is off
-(`config.mjs:149`). "A thing that runs in production is a thing somebody switched on." With coverage off,
+(`config.mjs:243`). "A thing that runs in production is a thing somebody switched on." With coverage off,
 `motu archipelago sync` writes an *empty* `coverage.generated.ts`, so nothing in the project names
 `@motu/coverage` and no bundler ships it, while the registry's import line stays constant
 (`archipelagos.mjs:18-22, 36-42`).
 
-**2. NO ADDRESSES HERE.** The comment at `config.mjs:150-153`:
+**2. NO ADDRESSES HERE.** The comment at `config.mjs:244-247`:
 
 > They would be baked into the generated island registry, which the lagoon imports and publishes as a
 > public page. The application renders them as meta tags; see `metaContent` in `@motu/coverage`.
@@ -378,7 +378,7 @@ allowlist. A real published lagoon was grepped and found to contain exactly
 
 **3. `enums` is declared on the ARCHIPELAGO, not here.** Whether a key is a closed set is a fact about
 the key, so it travels with the region: `coverage: { enums: [...] }` on the archipelago
-(`config.mjs:140-142`, parsed at `region-coverage.mjs:53-61`, typed at `packages/coverage/src/index.ts:638-641`).
+(`config.mjs:234-236`, parsed at `region-coverage.mjs:53-61`, typed at `packages/coverage/src/index.ts:638-641`).
 Putting it in `motu.config.json` does nothing.
 
 `corpusUrl` is fetched by `motu archipelago coverage <id>` from a developer's machine. It is rewritten per
@@ -487,7 +487,7 @@ gate off. `isolation: "light"` keeps islands inside the host's Tailwind. `appPac
 host's own `/api/coverage` — the URL already carries `region=actions`, which `configuredUrl` rewrites per
 region.
 
-This config used to carry `"motuRoot": "../../motu"` — the machine-specific path `config.mjs:38-61`
+This config used to carry `"motuRoot": "../../motu"` — the machine-specific path `config.mjs:112-133`
 was written to eliminate. The key no longer exists; a project that still has the line gets a
 deprecation warning and the derived checkout.
 
@@ -538,24 +538,52 @@ frame-composed region passes — that is stage 1 of
 
 ---
 
-## Gaps in the source
+## What the source says about each key
 
-Keys that the loader models but whose reason is not written down anywhere:
+Every key is now commented where it is defined, and each comment says the same two things: what READS
+it, and what BREAKS when it is wrong. That second half is the point — "where the islands live" is
+obvious from the name, and "which check silently finds nothing" is not.
 
-- **`bridge`** (`config.mjs:25`) — resolved to `paths.bridgeDir` (`config.mjs:212`, `util.mjs:84`) and read
-  by NOTHING in `packages/`. `motu init` writes it for `angularjs` hosts only (`init.mjs:185`). It has no
-  comment, no consumer, and no test; it is either vestigial or an unfinished seam.
-- **`raw`** (`config.mjs:203-204`) — "the raw config object, for keys the CLI does not model", read by
-  nothing. It is the documented workaround for the allowlist and no command uses it.
-- **`app`, `islands`, `ui`, `archipelagos`, `shared`, `barrel`, `contract`, `manifest`, `tagPrefix`,
-  `lagoon`** — covered only by the file-header comment (`config.mjs:1-9, 14-15`); no individual comment
-  says what depends on each. `manifest` in particular has a load-bearing asymmetry (it is the ONE path
-  relative to the project root rather than the app root) recorded in a single line above `DEFAULTS`.
-- **`appPackage`** and **`legacyFit`** have one-line comments (`config.mjs:110, 186`) that state what they
-  are but not what breaks — and `appPackage` is the key whose silent `undefined` generated imports of a
-  package that does not exist (`util.mjs:58-67`).
-- **`isolation`** has no comment in `config.mjs` at all; its reasoning lives in `util.mjs:35-43`,
-  `islands.mjs:50-58` and `archipelago-element.ts:63-66`.
+| Key | Comment lives at | The failure it names |
+|---|---|---|
+| `app` | `config.mjs:24-27` | Moves every other path at once; a wrong value makes every walk return empty, with no error |
+| `islands` | `config.mjs:28-33` | `island verify --all` verifies zero islands, successfully |
+| `ui` | `config.mjs:34-38` | Why it is OUTSIDE `islands/`: a directory boundary is what stops mount points importing each other |
+| `archipelagos` | `config.mjs:39-43` | A project reports zero regions rather than failing to find them |
+| `shared` | `config.mjs:44-47` | The lagoon builds fine and renders every island unstyled |
+| `barrel` | `config.mjs:48-52` | Every `--runtime` check fails to import the registry at all |
+| `contract` | `config.mjs:53-56` | Read only by `codegen`, as the default out-dir |
+| `lagoon` | `config.mjs:57-61` | motu materializes a second lagoon beside the real one |
+| `bridge` | `config.mjs:62-71` | **Declared, not driven** — see below |
+| `manifest` | `config.mjs:72-76` | The one path relative to the PROJECT root, and why |
+| `tagPrefix` | `config.mjs:77-85` | Changing it on a live project renames every tag: islands stop upgrading, silently |
+| `isolation` | `config.mjs:86-100` | `shadow` on a Tailwind host renders every island unstyled, with no check failing |
+| `appPackage` | `config.mjs:186-205` | The `undefined` that generated an import of a package that does not exist |
+| `legacyFit` | `config.mjs:280-297` | Both directions: a wasted second browser mount, or the legacy mount never driven |
+| `raw` | `config.mjs:311-324` | Read by nothing, deliberately — see below |
+
+The keys that were already documented — `hostSources`, `regionRoot`, `coverage`, `removable`,
+`publishAs`, `host`, `hostRoot` — keep their own comments, and each has a section above.
+
+### The two that are read by nothing
+
+Both were flagged as "vestigial or an unfinished seam". Investigated, they are neither, and the
+comments now say so rather than leaving the next reader to re-derive it:
+
+- **`bridge`** declares where the ocean composition root lives — `bridge.js`, the embedded IIFE
+  injected into legacy pages. `motu init` writes it for `angularjs` hosts only (`init.mjs:180`) and it
+  resolves to `paths.bridgeDir`, but no CLI command reads that path: the bridge is built by the
+  project's own vite (`pnpm --filter @demo-app/bridge build`), because it is an application artifact
+  with an application's dependencies, not something motu generates. The key exists so the layout is
+  declared in one place instead of being assumed by whoever writes the build script. **Changing it
+  moves nothing on its own** — move the directory and update your build script too.
+
+- **`raw`** is the escape hatch around the allowlist this page opens with, and nothing in
+  `packages/cli` reads it. That is the correct state, not an oversight: every time a key has actually
+  been needed, the right answer was to add it to the allowlist properly, where it gets a type, a
+  default, a comment and a place on `paths`. A command reading `raw` would be re-creating the untyped,
+  undefaulted, uncommented surface the allowlist exists to prevent. It stays because it costs one line
+  and it is the right seam for a genuinely project-specific key — one motu should not model.
 
 ---
 

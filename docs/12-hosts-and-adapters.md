@@ -12,13 +12,13 @@ subject of the second half of this page: whatever the host, motu must stay **rem
 ## The `host` key
 
 Declared in `motu.config.json`, defaulting to `'angularjs'`
-(`packages/cli/src/lib/config.mjs:33`), read once into `HOST` (`packages/cli/src/lib/util.mjs:23`).
+(`packages/cli/src/lib/config.mjs:105`), read once into `HOST` (`packages/cli/src/lib/util.mjs:23`).
 `motu init --host <value>` accepts four (`packages/cli/src/commands/init.mjs:121`); three of them are
-the ones the framework's own comments describe (`packages/cli/src/lib/config.mjs:29-32`).
+the ones the framework's own comments describe (`packages/cli/src/lib/config.mjs:101-105`).
 
 | `host` | what it means | what it selects |
 | --- | --- | --- |
-| `angularjs` | the reference *ocean* — a foreign framework an island has to cross into | `@motu/adapter-angularjs` as a dependency (`init.mjs:232`) and as a lagoon alias (`init.mjs:64`); legacy fit ON (`config.mjs:60`); default isolation `shadow` (`init.mjs:169`); a `roots/bridge` root (`init.mjs:185`) |
+| `angularjs` | the reference *ocean* — a foreign framework an island has to cross into | `@motu/adapter-angularjs` as a dependency (`init.mjs:232`) and as a lagoon alias (`init.mjs:64`); legacy fit ON (`config.mjs:136`); default isolation `shadow` (`init.mjs:169`); a `roots/bridge` root (`init.mjs:185`) |
 | `next` | a Next.js app — already React | `@motu/adapter-next` (`init.mjs:232`, `init.mjs:65`); the lagoon inherits the host's `@/…` alias, `globals.css` and Tailwind (`init.mjs:281`, `init.mjs:269`, `packages/adapters/next/vite.mjs:47`); `"mount": "react"` in the scaffolded lagoon config (`init.mjs:279`); legacy fit OFF |
 | `none` | plain React — nothing host-specific | no adapter dependency (`init.mjs:232`); no Vite contribution (`packages/cli/src/lib/lagoon-vite.mjs:219`); legacy fit OFF |
 | `vite` | a Vite application, whose build *is* its `vite.config.ts` | no runtime adapter package — it contributes at BUILD time only (`init.mjs:231`), through `packages/adapters/vite/vite.mjs` |
@@ -48,7 +48,7 @@ lagoon with an empty alias list and died on "`@motu/react` could not be resolved
 ## `legacyFit` — only meaningful when there IS a legacy skin
 
 `legacyFit` defaults from the host: true for `angularjs`, false for everything else
-(`packages/cli/src/lib/config.mjs:59-60`, `config.mjs:187`), and is overridable per project. It gates
+(`packages/cli/src/lib/config.mjs:136`, `config.mjs:297`), and is overridable per project. It gates
 three separate things:
 
 - **The `legacy` strategy declaration.** With `legacyFit` on, an island that omits `legacy` is an
@@ -174,7 +174,7 @@ archipelago id — React StrictMode double-invokes effects and Next remounts acr
 
 ### `tagPrefix` — the tag namespace
 
-`tagPrefix` defaults to `'x-'` (`packages/cli/src/lib/config.mjs:27`, resolved at `config.mjs:112`).
+`tagPrefix` defaults to `'x-'` (`packages/cli/src/lib/config.mjs:77-85`, resolved at `config.mjs:206`).
 Every island's custom-element tag is `${tagPrefix}${kebab}` — `week-actions` → `x-week-actions`
 (`packages/cli/src/lib/util.mjs:335`). It is a project-wide namespace so an app's islands cannot
 collide with another library's custom elements. The placement markers themselves — `<motu-island>`
@@ -183,7 +183,7 @@ collide with another library's custom elements. The placement markers themselves
 
 ### `isolation: shadow | light`
 
-Project-wide default in `motu.config.json`, normalised at `packages/cli/src/lib/config.mjs:113`
+Project-wide default in `motu.config.json`, normalised at `packages/cli/src/lib/config.mjs:207`
 (`'light'` if literally `'light'`, otherwise `'shadow'`), set at a composition root through
 `setDefaultIsolation` (`packages/core/src/island.ts:32-37`). `motu init` picks `shadow` for
 `angularjs` and `light` for every React host, because islands mount directly there and a shadow root
@@ -235,8 +235,8 @@ from a module's *real* path, leaving the host's tree entirely (`scripts/build-pa
 
 The **lagoon** is a different consumer and still reads the checkout's sources directly — it is a Vite
 app that transpiles TS anyway — and it works out where that checkout is by itself, from the binary you
-just ran (`packages/cli/src/lib/config.mjs:38-61`). `$MOTU_ROOT` overrides it
-(`config.mjs:202`). There is no machine-specific path to commit; there used to be, and it was the
+just ran (`packages/cli/src/lib/config.mjs:112-133`). `$MOTU_ROOT` overrides it
+(`config.mjs:308`). There is no machine-specific path to commit; there used to be, and it was the
 one line that broke on a second machine and in CI.
 
 Three mechanisms carry the framework into a project with no install:
@@ -319,7 +319,7 @@ is a regex, and only the files that matter are parsed properly afterwards
 (`packages/cli/src/lib/host-sources.mjs`), shared with `integrate check`: `hostSources` from
 `motu.config.json` if set, else the host's own `tsconfig.json` — the same declaration this check
 already trusts when it runs `tsc --noEmit -p tsconfig.json` — else the five-directory guess. If you set
-the key, it must also be in the config whitelist (`packages/cli/src/lib/config.mjs:115-123`).
+the key, it must also be in the config whitelist (`packages/cli/src/lib/config.mjs:209-217`).
 
 "Motu-only" is then computed **to a fixpoint** (`removal-check.mjs:227-274`), because two things are
 true that the first version missed: an import can reach motu without a motu specifier (an app-alias
@@ -369,13 +369,13 @@ and a cache that cannot be written just means the next run re-proves it (`:592`)
 
 ### `removable: false` is an opt-out, reported as a SKIP
 
-A project may declare `"removable": false` (`packages/cli/src/lib/config.mjs:158-171`). motu's own
+A project may declare `"removable": false` (`packages/cli/src/lib/config.mjs:252-265`). motu's own
 surfaces do: the review console composes regions with `createRegion` and paints from
 `@motu/chrome/react`, and motu is load-bearing there by choice — "does it compile without motu" is not
 a question about its integration. It is reported as a **SKIP, never a pass**, because opting out proves
 nothing and the verdict must not read like proof (`removal-check.mjs:285-297`). It is not a hatch for
 an adopting app that finds removal inconvenient; for those the answer stays FAIL. Default is `true`: a
-host must say so deliberately (`config.mjs:171`).
+host must say so deliberately (`config.mjs:265`).
 
 ### The other outcomes, and why each is worded the way it is
 

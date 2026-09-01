@@ -350,7 +350,7 @@ motu codegen [manifest] [outDir]
 `packages/cli/src/run.mjs:87`, dispatched at `run.mjs:297-300`. Defaults are
 `paths.defaultManifest` and `paths.contractSrcDir` (`packages/cli/src/commands/codegen.mjs:9-10`) —
 i.e. `motu.config.json`'s `manifest` key, default `target/motu-manifest.json` relative to the project
-root (`packages/cli/src/lib/config.mjs:26`, `210-213`). A missing manifest is a hard error with the
+root (`packages/cli/src/lib/config.mjs:72-76`, `:337`). A missing manifest is a hard error with the
 remedy printed: *"build the backend so `dev.motu:apt` emits `motu-manifest.json`, or pass an explicit
 path"* (`codegen.mjs:12-16`). The command is a thin wrapper that spawns
 `packages/codegen/src/cli.mjs` (`codegen.mjs:18-19`), so the same generation is reachable from the one

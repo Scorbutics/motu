@@ -342,7 +342,7 @@ Three stages, and **a project is expected to sit in the middle one for a long ti
    page. **Never as its own sweep** — that is a large diff whose risky parts are invisible.
 3. **Close it.** When the last region has a `root`, set `"regionRoot": "required"` in
    `motu.config.json` and a frame becomes an error from then on. That is the switch that makes the arc
-   finish instead of stalling half-done (`packages/cli/src/lib/config.mjs:121-135`).
+   finish instead of stalling half-done (`packages/cli/src/lib/config.mjs:209-216`).
 
 An **extraction uses the frame, and that is correct rather than a concession**: moving a page to `root`
 is a region-level refactor of the host's own code, and doing it in the same step as pulling out one

@@ -397,7 +397,7 @@ from the document at runtime:
 send anything even if the sandbox rule were removed. Defence that does not depend on a flag being
 right." (`packages/coverage/src/index.ts:684`.)
 
-`motu.config.json` enforces the same rule — `packages/cli/src/lib/config.mjs:148`:
+`motu.config.json` enforces the same rule — `packages/cli/src/lib/config.mjs:234-236`:
 
 ```js
 coverage: {
@@ -555,8 +555,8 @@ by policy:
   on the archipelago (`packages/core/src/archipelago.ts:227`), never inferred, and anything longer
   than `maxEnumLength` (default 32) falls back to `set`
   (`packages/coverage/src/index.ts:43`, `:56`).
-- **`coverage.enabled` defaults to false** (`packages/cli/src/lib/config.mjs:149`): "a thing that runs
-  in production is a thing somebody switched on" (`packages/cli/src/lib/config.mjs:145`, and the same
+- **`coverage.enabled` defaults to false** (`packages/cli/src/lib/config.mjs:243`): "a thing that runs
+  in production is a thing somebody switched on" (`packages/cli/src/lib/config.mjs:240`, and the same
   sentence at `packages/coverage/src/index.ts:643`).
 - **Coverage off means the package is not in the bundle.** The generated module names
   `@motu/coverage` only when enabled (`packages/cli/src/lib/archipelagos.mjs:36`).
@@ -565,7 +565,7 @@ by policy:
 - **The ingest token is write-only**; reading the accepted set uses a different secret
   (`packages/coverage/src/server/index.ts:40`).
 - **No addresses in committed config**, because the lagoon publishes what is baked
-  (`packages/cli/src/lib/config.mjs:150`, `packages/coverage/src/index.ts:672`).
+  (`packages/cli/src/lib/config.mjs:244-247`, `packages/coverage/src/index.ts:672`).
 - **No token from config, ever** — the CLI reads `MOTU_COVERAGE_TOKEN` from the environment, uses it
   for one fetch, and writes it nowhere (`packages/cli/src/commands/region-coverage.mjs:235`).
 - **The lagoon folds but never beacons** (`packages/coverage/src/index.ts:716`,
@@ -663,11 +663,11 @@ The worked example is peps (`peps:motu/motu.config.json`).
 }
 ```
 
-`enabled` defaults to false (`packages/cli/src/lib/config.mjs:149`). `regions` may be a list or
+`enabled` defaults to false (`packages/cli/src/lib/config.mjs:239`). `regions` may be a list or
 `["*"]`, which means every region including ones added later
 (`packages/coverage/src/index.ts:740`). `corpusUrl` is the one coverage address allowed in committed
 config, because it is read on a developer's machine and never reaches a browser
-(`packages/cli/src/lib/config.mjs:150`, `packages/cli/src/commands/region-coverage.mjs:189`) — and the
+(`packages/cli/src/lib/config.mjs:244-247`, `packages/cli/src/commands/region-coverage.mjs:189`) — and the
 CLI rewrites its `region=` to whichever region you asked about (`:200`).
 
 **2. Declare the closed sets on the archipelago**, beside the keys they are about:

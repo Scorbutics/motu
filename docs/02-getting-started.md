@@ -82,7 +82,7 @@ root would cut them off from the host's own stylesheet, Tailwind included (`init
 There is no `motuRoot` in the generated config, and no way to put one there. It used to be written as
 "the only machine-specific path in the project" — a committed relative path to somebody's checkout,
 which is exactly what breaks on the second machine and in CI. The CLI derives it from the binary that
-is running (`init.mjs:189-196`, `packages/cli/src/lib/config.mjs:38-61`), and `$MOTU_ROOT` is the only
+is running (`init.mjs:189-196`, `packages/cli/src/lib/config.mjs:112-133`), and `$MOTU_ROOT` is the only
 override. The key was removed entirely; a config that still carries it gets a deprecation warning. See
 [Configuration](04-configuration.md).
 
@@ -123,7 +123,7 @@ Consequences to plan around:
   nothing. Re-clone and run any `motu` command to relink.
 - **Moving the checkout is fine** as long as you re-run `motu` from the new one: the framework root is
   derived from the running CLI, with `$MOTU_ROOT` the only override
-  (`packages/cli/src/lib/config.mjs:202`).
+  (`packages/cli/src/lib/config.mjs:308`).
 - **`@motu/*` are not in the generated `package.json`** unless a workspace above the project can
   actually satisfy them. `workspace:*` in a standalone project is a lie that made `bun install` — and
   therefore `bun add react` — fail outright in a freshly initialised project (`init.mjs:202-232`).

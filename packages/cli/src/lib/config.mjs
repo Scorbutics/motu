@@ -11,20 +11,92 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
-// Paths are relative to the APP root (root/<app>), except `manifest` which is relative to the project
-// root (the backend build output often sits outside the frontend app).
+// THE LAYOUT KEYS. Every one is relative to the APP root (root/<app>) except `manifest`, which is
+// relative to the PROJECT root — see its comment; that asymmetry is load-bearing and is the single
+// most common thing to get wrong here.
+//
+// Each key below says what READS it and what BREAKS when it points somewhere wrong, because "where
+// the islands live" is obvious and "which command silently finds nothing" is not. A path key that is
+// merely wrong rarely errors: the directory walk returns an empty list and the check that depended on
+// it reports a pass over nothing, which is the failure mode `report.ok(check, msg, seen)` and the
+// `seen: 0` -> skip rule exist to catch.
 const DEFAULTS = {
+  // The frontend app root, relative to the project root. EVERY path below resolves through it
+  // (`inApp`), so this is the one key that moves all the others at once. Point it at a directory that
+  // is not the app and every subsequent walk finds nothing — no error, just empty results everywhere.
   app: '.',
+  // Island mount points, plus the two generated files beside them (`registry.ts`,
+  // `contracts.generated.ts`). Read by `island create/sync/verify/snapshot`, by `check`, by
+  // `--changed`'s file->island attribution (`lib/changed.mjs:87`), and by the lagoon's fixture glob
+  // (`lib/lagoon-materialize.mjs:72`). Wrong, and `island verify --all` verifies zero islands
+  // successfully.
   islands: 'src/islands',
+  // The components the islands mount — `ui/<kebab>/<Pascal>.tsx`. Kept OUTSIDE `islands/` on purpose:
+  // mount points must not be able to import each other, and a directory boundary is what enforces it
+  // (`util.mjs:29-31`). Read by `island create`, by `island verify`'s component resolution
+  // (`verify.mjs:1191`), and by `integrate check`'s "what does motu own" set (`integration.mjs:51`).
   ui: 'src/ui',
+  // Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. Read
+  // by every `archipelago` verb, by `integrate check` (`integration.mjs:845`) and by `--changed`'s
+  // file->region attribution (`changed.mjs:100`). Wrong, and a project reports zero regions rather
+  // than failing to find them.
   archipelagos: 'src/archipelagos',
+  // Holds exactly one file motu cares about: `<shared>/styles.css`, the single island stylesheet the
+  // lagoon aliases as `<appPackage>/styles.css` (`lagoon-vite.mjs:212`). Wrong, and the lagoon builds
+  // fine and renders every island unstyled.
   shared: 'src/shared',
+  // The module that exports ELEMENT_REGISTRY. It is the app's PUBLIC entry: the runtime harness
+  // imports it by path (`runtime-harness.mjs:88`), the lagoon aliases the bare package specifier onto
+  // it (`lagoon-vite.mjs:213`), and `archipelago create` edits it to add re-exports
+  // (`archipelago.mjs:97`). Wrong, and every `--runtime` check fails to import the registry at all.
   barrel: 'src/index.ts',
+  // Output directory of `motu codegen` — where the generated `@motu/contract` package is written, and
+  // whose `index.ts` is the contract entry the lagoon aliases (`util.mjs:78`). Read only by
+  // `codegen.mjs:10`, as the default when no out-dir argument is given.
   contract: 'contract/src',
+  // The lagoon root: its entries and `lagoon.config.json` (viewports, a11y policy, chrome, mount).
+  // Read by every `lagoon` verb, by every `--runtime` check, and by the materializer, which decides
+  // whether the PROJECT owns its lagoon by looking for `index.html` here
+  // (`lagoon-materialize.mjs:47`). Wrong, and motu materializes a second lagoon beside the real one.
   lagoon: 'roots/lagoon',
+  // The ocean composition root — `bridge.js`, the embedded IIFE injected into legacy pages.
+  //
+  // DECLARED, NOT DRIVEN. `motu init` writes it for `angularjs` hosts only (`init.mjs:180`), and it is
+  // resolved to `paths.bridgeDir` — but NO CLI command reads that path. The bridge is built by the
+  // project's own vite (`pnpm --filter @demo-app/bridge build`), because it is an application
+  // artifact with an application's dependencies, not something motu generates. The key exists so the
+  // layout is declared in one place rather than assumed by whoever writes the build script.
+  //
+  // So: changing it moves nothing on its own. Move the directory and update your build script too.
   bridge: 'roots/bridge',
+  // THE ONE PATH RELATIVE TO THE PROJECT ROOT, not the app root. The backend build emits it — for the
+  // reference ocean, a Maven build in a sibling tree — so it routinely sits outside the frontend app
+  // and could not resolve through `inApp` (`config.mjs`'s `manifest:` line uses `resolve(root, …)`).
+  // Read only by `codegen.mjs:9`, as the default input when no manifest argument is given.
   manifest: 'target/motu-manifest.json',
+  // Prefix of every custom element tag: `names(x).tag = tagPrefix + kebab` (`util.mjs:359`). It exists
+  // because a custom element name MUST contain a hyphen, and because a host page needs a namespace it
+  // can reserve. Read by `island create` and `verify`, by the lagoon materializer
+  // (`lagoon-materialize.mjs:68`), and by the tag->island reverse lookup (`verify.mjs:2899`).
+  //
+  // CHANGING IT ON A LIVE PROJECT RENAMES EVERY TAG. The registry is regenerated with new tags while
+  // the host's own markup still says the old ones, so every island silently fails to upgrade — a
+  // custom element that is not defined renders as an empty unknown element, with no error.
   tagPrefix: 'x-',
+  // Shadow or light, project-wide. Baked into the generated registry as `setDefaultIsolation(...)`
+  // (`islands.mjs:78-92`); an `isolation` attribute on <motu-archipelago> still wins per region
+  // (`archipelago-element.ts:100-103`).
+  //
+  // 'shadow' gives a region one shadow root and one adopted stylesheet — right for an ocean, whose
+  // global CSS would otherwise bleed into the islands. 'light' uses no shadow and injects styles
+  // globally — right for a React host, where the app's stylesheet IS the point and a shadow root
+  // would cut islands off from it, Tailwind included. `motu init` therefore defaults it to 'light'
+  // for every host but 'angularjs' (`init.mjs:164`).
+  //
+  // What breaks: 'shadow' on a Tailwind host renders every island unstyled, in the lagoon and in the
+  // page, with NO check failing. That is also why `renderRegistry` throws rather than defaulting on an
+  // unrecognised value (`islands.mjs:54-58`) — a silent default is exactly how this key's own `paths`
+  // dead-end bug shipped.
   isolation: 'shadow',
   // The stack the islands are embedded INTO. It selects the adapter, and decides whether the
   // "legacy fit" gate applies: fitting an island to a legacy skin is only meaningful when there IS
@@ -111,7 +183,25 @@ export function loadMotuConfig() {
   cached = {
     root,
     appRoot,
-    /** The npm package name whose barrel exports ELEMENT_REGISTRY (defaults to the app dir name). */
+    /**
+     * The npm package name whose barrel exports ELEMENT_REGISTRY. Defaults to the app directory name.
+     *
+     * It is a NAME, not a path: it is the specifier generated code imports from. The lagoon aliases
+     * it onto `paths.barrel` (`lagoon-vite.mjs:193`), the materialized entries import from it
+     * (`lagoon-materialize.mjs:67`), and `archipelago init` writes it into the composition root it
+     * scaffolds (`archipelago-init.mjs:187`). So it has to match the `name` in the app's own
+     * package.json, and `basename(appRoot)` is right only when the directory and the package agree.
+     *
+     * WHAT BREAKS, and it has: this is the key whose silent `undefined` generated an import of a
+     * package that does not exist. `loadMotuConfig` resolved it and `paths` did not carry it, so
+     * `archipelago init` read `paths.appPackage ?? 'motu-islands'` and got the fallback — a file that
+     * imports from a package nobody installed, failing at the app's build rather than at motu's. It
+     * is on `paths` now; the shape of the bug is the allowlist dead end described
+     * at the top of this file (`util.mjs:58-67`).
+     *
+     * Set it explicitly whenever the directory name is not the package name — a project whose motu
+     * lives in `motu/` but publishes its islands as `motu-islands` must say so.
+     */
     appPackage: cfg.appPackage ?? basename(appRoot),
     tagPrefix: cfg.tagPrefix,
     isolation: cfg.isolation === 'light' ? 'light' : 'shadow',
@@ -187,7 +277,23 @@ export function loadMotuConfig() {
       repo: typeof cfg.publishAs?.repo === 'string' ? cfg.publishAs.repo : null,
       slug: typeof cfg.publishAs?.slug === 'string' ? cfg.publishAs.slug : null,
     },
-    /** Whether `legacy` fit is a required strategy + a verified runtime mount for this host. */
+    /**
+     * Whether `legacy` fit is a required strategy AND a second verified runtime mount for this host.
+     *
+     * Derived from `host` — true only for the ocean — and overridable for a host with a legacy skin
+     * motu does not know about. Three things read it: `island create` scaffolds `legacy: 'fill'` into
+     * a new island (`create.mjs:50`), `island verify` requires the strategy to be declared
+     * (`verify.mjs:393`), and the runtime lane drives BOTH fits instead of one
+     * (`verify.mjs:1236`, `:2433`). It also reaches the browser as `__MOTU_LEGACY_FIT__`
+     * (`lagoon-vite.mjs:285`), so the lagoon can offer the fit chip.
+     *
+     * WHAT BREAKS, in both directions. Turned ON for a modern host, every island is asked to declare a
+     * fit to a skin that does not exist and the runtime lane pays a second browser mount per scenario
+     * for nothing — roughly double the cost of the most expensive tier. Turned OFF for an ocean, the
+     * `legacy` mount is never driven, so an island that renders correctly standalone and collapses
+     * inside the legacy page's CSS passes green: the check that exists precisely to catch that is the
+     * one you switched off.
+     */
     legacyFit: cfg.legacyFit ?? LEGACY_FIT_HOSTS.has(cfg.host ?? 'angularjs'),
     hostRoot: resolve(root, cfg.hostRoot ?? cfg.app ?? '.'),
     /**
@@ -202,8 +308,22 @@ export function loadMotuConfig() {
     motuRoot: process.env.MOTU_ROOT ? resolve(process.env.MOTU_ROOT) : (FRAMEWORK_ROOT ?? root),
     /** Generated, never-committed build inputs (see `.gitignore`: `.motu/`). */
     cacheDir: resolve(root, '.motu/cache'),
-    /** The raw config object, for keys the CLI does not model. */
+    /**
+     * The parsed config verbatim, defaults merged in — an escape hatch for keys the CLI does not
+     * model.
+     *
+     * NOTHING IN packages/cli READS IT, and that is the honest state rather than an oversight to fix.
+     * It was added as the documented way around the allowlist this file opens with, and every time a
+     * key has actually been needed the right answer was to add it to the allowlist properly — where
+     * it gets a type, a default, a comment, and a place on `paths`. A command reading `raw` would be
+     * re-creating the untyped, undefaulted, uncommented surface the allowlist exists to prevent.
+     *
+     * Kept because it costs one line and it is the correct seam for a genuinely project-specific key
+     * — one motu should not model. If you reach for it, ask first whether the key deserves modelling.
+     */
     raw: cfg,
+    // The layout, resolved to absolute paths once. What each one drives, and what breaks when it is
+    // wrong, is documented on the corresponding key in DEFAULTS at the top of this file.
     islandsDir: inApp(cfg.islands),
     uiDir: inApp(cfg.ui),
     archipelagosDir: inApp(cfg.archipelagos),
@@ -211,7 +331,9 @@ export function loadMotuConfig() {
     barrel: inApp(cfg.barrel),
     contractSrcDir: inApp(cfg.contract),
     lagoonDir: inApp(cfg.lagoon),
+    /** Declared for the layout's sake; no CLI command reads it. See `bridge` in DEFAULTS. */
     bridgeDir: inApp(cfg.bridge),
+    /** PROJECT root, not app root — the backend build output sits outside the frontend app. */
     manifest: resolve(root, cfg.manifest),
     configPath: found ? resolve(found.dir, 'motu.config.json') : null,
   };

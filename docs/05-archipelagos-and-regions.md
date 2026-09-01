@@ -54,8 +54,7 @@ import and it erases at runtime, so removing motu leaves it and the page that us
 (`packages/core/src/archipelago.ts:161-170`). `motu archipelago verify` requires the parameter under
 a modern host and reports it as `region-type`; on an ocean the check is skipped, because there is no
 app-side type to reference — region state lives in `$scope` and motu declares it
-(`packages/cli/src/commands/verify.mjs:2267-2296`, decision D8 in
-[plan-key-ownership](plan-key-ownership.md)).
+(`packages/cli/src/commands/verify.mjs:2267-2296`).
 
 `TTag` narrows `element` to the generated tag map. Left at its default `string` — what an ocean needs
 — an unknown tag is a runtime warning; narrowed to `keyof ElementTypes` (the map `motu island sync`
@@ -125,8 +124,7 @@ cannot: it declares OWNERSHIP (nobody else may update those keys — see `produc
 EJECTABLE — a `useState` plus a callback prop can be generated from a mapping and cannot be generated
 reliably from an arbitrary function body (`packages/cli/src/lib/eject.mjs:459-484`). Ownership is
 about UPDATES, not first paint, so `writes` and a host `seed` coexist
-(`packages/core/src/archipelago.ts:152-153`, D4). The full rule set is
-[plan-key-ownership](plan-key-ownership.md).
+(`packages/core/src/archipelago.ts:152-153`).
 
 ### `on` and `intents` — outputs that are NOT store writes
 
@@ -252,7 +250,7 @@ inside a legacy app (`packages/core/src/archipelago.ts:279-284`). It is register
 `defineArchipelago` and read back with `getArchipelagoLayout(id)`
 (`packages/core/src/archipelago.ts:1143-1145`, `:591`). This is the OCEAN's form of arrangement:
 under a modern host the page owns the arrangement and `root` + `slots` carries it, so the region
-declares no layout (see D9 in [plan-key-ownership](plan-key-ownership.md); host modes are
+declares no layout (host modes are
 [12 — Hosts and adapters](12-hosts-and-adapters.md)).
 
 ```ts
@@ -291,7 +289,7 @@ CLOSED SETS for the production coverage fold (`packages/core/src/archipelago.ts:
 ```ts
 coverage: { enums: ['viewMode'] },
 ```
-— `review-console/src/archipelagos/review/review.archipelago.ts:22`
+— `host-app/motu/src/archipelagos/review/review.archipelago.ts:41`
 
 Declared on the region rather than in `motu.config.json` because it is a fact about the KEY —
 `viewMode` is one of three words wherever this region is mounted — and it travels with the region
@@ -341,7 +339,7 @@ These are set operations over declarations the compiler already holds, so they c
 instead of a report someone has to run — in the same loop as the edit that caused them. They are
 written as CONSTANTS, never type aliases: an alias NAMES the result, so a failing check quietly
 resolves to its error object and nobody reads it. Only the assignment to `true` makes the compiler
-reject it (`review-console/src/archipelagos/review/review.archipelago.ts:77-85`).
+reject it (`host-app/motu/src/archipelagos/review/review.archipelago.ts:99-103`).
 
 ```ts
 const _everyKeyIsOwned: RegionOwnershipOk<typeof reviewArchipelago> = true;
@@ -399,7 +397,7 @@ goes. A drift on either side yields a labelled tuple: `'declared by the app but 
 
 The failure it prevents: a page that keeps a key in the half it may assign after an island has taken
 ownership of it, so the page's own state and the producer's both write the value and neither is the
-source of truth. See D5 in [plan-key-ownership](plan-key-ownership.md).
+source of truth.
 
 ### `RegionWiringOk<A, TElements>`
 
@@ -489,8 +487,8 @@ return {
   source produces).
 - **`id`** — the archipelago's id, for the rare call that still needs it (`:81-82`).
 
-`seed` vs `provide` is the ownership boundary, not a stylistic choice; the rule and what it prevents
-are D4 and D5 in [plan-key-ownership](plan-key-ownership.md). Which of `Root` and `Island` a page
+`seed` vs `provide` is the ownership boundary, not a stylistic choice — see
+[`writes`](#writes--what-the-island-owns) above. Which of `Root` and `Island` a page
 should reach for, and in what order to adopt them, is
 [06 — Composition and adoption](06-composition-and-adoption.md). What each declaration above is
 checked by is [07 — Checks and verification](07-checks-and-verification.md).

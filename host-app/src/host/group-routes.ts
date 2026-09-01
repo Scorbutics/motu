@@ -100,7 +100,7 @@ export async function groupView(
   if (!s.getGroup(name)) return html(404, errorPage(404, `no group "${name}"`))
 
   // A GALLERY MUST NOT BE A WAY ROUND THE GATE, and now it is not a way round the GRANT either.
-  // `motu lagoon group <name> --all` composes every published project, so a private one joins a
+  // an `all` group composes every published project, so a private one joins a
   // public gallery by default rather than by anyone choosing it — and the answer to that is the same
   // question the front page asks, which is what this line finally is.
   //

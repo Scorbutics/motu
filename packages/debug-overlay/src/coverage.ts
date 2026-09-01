@@ -2,9 +2,9 @@
 //
 // Every other section of the lens reads the region's DECLARATION and the region as it is running.
 // This one adds the only input neither of those contains: a corpus of the states production reached,
-// folded from beacons and baked into the build by `motu region coverage <id> --save`.
+// folded from beacons and baked into the build by `motu archipelago coverage <id> --save`.
 //
-// WHY THIS BELONGS IN THE LENS AND NOT ONLY IN THE CLI. `motu region coverage` compares a corpus to
+// WHY THIS BELONGS IN THE LENS AND NOT ONLY IN THE CLI. `motu archipelago coverage` compares a corpus to
 // the region's FLOWS — a file to a file, and a fine answer to "what should we preview?". It cannot
 // answer the question a person standing in front of the lagoon actually has, because it has no
 // running region: *is the state I am looking at right now one that happens?* A scenario that renders
@@ -34,7 +34,7 @@ export function corpusFor(regionId: string | null): CoverageCorpus | null {
 // by the same cookie that opened the page. That is what lets a corpus reach a published lagoon
 // without the page carrying either of the two things it must never carry.
 //
-// The baked corpus still wins. `motu region coverage --save` writes a file the build inlines, which
+// The baked corpus still wins. `motu archipelago coverage --save` writes a file the build inlines, which
 // is what makes `lagoon dev` on a laptop work at all — there is no host in front of it to ask.
 
 const fetched = new Map<string, CoverageCorpus>();

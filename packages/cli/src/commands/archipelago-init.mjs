@@ -1,4 +1,4 @@
-// `motu region init <id> --page <page.tsx>` — everything a page needs before its FIRST island.
+// `motu archipelago init <id> --page <page.tsx>` — everything a page needs before its FIRST island.
 //
 // The second island on a page is cheap. The first is not: an archipelago, an app-side region type the
 // config is declared against, a composition root that binds the region to this environment, a lagoon
@@ -73,11 +73,11 @@ function precedent() {
   return found[0] ?? null;
 }
 
-export async function regionInitCommand(argv) {
+export async function archipelagoInitCommand(argv) {
   const id = argv._[0];
   const page = argv.page ? resolve(process.cwd(), argv.page) : null;
   if (!id || !page) {
-    console.error('usage: motu region init <id> --page <path/to/page.tsx>');
+    console.error('usage: motu archipelago init <id> --page <path/to/page.tsx>');
     process.exit(2);
   }
   if (!existsSync(page)) {
@@ -205,7 +205,7 @@ export const MotuRegion = ${pascal}.Region;
     let text = readFileSync(overrides, 'utf8');
     const before = text;
     // ANCHORED, AND NOT INTO A COMMENT. These patterns used to match anywhere, and the scaffold's own
-    // overrides file ships every map COMMENTED OUT as a template — so the first `region init` in a
+    // overrides file ships every map COMMENTED OUT as a template — so the first `archipelago init` in a
     // project spliced its entry into the middle of `// export const seed: … = {`, leaving a bare
     // `'id': seed, someArchipelago: { … } };` on the next line. A file that cannot parse, written by
     // the command whose job is to make the region work, and reported as a success.
@@ -242,7 +242,7 @@ export const MotuRegion = ${pascal}.Region;
   }
 
   const rel = (f) => relative(process.cwd(), f);
-  console.log(color.bold(`\nmotu region init — ${id}\n`));
+  console.log(color.bold(`\nmotu archipelago init — ${id}\n`));
   for (const f of written) console.log('  ' + color.green('+ ') + rel(f));
   for (const f of skipped) console.log('  ' + color.dim('= ' + rel(f) + ' (exists, untouched)'));
   console.log('');

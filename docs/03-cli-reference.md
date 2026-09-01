@@ -43,12 +43,12 @@ One shared parser (`packages/cli/src/run.mjs:33-48`), and its rules explain seve
 | anything not starting with `--` | appended to `argv._` |
 
 Consequences worth knowing: a single-dash form (`-a`) is **not** a flag — it lands in the positionals;
-a repeated flag silently overwrites the earlier one, which is why `motu lagoon group` takes
-comma-separated lists instead (`packages/cli/src/commands/lagoon-group.mjs:55-62`); and a flag whose
+a repeated flag silently overwrites the earlier one, so a command wanting several values takes a
+comma-separated list in ONE flag instead; and a flag whose
 value looks like a flag (`--title --foo`) becomes `true`.
 
 Single-word verbs (`check`, `removal-check`, `codegen`) and the sub-verbs that take a leading
-positional (`init`, `skills install`, `lagoon group`, `archipelago snapshot`, `archipelago adopt-root`)
+positional (`init`, `skills install`, `archipelago snapshot`, `archipelago adopt-root`)
 re-parse with the argument list shifted, so their positional lands in `argv._[0]`
 (`packages/cli/src/run.mjs:205`, `:243`, `:246`, `:265`, `:274`, `:287`, `:289`, `:299`).
 
@@ -75,9 +75,9 @@ to the reference layout (`packages/cli/src/lib/config.mjs:16-36`, `:103`). See
 
 Where the **framework checkout** lives is derived from the running binary — `packages/cli/src/lib` up
 four levels, verified by the presence of `packages/core/src/index.ts`
-(`packages/cli/src/lib/config.mjs:55-57`). `$MOTU_ROOT` overrides it, then `motuRoot` in
-`motu.config.json`, in that order (`packages/cli/src/lib/config.mjs:196-200`). Committing `motuRoot` is
-discouraged: it is a machine-specific path that the CLI already knows.
+(`packages/cli/src/lib/config.mjs:59-61`). `$MOTU_ROOT` is the only override
+(`packages/cli/src/lib/config.mjs:202`). There is no `motuRoot` config key — it was removed, because a
+machine-specific path the CLI already knows has no business in a committed file.
 
 ### Environment variables
 
@@ -86,15 +86,14 @@ Read by the CLI itself:
 | Variable | Read at | Meaning |
 | --- | --- | --- |
 | `MOTU_PROJECT_ROOT` | `lib/config.mjs:102` | Where to start the walk for `motu.config.json`. Set by the CLI on its own child processes. |
-| `MOTU_ROOT` | `lib/config.mjs:196`, `lib/scaffold.mjs:447` | The framework checkout, overriding the derived one. When set during `motu init`, it is also written into the generated config (`commands/init.mjs:196`). |
-| `MOTU_HOST_URL` | `commands/lagoon.mjs:184`, `:198`, `:518`; `commands/lagoon-group.mjs:21`; `commands/region-coverage.mjs:377`, `:413`; `lib/baselines.mjs:21` | Default lagoon host for `publish --remote`, `lagoon group(s)`, snapshot baselines, coverage accept/forget, and live-gallery registration. |
-| `MOTU_HOST_TOKEN` | `commands/lagoon.mjs:255`, `:519`; `commands/lagoon-group.mjs:22`; `commands/region-coverage.mjs:378`, `:414`; `lib/baselines.mjs:22` | Bearer token for the same host. |
+| `MOTU_ROOT` | `lib/config.mjs:202` | The framework checkout, overriding the derived one. Never written into a generated config — it stays in the environment. |
+| `MOTU_HOST_URL` | `commands/lagoon.mjs:184`, `:198`, `:518`; `commands/region-coverage.mjs:377`, `:413`; `lib/baselines.mjs:21` | Default lagoon host for `publish --remote`, snapshot baselines, coverage accept/forget, and live-gallery registration. |
+| `MOTU_HOST_TOKEN` | `commands/lagoon.mjs:255`, `:519`; `commands/region-coverage.mjs:378`, `:414`; `lib/baselines.mjs:22` | Bearer token for the same host. |
 | `MOTU_COVERAGE_TOKEN` | `commands/region-coverage.mjs:239` | Token for fetching a coverage corpus over HTTP. Deliberately not a config key — config is baked into the generated registry the lagoon publishes. |
 | `MOTU_CONFIG_HOME` | `lib/remote.mjs:24` | Directory holding `host.json` (default `~/.config/motu`). |
 
 Precedence for the host is the same everywhere it is resolved: `--remote`/`--token` flag →
-environment → `~/.config/motu/host.json` (`packages/cli/src/lib/baselines.mjs:19-25`,
-`packages/cli/src/commands/lagoon-group.mjs:19-28`).
+environment → `~/.config/motu/host.json` (`packages/cli/src/lib/baselines.mjs:19-25`).
 
 Set by the CLI for its own build/harness children, not user-facing input: `MOTU_SINGLEFILE`,
 `MOTU_TRANSPORT`, `MOTU_TARGET`, `MOTU_FIT`, `MOTU_NO_SSL` (`commands/lagoon.mjs:77-86`),
@@ -113,7 +112,7 @@ cause is classified — are in [checks and verification](07-checks-and-verificat
 
 | Writes files | Read-only |
 | --- | --- |
-| `init`, `island create`, `island sync`, `island integrate`, `island snapshot --update`, `region init`, `archipelago create`, `archipelago sync`, `archipelago adopt-root`, `archipelago record-frame`, `fixtures record`, `lagoon eject`, `lagoon publish`, `contract check --update`, `codegen`, `skills install` | `check`, `island verify`, `island defaults`, `archipelago verify`, `integrate check`, `contract check`, `lagoon dev`, `lagoon serve`, `lagoon states`, `lagoon group(s)`, `region coverage` (unless `--save`), `skills list` |
+| `init`, `island create`, `island sync`, `island integrate`, `island snapshot --update`, `archipelago init`, `archipelago create`, `archipelago sync`, `archipelago adopt-root`, `archipelago record-frame`, `fixtures record`, `lagoon eject`, `lagoon publish`, `codegen`, `skills install` | `check`, `island verify`, `island defaults`, `archipelago verify`, `integrate check`, `lagoon dev`, `lagoon serve`, `lagoon states`, `archipelago coverage` (unless `--save`), `skills list` |
 
 Two that need a footnote. `removal-check` **temporarily** deletes and rewrites host files, then always
 restores them from a backup in a `finally` block (`packages/cli/src/commands/removal-check.mjs:512-526`);
@@ -353,78 +352,6 @@ or tag is already a member (`:83-86`).
 
 ---
 
-## `motu region`
-
-### `motu region init <id> --page <file>`
-
-Everything a page needs before its first island: the app-side region type, the archipelago, the lagoon
-region module, a composition root, and the lagoon overrides entries.
-
-```console
-motu region init <id> --page <path/to/page.tsx>
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `<id>` positional | Region id | required (`commands/region.mjs:77`) |
-| `--page` | The page this region is drawn around; resolved against the cwd | required (`:78`) |
-
-**Reads** — the host `tsconfig.json`, to decide between the `@/` alias and a relative import
-(`:41-48`); and an existing composition root anywhere under `app/`, `components/`, `lib/`, `src/`, so a
-new one inherits this project's `transport` and `useHost` rather than answering those environment
-questions a second way (`:51-74`, `:163-170`).
-
-**Writes** — `<page dir>/<id>-region.ts` (the app's own type, no motu import); the archipelago via
-`archipelago create`, re-declared as `ArchipelagoConfig<PascalRegion>` (`:107-126`);
-`<lagoon>/src/regions/<id>.tsx`; `<id>-region.tsx` (or `<id>-binding.tsx` when that name would collide
-with the type module — a real collision that makes the composition root unreachable, `:155-162`); and
-entries spliced into `<lagoon>/src/lagoon.tsx` when its maps are uncommented, else a printed
-instruction (`:201-242`).
-
-**Exit** — `2` with no id, no `--page`, or a page that does not exist; otherwise `0`. Existing files are
-listed as `(exists, untouched)`.
-
-```console
-motu region init client-portfolio --page app/portfolio/page.tsx
-```
-
-### `motu region coverage <id>`
-
-The states production reached that no flow previews. The one motu check that compares the region to
-reality rather than to a declaration — see [coverage](09-coverage.md).
-
-```console
-motu region coverage <id> [--corpus <file|url>] [<more corpora>…] [--token <secret>]
-                     [--save] [--accept <id>] [--forget <id>] [--forget-all]
-                     [--ids] [--fail-above <n>] [--json]
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `<id>` positional | Region id | required (`commands/region-coverage.mjs:160`) |
-| `--corpus` + extra positionals | Corpus files or URLs, merged (`:215`, `:328`) | `coverage.corpusUrl` from config, with `region` filled in (`:200-218`) |
-| `--token` | Bearer token for an HTTP corpus | `MOTU_COVERAGE_TOKEN` (`:239`) |
-| `--save` | Write the corpus into `<lagoon>/src/coverage/<id>.json`, refusing if the body contains the token or its source URL (`:343-363`) | off |
-| `--accept <id>` | Mark a recorded state as looked-at on the host; needs `MOTU_HOST_URL` + `MOTU_HOST_TOKEN` (`:409-438`) | off |
-| `--forget <id>` / `--forget-all` | Remove a state the instrument recorded wrongly — a different act from accepting (`:373-400`) | off |
-| `--ids` | Print each uncovered state's id, so `--accept` is reachable without deriving it (`:526`) | off |
-| `--fail-above <n>` | Gate: fail when an uncovered state's share is at or above `n` percent (`:466`, `:554-558`) | advisory only |
-| `--json` | Findings as data, including a typed scenario skeleton per uncovered state. Owns stdout — the prose is suppressed (`:159`, `:474-508`) | off |
-
-**Reads** the archipelago's declared keys and `coverage.enums`, the region's flows, and the corpus —
-which may be a file, a URL, the host's `GET /api/coverage` envelope, or a `/coverage/status` summary,
-all normalised by one function (`:257-300`).
-
-**Exit** — `2` for a missing id, an unknown region, unreadable flows, no corpus at all, a corpus that
-would not load, or a failed accept/forget; `1` when the corpus and the code disagree about the declared
-keys (nothing below is comparable, `:443-455`) or when `--fail-above` is breached; `0` otherwise.
-
-```console
-motu region coverage actions --ids --fail-above 2
-```
-
----
-
 ## `motu integrate check [region]`
 
 The last mile, and its own verb because it asks about the **host**, not about motu's files: does the
@@ -478,19 +405,52 @@ and the reasoning for why that is not true here is written in `signin-screen.tsx
 If it scans nothing, it exits `2` rather than passing:
 
 ```console
-  ! host-sources  scanned 0 files under . (app, components, lib, src, pages) — nothing was examined,
+  ! host-sources  scanned 0 files under . (declared by tsconfig.json) — nothing was examined,
                   so nothing is proved about the host. Set `hostSources` in motu.config.json if the
                   application lives elsewhere.
 ```
 
-> That message names a key `integrate check` does **not** read: `hostSources()` hardcodes the five
-> directories, and only `removal-check` honours the config key (`commands/integration.mjs:62`,
-> `commands/removal-check.mjs:85`). The usual cause is running from the wrong directory — the CLI
-> locates a project by `motu.config.json` in the cwd.
+> The parenthesis names WHERE it looked — `declared by <tsconfig>`, `guessed: <dirs>` or
+> `hostSources: <dirs>` — so an empty scan says which of the three it trusted before finding nothing
+> (`lib/host-sources.mjs`). The usual cause is running from the wrong directory — the CLI locates a
+> project by `motu.config.json` in the cwd.
 
 ---
 
 ## `motu archipelago`
+
+### `motu archipelago init <id> --page <file>`
+
+Everything a page needs before its first island: the app-side region type, the archipelago, the lagoon
+region module, a composition root, and the lagoon overrides entries.
+
+```console
+motu archipelago init <id> --page <path/to/page.tsx>
+```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `<id>` positional | Region id | required (`commands/archipelago-init.mjs:77`) |
+| `--page` | The page this region is drawn around; resolved against the cwd | required (`:78`) |
+
+**Reads** — the host `tsconfig.json`, to decide between the `@/` alias and a relative import
+(`:41-48`); and an existing composition root anywhere under `app/`, `components/`, `lib/`, `src/`, so a
+new one inherits this project's `transport` and `useHost` rather than answering those environment
+questions a second way (`:51-74`, `:163-170`).
+
+**Writes** — `<page dir>/<id>-region.ts` (the app's own type, no motu import); the archipelago via
+`archipelago create`, re-declared as `ArchipelagoConfig<PascalRegion>` (`:107-126`);
+`<lagoon>/src/regions/<id>.tsx`; `<id>-region.tsx` (or `<id>-binding.tsx` when that name would collide
+with the type module — a real collision that makes the composition root unreachable, `:155-162`); and
+entries spliced into `<lagoon>/src/lagoon.tsx` when its maps are uncommented, else a printed
+instruction (`:201-242`).
+
+**Exit** — `2` with no id, no `--page`, or a page that does not exist; otherwise `0`. Existing files are
+listed as `(exists, untouched)`.
+
+```console
+motu archipelago init client-portfolio --page app/portfolio/page.tsx
+```
 
 ### `motu archipelago create <id>`
 
@@ -645,6 +605,41 @@ on success.
 
 ```console
 motu archipelago adopt-root sign-in
+```
+
+### `motu archipelago coverage <id>`
+
+The states production reached that no flow previews. The one motu check that compares the region to
+reality rather than to a declaration — see [coverage](09-coverage.md).
+
+```console
+motu archipelago coverage <id> [--corpus <file|url>] [<more corpora>…] [--token <secret>]
+                     [--save] [--accept <id>] [--forget <id>] [--forget-all]
+                     [--ids] [--fail-above <n>] [--json]
+```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `<id>` positional | Region id | required (`commands/region-coverage.mjs:160`) |
+| `--corpus` + extra positionals | Corpus files or URLs, merged (`:215`, `:328`) | `coverage.corpusUrl` from config, with `region` filled in (`:200-218`) |
+| `--token` | Bearer token for an HTTP corpus | `MOTU_COVERAGE_TOKEN` (`:239`) |
+| `--save` | Write the corpus into `<lagoon>/src/coverage/<id>.json`, refusing if the body contains the token or its source URL (`:343-363`) | off |
+| `--accept <id>` | Mark a recorded state as looked-at on the host; needs `MOTU_HOST_URL` + `MOTU_HOST_TOKEN` (`:409-438`) | off |
+| `--forget <id>` / `--forget-all` | Remove a state the instrument recorded wrongly — a different act from accepting (`:373-400`) | off |
+| `--ids` | Print each uncovered state's id, so `--accept` is reachable without deriving it (`:526`) | off |
+| `--fail-above <n>` | Gate: fail when an uncovered state's share is at or above `n` percent (`:466`, `:554-558`) | advisory only |
+| `--json` | Findings as data, including a typed scenario skeleton per uncovered state. Owns stdout — the prose is suppressed (`:159`, `:474-508`) | off |
+
+**Reads** the archipelago's declared keys and `coverage.enums`, the region's flows, and the corpus —
+which may be a file, a URL, the host's `GET /api/coverage` envelope, or a `/coverage/status` summary,
+all normalised by one function (`:257-300`).
+
+**Exit** — `2` for a missing id, an unknown region, unreadable flows, no corpus at all, a corpus that
+would not load, or a failed accept/forget; `1` when the corpus and the code disagree about the declared
+keys (nothing below is comparable, `:443-455`) or when `--fail-above` is breached; `0` otherwise.
+
+```console
+motu archipelago coverage actions --ids --fail-above 2
 ```
 
 ---
@@ -828,97 +823,6 @@ runs until Ctrl-C.
 ```console
 motu lagoon serve --watch --host
 ```
-
-### `motu lagoon group <name>`
-
-Compose published projects into one gallery on the host.
-
-```console
-motu lagoon group <name> [--all] [--add <repo>[:<slug>][,…]] [--remove <repo>[:<slug>][,…]]
-                  [--remote <url>] [--token <secret>] [--json]
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `<name>` positional | Gallery name | required (`commands/lagoon-group.mjs:83`) |
-| `--all` | A standing rule, not a frozen list: the host resolves "every repository" when it assembles the group (`:93-98`) | off |
-| `--add` | Comma-separated members; slug defaults to `all`, the switcher entry (`:49-53`, `:102`) | — |
-| `--remove` | Comma-separated; a bare repo drops every slug of it, and on an `--all` group it records an exclusion so the next assembly does not put it back (`:111-122`) | — |
-| `--remote` | Host URL | `MOTU_HOST_URL`, then `host.json` (`:21`) |
-| `--token` | Host token | `MOTU_HOST_TOKEN`, then `host.json` (`:22`) |
-| `--json` | `{ ok, name, url, members, manifest, missing }` | off (`:136`) |
-
-`--add`/`--remove` are edits against what the group already is, not a redefinition (`:90-91`). Members
-that have published nothing are reported separately from members that are stored, because the two counts
-differ (`:141-152`).
-
-**Exit** — `2` with no name or a malformed `--add`; `1` with no host configured or when the group would
-end up empty; `0` otherwise.
-
-> `--token` is undocumented in `USAGE`.
-
-```console
-motu lagoon group product --all --remove old/thing
-```
-
-### `motu lagoon groups`
-
-List the galleries this host serves.
-
-```console
-motu lagoon groups [--remote <url>] [--token <secret>] [--json]
-```
-
-Reads `GET /api/groups`. **Exit** — `1` with no host configured; `0` otherwise.
-
----
-
-## `motu contract check`
-
-The application's boundary and coupling graph, as one committed artifact — a lockfile for
-architecture.
-
-```console
-motu contract check [--update]
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `--update` | Write the snapshot instead of comparing against it | off (`commands/contract.mjs:149`) |
-
-**Reads** — `src/services/index.ts` (`defineServices`, the callable surface), every island's declared
-`input`/`output`/`ambient`, and every archipelago's `bind`/`writes`, with comments blanked so scaffolded
-examples are not read as real coupling (`:28-138`). **Writes** `<app>/src/contract.snapshot.json`, and
-only under `--update`.
-
-**Exit** — `2` when the scan found no callable method, island or archipelago at all: nothing was
-examined, so nothing is proved, and `--update` refuses to write the empty snapshot that would have made
-every later run print `PASS` forever (`commands/contract.mjs:160-171`). Otherwise `1` when the snapshot
-is missing, or when the boundary moved and the snapshot did not; `0`
-when it matches. There is no `--json`; the snapshot file **is** the machine-readable form.
-
-```console
-motu contract check          # in CI
-motu contract check --update # acknowledge a reviewed change
-```
-
-The failure that matters is not "it changed" — it is "it changed and nobody said so":
-
-```console
-FAIL  the boundary moved and src/contract.snapshot.json did not.
-  Review the change, then acknowledge it: `motu contract check --update`
-```
-
-And the one that used to be a silent pass:
-
-```console
-NOTHING TO CHECK  no callable method, island or archipelago was found under . — nothing was
-                  examined, so nothing is proved about the boundary.
-  Check `app`, `islands` and `archipelagos` in motu.config.json.
-```
-
-Exit `2`, and `--update` refuses to write in that state. An empty snapshot compares equal to an empty
-scan, so recording one once made every later run print `PASS` over a project it never examined.
 
 ---
 
@@ -1131,10 +1035,9 @@ a 20-island / 3-region one).
 | Before handing work over | `motu island snapshot --all --remote` | 89s | Did any island move? |
 | Before handing work over | `motu archipelago snapshot --all --remote` | 18s | Did the composed page move? |
 | Before saying an integration is done | `motu integrate check <id>` | static | Does the **host** compose, place and read the region? |
-| In review, on the boundary | `motu contract check` | static | Did the callable surface or the coupling graph widen? |
 | Looking at a state | `motu lagoon states`, then `motu lagoon serve --watch` | — | Open the exact declared state, in a browser. |
 | Showing a human | `motu lagoon publish --remote` | — | A link that outlives your process. |
-| Asking what production reached | `motu region coverage <id>` | — | Which real states no flow previews. |
+| Asking what production reached | `motu archipelago coverage <id>` | — | Which real states no flow previews. |
 
 Two scoping rules that decide whether these numbers apply to you. **Name what you touched**: while
 working on a region, run that region and its islands, not the whole project. And `--changed` is not that

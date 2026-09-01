@@ -601,7 +601,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (!group) return html(res, 404, errorPage(404, `no group "${name}"`), NO_STORE);
       // A GALLERY MUST NOT BE A WAY ROUND THE GATE. A group is a list of members by repo, and serving
       // its frames without this check would hand out exactly the pages the per-repo route refuses —
-      // `motu lagoon group <name> --all` composes EVERY published project, so a private one joins a
+      // an `all` group composes EVERY published project, so a private one joins a
       // public gallery by default rather than by anyone choosing it.
       //
       // Filtered rather than refused: a gallery of five projects, one of them private, is still a

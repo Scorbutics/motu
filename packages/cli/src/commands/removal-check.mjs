@@ -17,6 +17,7 @@ import { relative, resolve, dirname } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
 import { paths, color } from '../lib/util.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
+import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { ejectFile, readOutputs, readRegions, regionOfRoot } from '../lib/eject.mjs';
 
@@ -42,51 +43,34 @@ function hostTypecheck(hostRoot) {
  */
 function importGraph(hostRoot, motuRoot, cfg) {
   const graph = new Map();
-  const walk = (dir) => {
-    let entries;
+  const resolved = hostSourceFiles(hostRoot, cfg);
+  // The ORIGIN travels with the graph: a scan that found nothing has to be able to say what it
+  // trusted, or "0 files" is indistinguishable from "the host has no source".
+  graph.origin = resolved.origin;
+  graph.detail = resolved.detail;
+  for (const full of resolved.files) {
+    // MOTU'S OWN SOURCE IS NOT THE HOST'S — unless the host lives inside the checkout.
+    //
+    // This skipped everything under `motuRoot`, which is right for an application that sits beside
+    // motu and wrong for one that sits inside it. The review console does: it was subtree'd into
+    // this repository, so every one of its files matched and the walk returned nothing, and the
+    // check reported "examined no files" over a fully integrated app — the same empty-search
+    // failure `hostSourceFiles` was written to stop, arriving by a different door.
+    //
+    // Guarded on the two being different so the repo-root project, whose hostRoot IS the checkout,
+    // does not start treating motu's own packages as the host.
+    if (full.startsWith(motuRoot) && (hostRoot === motuRoot || !full.startsWith(hostRoot))) continue;
+    let text;
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      text = readFileSync(full, 'utf8');
     } catch {
-      return;
+      continue;
     }
-    for (const e of entries) {
-      const full = resolve(dir, e.name);
-      // MOTU'S OWN SOURCE IS NOT THE HOST'S — unless the host lives inside the checkout.
-      //
-      // This skipped everything under `motuRoot`, which is right for an application that sits beside
-      // motu and wrong for one that sits inside it. The review console does: it was subtree'd into
-      // this repository, so every one of its files matched and the walk returned nothing, and the
-      // check reported "examined no files" over a fully integrated app — the same empty-search
-      // failure the roots guess above was written to stop, arriving by a different door.
-      //
-      // Guarded on the two being different so the repo-root project, whose hostRoot IS the checkout,
-      // does not start walking motu's own packages and calling them the host.
-      if (full.startsWith(motuRoot) && (hostRoot === motuRoot || !full.startsWith(hostRoot))) continue;
-      if (e.isDirectory()) {
-        if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-        walk(full);
-      } else if (/\.tsx?$/.test(e.name)) {
-        const text = readFileSync(full, 'utf8');
-        graph.set(
-          full,
-          [...text.matchAll(/(?:^|\n)\s*(?:import|export)[^'"\n]*?from\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
-        );
-      }
-    }
-  };
-  // WHERE THE HOST KEEPS ITS CODE is not a constant.
-  //
-  // This walked `app/`, `components/` and `lib/` — Next's layout, and the only host motu had ever been
-  // integrated into. Pointed at Twenty, whose source is all under `src/`, it found nothing and printed
-  // "no motu references in the host application" over a fully integrated app: the check answered
-  // "removable" because it had not looked anywhere. A green result from an empty search is the worst
-  // failure mode this tool has, so the roots are now the host's actual top-level source directories,
-  // and `hostSources` in motu.config.json overrides the guess for a layout nobody anticipated.
-  const configured = Array.isArray(cfg?.hostSources) ? cfg.hostSources : null;
-  const roots =
-    configured ??
-    ['app', 'components', 'lib', 'src', 'pages'].filter((d) => existsSync(resolve(hostRoot, d)));
-  for (const top of roots.length ? roots : ['.']) walk(resolve(hostRoot, top));
+    graph.set(
+      full,
+      [...text.matchAll(/(?:^|\n)\s*(?:import|export)[^'"\n]*?from\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+    );
+  }
   return graph;
 }
 
@@ -439,8 +423,12 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       if (!quiet) {
         console.log(
           color.yellow('– removal-check') +
-            color.dim(`  scanned 0 files under ${paths.rel(hostRoot)} — nothing was examined, so nothing is proved. ` +
-              `Set \`hostSources\` in motu.config.json to the host's own source directories.`),
+            color.dim(
+              `  scanned 0 files under ${paths.rel(hostRoot)} ` +
+                `(${describeSources(graph, paths.rel)}) — ` +
+                `nothing was examined, so nothing is proved. ` +
+                `Set \`hostSources\` in motu.config.json to the host's own source directories.`,
+            ),
         );
       }
       return {

@@ -1,4 +1,4 @@
-// `motu region coverage <id> --corpus <file…>` — what the region DOES, against what it PREVIEWS.
+// `motu archipelago coverage <id> --corpus <file…>` — what the region DOES, against what it PREVIEWS.
 //
 // Every other check in this CLI compares the region to its declaration. This compares it to reality:
 // a corpus of the states production actually reached, folded from beacons, against the states the
@@ -159,7 +159,7 @@ export async function regionCoverageCommand(argv) {
   const say = argv.json ? () => {} : console.log;
   const id = argv._[0];
   if (!id) {
-    console.error(color.red('motu region coverage <id> --corpus <file…>'));
+    console.error(color.red('motu archipelago coverage <id> --corpus <file…>'));
     process.exit(2);
   }
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
@@ -172,7 +172,7 @@ export async function regionCoverageCommand(argv) {
   const enums = declaredEnums(region);
   const flows = await readFlows(id);
 
-  say(color.bold(`\nmotu region coverage — ${id}\n`));
+  say(color.bold(`\nmotu archipelago coverage — ${id}\n`));
 
   if (!flows?.length) {
     say(
@@ -186,7 +186,7 @@ export async function regionCoverageCommand(argv) {
   // NO CORPUS IS NOT A PASS. Without one this can still say what the flows cover and print the known
   // set to publish, which is useful on its own — but it has examined no reality, and says so.
   //
-  // `corpusUrl` FROM CONFIG IS THE DEFAULT, so the everyday invocation is `motu region coverage
+  // `corpusUrl` FROM CONFIG IS THE DEFAULT, so the everyday invocation is `motu archipelago coverage
   // <id>` rather than a URL somebody has to remember. It is the one coverage address allowed in
   // committed config, because it is read HERE — on a developer's machine — and never reaches a
   // browser; the beacon's own addresses stay in the page's meta tags for exactly that reason.
@@ -240,7 +240,7 @@ export async function regionCoverageCommand(argv) {
 
   // A URL IS A FILE HERE. The corpus lives wherever the project put it, and the whole point of the
   // read side being a cacheable blob is that checking against the real thing should not need an
-  // export step — `motu region coverage <id> --corpus https://…` is the drift check.
+  // export step — `motu archipelago coverage <id> --corpus https://…` is the drift check.
   /**
    * A STATUS PAGE IS ALSO A CORPUS SOURCE, whichever way it arrived.
    *

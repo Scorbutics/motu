@@ -48,9 +48,13 @@ const DEFAULTS = {
  * machine-specific path (`"../../motu"`, `"../../../../motu"`) into a committed file — the single line
  * that made a clone fail on someone else's machine.
  *
- * Kept as an override, because it is genuinely needed for a differently-placed checkout or a CI image;
- * it is just no longer required. Verified rather than assumed: if that directory holds no motu
- * checkout, fall back to the previous behaviour instead of resolving every @motu/* to nothing.
+ * SO THE CONFIG KEY IS GONE. It was kept for a while as an override for "a differently-placed checkout
+ * or a CI image", but `$MOTU_ROOT` already answers both and answers them better: the one property the
+ * config key had that the environment variable does not is that it gets COMMITTED, which is precisely
+ * the bug. A key whose only distinguishing feature is the failure mode is not an escape hatch.
+ *
+ * Verified rather than assumed: if the derived directory holds no motu checkout, FRAMEWORK_ROOT is
+ * null and we fall back to the project root instead of resolving every @motu/* to nothing.
  */
 const CLI_DIR = dirname(fileURLToPath(import.meta.url));
 const OWN_CHECKOUT = resolve(CLI_DIR, '../../../..');
@@ -189,15 +193,13 @@ export function loadMotuConfig() {
     /**
      * Where the motu framework checkout lives. @motu/* are unpublished packages whose entry point is
      * raw TypeScript, so a project resolves them BY PATH rather than through node_modules — which is
-     * what lets a project adopt motu with no install step. Derived from the running CLI by default
-     * (see FRAMEWORK_ROOT); `$MOTU_ROOT` then `motuRoot` in motu.config.json override it, in that
-     * order, for a differently-placed checkout or a CI image.
+     * what lets a project adopt motu with no install step. DERIVED from the running CLI (see
+     * FRAMEWORK_ROOT); `$MOTU_ROOT` overrides it for a differently-placed checkout or a CI image.
+     *
+     * There is no config key. See the FRAMEWORK_ROOT comment for why the environment is the only
+     * override: this value must not be committed.
      */
-    motuRoot: process.env.MOTU_ROOT
-      ? resolve(process.env.MOTU_ROOT)
-      : cfg.motuRoot
-        ? resolve(root, cfg.motuRoot)
-        : (FRAMEWORK_ROOT ?? root),
+    motuRoot: process.env.MOTU_ROOT ? resolve(process.env.MOTU_ROOT) : (FRAMEWORK_ROOT ?? root),
     /** Generated, never-committed build inputs (see `.gitignore`: `.motu/`). */
     cacheDir: resolve(root, '.motu/cache'),
     /** The raw config object, for keys the CLI does not model. */
@@ -213,5 +215,23 @@ export function loadMotuConfig() {
     manifest: resolve(root, cfg.manifest),
     configPath: found ? resolve(found.dir, 'motu.config.json') : null,
   };
+
+  // A REMOVED KEY MUST NOT BE A SILENT ONE.
+  //
+  // Dropping `motuRoot` quietly would be the exact failure this file's own allowlist comment is about:
+  // a project keeps a line that used to mean something, nothing reads it, and the CLI resolves
+  // somewhere else without saying so. `motuRoot` in particular used to point @motu/* at a checkout, so
+  // a project whose line was doing real work needs to hear that the environment now carries it.
+  if (cfg.motuRoot !== undefined && !process.env.MOTU_MUTE_DEPRECATED) {
+    const where = cached.configPath ?? 'motu.config.json';
+    process.emitWarning(
+      `motu: \`motuRoot\` was removed and is being ignored (${where}).\n` +
+        `  The framework checkout is derived from the running CLI: ${cached.motuRoot}\n` +
+        `  Delete the line. If that path is wrong, export MOTU_ROOT=<checkout> instead — it is the\n` +
+        `  same override without committing a machine-specific path.`,
+      'MotuDeprecationWarning',
+    );
+  }
+
   return cached;
 }

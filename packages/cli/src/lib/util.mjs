@@ -11,7 +11,7 @@ const cfg = loadMotuConfig();
 
 /** The motu project root (the directory that owns motu.config.json). */
 export const REPO_ROOT = cfg.root;
-/** Where the framework checkout lives (motu.config.json's `motuRoot`, or $MOTU_ROOT). */
+/** Where the framework checkout lives — derived from the running CLI, or `$MOTU_ROOT`. */
 export const MOTU_CHECKOUT = cfg.motuRoot;
 /** The HOST application's root — where its instruction files and tsconfig live. */
 export const HOST_ROOT = cfg.hostRoot;
@@ -59,7 +59,7 @@ export const paths = {
    * The npm package name whose barrel exports ELEMENT_REGISTRY.
    *
    * The fourth value to be resolved by `loadMotuConfig()` and never surfaced here, after `isolation`,
-   * `coverage` and `regionRoot` — and it failed the same silent way they did. `region init` writes a
+   * `coverage` and `regionRoot` — and it failed the same silent way they did. `archipelago init` writes a
    * composition root that imports the project's islands, read it as `paths.appPackage ?? 'motu-islands'`,
    * got `undefined`, and generated an import of a package that does not exist for every project whose
    * appPackage is not literally `motu-islands`. The fallback is what hid it.

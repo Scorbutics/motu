@@ -289,7 +289,7 @@ not weaken the check — a wrong value and another island's text both still fail
 Matching is **case-insensitive**, deliberately: `innerText` reports what `text-transform` produced, and
 an assertion that breaks when a caption is restyled is asserting the wrong thing. Found the day the
 focused lagoon started applying the project's stylesheet, when every flow asserting `"changed"` failed
-against `"CHANGED"` (`packages/cli/src/playwright-lagoon.mjs:632`). `notText` is the negative form.
+against `"CHANGED"` (`packages/cli/src/playwright-lagoon.mjs:708-712`). `notText` is the negative form.
 
 ### A flow step must be able to fail
 

@@ -111,7 +111,7 @@ comparing eight characters does not. And it is **FNV-1a, not a crypto hash**
 dependency would be a strange price for eight characters."
 
 This earned its place in practice. `coverage.corpusUrl` is one string for a project with several
-regions, so a `region=` written into it is right for exactly one of them; `motu region coverage
+regions, so a `region=` written into it is right for exactly one of them; `motu archipelago coverage
 directory` once fetched the actions corpus. The declaration guard caught it — `corpus 7f46c60a vs code
 3eda0a71` — where without it every state would have been reported uncovered with nothing to say why
 (`packages/cli/src/commands/region-coverage.mjs:193`).
@@ -449,8 +449,8 @@ deployment" (`packages/core/src/archipelago.ts:216`). It is **opt-in per key, ne
 cannot tell an enum from an email address by looking at one string, and guessing wrong writes a
 customer's data into a coverage report" (`packages/core/src/archipelago.ts:224`).
 
-The in-tree example is the review console
-(`review-console/src/archipelagos/review/review.archipelago.ts:22`):
+The in-tree example is the review region of the host app
+(`host-app/motu/src/archipelagos/review/review.archipelago.ts:41`):
 
 ```ts
 coverage: { enums: ['viewMode'] },
@@ -577,10 +577,10 @@ by policy:
 
 ---
 
-## 9. The CLI: `motu region coverage <id>`
+## 9. The CLI: `motu archipelago coverage <id>`
 
 ```
-motu region coverage <id> [--corpus <f>]         states production reached that no flow previews
+motu archipelago coverage <id> [--corpus <f>]         states production reached that no flow previews
   --json --ids --accept <id> --fail-above <n>    machine-readable · print ids · accept one · gate
   --forget <id> | --forget-all                   remove a state the instrument recorded wrongly
 ```
@@ -680,7 +680,7 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
 });
 ```
 
-(`review-console/src/archipelagos/review/review.archipelago.ts:22`;
+(`host-app/motu/src/archipelagos/review/review.archipelago.ts:41`;
 type at `packages/core/src/archipelago.ts:227`.) Everything not listed stays a category. Nothing else
 about coverage belongs here.
 
@@ -723,9 +723,9 @@ baked half changes only on a redeploy, the served half is why accepting a state 
 **6. Ship it, then ask.** Once real traffic has folded and beaconed:
 
 ```
-motu region coverage actions            # uses coverage.corpusUrl
-motu region coverage actions --ids      # print the fingerprint ids too
-motu region coverage actions --json     # the same findings as data
+motu archipelago coverage actions            # uses coverage.corpusUrl
+motu archipelago coverage actions --ids      # print the fingerprint ids too
+motu archipelago coverage actions --json     # the same findings as data
 ```
 
 **7. Read `systemic` first.** A disjoint key is not a missing scenario but a missing column — widen
@@ -736,8 +736,8 @@ the flow seeds and re-run before writing any of the per-row scenarios
 
 - **Write a scenario** — paste the printed skeleton into `<id>.evidence.ts`, fill in the TODOs, and
   the state moves to `covered` on the next run. See [evidence and testing](10-evidence-and-testing.md).
-- **Accept it** — `motu region coverage actions --ids` to get the id, then
-  `motu region coverage actions --accept '<id>'`. A decision, recorded under the admin token, and the
+- **Accept it** — `motu archipelago coverage actions --ids` to get the id, then
+  `motu archipelago coverage actions --accept '<id>'`. A decision, recorded under the admin token, and the
   known endpoint starts suppressing it immediately.
 - **Fix the application** — "an error state at 3% is a 3% error rate, not a missing preview"
   (`packages/cli/src/commands/region-coverage.mjs:531`).
@@ -745,11 +745,11 @@ the flow seeds and re-run before writing any of the per-row scenarios
 Use `--forget <id>` / `--forget-all` only for a state the instrument recorded wrongly — a state the
 page cannot compute (`:365`). Forgetting is not accepting.
 
-**9. Gate it in CI** once the worklist is triaged: `motu region coverage actions --fail-above 5` exits
+**9. Gate it in CI** once the worklist is triaged: `motu archipelago coverage actions --fail-above 5` exits
 1 when any uncovered state holds 5% or more of recorded traffic. Leave it advisory while the list is
 long; a permanently red check teaches people to stop reading it.
 
-**10. Optionally, put the corpus in front of the lagoon.** `motu region coverage <id> --save` writes
+**10. Optionally, put the corpus in front of the lagoon.** `motu archipelago coverage <id> --save` writes
 the corpus into the lagoon root so the build inlines it, and the lens shows the state you are looking
 at against the states that happen (`packages/debug-overlay/src/coverage.ts:1`). That answers the
 question the CLI cannot: *is the state I am looking at right now one that happens?* — "A scenario that

@@ -10,7 +10,7 @@
 // WHAT IT REFUSES TO DO. A composed group pinning a record is exactly what `store.mjs`'s retention
 // rule protects: "never evict what an alias or a composed manifest points at". Removing a repo out
 // from under a gallery would leave that gallery resolving to nothing, so this checks first and stops.
-// Re-compose the group (`motu lagoon group <name> --remove <repo>`) and run it again.
+// Drop the repo from the group on the host and run it again.
 //
 //   node infra/remove-repo.mjs --repo Scorbutics/motu            # dry run: says what would go
 //   node infra/remove-repo.mjs --repo Scorbutics/motu --confirm  # remove it, if nothing pins it
@@ -118,8 +118,7 @@ if (pinning.length && !force) {
   console.error('')
   console.error(`✗ refusing: ${pinning.length} composed manifest(s) still point at ${repo}`)
   console.error('  Removing it would leave those galleries resolving to nothing — the exact thing')
-  console.error("  store.mjs's retention rule protects against. Re-compose them first:")
-  console.error(`      motu lagoon group <name> --remove ${repo}`)
+  console.error("  store.mjs's retention rule protects against. Drop it from those groups first.")
   console.error('  Re-composing a GROUP mints a new manifest and leaves the old ones standing, so if')
   console.error('  the history is what pins it, --force is the only way and it destroys those views.')
   process.exit(1)

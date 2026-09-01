@@ -13,14 +13,14 @@ other people, and how its visual baselines work. Vocabulary is in
 
 The lagoon proves **a component and its declared boundary**: one island or one page's islands, no
 backend, fixtures, deterministic, headless, exit-coded, publishable as a page that opens on a phone
-(`README.md:133-137`).
+(`README.md`).
 
 It does not prove **the system**. Cross-page behaviour — island A changing what island B shows on
 another page — is mediated by the database, and the honest tools for it are the real app running
-locally with auth bypassed, plus Playwright (`README.md:138-141`). Simulating that backend inside the
+locally with auth bypassed, plus Playwright (`README.md`). Simulating that backend inside the
 lagoon (a stateful fake, the schema in pglite) was investigated and declined: it reimplements business
 logic that cannot be diffed against the original, and the moment the lagoon has a backend it loses
-determinism, one-cause failures, speed, and the artifact with nothing behind it (`README.md:141-145`).
+determinism, one-cause failures, speed, and the artifact with nothing behind it (`README.md`).
 
 **It is always mock-backed.** A published or served artifact is built with `MOTU_TRANSPORT='mock'`
 unconditionally, with the reason in the source: an artifact has no `/api` proxy behind it, so `http`
@@ -288,13 +288,13 @@ months later into a lagoon that has grown another region since
 | Builds | a Vite dev server, in-process, with HMR (`lagoon.mjs:648-670`) | one self-contained page, held in memory | one self-contained page |
 | Writes | nothing | nothing (unless `--no-build`, which reads) | `.motu/publish/lagoon-<slug>.html` (`:143-145`) |
 | Transport | whatever `lagoon.config.json` says | forced `mock` (`:81-84`) | forced `mock` (`:81-84`) |
-| Reload | HMR | `--watch` only (SSE, `:318-347`) | never — a published artifact that dials home is a lie about what the artifact is (`README.md:1077-1078`) |
+| Reload | HMR | `--watch` only (SSE, `:318-347`) | never — a published artifact that dials home is a lie about what the artifact is |
 | Proves the artifact | no | **yes** | yes |
 
 Use **`dev`** to iterate: it is the fastest loop and the only one with HMR. Use **`serve`** to look at
 what you are about to publish, and as the only check that exercises the artifact rather than the
 source — `dev` serves through Vite with the dev proxy, so it never proves the inlining worked or that
-the page survives with no `/assets/` and no backend behind it (`README.md:531-533`). Use **`publish`**
+the page survives with no `/assets/` and no backend behind it. Use **`publish`**
 for a link that outlives your process.
 
 ### `motu lagoon dev [island]`
@@ -320,14 +320,14 @@ It serves the same bytes at **every path**, `cache-control: no-store`
 (`packages/cli/src/commands/lagoon.mjs:449-474`) — which is why an address that only worked on
 `lagoon.html` used to appear to work here. It restores the `<!doctype>`/`<html>`/`<head>` skeleton
 that `publish` strips (`:297-308`); without it the page gets no viewport meta and renders
-desktop-width on a phone, which is the one device this is for (`README.md:529-531`). Rebuilds are
+desktop-width on a phone, which is the one device this is for. Rebuilds are
 debounced 250 ms and keep the last good bytes on failure (`:570-599`).
 
 For a phone that is not on your wifi the command prints an ssh one-liner
 (`ssh -R 80:localhost:<port> nokey@localhost.run`, `:492-496`) — it deliberately does not run it for
-you: that URL is public while it lives (`README.md:534-535`). If you already run tailscale, prefer it:
+you: that URL is public while it lives. If you already run tailscale, prefer it:
 the tunnel is a property of the PORT, so whichever lagoon is serving on 8817 is what is exposed, and
-pointing it at another project is just running `serve` there (`README.md:537-550`). There is no
+pointing it at another project is just running `serve` there. There is no
 `motu lagoon funnel` command.
 
 ### `motu lagoon publish [island]`
@@ -354,8 +354,7 @@ phone keeps working (`:138-142`).
 ## Publishing to a host
 
 `motu lagoon publish` writes one self-contained page and `motu lagoon serve` puts it on a port, but
-both need your laptop awake. A **lagoon host** (`motu-host`) is that URL without the laptop
-(`README.md:864-869`).
+both need your laptop awake. A **lagoon host** (`motu-host`) is that URL without the laptop.
 
 ```bash
 motu-host --token $(openssl rand -hex 24)      # serve on 127.0.0.1:8818
@@ -364,13 +363,13 @@ motu lagoon publish --remote                   # any project, any agent, same ho
 
 `--remote` **adds a destination**; it does not replace the artifact. The same bytes are written to
 `.motu/publish/` first, so a host that is down or a token that is wrong costs you nothing, and there is
-one build so local and hosted cannot drift (`README.md:882-885`;
-`packages/cli/src/commands/lagoon.mjs:185`, `:203-209`).
+one build so local and hosted cannot drift
+(`packages/cli/src/commands/lagoon.mjs:185`, `:203-209`).
 
 ### Where the host lives
 
 Precedence is **flag → `$MOTU_HOST_URL` / `$MOTU_HOST_TOKEN` → `~/.config/motu/host.json`**
-(`packages/cli/src/lib/remote.mjs:21`; `README.md:913-915`). The file is read from
+(`packages/cli/src/lib/remote.mjs:21`). The file is read from
 `$MOTU_CONFIG_HOME || ~/.config/motu` and carries exactly two keys; anything missing or malformed
 yields `{}` rather than an error (`packages/cli/src/lib/remote.mjs:23-33`):
 
@@ -379,7 +378,7 @@ yields `{}` rather than an error (`packages/cli/src/lib/remote.mjs:23-33`):
 ```
 
 That is the point of a long-running host: a fleet of agents across several repositories all publish
-into one place without being configured (`README.md:913-915`).
+into one place without being configured.
 
 The repository identity comes from the `origin` git remote parsed to `owner/name`, falling back to the
 directory basename — the only name stable across machines and clones
@@ -398,37 +397,17 @@ Templates at `packages/host/src/server.mjs:655-659`; cache headers at `:147-148`
 Objects are content-addressed, so republishing an unchanged lagoon stores nothing new. A commit URL
 from a **dirty tree** would be a lie — it would name a commit that does not contain what you are
 looking at — so the CLI withholds the sha and the host falls back to the content hash, which is always
-true (`README.md:895-899`; `packages/cli/src/lib/remote.mjs:70-78`;
+true (`packages/cli/src/lib/remote.mjs:70-78`,
 `packages/host/src/store.mjs:165`). Ref lookups accept sha and content-hash prefixes, newest first
 (`store.mjs:196-201`).
-
-### Groups: one gallery across several repositories
-
-```bash
-motu lagoon group product --all                                  # every repo the host knows
-motu lagoon group product --add acme/admin:archipelago-billing --remove old/thing
-motu lagoon groups                                               # what galleries exist
-# /g/product  →  302  /m/<manifest>/
-```
-
-The host resolves each member's `latest` **at view time** and snapshots the resolved hashes into an
-immutable manifest, so `/g/<name>` always means today while the manifest it redirects to keeps
-rendering what today looked like (`README.md:934-938`; `packages/host/src/server.mjs:427-479`).
-
-`--all` is a standing rule stored on the group and resolved at assembly time
-(`packages/cli/src/commands/lagoon-group.mjs:93-98`); `--add`/`--remove` EDIT rather than redefine, the
-slug defaults to `all` (the switcher entry), and a bare `--remove acme/web` drops every slug of that
-repo (`:102-122`). Members are comma-separated in **one** flag, not a repeated flag — the argv parser
-overwrites repeats, so `--add a --add b` would silently keep only `b`
-(`packages/cli/src/commands/lagoon-group.mjs:55-62`; `README.md:950-952`).
 
 ### Retention that cannot break a link
 
 Two caps per repository, whichever binds first: `--max-records` (default **1000**,
 `packages/host/src/store.mjs:30`) and `--max-bytes` (default **4 GB**, `:40`), also settable as
-`MOTU_HOST_MAX_RECORDS` / `MOTU_HOST_MAX_BYTES` (`packages/host/src/cli.mjs:62-71`). The byte cap
+`MOTU_HOST_MAX_RECORDS` / `MOTU_HOST_MAX_BYTES` (`packages/host/src/cli.mjs:67`, `:72`). The byte cap
 exists because records are not a proxy for size — a typical lagoon is ~430 kB, but Twenty's record page
-inlines its whole front-end and publishes at 19.2 MB (`README.md:923-926`).
+inlines its whole front-end and publishes at 19.2 MB.
 
 Eviction never touches a record a mutable alias points at, or one a composed manifest names
 (`packages/host/src/store.mjs:230-235`), and orders by **last access** rather than publish date: a
@@ -449,7 +428,7 @@ HttpOnly cookie and 302s the key out of the URL (`packages/host/src/server.mjs:2
 
 A private repo answers **404, not 403**, with a body identical to a genuine miss
 (`packages/host/src/server.mjs:524-533`). There is still no per-user account, so the read secret opens
-every private repo, not just one (`README.md:1075-1076`).
+every private repo, not just one.
 
 Without a token the host accepts no uploads at all — every POST is `503`
 (`packages/host/src/server.mjs:360`).
@@ -557,34 +536,39 @@ sampled and hoped for (`packages/cli/src/playwright-lagoon.mjs:882-884`, `:1035-
 
 ## The lens
 
-**Ctrl/Cmd-Shift-G** (`packages/debug-overlay/src/overlay.ts:126`, `:155`), or the tab on the edge of
-its own panel. It is read-only throughout: it observes the mount registry, the shared stores, the
-island definitions and the transport call log, and never writes a store, fires a channel or forces a
-render (`packages/debug-overlay/src/overlay.ts:13-14`).
+**Ctrl/Cmd-Shift-G** — matched against `KeyboardEvent.code`, default `KeyG`, overridable with
+`shortcutCode` (`packages/debug-overlay/src/overlay.ts:74-75`, `:168`, `:197`). It is read-only
+throughout: it observes the mount registry, the shared stores, the island definitions and the
+transport call log, and never writes a store, fires a channel or forces a render
+(`packages/debug-overlay/src/overlay.ts:13-14`).
 
-It opens on the **region sheet — one row per key**: who owns it, who reads it, what it holds, whether
-it has moved (`packages/debug-overlay/src/panel.tsx:449-460`). Columns are the key, its owner (a slot,
-or `host`), its readers (`∅ nobody` when none), a value preview, and either `<slot> · <n>× · <ago>` or
-`seed` (`:503-520`), plus a warning flag where a declared write has never fired or the host answered an
-island.
+**The lens is two halves, and only one of them is still a panel.** As of `b386e84` the floating panel
+is retired: what it drew now lives in the lagoon's own sidebar, drawn by whoever hosts the lagoon
+rather than bundled into the artifact (`packages/debug-overlay/src/overlay.ts:351-362`). What could
+NOT move is the PAGE layer — outlines, wires, hit-testing, the crosshair — because it measures the
+host's live DOM sixty times a second and only means anything over the running region.
 
-> Everything else in this panel answers a question about one island. This answers the question a
-> reviewer would otherwise open two files to answer — the archipelago (who declared what) and the page
-> (what actually feeds it) — and it answers it from the RUNNING region, so a declaration that is merely
-> plausible reads differently from one that is true.
-> — `packages/debug-overlay/src/panel.tsx:453-458`
+So the lens now EXPOSES data and the sidebar renders it. The tabs are `sheet`, `seams`, `islands`,
+`coupling`, `coverage`, `findings`, plus fixture recording
+(`packages/react/src/lagoon-gallery.ts:821-835`).
+
+The **region sheet — one row per key**: who owns it, who reads it, what it holds, whether it has moved
+(`currentSheet()`, `packages/debug-overlay/src/findings-view.ts:298-340`). Columns are the key, its
+owner (a slot, or `host`), its readers, a value preview, and either `<slot> · <n>× · <ago>` or `seed`
+— "the honest word for a key nothing has been seen to move: it holds what the page established, and no
+declared write has fired" (`findings-view.ts:325-327`) — plus a flag where a declared write has never
+fired or the host answered an island.
 
 Read it before reading the archipelago; it is the same declaration, proved by the region that is
-running (`.github/host-rules.md:120-123`). Below it sit coverage, input (host channels), requests,
-output and coupling (`packages/debug-overlay/src/panel.tsx:428-447`). `MOTU_DEBUG=0` strips the lens
-and its tab entirely (`packages/cli/src/lib/scaffold.mjs:386-387`).
+running (`.github/host-rules.md:120-123`). `MOTU_DEBUG=0` strips the lens entirely
+(`packages/cli/src/lib/scaffold.mjs:458-459`).
 
 ---
 
 ## Known traps
 
 **Absolute asset paths.** `/images/…` works under `lagoon dev`, because Vite serves it, and 404s the
-moment the page is hosted (`.github/host-rules.md:133-134`; `README.md:1082-1088`). Hosting is the
+moment the page is hosted (`.github/host-rules.md:133-134`). Hosting is the
 first place that difference is visible, so the host says it: an upload is **refused (422)** when the
 fragment still references `/assets/` — that build's inlining did not happen — and anything else
 absolute is a **warning**, printed by the CLI and returned in the JSON
@@ -607,7 +591,7 @@ value on both entries, or the lagoon shows a mount path the project does not shi
 (`packages/cli/src/commands/lagoon.mjs:426-432`).
 
 **The lagoon cannot reproduce host CSS collisions or auth expiry.** A small integration test alongside
-it stays necessary (`README.md:861-862`).
+it stays necessary.
 
 ---
 
@@ -624,5 +608,4 @@ it stays necessary (`README.md:861-862`).
 [10 — Evidence and testing](10-evidence-and-testing.md) ·
 [11 — Contract and backend](11-contract-and-backend.md) ·
 [12 — Hosts and adapters](12-hosts-and-adapters.md) ·
-[13 — Agents and skills](13-agents-and-skills.md) ·
-[plan-lagoon-host](plan-lagoon-host.md) — the design record for the host.
+[13 — Agents and skills](13-agents-and-skills.md).

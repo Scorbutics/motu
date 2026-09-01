@@ -42,8 +42,7 @@ Two invariants live in the constructors themselves, not at the call sites:
 | `motu integrate check` | `integration.mjs:830` (json), `:852` (human) | any finding at `level === 'error'` → 1 |
 | `motu check` | `check.mjs:137`, exits at `:155` / `:268` | `structureOk && integrationOk && (removal?.pass ?? false)` |
 | `motu removal-check` | `removal-check.mjs:669` | `summary.pass ? 0 : 1` |
-| `motu contract check` | `contract.mjs:156`, `:169` | snapshot missing, or snapshot differs → 1 |
-| `motu region coverage <id>` | `region-coverage.mjs:507`, `:557`, `:563` | uncovered states at or above `--fail-above` → 1 |
+| `motu archipelago coverage <id>` | `region-coverage.mjs:507`, `:557`, `:563` | uncovered states at or above `--fail-above` → 1 |
 
 Two consequences worth stating flatly:
 
@@ -147,6 +146,10 @@ Opt-in. Everything here drives a lagoon: a real browser (Playwright/Chromium) by
 | `data-flow` | Opt-in at two or more declared `scenarios`: distinct seeds produce **distinct rendered output**, so data flows past the seam rather than merely type-checking. A scenario that rendered nothing is an error with its own message — a blank cannot be compared. Duplicate renders warn. | ok, warn, error, inconclusive | both | `verify.mjs:861`, `:872`, `:878`, `:889`, `:896` |
 | `responsive` | The island fits every declared viewport, in every scenario. Horizontal overflow is an **error** (a page the member must pan sideways is broken); rendering nothing at any viewport is a warning. | ok, warn, error | browser, `--audit` only | `verify.mjs:1365`–`:1385` |
 | `a11y` | axe finds no violation, per declared scenario, scoped to the island's subtree. The fail bar is `lagoon.config.json` → `a11y.fail`, **default `never`** — so by default every violation is a warning. | ok, warn, error, inconclusive | browser, `--audit` only | `verify.mjs:1223`, `:1229`, `:1238`, `:1239` |
+| `fixture-coverage` | Every request the fake fetch saw matched a declared table or fixture. A request that matched nothing is an **error**, named with its method, path and the reason it missed — the island was standing on a stub that does not exist. | ok, error | browser | `verify.mjs:735`, `:738-742` |
+| `network-sealed` | Nothing escaped the lagoon: every backend call was answered locally. A request that reached a real host is an error, because "the failure is normally invisible: the island catches it and renders empty". The `ok` counts the fake-fetch requests, not the escapes — zero escapes over zero requests proves nothing. | ok, error | browser | `verify.mjs:784-788`, `:794` |
+| `data-reach` | Reports which tables, RPCs, functions and routes the island actually touched. A readout rather than a gate — it is what makes "where did this island's data come from" answerable without reading the component. | ok | browser | `verify.mjs:766-769` |
+| `interaction-effective` | Every scripted `Scenario.interactions` step moved the render or caused a request. A step that changed nothing observable **warns**: either it is decorative, or what it moved is not captured — "a seed describing the same end state is the honest form". | ok, warn | browser | `verify.mjs:956`, `:960-967` |
 | `audit` | Meta: says out loud that `responsive` and `a11y` were **not** run, because this was not an `--audit` run. | skip | — | `verify.mjs:1153` |
 
 ### 4.6 Region checks — static config
@@ -245,19 +248,7 @@ Skipped under `--fast`, which says so via `region-runtime`. Gated at `verify.mjs
 
 Two exemptions narrow the claim honestly: `@motu/types` is type-only and erases at compile time, so it is **not** stripped (`:118`–`:128`) — the claim is "no *runtime* trace". `@motu/chrome` tags are never unwrapped (`:208`, `:217`), so an app painting with `@motu/chrome/react` legitimately reports load-bearing.
 
-### 4.11 Contract — `motu contract check`
-
-`packages/cli/src/commands/contract.mjs`. Purely static: ts-morph plus regex over comment-blanked archipelago text. One rule, three outcomes.
-
-| Verdict | Proves | Exit | Line |
-|---|---|---|---|
-| no snapshot | `src/contract.snapshot.json` has never been generated; nothing can be compared. | 1 | `:154`–`:157` |
-| `PASS  boundary unchanged` | The rebuilt boundary — callable methods, each island's input/output/ambient, each region's slots, shared state and coupling edges — is byte-identical to the committed snapshot. | 0 | `:158`–`:166` |
-| `FAIL  the boundary moved and <file> did not.` | Something in that surface changed without acknowledgement. `--update` writes it, so the change lands as a reviewable line in the diff. | 1 | `:167`–`:169` |
-
-**Known weakness worth knowing:** `contract check` has no `seen: 0 → skip` guard. If `src/services/index.ts` is absent and no archipelago dirs exist, `build()` returns empty objects, and once `--update` has recorded that emptiness the check is green forever.
-
-### 4.12 Coverage — `motu region coverage <id>`
+### 4.11 Coverage — `motu archipelago coverage <id>`
 
 `packages/cli/src/commands/region-coverage.mjs`. Static: it compares a recorded corpus of production state fingerprints against the states the region's flows establish. See [coverage](09-coverage.md).
 
@@ -342,11 +333,10 @@ Every documented way to downgrade or excuse a check. Each costs something; the c
 | `a11y.fail` / `a11y.ignore` | `lagoon.config.json`; `packages/cli/src/lib/util.mjs:271` | axe violations | `fail` defaults to **`never`** — every violation is a warning; `ignore` drops named rules entirely | The default is the hatch: a check that turns an existing codebase red on the day it ships gets switched off, not acted on. Ignored rules are counted in the `ok` message. |
 | `--fast` | flag | Every browser-only check | **skip**, said out loud (`region-runtime`, `verify.mjs:3128`) | Regions are not checked at all. Re-run without it before handing over. |
 | `--force` | `motu removal-check --force`; `removal-check.mjs:489` | The fingerprint cache | forces a real `tsc` | Time. |
-| `--update` | `motu contract check --update`; `contract.mjs:149` | A boundary FAIL | write-and-return, no verdict | The change lands **in the committed diff** (`contract.mjs:9-10`) — widening the callable surface becomes a reviewable line rather than an invisible one. |
-| `--accept <id>` | `motu region coverage`; `region-coverage.mjs:417` | An uncovered production state | accepted, no longer triaged | One of three answers; the other two are "write a scenario" and "fix the application" (`region-coverage.mjs:530`). |
-| `hostSources: [...]` | `motu.config.json`; read at `removal-check.mjs:85`, whitelisted at `config.mjs:123` | *(widens, does not excuse)* the removal scan roots | — | **Caveat: `integrate check` ignores it.** `integration.mjs:62` hardcodes `['app','components','lib','src','pages']`, even though its own `host-sources` message at `integration.mjs:814` tells you to set `hostSources`. |
+| `--accept <id>` | `motu archipelago coverage`; `region-coverage.mjs:417` | An uncovered production state | accepted, no longer triaged | One of three answers; the other two are "write a scenario" and "fix the application" (`region-coverage.mjs:530`). |
+| `hostSources: [...]` | `motu.config.json`; read at `lib/host-sources.mjs:98`, whitelisted at `config.mjs:123` | *(widens, does not excuse)* the roots both host scans use | — | Read by `removal-check` **and** `integrate check`, which share one resolver. It is the last resort: with it unset, the roots come from the host's own `tsconfig.json`, and only then from the five-directory guess. |
 | `@motu/types` import | — | The removal surgery | not stripped (`removal-check.mjs:118-128`) | The claim narrows to "no **runtime** trace of motu". |
-| Comments | everywhere | — | *(not a hatch — the opposite)* | `blankComments` runs before nearly every text match (`verify.mjs:2321-2323`, `integration.mjs:67`, `contract.mjs:96`), so a commented-out `<X.Island>` never counts as a placement and a scaffolded `// bind: {…}` never counts as coupling. Commenting things out removes evidence; it does not excuse a check. |
+| Comments | everywhere | — | *(not a hatch — the opposite)* | `blankComments` runs before nearly every text match (`verify.mjs:2321-2323`, `integration.mjs:67`), so a commented-out `<X.Island>` never counts as a placement and a scaffolded `// bind: {…}` never counts as coupling. Commenting things out removes evidence; it does not excuse a check. |
 
 There is **no comment pragma** — no `motu-ignore`, no inline suppression — anywhere in the checkers. Every hatch above is either a declaration in the code, a key in config, or a flag.
 
@@ -429,6 +419,6 @@ Finding-object fields, in one place:
 
 Three shapes do **not** appear in JSON and exist only on the human path: `strict-boundaries`, `region-generated` (though `regionDrift.stale` still affects `pass`), and the `host-sources` exit-2 message, which prints prose and exits before any JSON is written.
 
-`motu region coverage --json` (`region-coverage.mjs:474-507`) owns stdout entirely — the prose printer is disabled (`region-coverage.mjs:159`) so a parser cannot get half of each. Its payload carries `covered`, `systemic`, `uncovered[]` (each with `share`, `count`, `differsBy`, `fingerprint` and a paste-able `scenario` skeleton), `unreachable`, `keysDiffer`, `caveats` and `pass`.
+`motu archipelago coverage --json` (`region-coverage.mjs:474-507`) owns stdout entirely — the prose printer is disabled (`region-coverage.mjs:159`) so a parser cannot get half of each. Its payload carries `covered`, `systemic`, `uncovered[]` (each with `share`, `count`, `differsBy`, `fingerprint` and a paste-able `scenario` skeleton), `unreachable`, `keysDiffer`, `caveats` and `pass`.
 
-`motu contract check` and `motu removal-check` have no `--json` of their own: the contract's artifact is `src/contract.snapshot.json` itself, and removal-check's summary surfaces under `motu check --json` → `removal`.
+`motu removal-check` has no `--json` of its own: its summary surfaces under `motu check --json` → `removal`.

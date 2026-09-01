@@ -122,15 +122,16 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    who reads it, what it holds, whether it has moved, and a flag where a declared write has never fired
    or the host answered an island. Read it before reading the archipelago; it is the same declaration,
    proved by the region that is running.
- - `docs/plan-key-ownership.md` in the motu repo is the design record for ownership, eject and the
-   verify checks; read it before changing how a region declares anything.
+ - `docs/05-archipelagos-and-regions.md` in the motu repo is the reference for how a region declares
+   ownership, and `docs/07-checks-and-verification.md` for the checks that enforce it; read them
+   before changing how a region declares anything.
  - SHOW YOUR WORK on the shared lagoon host, don't stand up another server. `motu lagoon publish
    --remote` (no argument — the URL and token live in `~/.config/motu/host.json`) uploads the
    self-contained page and prints two URLs: `latest`, which follows every publish, and an immutable
    one keyed by the commit. That is how a human looks at what you built without your process staying
-   alive. `motu lagoon group <name> --all` composes every published project into one gallery. The rule
-   is ONE long-running host plus occasional spawns: `motu lagoon dev` / `lagoon serve --watch` while
-   you iterate, killed when you stop. A second permanent preview server is what the host replaces.
+   alive. The rule is ONE long-running host plus occasional spawns: `motu lagoon dev` /
+   `lagoon serve --watch` while you iterate, killed when you stop. A second permanent preview
+   server is what the host replaces.
    Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted — the publish output
    warns about them, and the warning is a finding.
 

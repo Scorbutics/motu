@@ -235,8 +235,8 @@ from a module's *real* path, leaving the host's tree entirely (`scripts/build-pa
 
 The **lagoon** is a different consumer and still reads the checkout's sources directly — it is a Vite
 app that transpiles TS anyway — and it works out where that checkout is by itself, from the binary you
-just ran (`packages/cli/src/lib/config.mjs:38-57`). `$MOTU_ROOT`, then a `motuRoot` key, override it
-(`config.mjs:196-201`). There is no machine-specific path to commit; there used to be, and it was the
+just ran (`packages/cli/src/lib/config.mjs:38-61`). `$MOTU_ROOT` overrides it
+(`config.mjs:202`). There is no machine-specific path to commit; there used to be, and it was the
 one line that broke on a second machine and in CI.
 
 Three mechanisms carry the framework into a project with no install:
@@ -315,10 +315,11 @@ Two motu specifiers survive the surgery on purpose:
 
 An **import graph over source text**, not a ts-morph parse of the whole application — an import graph
 is a regex, and only the files that matter are parsed properly afterwards
-(`removal-check.mjs:36-42`, `:68-74`). The roots are the host's actual top-level source directories
-(`app`, `components`, `lib`, `src`, `pages`), with `hostSources` in `motu.config.json` overriding the
-guess for a layout nobody anticipated (`removal-check.mjs:85-89`; the key must also be in the config
-whitelist — `packages/cli/src/lib/config.mjs:115-123`).
+(`removal-check.mjs:36-42`). The file set comes from `hostSourceFiles()`
+(`packages/cli/src/lib/host-sources.mjs`), shared with `integrate check`: `hostSources` from
+`motu.config.json` if set, else the host's own `tsconfig.json` — the same declaration this check
+already trusts when it runs `tsc --noEmit -p tsconfig.json` — else the five-directory guess. If you set
+the key, it must also be in the config whitelist (`packages/cli/src/lib/config.mjs:115-123`).
 
 "Motu-only" is then computed **to a fixpoint** (`removal-check.mjs:227-274`), because two things are
 true that the first version missed: an import can reach motu without a motu specifier (an app-alias
@@ -401,7 +402,7 @@ when something failed, on the restored tree, so a clean removal still pays for e
 
 ## Known limits
 
-Stated as the README states them (`README.md:853-863`), verified against source:
+The [README](../README.md) lists the headline ones; here they are verified against source:
 
 - **`contract-only-io` still cannot see a direct Supabase import.** The seam exists, but the static
   rule's blocked-client list is `axios / ky / superagent / node-fetch / got`
@@ -410,13 +411,12 @@ Stated as the README states them (`README.md:853-863`), verified against source:
   configurable per project; it is not.
 - **Turbopack does not work.** Use `next dev --webpack` / `next build --webpack`. Turbopack resolves an
   absolute `resolveAlias` value as project-relative and has no `extensionAlias` equivalent for the
-  `.js` specifiers motu's sources use (`README.md:829-831`). The workaround is visible in the
+  `.js` specifiers motu's sources use (`README.md`). The workaround is visible in the
   generated code: the scaffolded barrel deliberately writes extensionless specifiers
   (`packages/cli/src/lib/scaffold.mjs:48`, `packages/cli/src/lib/islands.mjs:64`).
 - **A Next host needs bundler wiring beyond the aliases:** `experimental.externalDir: true` (the
   checkout is outside the project root), `resolve.extensionAlias { '.js': ['.ts', '.tsx', '.js'] }`,
-  and exact-match alias keys or `@motu/runtime` swallows `@motu/runtime/mock`
-  (`README.md:820-827`).
+  and exact-match alias keys, or `@motu/runtime` swallows `@motu/runtime/mock`.
 - **A Next host is not necessarily a Tailwind host.** The adapter used to assume it was and served a
   500 naming a generated file the project never wrote; it now looks for a config first
   (`packages/adapters/next/vite.mjs:30-44`).
@@ -429,7 +429,7 @@ Stated as the README states them (`README.md:853-863`), verified against source:
 ## See also
 
 - [04 — Configuration](04-configuration.md) — `host`, `isolation`, `tagPrefix`, `hostRoot`,
-  `hostSources`, `removable`, `motuRoot`, key by key.
+  `hostSources`, `removable`, key by key.
 - [06 — Composition and adoption](06-composition-and-adoption.md) — `<X.Root>` vs `<X.Island>` and the
   staged adoption path. This page does not repeat it.
 - [08 — The lagoon](08-lagoon.md) — the host's Vite contribution as the lagoon consumes it.

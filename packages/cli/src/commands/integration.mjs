@@ -11,13 +11,15 @@
 // state. It answers "is this wired?", which is the question that blocks adoption; the runtime half
 // ("does the wired page hold the same values it held before") needs the host's own dev server and is
 // a separate lane.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { sep } from 'node:path';
 import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
 import { sourceFileAt } from '../lib/ts-project.mjs';
+import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
+import { loadMotuConfig } from '../lib/config.mjs';
 
 /** `client-portfolio` -> `clientPortfolioArchipelago`, the const an archipelago file exports. */
 function archConst(id) {
@@ -28,38 +30,37 @@ function archConst(id) {
 /**
  * Every host source file, as text.
  *
+ * The roots come from `hostSourceFiles` — the host's own tsconfig where it has one, so this and
+ * `removal-check` cannot disagree about what "the application" is. This check used to hardcode the
+ * five-directory guess and IGNORE `hostSources` while its own failure message told you to set it;
+ * both now go through the one resolver.
+ *
  * The motu app root is excluded: a region composed inside motu's own folder is not the application
- * using it, it is motu talking to itself. Same walk as removal-check — the host's own top-level
- * folders, no node_modules, no dotfiles.
+ * using it, it is motu talking to itself.
  */
 export function hostSources() {
   const files = new Map();
+  const resolved = hostSourceFiles(HOST_ROOT, loadMotuConfig());
   // The directories motu writes into. Everything else under the host root is the application's.
+  //
+  // EXCLUDE MOTU'S OWN FILES, not the whole app. `APP_ROOT` is the motu app root, and when motu owns
+  // the repository (`"app": "."`, the natural greenfield shape) it EQUALS the host root — so
+  // excluding that skipped every file, scanned nothing, and reported "no createRegion in the host"
+  // about a host it had never opened. Excluding the directories motu actually owns keeps the check
+  // meaningful in both layouts.
   const motuOwned = [paths.islandsDir, paths.archipelagosDir, paths.uiRoot, paths.lagoonDir].filter(Boolean);
-  const walk = (dir) => {
-    let entries;
+  for (const full of resolved.files) {
+    if (motuOwned.some((d) => full === d || full.startsWith(d + sep))) continue;
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      files.set(full, readFileSync(full, 'utf8'));
     } catch {
-      return;
+      /* unreadable is not a placement */
     }
-    for (const e of entries) {
-      const full = resolve(dir, e.name);
-      // EXCLUDE MOTU'S OWN FILES, not the whole app. `APP_ROOT` is the motu app root, and when motu
-      // owns the repository (`"app": "."`, the natural greenfield shape) it EQUALS the host root — so
-      // this skipped every file, scanned nothing, and reported "no createRegion in the host" about a
-      // host it had never opened. Excluding the directories motu actually owns keeps the check
-      // meaningful in both layouts.
-      if (motuOwned.some((d) => full === d || full.startsWith(d + sep))) continue;
-      if (e.isDirectory()) {
-        if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-        walk(full);
-      } else if (/\.tsx?$/.test(e.name)) {
-        files.set(full, readFileSync(full, 'utf8'));
-      }
-    }
-  };
-  for (const top of ['app', 'components', 'lib', 'src', 'pages']) walk(resolve(HOST_ROOT, top));
+  }
+  // The ORIGIN travels with the answer: a scan that found nothing has to be able to say what it
+  // trusted, or "0 files" is indistinguishable from "the app is empty".
+  files.origin = resolved.origin;
+  files.detail = resolved.detail;
   return files;
 }
 
@@ -851,7 +852,8 @@ export function integrationResults(only) {
     console.log(color.bold('\nmotu integrate check\n'));
     console.log(
       `  ${color.yellow('!')} ${color.dim('host-sources'.padEnd(12))} scanned 0 files under ${paths.rel(HOST_ROOT)} ` +
-        `(app, components, lib, src, pages) — nothing was examined, so nothing is proved about the host. ` +
+        `(${describeSources(sources, paths.rel)}) — ` +
+        `nothing was examined, so nothing is proved about the host. ` +
         `Set \`hostSources\` in motu.config.json if the application lives elsewhere.`,
     );
     process.exit(2);

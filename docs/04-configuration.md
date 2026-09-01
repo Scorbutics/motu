@@ -1,4 +1,4 @@
-# Configuration — `motu.config.json`
+# Configuration — `motu.config.json` and `lagoon.config.json`
 
 One file declares WHERE each piece of a project lands (islands, ui, archipelagos, contract, lagoon,
 bridge, the backend manifest) and a handful of facts the checks need (which host stack, how hard
@@ -27,7 +27,7 @@ There is a second layer with the same failure mode. A key resolved by `loadMotuC
 surfaced on the `paths` object in `packages/cli/src/lib/util.mjs:33-114` is *whitelisted into a dead
 end*. Four keys have already shipped that way — `isolation` (`util.mjs:35-43`), `coverage`
 (`util.mjs:44-49`), `regionRoot` (`util.mjs:50-55`) and `appPackage` (`util.mjs:58-67`) — each failing
-silently: the registry took a `'shadow'` default on a project declaring `light`; `region init`
+silently: the registry took a `'shadow'` default on a project declaring `light`; `archipelago init`
 generated an import of a package that does not exist, because it read `paths.appPackage ?? 'motu-islands'`
 and got `undefined`.
 
@@ -56,7 +56,7 @@ The result is cached for the life of the process (`config.mjs:97-101`).
 | Environment variable | Read at | Effect |
 | --- | --- | --- |
 | `MOTU_PROJECT_ROOT` | `config.mjs:102` | The walk starts HERE instead of `process.cwd()`. |
-| `MOTU_ROOT` | `config.mjs:196-197` | Overrides `motuRoot` — where the framework checkout is. Wins over the config file. |
+| `MOTU_ROOT` | `config.mjs:202` | Where the framework checkout is — the ONLY override for the derived value. There is no config key. |
 
 `MOTU_PROJECT_ROOT` exists because the cwd is not always the project's
 (`config.mjs:62-70`): the runtime harness is spawned with `cwd` set to the CLI package — it has to be,
@@ -76,9 +76,9 @@ Everything is resolved to an absolute path once, at load (`config.mjs:105-106, 2
     inApp(p) = resolve(appRoot, p)
 
 `islands`, `ui`, `archipelagos`, `shared`, `barrel`, `contract`, `lagoon` and `bridge` go through
-`inApp` — they are relative to the **APP root**. `manifest`, `hostRoot`, `motuRoot` and the cache
-directory resolve against the **PROJECT root**, because the backend build output and the host
-application often sit outside the frontend app (`config.mjs:14-15, 188, 199, 202, 213`).
+`inApp` — they are relative to the **APP root**. `manifest`, `hostRoot` and the cache directory
+resolve against the **PROJECT root**, because the backend build output and the host application often
+sit outside the frontend app (`config.mjs:14-15`, `:190`, `:205`, `:216`).
 
 ---
 
@@ -92,27 +92,26 @@ resolves against.
 | `app` | string, relative to project root | `"."` (`config.mjs:17`) | The frontend app root. Base for every path below marked *app root* (`config.mjs:105-106`). | everything; `APP_ROOT` (`util.mjs:19`) |
 | `host` | `"angularjs" \| "next" \| "vite" \| "none"` | `"angularjs"` (`config.mjs:33, 114`) | Selects the adapter and the host-specific gates; drives `legacyFit`. | lagoon build (`lagoon-vite.mjs:219`), lagoon scaffolding (`lagoon-materialize.mjs:86-96`), `HOST` (`util.mjs:23`) |
 | `hostRoot` | string, relative to project root | value of `app` (`config.mjs:36, 188`) | Where the HOST application lives — its `tsconfig` path aliases, Tailwind config, component library. | host alias reading (`util.mjs:163-184`), `resolveAppImport` (`util.mjs:363`), `hostStrictBoundaries` (`util.mjs:474`), `removal-check`, `lagoon`, `init` |
-| `hostSources` | string[], relative to `hostRoot` | *unset* → guessed (`config.mjs:123`) | Overrides the guess at the host's own top-level source directories. | `removal-check` (`removal-check.mjs:85-88`), `integrate check` (`integration.mjs:35`, message at `integration.mjs:814`) |
+| `hostSources` | string[], relative to `hostRoot` | *unset* → the host's tsconfig, then a guess (`host-sources.mjs:97-109`) | Overrides both, for a layout neither gets right. | `removal-check` and `integrate check`, both through `hostSourceFiles()` (`lib/host-sources.mjs`) |
 | `islands` | string, app root | `"src/islands"` (`config.mjs:18`) | Island mount points + `registry.ts` + `contracts.generated.ts`. | `island create/sync/verify/snapshot`, `check`, `changed` |
 | `ui` | string, app root | `"src/ui"` (`config.mjs:19`) | `ui/<kebab>/<Pascal>.tsx` — the components islands mount, kept OUTSIDE `islands/` so mount points cannot import each other (`util.mjs:29-31`). | `island create`, `verify`, `integrate check` |
-| `archipelagos` | string, app root | `"src/archipelagos"` (`config.mjs:20`) | Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. | `archipelago create/verify/sync/snapshot`, `region coverage`, `lagoon` |
+| `archipelagos` | string, app root | `"src/archipelagos"` (`config.mjs:20`) | Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. | `archipelago create/verify/sync/snapshot`, `archipelago coverage`, `lagoon` |
 | `shared` | string, app root | `"src/shared"` (`config.mjs:21`) | Only `<shared>/styles.css`, the one shared island stylesheet (`util.mjs:110-111`). | lagoon build (`lagoon-vite.mjs`) |
 | `barrel` | string, app root | `"src/index.ts"` (`config.mjs:22`) | The module exporting `ELEMENT_REGISTRY`. | runtime harness (`runtime-harness.mjs`), lagoon alias, `island sync`, `archipelago`, `init` |
 | `contract` | string, app root | `"contract/src"` (`config.mjs:23`) | Output directory of `motu codegen`; `contract/src/index.ts` is the contract entry (`util.mjs:78`). | `motu codegen` (`codegen.mjs:10`) — see [docs/11-contract-and-backend.md](11-contract-and-backend.md) |
-| `lagoon` | string, app root | `"roots/lagoon"` (`config.mjs:24`) | The lagoon root: its entries, `lagoon.config.json` (viewports + a11y policy, `util.mjs:255-275`), the vite install search starts here (`util.mjs:309-317`). | every `lagoon` command, all `--runtime` checks, `region coverage` |
+| `lagoon` | string, app root | `"roots/lagoon"` (`config.mjs:24`) | The lagoon root: its entries, `lagoon.config.json` (viewports + a11y policy, `util.mjs:255-275`), the vite install search starts here (`util.mjs:309-317`). | every `lagoon` command, all `--runtime` checks, `archipelago coverage` |
 | `bridge` | string, app root | `"roots/bridge"` (`config.mjs:25`) | Resolved to `paths.bridgeDir` and **read by nothing** today (see *Gaps*). | — |
 | `manifest` | string, **relative to project root** | `"target/motu-manifest.json"` (`config.mjs:26, 213`) | Default input to `motu codegen` — the backend build output, which usually sits outside the frontend app. | `motu codegen` (`codegen.mjs:9`) |
-| `appPackage` | string | `basename(appRoot)` (`config.mjs:111`) | The npm package name whose barrel exports `ELEMENT_REGISTRY`. | runtime harness, lagoon alias (`lagoon-vite.mjs`), `region init` (`region.mjs`), `init` |
+| `appPackage` | string | `basename(appRoot)` (`config.mjs:111`) | The npm package name whose barrel exports `ELEMENT_REGISTRY`. | runtime harness, lagoon alias (`lagoon-vite.mjs`), `archipelago init` (`archipelago-init.mjs`), `init` |
 | `tagPrefix` | string | `"x-"` (`config.mjs:27`) | Prefix of every custom element tag: `names(x).tag = tagPrefix + kebab` (`util.mjs:335`). | `island create`, `verify`, lagoon materialize, `init` |
 | `isolation` | `"shadow" \| "light"` | `"shadow"`; anything not `"light"` becomes `"shadow"` (`config.mjs:113`) | Baked into the generated island registry as `setDefaultIsolation(...)` (`islands.mjs:78-92`). | `island sync`, lagoon, `create`, `defaults`, `archipelago-element.ts:63-66` |
-| `motuRoot` | string, relative to project root | the running CLI's own checkout, verified (`config.mjs:55-57, 196-200`) | Where `@motu/*` resolve from — by path, with no install step. `$MOTU_ROOT` wins over it. | lagoon vite aliases, `removal-check`, `scaffold`, `ensureNoInstallLinks` (`util.mjs:431-454`) |
 | `regionRoot` | `"encouraged" \| "required"` | `"encouraged"`; anything but `"required"` is `"encouraged"` (`config.mjs:135`) | Whether a hand-written lagoon frame is a nudge or an error. | `archipelago verify` (`verify.mjs:2244-2250`) |
 | `removable` | boolean | `true`; only an explicit `false` opts out (`config.mjs:171`) | Whether this project CLAIMS motu is deletable. `false` turns `removal-check` into a visible SKIP. | `removal-check` (`removal-check.mjs:285-292`), `check` (`check.mjs:218-228`) |
 | `legacyFit` | boolean | `host === 'angularjs'` (`config.mjs:59-60, 187`) | Whether `legacy` is a required fit strategy and a verified runtime mount. | `island create` (`create.mjs:50`), `island verify` (`verify.mjs:393, 1130`) |
-| `publishAs.repo` | string | `null` → the git remote (`config.mjs:183`) | The repository identity used on a lagoon host. | `lagoon publish/group` (`lagoon.mjs:250, 525`), `region coverage` (`region-coverage.mjs:384, 415`) |
+| `publishAs.repo` | string | `null` → the git remote (`config.mjs:183`) | The repository identity used on a lagoon host. | `lagoon publish` (`lagoon.mjs:250, 525`), `archipelago coverage` (`region-coverage.mjs:384, 415`) |
 | `publishAs.slug` | string | `null` → derived (`config.mjs:184`) | The project slug on the lagoon host. | `lagoon publish/serve` (`lagoon.mjs:159, 407`) |
 | `coverage.enabled` | boolean | **`false`**; only `true` enables (`config.mjs:149`) | Whether the coverage fold runs at all. Emits `configureCoverage(...)` into `archipelagos/coverage.generated.ts`; off emits an empty module (`archipelagos.mjs:30-65`). | `archipelago sync`, `check` (`check.mjs:46-52, 190`) |
-| `coverage.corpusUrl` | string | `null` (`config.mjs:154`) | Where `motu region coverage <id>` fetches the corpus from, on a DEVELOPER's machine. Never reaches a browser. | `region coverage` (`region-coverage.mjs:214-223`) |
+| `coverage.corpusUrl` | string | `null` (`config.mjs:154`) | Where `motu archipelago coverage <id>` fetches the corpus from, on a DEVELOPER's machine. Never reaches a browser. | `archipelago coverage` (`region-coverage.mjs:214-223`) |
 | `coverage.regions` | string[] | `null` → every region (`config.mjs:155`) | Region ids to watch. `"*"` also means every region (`packages/coverage/src/index.ts:744-746`). | `archipelago sync` (`archipelago-sync.mjs:15-18`), baked into `coverage.generated.ts` |
 
 Derived values, not settable: `root`, `appRoot`, `cacheDir` (`resolve(root, '.motu/cache')`, gitignored —
@@ -126,32 +125,44 @@ Derived values, not settable: `root`, `appRoot`, `cacheDir` (`resolve(root, '.mo
 
 ---
 
-## `motuRoot` — the key you should not need, and should not commit
+## There is no `motuRoot` key — the framework finds itself
 
 `@motu/*` are unpublished packages whose entry point is raw TypeScript, so a project resolves them BY
-PATH rather than through `node_modules` — that is what lets a project adopt motu with no install step
-(`config.mjs:189-195`).
+PATH rather than through `node_modules` — that is what lets a project adopt motu with no install step.
 
-The default is derived, not asked for. `packages/cli/src/lib` → the checkout root, from the file that is
-currently executing (`config.mjs:39-57`):
+**Where the checkout is, is derived, not asked for.** `packages/cli/src/lib` → up four → the checkout
+root, taken from the file that is currently executing (`config.mjs:38-61`):
 
 > Which made `motuRoot` in every adopting project's config a bug rather than a configuration: two
 > modules of the same package disagreed about a knowable fact, and the one that asked put a
 > machine-specific path (`"../../motu"`, `"../../../../motu"`) into a committed file — the single line
 > that made a clone fail on someone else's machine.
 
-Set it wrong and every `@motu/*` alias points somewhere that is not a motu checkout: the lagoon fails to
-build, `--fast` cannot load an island, and `ensureNoInstallLinks` symlinks `node_modules/@motu/*` at a
-directory that does not exist. The derivation is verified rather than assumed — if that directory holds
-no `packages/core/src/index.ts`, `FRAMEWORK_ROOT` is `null` and the fallback is the project root
-(`config.mjs:57, 200`).
+The derivation is verified rather than assumed: if that directory holds no `packages/core/src/index.ts`,
+`FRAMEWORK_ROOT` is `null` and the fallback is the project root (`config.mjs:61`, `:202`).
 
-Precedence: `$MOTU_ROOT` → `motuRoot` in the config → the derived checkout → the project root
-(`config.mjs:196-200`). `motu init` deliberately does NOT write it, except when `$MOTU_ROOT` was set for
-that init (`init.mjs:190-196`).
+Precedence is now two deep: **`$MOTU_ROOT` → the derived checkout → the project root**
+(`config.mjs:202`).
 
-**Rule:** leave it unset. Set it only for a differently-placed checkout or a CI image, and prefer
-`$MOTU_ROOT` in the environment over a line in a committed file.
+**The config key was removed.** It survived for a while as an override "for a differently-placed
+checkout or a CI image" — but `$MOTU_ROOT` already answers both, and answers them better. The one
+property the config key had that the environment variable does not is that it gets COMMITTED, which is
+precisely the bug it caused. A key whose only distinguishing feature is its failure mode is not an
+escape hatch. `motu init` no longer writes it under any circumstance, including when `$MOTU_ROOT` was
+set for that init (`init.mjs:189-196`) — that took an override correct for ONE machine and froze it
+into the file every other machine reads.
+
+**If your config still has the line**, motu says so rather than dropping it quietly — the silent-drop
+behaviour this page opens with is exactly what a removal must not repeat (`config.mjs:219-233`):
+
+```
+MotuDeprecationWarning: motu: `motuRoot` was removed and is being ignored (/path/motu.config.json).
+  The framework checkout is derived from the running CLI: /home/you/dev/motu
+  Delete the line. If that path is wrong, export MOTU_ROOT=<checkout> instead — it is the
+  same override without committing a machine-specific path.
+```
+
+Delete the line. Set `$MOTU_ROOT` in the environment only if the derivation is genuinely wrong for you.
 
 ## `removable` — a claim, and the reason it is not a switch
 
@@ -175,20 +186,32 @@ removal failure, it hides one — you have converted the one check that proves m
 dimmed line nobody reads. It is not a hatch for an app that finds removal inconvenient. See
 [docs/07-checks-and-verification.md](07-checks-and-verification.md).
 
-## `hostSources` — the escape hatch for an empty search
+## `hostSources` — the last word, not the first
 
-`removal-check` and `integrate check` both need the host's own top-level source directories. The guess is
-`['app', 'components', 'lib', 'src', 'pages']`, filtered to what exists under `hostRoot`
-(`removal-check.mjs:87-88`). It exists because the guess was once Next-only
-(`removal-check.mjs:77-86`):
+`removal-check` and `integrate check` both need to know where the host keeps its code. They ask one
+resolver, `hostSourceFiles()` (`packages/cli/src/lib/host-sources.mjs`), which answers in three steps:
 
-> Pointed at Twenty, whose source is all under `src/`, it found nothing and printed "no motu references
-> in the host application" over a fully integrated app: the check answered "removable" because it had
-> not looked anywhere. A green result from an empty search is the worst failure mode this tool has.
+1. **`hostSources`**, if set — an explicit list of roots, relative to `hostRoot`.
+2. **the host's own `tsconfig.json`** (or `jsconfig.json`) — the file set it declares through
+   `include`/`exclude` and its `extends` chain, read with `ts.getParsedCommandLineOfConfigFile`.
+3. **the guess** — `['app', 'components', 'lib', 'src', 'pages']`, filtered to what exists.
 
-Set it to the host's real source roots when your layout is not one of those five. Set it too NARROW and
-you get the original bug back — a check that examined less than the application and reported a pass;
-the report now names its scanned count so an empty scan exits 1 rather than green.
+Step 2 is the one worth understanding, because it removes most reasons to set the key at all. The
+application already declared what it compiles, and `removal-check` was already trusting that
+declaration for the half that decides the verdict — it runs `tsc --noEmit -p tsconfig.json`. Its file
+walk used the guess, so ONE CHECK CARRIED TWO DEFINITIONS of "the application". Measured on this
+repository's own Next host, the guess misses `middleware.ts` and all eight files under `test/`: source
+`tsc` compiles and the surgery would never have unwrapped, which is how a dangling import ends up on a
+line that looks fine.
+
+The guess remains, and is not vestigial — the review console has no tsconfig at all, and neither does a
+JS host. A **solution-style** tsconfig falls through to it too: this repository's root config is
+`{ "files": [], "references": [...] }`, which declares no files of its own, so trusting it would produce
+exactly the empty scan the whole mechanism exists to prevent. `fromTsconfig` returns `null` on an empty
+file set for that reason (`host-sources.mjs:83-87`).
+
+Set the key when your layout defeats both — a monorepo host whose tsconfig does not reach the packages
+you care about:
 
 ```json
 {
@@ -197,9 +220,15 @@ the report now names its scanned count so an empty scan exits 1 rather than gree
 }
 ```
 
-> **Only `removal-check` reads it.** `integrate check` prints the same "set `hostSources`" advice and
-> then ignores the key — it hardcodes the five directories (`integration.mjs:62` vs
-> `removal-check.mjs:85`). If `integrate check` scanned nothing, check your working directory first.
+Set it too NARROW and you get the original bug back: a check that examined less than the application and
+reported a pass. Both reports name their scanned count *and where they looked* — `scanned 0 files under
+. (declared by tsconfig.json)` versus `(guessed: app, components)` versus `(hostSources: …)` — so an
+empty scan says which of the three it trusted before finding nothing, and exits non-zero rather than
+green (`describeSources`, `host-sources.mjs:117-121`).
+
+> Originally this key was read by `removal-check` only, while `integrate check` printed the same "set
+> `hostSources`" advice and then ignored it, hardcoding the five directories. Both now go through the
+> one resolver, so the advice and the behaviour agree.
 
 ## `isolation` — shadow or light
 
@@ -271,7 +300,7 @@ than one publishable app (`config.mjs:172-181`):
 > whichever published last.
 
 Either half can be set; whatever is absent keeps its derived value (`lagoon.mjs:159, 250, 407, 525`).
-`region coverage` uses `publishAs.repo` for the same identity when reading a corpus from a host
+`archipelago coverage` uses `publishAs.repo` for the same identity when reading a corpus from a host
 (`region-coverage.mjs:384, 415`). See [docs/08-lagoon.md](08-lagoon.md).
 
 ```json
@@ -352,12 +381,46 @@ the key, so it travels with the region: `coverage: { enums: [...] }` on the arch
 (`config.mjs:140-142`, parsed at `region-coverage.mjs:53-61`, typed at `packages/coverage/src/index.ts:638-641`).
 Putting it in `motu.config.json` does nothing.
 
-`corpusUrl` is fetched by `motu region coverage <id>` from a developer's machine. It is rewritten per
+`corpusUrl` is fetched by `motu archipelago coverage <id>` from a developer's machine. It is rewritten per
 region: a `{region}` placeholder is substituted, otherwise `?region=<id>` is appended
 (`region-coverage.mjs:200-213`). A root-relative path (`/api/motu/coverage/status`) is a config mistake and
 is reported as one — it needs an origin (`region-coverage.mjs:301-314`).
 
 The full story is [docs/09-coverage.md](09-coverage.md).
+
+---
+
+## The OTHER file: `lagoon.config.json`
+
+`motu.config.json` says where things live. `<lagoon>/lagoon.config.json` says what the lagoon IS, and
+it is a separate surface with separate readers — the CLI reads some keys from node
+(`packages/cli/src/lib/util.mjs:255`, `:272`, `:291`), the gallery reads others in the browser
+(`packages/react/src/lagoon-gallery.ts:161-162`, `:289-300`), and the materialized entries read the
+rest (`packages/cli/src/lib/scaffold.mjs:264`, `:369-371`).
+
+It is scaffolded by `motu init` (`commands/init.mjs:320`) and is entirely optional — every key has a
+default.
+
+| Key | Shape | Default | What it changes | Read by |
+|---|---|---|---|---|
+| `about` | string | none | The blurb the Cmd/Ctrl-K palette shows | gallery |
+| `transport` | `"mock"` \| `"http"` | `"mock"` | The BUILD-TIME default. `MOTU_TRANSPORT`, `?transport=`, and the toolbar chip all override it | `lagoon-gallery.ts:293` |
+| `httpBase` | string | none | Where `HttpTransport` points when the transport is `http`. Its presence is also what makes the transport chip a real choice | `lagoon-gallery.ts:299-300`, `:1064` |
+| `mount` | `"react"` \| `"element"` | host-dependent | Which tree islands render in. **Must match the host application** or `island verify` green-lights a mount path the project never ships | `scaffold.mjs:371`, `:477` |
+| `chrome` | `{ primary, onPrimary, … }` | motu teal | Points motu's own tooling at the host's colours. Prefer a REFERENCE to the host's token (`"hsl(var(--primary))"`) over a copied hex, so a rebrand moves the tooling with it. `onPrimary` is required whenever `primary` is light | `lagoon-gallery.ts:242`, `:289`; `scaffold.mjs:369` |
+| `viewports` | `{ name: width }` | `{ mobile: 390, desktop: 1280 }` | The widths the `responsive` check measures AND the lagoon's own width switcher — one list, so what you look at is what CI measures | `util.mjs:255-260` |
+| `a11y` | `{ fail, ignore[] }` | `{ fail: "never" }` | How hard `a11y` bites. `fail` is `critical` \| `serious` \| `never`; `ignore` is a list of axe rule ids. Warnings by default, deliberately — "a check that turns an existing codebase red on the day it ships gets switched off, not acted on" | `util.mjs:263-275` |
+| `alias` | `{ specifier: path }` | none | The modules this project stands down in the lagoon. **This is the one definition of "ambient"** — the `ambient` check derives from these keys, not from a path convention | `util.mjs:277-298` |
+| `stations` | `{ id: { label, order } }` | `{}` | Renames and orders archipelagos in the switcher. **Never controls visibility** — an archipelago missing from `stations` still appears, so a new one cannot be invisible because somebody forgot a config edit | `lagoon-gallery.ts:162` |
+| `exclude` | string[] | `[]` | Archipelago ids to keep out of the gallery | `lagoon-gallery.ts:161` |
+| `env` | `{ NAME: value }` | `{}` | Merged into `process.env` for the lagoon build, over `NODE_ENV: 'development'` | `scaffold.mjs:264` |
+| `defaultTheme` | string | `"motu"` | The theme axis the lagoon opens on | `lagoon-bootstrap.ts:466` |
+| `title` | string | derived | The project's name in a lagoon host's listing. Prefer this over `motu lagoon publish --title`: a republish that forgets the flag renames the project back | `commands/lagoon.mjs:161-168`, `:219-221` |
+
+**What does NOT go here.** Anything that is a function or a live object — `layout`, `seed`, `channels`,
+`providers`, `setup`, `transportFor` — belongs in `<lagoon>/src/lagoon.tsx`, the overrides module. A
+declaration cannot hold a component or a channel handler. See
+[08 — The lagoon](08-lagoon.md) and [10 — Evidence and testing](10-evidence-and-testing.md).
 
 ---
 
@@ -387,8 +450,8 @@ sub-directory:
 Three lines, and each one is a departure from the defaults: the app is a sub-package; the backend
 manifest is produced by a Java build in a sibling tree, so it resolves against the PROJECT root, not the
 app; and islands render in light DOM. `host` is left at `angularjs`, so `legacyFit` is on and the legacy
-fit gate applies. Note what is NOT here: no `motuRoot` (derived from the running CLI) and no `removable`,
-even though motu's own surfaces set `removable: false` where motu is load-bearing.
+fit gate applies. Note what is NOT here: no `removable`, even though motu's own surfaces set
+`removable: false` where motu is load-bearing.
 
 ### A real adopting project (peps, a Next host)
 
@@ -408,7 +471,6 @@ even though motu's own surfaces set `removable: false` where motu is load-bearin
   "appPackage": "motu-islands",
   "tagPrefix": "x-",
   "isolation": "light",
-  "motuRoot": "../../motu",
   "coverage": {
     "enabled": true,
     "regions": ["*"],
@@ -425,9 +487,9 @@ gate off. `isolation: "light"` keeps islands inside the host's Tailwind. `appPac
 host's own `/api/coverage` — the URL already carries `region=actions`, which `configuredUrl` rewrites per
 region.
 
-`motuRoot: "../../motu"` is the line NOT to copy: it is the machine-specific path
-`config.mjs:39-53` was written to eliminate, kept here from before the derivation existed. Delete it, or
-move it to `$MOTU_ROOT`.
+This config used to carry `"motuRoot": "../../motu"` — the machine-specific path `config.mjs:38-61`
+was written to eliminate. The key no longer exists; a project that still has the line gets a
+deprecation warning and the derived checkout.
 
 ### motu's own Next host (`host-app/motu/motu.config.json`)
 
@@ -457,9 +519,6 @@ does not have:
 "delete motu, does it still compile?" is a meaningless question and `removal-check` reports a SKIP
 rather than a pass. `publishAs.repo` because this repository holds more than one publishable app, and
 without it `host-app` and `demo-app` would land on the same `repo:slug` and overwrite each other.
-
-And no `motuRoot`: the CLI derives it from the binary that is running, which is what peps' line should
-become.
 
 ### The smallest adoption config
 

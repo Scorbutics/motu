@@ -12,7 +12,7 @@ import { checkCommand } from './commands/check.mjs';
 import { snapshotCommand, archipelagoSnapshotCommand } from './commands/snapshot.mjs';
 import { integrateCommand } from './commands/integrate.mjs';
 import { integrateCheckCommand } from './commands/integration.mjs';
-import { regionInitCommand } from './commands/region.mjs';
+import { archipelagoInitCommand } from './commands/archipelago-init.mjs';
 import { regionCoverageCommand } from './commands/region-coverage.mjs';
 import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoAdoptRootCommand } from './commands/adopt-root.mjs';
@@ -22,9 +22,7 @@ import { fixturesRecordCommand } from './commands/fixtures.mjs';
 import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mjs';
 import { archipelagoSyncCommand } from './commands/archipelago-sync.mjs';
 import { removalCheckCommand } from './commands/removal-check.mjs';
-import { contractCheckCommand } from './commands/contract.mjs';
 import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand, lagoonStatesCommand } from './commands/lagoon.mjs';
-import { lagoonGroupCommand, lagoonGroupsCommand } from './commands/lagoon-group.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
 import { color, ensureNoInstallLinks, REPO_ROOT, MOTU_CHECKOUT } from './lib/util.mjs';
@@ -62,16 +60,16 @@ ${color.bold('Usage:')}
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
   motu island sync                                  regenerate the element registry from the files on disk
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
-  motu region init <id> --page <file>              scaffold everything a page needs before its 1st island
-  motu region coverage <id> [--corpus <f>]         states production reached that no flow previews
-    --json --ids --accept <id> --fail-above <n>    machine-readable · print ids · accept one · gate
-    --forget <id> | --forget-all                  remove a state the instrument recorded wrongly
-  motu integrate check [region]                    does the HOST compose, place and read the region?
+  motu integrate check [region]                     does the HOST compose, place and read the region?
+  motu archipelago init <id> --page <file>          scaffold everything a page needs before its 1st island
   motu archipelago create <id>                      scaffold + register a new archipelago
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
   motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
   motu archipelago sync                             regenerate the region-side derived files
+  motu archipelago coverage <id> [--corpus <f>]     states production reached that no flow previews
+    --json --ids --accept <id> --fail-above <n>     machine-readable · print ids · accept one · gate
+    --forget <id> | --forget-all                    remove a state the instrument recorded wrongly
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
   motu lagoon states [island|region]                every state the lagoon can be OPENED in, as a URL
@@ -80,9 +78,6 @@ ${color.bold('Usage:')}
   motu lagoon publish --remote <url>                ...and upload it to a lagoon host (see motu-host)
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
   motu lagoon serve --watch --host                  ...and keep it current: rebuild on save, reload viewers
-  motu lagoon group <name> --all                    compose every published project into one gallery
-  motu lagoon groups                                the galleries this host serves
-  motu contract check [--update]                    the app's boundary + coupling graph, as one artifact
   motu removal-check [--force]                      prove motu is removable from the host app (C2)
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
@@ -166,13 +161,6 @@ ${color.bold('island snapshot flags:')}
   ${color.dim('  motu archipelago verify <id> --runtime   ·   motu island verify <name> --runtime')}
   --json          machine-readable report
 
-${color.bold('lagoon group flags:')}
-  --all                compose EVERY repository the host knows, at its switcher entry
-  --add <repo>[:<slug>][,…]     add members (slug defaults to 'all', the switcher)
-  --remove <repo>[:<slug>][,…]  remove members (no slug removes every slug of that repo)
-  --remote <url>       the host (default: $MOTU_HOST_URL, then ~/.config/motu/host.json)
-  --json          machine-readable report
-
 ${color.bold('integrate flags:')}
   --archipelago <id>   (required) target archipelago id
   --slot <slot>        marker slot name (defaults to the island's kebab name)
@@ -213,17 +201,6 @@ async function main() {
     return initCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
   }
 
-  // Everything a page needs before its FIRST island — the step that makes adoption feel expensive.
-  if (group === 'region') {
-    if (sub === 'init') return regionInitCommand(argv);
-    // What the region DOES, against what it previews. The only check here that compares motu to
-    // reality rather than to a declaration — see the command's own header.
-    if (sub === 'coverage') return regionCoverageCommand(argv);
-    console.error(color.red(`unknown: motu region ${sub ?? ''}`));
-    console.log(USAGE);
-    process.exit(2);
-  }
-
   // The last mile, and its own verb because it asks about the HOST, not about motu's files:
   // `motu integrate check [region]`.
   if (group === 'integrate') {
@@ -250,6 +227,11 @@ async function main() {
     // `snapshot` takes an id positional, so re-parse with `rest` shifted.
     if (sub === 'snapshot') return archipelagoSnapshotCommand(parse(rest));
     if (sub === 'create') return archipelagoCreateCommand(argv);
+    // Everything a page needs before its FIRST island — the step that makes adoption feel expensive.
+    if (sub === 'init') return archipelagoInitCommand(argv);
+    // What the region DOES, against what it previews. The only check here that compares motu to
+    // reality rather than to a declaration — see the command's own header.
+    if (sub === 'coverage') return regionCoverageCommand(argv);
     // The migration `region-root` points at: derive `root` + `slots` from the frame, hand back the rest.
     if (sub === 'adopt-root') return archipelagoAdoptRootCommand(parse(rest));
     if (sub === 'verify') return archipelagoVerifyCommand(argv);
@@ -278,9 +260,6 @@ async function main() {
   }
 
   if (group === 'lagoon') {
-    // `group` takes a NAME positional, so re-parse with `rest` shifted (same shape as skills install).
-    if (sub === 'group') return lagoonGroupCommand(parse(rest));
-    if (sub === 'groups') return lagoonGroupsCommand(argv);
     if (sub === 'dev') return lagoonDevCommand(argv);
     if (sub === 'states') return lagoonStatesCommand(argv);
     if (sub === 'eject') return lagoonEjectCommand(argv);
@@ -295,12 +274,6 @@ async function main() {
   if (group === 'removal-check') return removalCheckCommand(parse([sub, ...rest].filter(Boolean)));
 
   if (group === 'check') return checkCommand(parse([sub, ...rest].filter(Boolean)));
-
-  if (group === 'contract') {
-    if (sub === 'check') return contractCheckCommand(argv);
-    console.error(color.red(`unknown: motu contract ${sub ?? ''}`));
-    process.exit(2);
-  }
 
   if (group === 'codegen') {
     // Top-level verb: sub + rest are positional args ([manifest, outDir]).

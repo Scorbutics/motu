@@ -138,9 +138,9 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    --remote` (no argument — the URL and token live in `~/.config/motu/host.json`) uploads the
    self-contained page and prints two URLs: `latest`, which follows every publish, and an immutable
    one keyed by the commit. That is how a human looks at what you built without your process staying
-   alive. `motu lagoon group <name> --all` composes every published project into one gallery. The rule
-   is ONE long-running host plus occasional spawns: `motu lagoon dev` / `lagoon serve --watch` while
-   you iterate, killed when you stop. A second permanent preview server is what the host replaces.
+   alive. The rule is ONE long-running host plus occasional spawns: `motu lagoon dev` /
+   `lagoon serve --watch` while you iterate, killed when you stop. A second permanent preview
+   server is what the host replaces.
    Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted — the publish output
    warns about them, and the warning is a finding.
 

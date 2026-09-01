@@ -55,17 +55,17 @@ archipelago, so neither side can arrange the region differently from the other
 ## The metaphor terms
 
 These are prose only. They never appear in an import or a type name — those stay literal (`Store`,
-`Transport`, `HttpTransport`, `MockTransport`) — see `README.md:102`.
+`Transport`, `HttpTransport`, `MockTransport`) — see `README.md`.
 
 | Term | Is | Is not |
 |---|---|---|
-| **Island** | A component embedded in a host page, behind a declared boundary: input props, output events, ambient host reach (`README.md:83`). | A micro-frontend. Islands are a compile-time composition mechanism: one build, one contract, one version (`README.md:124`). |
-| **Ocean** | The legacy application the islands sit in (`README.md:85`). The reference one is a Jakarta EE + AngularJS app. | Required. A greenfield or Next host has no ocean; `--host none` and `--host next` are ocean-free. |
-| **Archipelago** | The islands of ONE PAGE, referenced by slot, sharing a `Store` instead of talking to each other (`README.md:86`). A declared grouping. | A DOM container. Scoping one to a subtree puts a boundary through the middle of any coupling that crosses it (`.github/host-rules.md`, "the scope of a region is the PAGE, never a DOM subtree"). |
-| **Region** | The same thing as an archipelago, named from the state side: the *keys* one archipelago owns, and the app-side TYPE those keys are declared against (`packages/core/src/archipelago.ts:201`, the `TRegion` parameter). | A second construct. `motu region init` and `motu archipelago create` scaffold the same object at different scopes — see [Archipelagos and regions](05-archipelagos-and-regions.md). |
-| **Lagoon** | Isolated mode: islands rendered with no ocean present, against fixtures (`MockTransport`), no session, no login, no backend (`README.md:92`). Where the loop closes. | A local environment. The lagoon proves a component and its declared boundary; it deliberately has no backend, so cross-page behaviour is out of scope (`README.md:135`, `:139`). See [The lagoon](08-lagoon.md). |
-| **Mainland** | The standalone destination the code migrates toward once the ocean recedes (`README.md:96`) — concretely, the plain components under `src/ui/`, which depend only on the contract and each other (`README.md:401`). | A build target. Nothing produces "the mainland"; it is what is left when the wrappers come off. |
-| **Motu** | A low islet on an atoll's rim — the island that holds the ocean back and makes the lagoon possible (`README.md:98`). | — |
+| **Island** | A component embedded in a host page, behind a declared boundary: input props, output events, ambient host reach (`README.md`). | A micro-frontend. Islands are a compile-time composition mechanism: one build, one contract, one version (`README.md`). |
+| **Ocean** | The legacy application the islands sit in (`README.md`). The reference one is a Jakarta EE + AngularJS app. | Required. A greenfield or Next host has no ocean; `--host none` and `--host next` are ocean-free. |
+| **Archipelago** | The islands of ONE PAGE, referenced by slot, sharing a `Store` instead of talking to each other (`README.md`). A declared grouping. | A DOM container. Scoping one to a subtree puts a boundary through the middle of any coupling that crosses it (`.github/host-rules.md`, "the scope of a region is the PAGE, never a DOM subtree"). |
+| **Region** | The same thing as an archipelago, named from the state side: the *keys* one archipelago owns, and the app-side TYPE those keys are declared against (`packages/core/src/archipelago.ts:201`, the `TRegion` parameter). | A second construct. `motu archipelago init` and `motu archipelago create` scaffold the same object at different scopes — see [Archipelagos and regions](05-archipelagos-and-regions.md). |
+| **Lagoon** | Isolated mode: islands rendered with no ocean present, against fixtures (`MockTransport`), no session, no login, no backend (`README.md`). Where the loop closes. | A local environment. The lagoon proves a component and its declared boundary; it deliberately has no backend, so cross-page behaviour is out of scope (`README.md`). See [The lagoon](08-lagoon.md). |
+| **Mainland** | The standalone destination the code migrates toward once the ocean recedes (`README.md`) — concretely, the plain components under `src/ui/`, which depend only on the contract and each other. | A build target. Nothing produces "the mainland"; it is what is left when the wrappers come off. |
+| **Motu** | A low islet on an atoll's rim — the island that holds the ocean back and makes the lagoon possible (`README.md`). | — |
 
 ---
 
@@ -171,10 +171,11 @@ thing derivation cannot see: a host-fed key no island binds.
 Ownership is a **compile** failure, not a report: one line per region, `RegionOwnershipOk<typeof
 config>` (`packages/core/src/archipelago.ts:425`), plus a runtime producer map that catches a write
 from the wrong source (`packages/core/src/store.ts:136-147`). What it prevents: two islands wired to
-each other through the page's own state. See [plan-key-ownership](plan-key-ownership.md).
+each other through the page's own state. See
+[Archipelagos and regions](05-archipelagos-and-regions.md).
 
 A key is *not* server data. Shared UI state is declared in the store; a component refetches through
-the contract instead (`README.md:265`).
+the contract instead.
 
 ### Bind, writes, reads, intents
 
@@ -235,7 +236,7 @@ The seam every server call leaves through: `Transport = { call(service, method, 
 for the lagoon (`packages/runtime/src/mock.ts:157`).
 
 The rule: all I/O goes through the generated contract and this one seam — no bare `fetch` in a
-component (`README.md:263`). What it prevents: an island that cannot mount in the lagoon, because the
+component. What it prevents: an island that cannot mount in the lagoon, because the
 only thing standing between it and a backend is a network. See
 [Contract and backend](11-contract-and-backend.md).
 
@@ -245,20 +246,20 @@ only thing standing between it and a backend is a network. See
 
 Evidence is the declared data the runtime lane consumes. It lives in a SIBLING file — `<kebab>.evidence.ts`
 for an island, `<id>.evidence.ts` for a region — never inside the island or the archipelago, so
-fixtures cannot travel into a production bundle (`README.md:404`, and the header of
+fixtures cannot travel into a production bundle (see the header of
 `host-app/motu/src/archipelagos/signin/signin.evidence.ts`).
 
 | Term | Type | Is |
 |---|---|---|
 | **Fixture** | `Fixture` (`packages/runtime/src/mock.ts:71`) | One recorded backend answer, keyed by `service` + `method`, optionally by `match` (deep-equal on the call args, `undefined` as a wildcard) and gated by `roles`. Either a `response` (`:27`) or a `status` failure (`:56`). |
-| **Scenario** | `Scenario` (`:85`) | A named `seed` for ONE island. Two scenarios whose renders are identical fail `data-flow` — two seeds that produce one screen are one seed (`README.md:194`). |
+| **Scenario** | `Scenario` (`:85`) | A named `seed` for ONE island. Two scenarios whose renders are identical fail `data-flow` — two seeds that produce one screen are one seed (`README.md`). |
 | **Flow** | `RegionScenario` (`:102`) | A named `seed` plus `steps` for a whole region. This is the integration test, as a value. |
 | **Step** | `RegionStep` (`:109`) | `emit` (slot + declared event + detail), and/or `provide` (keys in), asserting with `expect` (store keys) and/or `expectRender` (slot → text). |
 
 A flow **cannot script**. There is no selector, no click, no wait, no page object: a step names a SLOT
-and a DECLARED event (`README.md:169`). That constraint is what buys determinism, and it puts a
+and a DECLARED event (`README.md`). That constraint is what buys determinism, and it puts a
 component's internal interaction logic permanently out of scope — that stays a Testing Library test
-(`README.md:25`).
+(`README.md`).
 
 Every declared state is an **address**: `/?target=island:<tag>&scenario=<name>` and
 `/?region=<id>&flow=<name>&step=<n>` — the parameters `scenario`, `flow`, `step`, `region` and
@@ -280,8 +281,8 @@ A name that resolves to nothing REFUSES to render rather than falling back to a 
 6. Server calls leave through the **transport**.
 7. The **lagoon** mounts the same archipelago with `MockTransport` and **evidence** — no ocean, no
    backend, no session — and each **scenario** and **flow** is an address you can open.
-8. Removing motu leaves the component, the root, the region type and the source behind, working
-   (`README.md:275-277`); `motu removal-check` is what keeps that honest.
+8. Removing motu leaves the component, the root, the region type and the source behind, working —
+   `motu removal-check` is what keeps that honest.
 
 Next: [Getting started](02-getting-started.md) · [Archipelagos and regions](05-archipelagos-and-regions.md) ·
 [Checks and verification](07-checks-and-verification.md)

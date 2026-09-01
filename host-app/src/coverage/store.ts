@@ -157,7 +157,7 @@ export async function accept(
   return { accepted: rowCount ?? 0 }
 }
 
-/** The accepted set — what `motu region coverage` calls "known". */
+/** The accepted set — what `motu archipelago coverage` calls "known". */
 export async function known(projectId: string, region: string, keysHash: string): Promise<string[]> {
   const { rows } = await db().query(
     `select state_id from coverage_states

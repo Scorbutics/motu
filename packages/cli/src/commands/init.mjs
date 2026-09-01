@@ -12,7 +12,6 @@
 //   next       a Next.js app — the lagoon inherits the host's '@/…' alias + Tailwind, stubs next/*
 //   none       plain React — nothing host-specific
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { color } from '../lib/util.mjs';
 import { applyHostRules } from '../lib/host-rules.mjs';
@@ -33,7 +32,6 @@ import {
   LAGOON_CONFIG,
   LAGOON_CHROME_SHADCN,
   LAGOON_OVERRIDES,
-  LAGOON_VITE_CONFIG,
   NEXT_STUBS,
   ENV_SHIM,
   NEXT_VITE_IMPORTS,
@@ -44,9 +42,6 @@ import {
 
 /** What a host's Tailwind config can be called. Mirrors @motu/adapter-next's own list. */
 const TAILWIND_CONFIGS = ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.cjs'];
-
-/** This motu checkout (packages/cli/src/commands -> up 4). */
-const MOTU_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 /** Framework entry points, mapped by module specifier — @motu/* are raw TS with no build step. */
 const MOTU_ENTRIES = {
@@ -186,14 +181,15 @@ export async function initCommand(argv) {
     appPackage,
     tagPrefix: 'x-',
     isolation,
-    // NO `motuRoot` BY DEFAULT. It used to be written here as "the only machine-specific path in the
+    // NO `motuRoot`, EVER. It used to be written here as "the only machine-specific path in the
     // project" — a committed relative path to somebody's checkout, which is exactly what breaks on the
     // second machine and in CI. The CLI derives it from the binary that is running (see
     // FRAMEWORK_ROOT in lib/config.mjs), so the correct value is never worth committing.
     //
-    // It is still written when $MOTU_ROOT was set for this init: that says the user has a deliberately
-    // non-default arrangement, and forgetting it silently would be worse than recording it.
-    ...(process.env.MOTU_ROOT ? { motuRoot: relPosix(root, MOTU_ROOT) } : {}),
+    // It used to still be written when $MOTU_ROOT was set for this init, on the reasoning that a
+    // deliberate arrangement is worth recording. That was backwards: it took an override that was
+    // correct for ONE machine and froze it into the file every other machine reads. $MOTU_ROOT stays
+    // in the environment, where whoever needs it sets it.
   };
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   created.push(configPath);

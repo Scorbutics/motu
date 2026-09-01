@@ -136,7 +136,7 @@ there; only egress is refused.
 
 **A fingerprint may never become a scenario.** The corpus is a worklist, not a source. Auto-expanding
 a fingerprint produces evidence nobody chose, with values nobody vetted — fake evidence, which is
-worse than none. `motu region coverage` *prints* skeletons to stdout; it writes nothing.
+worse than none. `motu archipelago coverage` *prints* skeletons to stdout; it writes nothing.
 
 **Nothing may promote a state to "known" except a flow or a person.** The GET/POST cycle is a
 **suppression** loop, not a learning one. A merge job passing the corpus' own fingerprints as
@@ -147,7 +147,7 @@ indistinguishable from having nothing to report.
 ## Reading the report
 
 ```
-motu region coverage actions --corpus corpus.json
+motu archipelago coverage actions --corpus corpus.json
 ```
 
 ```
@@ -206,12 +206,12 @@ browser flow lane to contribute its own fingerprints.
 
 ## Seeing it in the lagoon
 
-`motu region coverage` compares a corpus to the region's FLOWS — a file against a file, and the right
+`motu archipelago coverage` compares a corpus to the region's FLOWS — a file against a file, and the right
 way to answer *what should we preview next?*. It has no running region, so it cannot answer the
 question a person standing in front of the lagoon actually has: **does this state happen?**
 
 ```
-motu region coverage actions --save        # writes <lagoon>/src/coverage/actions.json
+motu archipelago coverage actions --save        # writes <lagoon>/src/coverage/actions.json
 motu lagoon dev                            # the build bakes it in
 ```
 
@@ -265,7 +265,7 @@ being comparable.
 
 ### Reading it back, without making the table public
 
-The corpus is read by a **machine on a developer's laptop** — `motu region coverage <id> --corpus
+The corpus is read by a **machine on a developer's laptop** — `motu archipelago coverage <id> --corpus
 <url>` — and almost every app's status route authenticates a **human**, through a session cookie. A
 Bearer token bounces off it, so the first thing this runs into is a 401 that no credential fixes.
 
@@ -305,7 +305,7 @@ export async function GET(request: Request) {
 Then, on the machine that publishes:
 
 ```
-MOTU_COVERAGE_TOKEN=… motu region coverage actions \
+MOTU_COVERAGE_TOKEN=… motu archipelago coverage actions \
   --corpus https://your-app/api/motu/coverage/status?region=actions --save
 ```
 

@@ -4,8 +4,7 @@ An island never fetches. It calls a contract, and a **transport** — chosen onc
 root, by code the island cannot see — decides how that call leaves the process. This page is the
 whole seam: the four transports that exist, where the choice is made and what it costs in security,
 the source/port/adapter distinction that decides how much a green lagoon actually claims, the
-generated artifacts (`@motu/contract`, `contracts.generated.ts`, `contract.snapshot.json`) and which
-command produces which, how fixtures are recorded and replayed, and what the `java/` subtree is for.
+generated artifacts (`@motu/contract`, `contracts.generated.ts`) and which command produces which, how fixtures are recorded and replayed, and what the `java/` subtree is for.
 
 ---
 
@@ -253,12 +252,12 @@ export const { POST } = createMotuRoute(services)
 export const dynamic = 'force-dynamic'
 ```
 
-`createMotuRoute` (`server.ts:138-186`) does the same own-property lookup
-(`server.ts:144-150`), rejects a non-array body with 400 (`server.ts:163-171`), and answers 404 for
+`createMotuRoute` (`server.ts:44-92`) does the same own-property lookup
+(`server.ts:50-56`), rejects a non-array body with 400 (`server.ts:69-77`), and answers 404 for
 an unknown pair, "indistinguishable from an unknown URL: deny-by-default leaks nothing"
-(`server.ts:118-121`). Its `authorize` hook (`server.ts:107-111`) is **a coarse early exit, not the
-security boundary** — the comment says so twice (`server.ts:98-103`, `109-110`), and it answers 401
-rather than 403 because existence is already established by that point (`server.ts:159-160`).
+(`server.ts:24-27`). Its `authorize` hook (`server.ts:12-17`) is **a coarse early exit, not the
+security boundary** — the comment says so twice (`server.ts:8-9`, `:14-15`), and it answers 401
+rather than 403 because existence is already established by that point (`server.ts:65-66`).
 
 ---
 
@@ -318,81 +317,17 @@ exempt (`stubs.mjs:50-51`).
 
 ---
 
-## 4. The contract artifact — `motu contract check`
-
-```
-motu contract check [--update]
-```
-
-`packages/cli/src/run.mjs:85`, dispatched at `run.mjs:291-295`. It builds one object and compares it
-to a committed file at `src/contract.snapshot.json` (`packages/cli/src/commands/contract.mjs:17`,
-`140-142`):
-
-```js
-return { host: HOST, services: services(), islands: islands(), archipelagos: archipelagos() };
-```
-
-Four parts, all derived from things already declared elsewhere:
-
-| part | derived from | source |
-|---|---|---|
-| `services` | the `defineServices({ svc: { method } })` literal in `src/services/index.ts` — "the only functions an island may reach" | `contract.mjs:27-43` |
-| `islands` | each island's `tag`, `component`, `input`, `output`, `ambient` | `contract.mjs:45-69` |
-| `archipelagos[id].islands / sharedState / coupling` | each region's `bind` (reads) and `writes` (writes), intersected into shared keys, then expanded into `{ key, from, to }` edges | `contract.mjs:86-138` |
-| `host` | the configured host | `contract.mjs:141` |
-
-The **coupling graph** is the part a human cannot see: who feeds whom, computed from what is already
-declared (`contract.mjs:128-134`). A real one, from an adopting project:
-
-```json
-{ "key": "applicableCount", "from": "week-actions", "to": "week-nav" }
-```
-
-`peps:motu/src/contract.snapshot.json`.
-
-**Why a committed file.** "Scattered across a dozen files it is invisible in review; gathered into one
-committed file it becomes a diff. Widening the callable surface, adding an input, or coupling two
-islands that were independent all stop being things you have to notice"
-(`contract.mjs:4-7`) — "the same contract a lockfile offers, for architecture instead of
-dependencies" (`contract.mjs:9-10`).
-
-**Outcomes** (`contract.mjs:144-169`):
-
-- `--update` writes the snapshot and prints the path. That is the *acknowledgement* step, not a fix.
-- no snapshot on disk → error `no snapshot at … — run \`motu contract check --update\``, exit 1.
-- byte-identical → `PASS  boundary unchanged — N callable method(s), M island(s), E coupling edge(s)`.
-- otherwise → `FAIL  the boundary moved and <file> did not.` plus `Review the change, then acknowledge
-  it: motu contract check --update`, exit 1.
-
-**What a failure means:** never "the tool is wrong". It means the application's boundary moved —
-a new callable method, a new island input, a new edge between two islands that were independent — and
-nobody wrote it down. Read the diff first; regenerate second.
-
-Two parsing decisions in that file were bugs paid for once, and are worth knowing because they change
-what the snapshot contains:
-
-- comments are blanked before the region file is parsed, because scaffolded wiring examples are
-  comments and "reading them as real coupling has already produced one false green in this codebase"
-  (`contract.mjs:94-98`).
-- reads are taken from the `bind` clause **only**. Taken from the whole block, every produced key came
-  back as a read of itself and every owned key looked shared (`contract.mjs:102-105`). Writes are read
-  from the `writes` clause as well as legacy `store.set('key')`, because the old `store.set`-only
-  matcher "silently went empty and `--update` accepted the loss" (`contract.mjs:112-122`).
-
----
-
-## 5. Three things are called "contract" — which is which
+## 4. Two things are called "contract" — which is which
 
 | artifact | what it describes | produced by | committed? |
 |---|---|---|---|
 | `@motu/contract` (`<app>/contract/src/index.ts`) | the **backend's callable surface**, as typed TS functions over `call()` | `motu codegen` from `motu-manifest.json` (Jakarta hosts) — or, on a TS host, hand-written as `createContract<AppServices>()` with no generator at all | yes |
 | `contracts.generated.ts` (in `islands/`) | each **island's** boundary: `input`, `output`, `ambient`, read from the component it mounts | `motu island sync` → `syncContracts()` (`packages/cli/src/lib/contracts.mjs:177-184`) | yes |
-| `contract.snapshot.json` | the **whole boundary + coupling graph** | `motu contract check --update` | yes |
 
-They are checked by different commands. `motu check` gates *drift* of `contracts.generated.ts`
-against the components (`packages/cli/src/commands/check.mjs:26-31`, using
-`contractsDrift()` at `packages/cli/src/lib/contracts.mjs:186-192`); `motu contract check` gates the
-snapshot. A stale `contracts.generated.ts` is *also* a compile error: the file emits a
+`motu check` gates *drift* of `contracts.generated.ts` against the components
+(`packages/cli/src/commands/check.mjs:26-31`, using `contractsDrift()` at
+`packages/cli/src/lib/contracts.mjs:186-192`). A stale `contracts.generated.ts` is *also* a compile
+error: the file emits a
 `ContractFitsComponent<...>` assertion per island whose failure message is `'contract is stale — run
 motu island sync; the component has no such prop:'` (`contracts.mjs:136-154`).
 
@@ -406,7 +341,7 @@ override for a callback the component does not have is deliberately kept out of 
 
 ---
 
-## 6. Codegen — `motu-manifest.json` → `@motu/contract`
+## 5. Codegen — `motu-manifest.json` → `@motu/contract`
 
 ```
 motu codegen [manifest] [outDir]
@@ -456,23 +391,22 @@ The safety net is that failure mode, not a deploy-time gate (`README.md`, "Backe
 | every `Service.method` wrapper and its types | the `@BrowserCallable` annotations that decide the surface |
 | `__roles` | fixtures (`fixtures.mock.ts`), scenarios, roles |
 | `contracts.generated.ts` (`motu island sync`) | the island file's `tag`, `component`, and event-name overrides |
-| `contract.snapshot.json` (`--update`) | the archipelago's `bind`/`writes` the snapshot is derived from |
 
 **On a TypeScript host there is no codegen at all.** "The Java seam needs an annotation processor
 because it has to DISCOVER which methods are callable across a whole compiled codebase. TypeScript
 needs no such thing: the callable surface is an object literal the app writes, and its type IS the
-contract" (`packages/adapters/next/src/contract.ts:4-8`). `defineServices` is identity at runtime and
+contract" (`packages/adapters/next/src/contract.ts:3-6`). `defineServices` is identity at runtime and
 exists only to fix the type (`packages/adapters/next/src/services.ts:38-40`); `createContract<S>()`
 returns a lazy two-level Proxy that turns `contract.directory.getSectors(…)` into
-`call('directory', 'getSectors', args)` (`contract.ts:73-93`). Non-string property reads return
-`undefined` so "a bundler probing for `then`" is not mistaken for a service name (`contract.ts:78-80`).
+`call('directory', 'getSectors', args)` (`contract.ts:33-53`). Non-string property reads return
+`undefined` so "a bundler probing for `then`" is not mistaken for a service name (`contract.ts:39-41`).
 That is strictly better here: "there is no regeneration step to forget, and a signature change fails
 `tsc` at the call site immediately rather than after someone re-runs a generator"
 (`contract.ts:7-8`).
 
 ---
 
-## 7. Fixtures — `motu fixtures record`
+## 6. Fixtures — `motu fixtures record`
 
 ```
 motu fixtures record <island> [--transport http|mock] [--out <path>]
@@ -537,8 +471,6 @@ you, and the three signals to read:
   loop, `packages/codegen/src/cli.mjs:5-6`);
 - the *method* went away → `contract-only-io` errors on a call not in the generated contract
   (`packages/cli/src/commands/verify.mjs:222-240`);
-- the callable surface widened or narrowed → `motu contract check` FAILs
-  (`packages/cli/src/commands/contract.mjs:167-169`).
 
 What none of them catch is a fixture whose *values* no longer resemble the backend's. That is the
 adapter gap of §3, and re-running `motu fixtures record --transport http` against the real backend is
@@ -553,7 +485,7 @@ stub for verifying the ISLAND's wiring", not backend fidelity (`packages/runtime
 
 ---
 
-## 8. The JVM side — `java/`
+## 7. The JVM side — `java/`
 
 **What it is.** Two Maven modules under `java/`, aggregated by `java/pom.xml`, groupId `dev.motu`,
 version `0.1.0-SNAPSHOT`:
@@ -633,7 +565,7 @@ open whether the framework jar should couple to the demo app's Vite output
 
 ---
 
-## 9. The rule: never widen the backend surface
+## 8. The rule: never widen the backend surface
 
 > Never widen backend surface beyond the specific `@BrowserCallable` method you need.
 
@@ -657,8 +589,6 @@ aspirational:
   (`BrowserCallable.java:15-18`) or only if named in the map
   (`services.ts:10-12`; the peps instance says the same at
   `peps:motu/src/services/index.ts:8-9`);
-- every widening lands in `contract.snapshot.json` under `services`, so `motu contract check` turns it
-  into a red diff someone has to acknowledge (`packages/cli/src/commands/contract.mjs:4-7`, `27`);
 - and an unexposed method is a 404 indistinguishable from a nonexistent one, on all three dispatchers
   (`MotuEndpoint.java:51-54`, `packages/adapters/next/src/server.ts:26`,
   `packages/runtime/src/direct-transport.ts:33-39`) — so "just try it" is not a discovery channel.
@@ -670,7 +600,7 @@ is a FIXTURE — the source ships, the stand-in must not"
 
 ---
 
-## 10. Worked end-to-end
+## 9. Worked end-to-end
 
 An island needs server data. Six steps, in order.
 
@@ -709,7 +639,7 @@ export const contract = createContract<AppServices>();
 
 *Jakarta host*: annotate the one method — `@BrowserCallable` on the method, not the class
 (`BrowserCallable.java:20-25`) — build the backend so `dev.motu:apt` emits
-`motu-manifest.json`, then `motu codegen` (§6).
+`motu-manifest.json`, then `motu codegen` (§5).
 
 **2 — Call it from the component.** `contract.directory.getSectors()`. Never a repository, never a
 client, never `fetch` — "reaching around it (importing a repository into a component) would make the
@@ -760,19 +690,18 @@ Writes `fixtures.recorded.ts` with request-keyed rows and any host-fed `seed`
 ```
 motu island verify member-results     # no-bare-fetch, contract-only-io, host-stubs
 motu check                            # contracts.generated.ts matches the components
-motu contract check                   # the boundary + coupling graph is what was committed
 ```
 
-Step 6 is where widening shows up. If `motu contract check` FAILs with a new method under `services`
-or a new edge under `coupling`, read the diff before running `--update`: the snapshot moving is the
-report, and `--update` is the acknowledgement (`packages/cli/src/commands/contract.mjs:167-169`).
+Step 6 is where widening shows up. `contract-only-io` fails on a call the generated contract does not
+carry, so a method that was never exposed cannot be reached from an island
+(`packages/cli/src/commands/verify.mjs:222-240`).
 
 ---
 
 ## See also
 
 - [01 — Concepts and terminology](01-concepts.md) — island, region, slot, key, lagoon.
-- [03 — CLI reference](03-cli-reference.md) — `contract check`, `codegen`, `fixtures record` among the rest.
+- [03 — CLI reference](03-cli-reference.md) — `codegen`, `fixtures record` among the rest.
 - [04 — Configuration](04-configuration.md) — `manifest`, `contract`, and the rest of `motu.config.json`.
 - [05 — Archipelagos and regions](05-archipelagos-and-regions.md) — `sources`, `channels`, `bind`/`writes` (what the coupling graph is derived from).
 - [07 — Checks and verification](07-checks-and-verification.md) — `no-bare-fetch`, `contract-only-io`, `host-stubs`.

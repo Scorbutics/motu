@@ -79,11 +79,12 @@ Flags beyond `--host` exist and are not in the usage text: `--force`, `--app <re
 `angularjs` and `light` everywhere else, because islands mount directly in a React host and a shadow
 root would cut them off from the host's own stylesheet, Tailwind included (`init.mjs:167-169`).
 
-`motuRoot` is deliberately absent from the generated config. It used to be written as "the only
-machine-specific path in the project" — a committed relative path to somebody's checkout, which is
-exactly what breaks on the second machine and in CI. The CLI derives it from the binary that is
-running (`init.mjs:189-196`, `packages/cli/src/lib/config.mjs:55-57`). It is written only when
-`$MOTU_ROOT` was set for that init.
+There is no `motuRoot` in the generated config, and no way to put one there. It used to be written as
+"the only machine-specific path in the project" — a committed relative path to somebody's checkout,
+which is exactly what breaks on the second machine and in CI. The CLI derives it from the binary that
+is running (`init.mjs:189-196`, `packages/cli/src/lib/config.mjs:38-61`), and `$MOTU_ROOT` is the only
+override. The key was removed entirely; a config that still carries it gets a deprecation warning. See
+[Configuration](04-configuration.md).
 
 Init ends by printing your next two commands:
 `motu archipelago create <id>` then `motu island create <name>` (`init.mjs:351`).
@@ -121,8 +122,8 @@ Consequences to plan around:
 - **Deleting the motu checkout breaks the host build.** The symlinks dangle and the aliases point at
   nothing. Re-clone and run any `motu` command to relink.
 - **Moving the checkout is fine** as long as you re-run `motu` from the new one: the framework root is
-  derived from the running CLI, with `$MOTU_ROOT` then `motuRoot` in `motu.config.json` overriding it,
-  in that order (`packages/cli/src/lib/config.mjs:190-200`).
+  derived from the running CLI, with `$MOTU_ROOT` the only override
+  (`packages/cli/src/lib/config.mjs:202`).
 - **`@motu/*` are not in the generated `package.json`** unless a workspace above the project can
   actually satisfy them. `workspace:*` in a standalone project is a lie that made `bun install` — and
   therefore `bun add react` — fail outright in a freshly initialised project (`init.mjs:202-232`).
@@ -155,11 +156,11 @@ Point `root` at the application's own layout component and map its props to slot
 sign-in region is the worked example: `root: SigninLayout`, `slots: { form: { slot: 'signin-form' } }`
 (`host-app/motu/src/archipelagos/signin/signin.archipelago.ts`).
 
-**If this page has no islands yet at all**, `motu region init <id> --page <file>` does the whole first
+**If this page has no islands yet at all**, `motu archipelago init <id> --page <file>` does the whole first
 mile instead — the archipelago, the app-side region type, a composition root, the lagoon module and
 the overrides entries — deriving the transport and host bridge from a composition root the project
 already wrote, so environment decisions are not answered differently by accident
-(`packages/cli/src/commands/region.mjs:1-14`). See
+(`packages/cli/src/commands/archipelago-init.mjs:1-14`). See
 [Archipelagos and regions](05-archipelagos-and-regions.md).
 
 ---
@@ -226,7 +227,7 @@ the host, tells you to open `/lagoon.html` when a target is focused, and then Vi
 (`packages/cli/src/commands/lagoon.mjs:648-670`). `--fit <native|legacy>` and `--allow-any-host` are
 also read there.
 
-This is where the loop closes, and the ordering is the whole point (`README.md:105-118`):
+This is where the loop closes, and the ordering is the whole point:
 
 1. **Build** the island as a plain, mode-agnostic component that calls the generated contract and
    emits events — nothing else.
@@ -235,7 +236,7 @@ This is where the loop closes, and the ordering is the whole point (`README.md:1
 
 > Verify in the lagoon first and a failure has one cause: the component is wrong. Drop an unverified
 > component straight into the ocean and a failure is ambiguous between "my component is wrong" and
-> "the host did something". — `README.md:116-120`
+> "the host did something".
 
 Every declared state is an address rather than something you hand-drive the store into. `motu lagoon
 states` prints them; the query parameters are `target`, `scenario`, `region`, `flow`, `step`
@@ -296,7 +297,7 @@ Two things `motu check` cannot see, so plan for them:
 - **Invention.** Every mechanical check compares the artifact to itself. A fixture that invents a
   vocabulary the application does not use passes all of them. That is why a run with `new` snapshots
   reports `LOOK` rather than `PASS` — open the state and read it, with a fresh reader
-  (`README.md:66-71`).
+  (`README.md`).
 
 ---
 

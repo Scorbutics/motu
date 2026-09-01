@@ -286,7 +286,7 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // THE CORPUS, BAKED IN — what the region has actually been in, so the lens can say whether the
       // state on screen is one production reaches.
       //
-      // Read from FILES that `motu region coverage --save` wrote, never fetched here. That is what
+      // Read from FILES that `motu archipelago coverage --save` wrote, never fetched here. That is what
       // keeps the promise a published lagoon has to keep: the page is reachable by anyone, so it may
       // carry the rows and must not carry the address they came from or the credential that opened
       // it. A build that fetched would put both one env var away from the bundle; a build that reads
@@ -356,7 +356,7 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
 }
 
 /**
- * The corpora `motu region coverage <id> --save` has written, keyed by region.
+ * The corpora `motu archipelago coverage <id> --save` has written, keyed by region.
  *
  * Nothing here is required: a project with no coverage has no directory, and the lens simply has
  * nothing to compare against. Unreadable or malformed files are SKIPPED rather than fatal — a preview

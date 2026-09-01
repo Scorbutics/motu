@@ -16,11 +16,17 @@
 // stage 2 exists — see docs/06-composition-and-adoption.md.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 import { archipelago } from '@motu/core';
-import type { ProducedKeysAre, RegionOwnershipOk } from '@motu/core';
+import type { ElementTypes } from '../../islands/registry';
 // TYPE-ONLY, from the app: the page's vocabulary is the application's to name.
 import type { CorpusRegion, ProducedCorpusKeys } from '@/app/corpus/corpus-region';
 
-export const corpusArchipelago = archipelago<CorpusRegion, 'x-corpus-filter' | 'x-corpus-states'>()({
+export const corpusArchipelago = archipelago<
+  CorpusRegion,
+  // A `Pick` OF THE ELEMENTS MAP, not a bare tag union. It narrows the same two tags the union did,
+  // and it also carries their contracts — which is what lets this region assert `wiring`.
+  Pick<ElementTypes, 'x-corpus-filter' | 'x-corpus-states'>,
+  ProducedCorpusKeys
+>()({
   id: 'corpus',
   islands: [
     {
@@ -40,15 +46,12 @@ export const corpusArchipelago = archipelago<CorpusRegion, 'x-corpus-filter' | '
       bind: ['states', 'filter', 'regionId'],
     },
   ],
-});
-
+},
 /**
- * The two compile-time guards, as constants rather than aliases so a drift fails HERE.
+ * The compile-time guards this region asserts, in the declaration itself.
  *
- * `ProducedKeysAre` pins the produced set to what the app's own type says; `RegionOwnershipOk`
- * refuses a region whose islands claim a key the vocabulary does not have.
+ * `produced` pins the produced set to what the app's own type says; `ownership` refuses a region
+ * whose islands claim a key the vocabulary does not have; `wiring` refuses an event wired to an
+ * island that does not declare it.
  */
-const _produced: ProducedKeysAre<typeof corpusArchipelago, ProducedCorpusKeys> = true;
-const _ownership: RegionOwnershipOk<typeof corpusArchipelago> = true;
-void _produced;
-void _ownership;
+{ ownership: true, wiring: true, produced: true });

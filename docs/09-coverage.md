@@ -673,11 +673,14 @@ CLI rewrites its `region=` to whichever region you asked about (`:200`).
 **2. Declare the closed sets on the archipelago**, beside the keys they are about:
 
 ```ts
-export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()({
-  id: 'review',
-  coverage: { enums: ['viewMode'] },
-  …
-});
+export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, ProducedReviewKeys>()(
+  {
+    id: 'review',
+    coverage: { enums: ['viewMode'] },
+    …
+  },
+  { ownership: true, wiring: true, produced: true },
+);
 ```
 
 (`host-app/motu/src/archipelagos/review/review.archipelago.ts:41`;

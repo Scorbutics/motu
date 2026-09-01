@@ -15,7 +15,7 @@
 // the app and rendered from `views.mjs`'s string concatenation, byte-identical and not motu at all.
 // That was caught by looking at the screen and asking where it was in the lagoon.
 import { archipelago } from '@motu/core';
-import type { ProducedKeysAre, RegionOwnershipOk } from '@motu/core';
+import type { ElementTypes } from '../../islands/registry';
 // THE REGION'S ROOT — the APPLICATION's own layout, imported.
 import { IndexLayout } from '@/app/index-layout';
 // TYPE-ONLY, from the app: the page's vocabulary is the application's to name.
@@ -23,11 +23,10 @@ import type { IndexRegion, ProducedIndexKeys } from '@/app/index-region';
 
 export const indexArchipelago = archipelago<
   IndexRegion,
-  | 'x-lagoon-filter'
-  | 'x-lagoon-palette'
-  | 'x-lagoon-repos'
-  | 'x-lagoon-stats'
-  | 'x-viewer-badge'
+  // A `Pick` OF THE ELEMENTS MAP, not a bare tag union: same five tags, plus the contracts that make
+  // `wiring` assertable.
+  Pick<ElementTypes, 'x-lagoon-filter' | 'x-lagoon-palette' | 'x-lagoon-repos' | 'x-lagoon-stats' | 'x-viewer-badge'>,
+  ProducedIndexKeys
 >()({
   id: 'index',
   root: IndexLayout,
@@ -86,12 +85,9 @@ export const indexArchipelago = archipelago<
       bind: [{ repos: 'repos', cap: 'cap' }, 'query'],
     },
   ],
-});
-
-/** Every key an island reads has exactly one owner. */
-const _ownership: RegionOwnershipOk<typeof indexArchipelago> = true;
-void _ownership;
-
-/** The region's produced keys and the archipelago's `writes` are the same set — here, none. */
-const _produced: ProducedKeysAre<typeof indexArchipelago, ProducedIndexKeys> = true;
-void _produced;
+},
+/**
+ * Every key an island reads has exactly one owner, every wired event exists on the island wired to
+ * it, and the region's produced keys are the set the app's own type names — here, none.
+ */
+{ ownership: true, wiring: true, produced: true });

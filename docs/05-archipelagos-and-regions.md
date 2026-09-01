@@ -12,27 +12,33 @@ slot, key) is [01 — Concepts](01-concepts.md).
 ## The call
 
 ```ts
-export const actionsArchipelago = archipelago<ActionsRegion, keyof ElementTypes>()({
-  id: 'actions',
-  root: ActionsPageLayout,
-  slots: { header: 'actions-header', /* … */ },
-  islands: [ /* … */ ],
-  sources: { /* … */ },
-});
+export const actionsArchipelago = archipelago<ActionsRegion, ElementTypes, ProducedActionsKeys>()(
+  {
+    id: 'actions',
+    root: ActionsPageLayout,
+    slots: { header: 'actions-header', /* … */ },
+    islands: [ /* … */ ],
+    sources: { /* … */ },
+  },
+  { ownership: true, wiring: true, produced: true },
+);
 ```
 — `peps:motu/src/archipelagos/actions/actions.archipelago.ts:34`
 
-`archipelago()` is a curried identity function whose only job is to keep types
-(`packages/core/src/archipelago.ts:550`):
+`archipelago()` is a curried identity function whose only job is to keep types and to make the
+region's cross-checks part of the declaration (`packages/core/src/archipelago.ts:605`):
 
 ```ts
-export function archipelago<TRegion, TTag extends string = string>() {
-  return <const A extends ArchipelagoConfig<TRegion, TTag>>(config: A): A & RegionBrand<TRegion> => config;
+export function archipelago<TRegion, TElements = string, TProduced extends string = never>() {
+  return <const A extends ArchipelagoConfig<TRegion, TagsOf<TElements>>>(
+    config: A,
+    checks: ArchipelagoChecks<A, TElements, TProduced>,
+  ): A & RegionBrand<TRegion> => { void checks; return config; };
 }
 ```
 
-Two things follow from the shape, and both are why `satisfies ArchipelagoConfig<R>` is the weaker
-form:
+Three things follow from the shape, and the first two are why `satisfies ArchipelagoConfig<R>` is the
+weaker form:
 
 - **The `const` type parameter keeps the literals.** `satisfies` widens `slot: 'week-actions'` to
   `string`, and it normalises an array of differently-shaped island entries into a union whose
@@ -48,6 +54,10 @@ form:
   type away — `typeof actionsArchipelago` remembers the literals and nothing else — which is why the
   composition root would otherwise have to repeat `ActionsRegion` at `createRegion`, at every
   `useRegion<ActionsRegion>()` and at every `seed`.
+- **The `checks` argument is REQUIRED**, so a region cannot be declared without asserting at least
+  that its keys are owned (`packages/core/src/archipelago.ts:568-577`). See
+  [The type-level guards](#the-type-level-guards) for what each property claims and why they are an
+  argument rather than part of the signature.
 
 `TRegion` is the CONTRACT TYPE and it is **extracted from the host application**: it contains no motu
 import and it erases at runtime, so removing motu leaves it and the page that uses it untouched
@@ -56,11 +66,22 @@ a modern host and reports it as `region-type`; on an ocean the check is skipped,
 app-side type to reference — region state lives in `$scope` and motu declares it
 (`packages/cli/src/commands/verify.mjs:2267-2296`).
 
-`TTag` narrows `element` to the generated tag map. Left at its default `string` — what an ocean needs
-— an unknown tag is a runtime warning; narrowed to `keyof ElementTypes` (the map `motu island sync`
-generates beside the registry) it is a compile error, and the tag stays a LITERAL, without which
-nothing downstream can look the island up to check the events an entry wires
+`TElements` narrows `element` to the project's tags, and it takes either of two forms — `TagsOf<T>`
+resolves a bare union to itself and an ELEMENTS MAP to its keys
+(`packages/core/src/archipelago.ts:548`). Left at its default `string` — what an ocean needs — an
+unknown tag is a runtime warning; narrowed it is a compile error, and the tag stays a LITERAL,
+without which nothing downstream can look the island up to check the events an entry wires
 (`packages/core/src/archipelago.ts:37-45`).
+
+Prefer the MAP: `ElementTypes` (the interface `motu island sync` generates beside the registry), or a
+`Pick<ElementTypes, 'x-a' | 'x-b'>` when the region should only admit its own islands' tags. A bare
+union `'x-a' | 'x-b'` narrows the tags exactly as well, and it carries nothing else — so a region
+declared that way cannot state `wiring`, whose check needs each tag's contract to look its events up.
+The `Pick` is the same narrowing plus a checkable claim.
+
+`TProduced` is the app's own `Produced…Keys` union, for the `produced` check. It defaults to `never`,
+which is the right value for a region whose islands write nothing and which still asserts
+`produced: true`.
 
 ## `id`
 
@@ -336,19 +357,49 @@ not written, because writing it from the host is the violation the store guard r
 ## The type-level guards
 
 These are set operations over declarations the compiler already holds, so they can be a build error
-instead of a report someone has to run — in the same loop as the edit that caused them. They are
-written as CONSTANTS, never type aliases: an alias NAMES the result, so a failing check quietly
-resolves to its error object and nobody reads it. Only the assignment to `true` makes the compiler
-reject it (`host-app/motu/src/archipelagos/review/review.archipelago.ts:99-103`).
+instead of a report someone has to run — in the same loop as the edit that caused them. They are the
+declaration's SECOND ARGUMENT (`packages/core/src/archipelago.ts:568-577`):
 
 ```ts
-const _everyKeyIsOwned: RegionOwnershipOk<typeof reviewArchipelago> = true;
-const _everyWiredEventExists: RegionWiringOk<typeof reviewArchipelago, ElementTypes> = true;
-const _producedKeysMatchTheApp: ProducedKeysAre<typeof reviewArchipelago, ProducedReviewKeys> = true;
+export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, ProducedReviewKeys>()(
+  { id: 'review', /* … */ },
+  { ownership: true, wiring: true, produced: true },
+);
 ```
 
-Each resolves to `true` when it holds and to a LABELLED TUPLE when it does not, so the type error
-names the offending keys rather than just failing.
+| Property | Type | Required |
+|---|---|---|
+| `ownership` | `RegionOwnershipOk<A>` | **yes** — the one check every region can make |
+| `wiring` | `RegionWiringOk<A, TElements>` | no — needs `TElements` given as a map |
+| `produced` | `ProducedKeysAre<A, TProduced>` | no |
+| `sourced` | `RegionSourcesOk<A>` | no — nothing to say when a region declares no `sources` |
+
+Each property's TYPE is the check's result, so `true` is the only value that compiles. Each resolves
+to `true` when it holds and to a LABELLED TUPLE when it does not, and the error lands on that
+property, naming the offending keys:
+
+```
+review.archipelago.ts(98,34): error TS2322: Type 'boolean' is not assignable to type
+  '["declared by the app but not in any `produces`:", "viewMode"]'.
+```
+
+**Why an argument and not part of the signature.** Every check depends on `A`, which is inferred from
+the config, so the two ways of folding them into `archipelago()` that look natural both fail. A
+self-referential CONSTRAINT reports `argument of type { id: 'review', … } is not assignable`, burying
+the labelled tuple inside a structural mismatch over the whole literal. A defaulted type parameter
+(`_Checks extends true = RegionOwnershipOk<A>`) is checked against its constraint GENERICALLY, at the
+declaration, where the conditional resolves to the union of both branches — so it errors on motu's
+own line and never on the call. A second argument is the one position where `A` is already inferred
+and the error lands on the `true` that failed.
+
+**Why required.** These used to be `const _x: Check<typeof arch> = true` lines below the config, and
+the repetition was not the problem: a file that omitted all three looked identical to one that
+asserted all three, so the guards were opt-in by silence. `ownership` being a required property is
+what that shape could not express. The optional ones stay optional because adoption is per region —
+omitting one skips it, exactly as omitting its `const` used to.
+
+Optional does mean forgettable, and that part did not improve: a missing `produced` property is as
+invisible as the missing `const` was.
 
 ### The derived key sets
 
@@ -414,6 +465,10 @@ ISLAND only when the config is declared through `archipelago()` — see the call
 `packages/core/src/archipelago.ts:391-401`. Every host-fed key has a declared source. It resolves to
 `true` while a region declares no `sources` at all — adoption is per region — and once it declares
 one, every host-fed key has to be accounted for, or the tuple names those that are not.
+
+Its property on the checks argument is spelled `sourced`, not `sources`: the CLI's text readers find
+a config's declared sources by looking for `sources:` (`packages/cli/src/lib/eject.mjs:184`), and a
+second `sources:` in the same file would be the first thing they found.
 
 ## The host side: `createRegion`
 

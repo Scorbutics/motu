@@ -537,7 +537,47 @@ export function slotShows(entry: string | { slot: string; when?: string; unless?
 export type SlotsOf<C> = C extends { islands: readonly (infer I)[] } ? (I extends { slot: infer S } ? (S extends string ? S : never) : never) : never;
 
 /**
- * Declare an archipelago, keeping its literal types.
+ * The tag union a second type argument names — whichever of the two forms it was given in.
+ *
+ * A bare union (`'x-a' | 'x-b'`) is the tags themselves and stays exactly what it was, which is what
+ * every archipelago written before the elements map existed passes. An ELEMENTS MAP (`ElementTypes`,
+ * or a `Pick<>` of it) is keyed by tag, so the tags are its keys — and unlike the bare union it also
+ * carries each tag's contract, which is what `wiring` needs. Passing the map is therefore strictly
+ * better: same narrowing, plus a checkable wiring claim.
+ */
+export type TagsOf<T> = [T] extends [string] ? T : keyof T & string;
+
+/**
+ * The cross-checks a region ASSERTS, passed as the declaration's second argument.
+ *
+ * These were three `const _x: Check<typeof arch> = true` lines under every archipelago, and the
+ * repetition was not the problem with them — a file that simply omitted all three looked identical to
+ * one that asserted all three, so the checks were opt-in by silence. Making this parameter REQUIRED is
+ * the whole point: a region cannot be declared without saying, at minimum, that its keys are owned.
+ *
+ * Every property is the check's own result type, so the value is always the literal `true` and a
+ * failure is a type error ON THAT PROPERTY — naming the offending keys, the way the constants did.
+ * The optional ones are optional because adoption is per region (a region with no `sources` has
+ * nothing for `sourced` to say, and one whose project has no generated elements map cannot state
+ * `wiring`); omitting one skips it, exactly as omitting its `const` used to.
+ *
+ * Named `sourced` rather than `sources` on purpose: the CLI's text readers look for `sources:` to find
+ * a config's declared sources, and a second `sources:` in the same file would be the first thing they
+ * found.
+ */
+export interface ArchipelagoChecks<A, TElements, TProduced extends string> {
+  /** Every bound key has exactly one owner. The one check every region can make, so it is required. */
+  ownership: RegionOwnershipOk<A>;
+  /** Every wired event is one its own island declares. Needs the project's elements map as `TElements`. */
+  wiring?: RegionWiringOk<A, TElements>;
+  /** The produced set and the app's own `Produced…Keys` are the same set. */
+  produced?: ProducedKeysAre<A, TProduced>;
+  /** Every host-fed key is claimed by a declared source. */
+  sourced?: RegionSourcesOk<A>;
+}
+
+/**
+ * Declare an archipelago, keeping its literal types, and assert its cross-checks in the same call.
  *
  * `satisfies` checks a config but widens what it cannot: `slot: 'week-actions'` becomes `string`, and
  * an array literal of differently-shaped entries is normalised into a union whose members no longer
@@ -545,10 +585,31 @@ export type SlotsOf<C> = C extends { islands: readonly (infer I)[] } ? (I extend
  * typed `<Island slot>` possible, the second makes the wiring check per-island rather than per-project.
  * A `const` type parameter keeps both.
  *
- *   export const actionsArchipelago = archipelago<ActionsRegion, keyof ElementTypes>()({ … });
+ *   export const actionsArchipelago = archipelago<ActionsRegion, ElementTypes, ProducedActionsKeys>()(
+ *     { id: 'actions', … },
+ *     { ownership: true, wiring: true, produced: true },
+ *   );
+ *
+ * WHY THE CHECKS ARE AN ARGUMENT AND NOT PART OF THE SIGNATURE. They depend on `A`, which is inferred
+ * from the config, so the two ways of folding them in that look natural both fail: a self-referential
+ * CONSTRAINT reports "argument of type { id: 'actions', … } is not assignable", burying the labelled
+ * tuple inside a structural mismatch over the whole literal; and a defaulted type parameter
+ * (`_Checks extends true = RegionOwnershipOk<A>`) is checked against its constraint GENERICALLY, at
+ * the declaration, where the conditional resolves to the union of both branches — so it errors on
+ * motu's own line and never on the call. A second argument is the one position where `A` is already
+ * inferred and the error lands on the `true` that failed.
+ *
+ * `TElements` accepts either form (see `TagsOf`); `TProduced` defaults to `never`, which is right for
+ * a region that produces nothing and asserts `produced: true`.
  */
-export function archipelago<TRegion, TTag extends string = string>() {
-  return <const A extends ArchipelagoConfig<TRegion, TTag>>(config: A): A & RegionBrand<TRegion> => config;
+export function archipelago<TRegion, TElements = string, TProduced extends string = never>() {
+  return <const A extends ArchipelagoConfig<TRegion, TagsOf<TElements>>>(
+    config: A,
+    checks: ArchipelagoChecks<A, TElements, TProduced>,
+  ): A & RegionBrand<TRegion> => {
+    void checks;
+    return config;
+  };
 }
 
 /**

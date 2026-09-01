@@ -12,7 +12,7 @@
 // list disagreeing about which state is showing, switching region leaving the address claiming an
 // island you had left. A key two controls read and one writes is exactly what an archipelago is for.
 import { archipelago } from '@motu/core';
-import type { ProducedKeysAre, RegionOwnershipOk } from '@motu/core';
+import type { ElementTypes } from '../../islands/registry';
 // THE REGION'S ROOT — the APPLICATION's own arrangement, imported.
 import { LagoonViewLayout } from '@/app/lagoon-view-layout';
 // TYPE-ONLY, from the app: this screen's vocabulary is the application's to name.
@@ -20,7 +20,10 @@ import type { LagoonViewRegion, ProducedLagoonViewKeys } from '@/app/lagoon-view
 
 export const lagoonViewArchipelago = archipelago<
   LagoonViewRegion,
-  'x-dock-regions' | 'x-dock-states'
+  // A `Pick` OF THE ELEMENTS MAP, not a bare tag union: same two tags, plus the contracts `wiring`
+  // needs to check `flow-changed` against the island that dispatches it.
+  Pick<ElementTypes, 'x-dock-regions' | 'x-dock-states'>,
+  ProducedLagoonViewKeys
 >()({
   id: 'lagoon-view',
   root: LagoonViewLayout,
@@ -55,12 +58,9 @@ export const lagoonViewArchipelago = archipelago<
       writes: { 'flow-changed': 'flow' },
     },
   ],
-});
-
-/** Every key an island reads has exactly one owner. */
-const _ownership: RegionOwnershipOk<typeof lagoonViewArchipelago> = true;
-void _ownership;
-
-/** The region's produced keys and the archipelago's `writes` are the same set. */
-const _produced: ProducedKeysAre<typeof lagoonViewArchipelago, ProducedLagoonViewKeys> = true;
-void _produced;
+},
+/**
+ * Every key an island reads has exactly one owner, every wired event exists on the island wired to
+ * it, and the produced keys are the set the app's own type names.
+ */
+{ ownership: true, wiring: true, produced: true });

@@ -39,17 +39,20 @@ its own description of that arrangement — a **frame**.
 The archipelago names the application's own layout component as `root` and maps its props to slots:
 
 ```ts
-export const clubArchipelago = archipelago<ClubRegion, /* tags */>()({
-  id: 'club',
-  root: ClubLayout,
-  slots: {
-    announcement: 'announcement-card',
-    counters: 'counters-banner',
-    feed: 'club-feed',
-    members: 'new-members-card',
+export const clubArchipelago = archipelago<ClubRegion, ElementTypes, ProducedClubKeys>()(
+  {
+    id: 'club',
+    root: ClubLayout,
+    slots: {
+      announcement: 'announcement-card',
+      counters: 'counters-banner',
+      feed: 'club-feed',
+      members: 'new-members-card',
+    },
+    islands: [ /* … */ ],
   },
-  islands: [ /* … */ ],
-});
+  { ownership: true, wiring: true, produced: true },
+);
 ```
 
 and the page passes its own prop names, never a slot string:

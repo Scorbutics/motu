@@ -168,8 +168,9 @@ the region's vocabulary, and every key has exactly one of two origins:
 There is no third case, which is why `provides` (`:214`) is documented as declarable only for the one
 thing derivation cannot see: a host-fed key no island binds.
 
-Ownership is a **compile** failure, not a report: one line per region, `RegionOwnershipOk<typeof
-config>` (`packages/core/src/archipelago.ts:425`), plus a runtime producer map that catches a write
+Ownership is a **compile** failure, not a report: the required `ownership` property of the
+declaration's second argument, typed `RegionOwnershipOk<A>`
+(`packages/core/src/archipelago.ts:425`, `:570`), plus a runtime producer map that catches a write
 from the wrong source (`packages/core/src/store.ts:136-147`). What it prevents: two islands wired to
 each other through the page's own state. See
 [Archipelagos and regions](05-archipelagos-and-regions.md).

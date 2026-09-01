@@ -2445,13 +2445,13 @@ function archipelagoConfigChecks(report, id) {
       // moment the region has a member; before that it is the tool failing its own output.
       report.warn(
         'region-type',
-        'no region type yet — declare it as `archipelago<TRegion, keyof ElementTypes>()({…})` with a ' +
+        'no region type yet — declare it as `archipelago<TRegion, ElementTypes, ProducedKeys>()({…}, {…})` with a ' +
           'type EXTRACTED FROM THE APP before adding the first island, so bind keys cannot drift from it',
       );
     } else {
       report.error(
         'region-type',
-        'no region type — declare it as `archipelago<TRegion, keyof ElementTypes>()({…})` with a type ' +
+        'no region type — declare it as `archipelago<TRegion, ElementTypes, ProducedKeys>()({…}, {…})` with a type ' +
           'EXTRACTED FROM THE APP (no motu import, erases at runtime) so bind keys cannot drift from it',
       );
     }

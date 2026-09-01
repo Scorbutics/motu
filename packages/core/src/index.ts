@@ -60,6 +60,8 @@ export type {
   EventsOf,
   HostRegionOf,
   ProducedKeysAre,
+  ArchipelagoChecks,
+  TagsOf,
   ArchipelagoOptions,
   MountedIslandInfo,
   HostIntent,

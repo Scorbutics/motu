@@ -8,7 +8,6 @@
 // changes what the viewer shows, and accepting changes the statuses the list renders. None of those
 // travel by prop between islands — they go through the region or they are not declared.
 import { archipelago } from '@motu/core';
-import type { ProducedKeysAre, RegionOwnershipOk, RegionWiringOk } from '@motu/core';
 import type { ElementTypes } from '../../islands/registry';
 import type { ReviewRegion, ProducedReviewKeys } from '@/app/console/review-region';
 import { shotsSource } from '@/src/review/shots-source';
@@ -17,7 +16,7 @@ import { shotsSource } from '@/src/review/shots-source';
 // happen to agree, which is what `region-root` asks and what the other three regions here already do.
 import { ReviewLayout } from '@/components/review/review-layout/ReviewLayout';
 
-export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()({
+export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, ProducedReviewKeys>()({
   id: 'review',
   root: ReviewLayout,
   // The app's prop name on the left, motu's slot on the right. The page passes `summary`, `projects`,
@@ -91,14 +90,10 @@ export const reviewArchipelago = archipelago<ReviewRegion, keyof ElementTypes>()
     // effects in the page — the lagoon installs the same object over fixtures.
     shots: shotsSource,
   },
-});
-
-// The three cross-checks, as CONSTANTS. They were `type _Ownership = …` aliases, which assert nothing:
-// a type alias NAMES the result, so a failing check quietly resolves to its error object and no one
-// reads it. Only the assignment to `true` makes the compiler reject it.
-const _everyKeyIsOwned: RegionOwnershipOk<typeof reviewArchipelago> = true;
-const _everyWiredEventExists: RegionWiringOk<typeof reviewArchipelago, ElementTypes> = true;
-const _producedKeysMatchTheApp: ProducedKeysAre<typeof reviewArchipelago, ProducedReviewKeys> = true;
-void _everyKeyIsOwned;
-void _everyWiredEventExists;
-void _producedKeysMatchTheApp;
+},
+// THE CROSS-CHECKS THE REGION ASSERTS. Every key is owned, every wired event exists on the island
+// that is wired to it, and the produced set is the one the app's own type names. Each property is
+// the check's result type, so `true` is the only value that compiles and a drift is an error on
+// that line naming the offending key. They were three `const _x: Check<…> = true` lines below this
+// config; as an argument they cannot be forgotten wholesale — `ownership` is required.
+{ ownership: true, wiring: true, produced: true });

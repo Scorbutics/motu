@@ -11,17 +11,23 @@
 // scenario can seed one, no flow can drive one, and the only way to see one is to break GoTrue by
 // hand. That is the whole argument for motu on this screen, and it is the argument for motu.
 import { archipelago } from '@motu/core';
+import type { ElementTypes } from '../../islands/registry';
 // THE REGION'S ROOT — the APPLICATION's own layout, imported. The page renders it with live content
 // and the lagoon renders the same component with islands; neither describes the arrangement twice.
 import { SigninLayout } from '@/app/signin/signin-layout';
-import type { ProducedKeysAre, RegionOwnershipOk } from '@motu/core';
 // TYPE-ONLY, from the app: the page's vocabulary is the application's to name.
 import type { SigninRegion, ProducedSigninKeys } from '@/app/signin/signin-region';
 // The source itself — a VALUE import, and the only one this file has from the app. It is what makes
 // "the module the channel installs" and "the module the region declares" the same object.
 import { signinSource } from '@/app/signin/signin-source';
 
-export const signinArchipelago = archipelago<SigninRegion, 'x-github-sign-in'>()({
+export const signinArchipelago = archipelago<
+  SigninRegion,
+  // A `Pick` OF THE ELEMENTS MAP, not a bare tag union: the same one tag, plus the contract `wiring`
+  // needs.
+  Pick<ElementTypes, 'x-github-sign-in'>,
+  ProducedSigninKeys
+>()({
   id: 'signin',
   root: SigninLayout,
   // The app's prop name on the left, motu's slot on the right. The page passes `form`; it never
@@ -61,12 +67,9 @@ export const signinArchipelago = archipelago<SigninRegion, 'x-github-sign-in'>()
      */
     signin: signinSource,
   },
-});
-
-/** Every key an island reads has exactly one owner. */
-const _ownership: RegionOwnershipOk<typeof signinArchipelago> = true;
-void _ownership;
-
-/** The region's produced keys and the archipelago's `writes` are the same set. */
-const _produced: ProducedKeysAre<typeof signinArchipelago, ProducedSigninKeys> = true;
-void _produced;
+},
+/**
+ * Every key an island reads has exactly one owner, every wired event exists on the island wired to
+ * it, and the produced keys are the set the app's own type names.
+ */
+{ ownership: true, wiring: true, produced: true });

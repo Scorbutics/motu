@@ -6,6 +6,8 @@ import { Store, declareProducers, declareReaders, noteIslandOutput } from './sto
 import { installChannels, type Channel } from './channel';
 import { offerRegionToCoverage } from './sandbox';
 import { runWithWriteSource, currentWriteSource } from './store';
+import { runWithSource } from './provenance';
+import type { EffectEntry } from '@motu/types';
 
 // Stripped in production (see the debug overlay). The mount registry below only tracks when this
 // build-time constant is true; the typeof guard keeps it safe under bare Node/tsc.
@@ -210,8 +212,6 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * is fed from outside, by definition, so listing them restated a subtraction the compiler can do
    * (`HostFedKeys`). The list also had to be maintained: sixteen entries in peps' actions region, each
    * of them a place to typo a key that `keyof TRegion` would have caught anyway.
-   */
-  provides?: readonly (keyof TRegion & string)[];
   /**
    * Which of this region's keys are CLOSED SETS, for the coverage fold.
    *
@@ -335,10 +335,21 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
            */
           create(...args: never[]): unknown;
           produces: readonly (keyof TRegion & string)[];
+          /**
+           * The backend this source touches — `{ table: 'shots', operation: 'select' }`,
+           * `{ rpc: 'accept_shots' }`, `{ route: '/api/x', method: 'GET' }`.
+           *
+           * The SOURCE's reach, not the island's. A source reads inside a channel, at region level and
+           * outside any island's window, so charging its tables to whichever island was rendering
+           * would report a correct declaration as a violation. An island that reaches a backend
+           * DIRECTLY declares its own in `contract.effects`, which is the same list in the same
+           * vocabulary — one concept, declared wherever the reaching actually happens.
+           */
+          reaches?: readonly EffectEntry[];
         }
       // A key no channel installs — the page fetches it itself. There is nothing to reference, so the
       // module is still named: it is what `motu integrate check` holds the page to.
-      | { module: string; produces: readonly (keyof TRegion & string)[] }
+      | { module: string; produces: readonly (keyof TRegion & string)[]; reaches?: readonly EffectEntry[] }
     >
   >;
 }
@@ -367,9 +378,6 @@ type BindsOf<I> = I extends { bind: infer B }
       : E[keyof E] & string
     : B[keyof B] & string
   : never;
-
-/** Every key the region declares as host-fed, in the rare case it says so explicitly. */
-export type ProvidedKeys<A> = A extends { provides: readonly (infer K)[] } ? (K extends string ? K : never) : never;
 
 /**
  * Host-fed keys, DERIVED: bound by an island, written by none.
@@ -401,10 +409,29 @@ export type RegionSourcesOk<A> = [SourcedKeys<A>] extends [never]
     : ['host-fed but produced by no declared source:', Exclude<HostFedKeys<A>, SourcedKeys<A>>];
 
 /** Bound, but claimed by nobody. Empty by construction now that host-feeding is the default. */
-export type UnownedKeys<A> = Exclude<BoundKeys<A>, ProvidedKeys<A> | ProducedKeys<A> | HostFedKeys<A>>;
-
-/** Claimed twice — the host says it feeds it, an island says it writes it. */
-export type DisputedKeys<A> = ProvidedKeys<A> & ProducedKeys<A>;
+/**
+ * A key more than one ISLAND writes — the thing ownership exists to forbid.
+ *
+ * Grouped by ELEMENT, not by slot: one island placed twice (peps' filter panel, desktop + mobile) is
+ * one producer and stays legal. `ProducedKeys` cannot answer this — it is a union over every island,
+ * so two writers of one key collapse into the same member — which is why the walk is per island.
+ *
+ * This replaces `UnownedKeys` and `DisputedKeys`, both of which were `never` BY CONSTRUCTION.
+ * `UnownedKeys` excluded `HostFedKeys`, which is itself `Exclude<BoundKeys, ProducedKeys>`, so every
+ * bound key fell in one side or the other and nothing was ever left over; `DisputedKeys` needed
+ * `provides`, which no region has used since `HostFedKeys` began deriving it. So the one REQUIRED
+ * check on every region resolved to `true` for every region that exists, and a second island claiming
+ * a key compiled cleanly — proved by writing exactly that and watching `tsc` pass.
+ */
+type ElementOf<I> = I extends { element: infer E } ? E : never;
+type WritersOtherThan<Is extends readonly unknown[], El, Acc = never> = Is extends readonly [infer H, ...infer T]
+  ? WritersOtherThan<T, El, ElementOf<H> extends El ? Acc : Acc | ProducesOf<H>>
+  : Acc;
+type DupWalk<All extends readonly unknown[], Rest extends readonly unknown[] = All, Acc = never> =
+  Rest extends readonly [infer H, ...infer T]
+    ? DupWalk<All, T, Acc | (ProducesOf<H> & WritersOtherThan<All, ElementOf<H>>)>
+    : Acc;
+export type DuplicateProducers<A> = A extends { islands: infer Is extends readonly unknown[] } ? DupWalk<Is> : never;
 
 /**
  * Ownership as a COMPILE failure rather than a report.
@@ -422,11 +449,9 @@ export type DisputedKeys<A> = ProvidedKeys<A> & ProducedKeys<A>;
  * What CANNOT move here, and is why `verify` still exists: whether a declared output ever fires, and
  * whether a declaration is HONEST. Both are runtime facts; types can only check consistency.
  */
-export type RegionOwnershipOk<A> = [UnownedKeys<A>] extends [never]
-  ? [DisputedKeys<A>] extends [never]
-    ? true
-    : ['declared in `provides` AND written by an island:', DisputedKeys<A>]
-  : ['bound but owned by nobody — add to `provides`, or to an island\'s `writes`:', UnownedKeys<A>];
+export type RegionOwnershipOk<A> = [DuplicateProducers<A>] extends [never]
+  ? true
+  : ['written by more than one island — a key has ONE producer:', DuplicateProducers<A>];
 
 /** The CustomEvent names an island declares as outputs, from its element spec's contract. */
 export type EventsOf<E> = E extends { options: { contract: { output: infer O } } }
@@ -471,7 +496,13 @@ type PerIsland<I, TElements> = I extends { element: infer Tag }
   : never;
 
 /** Every event name an island entry mentions, in `writes` or in `on`. */
-type WiredEvents<I> = (I extends { writes: infer W } ? keyof W & string : never) | (I extends { on: infer H } ? keyof H & string : never);
+// `intents` too: its KEY is the island's own event name (its value is what the host is asked for), so a
+// misspelling there is the same silently-dead declaration `writes` and `on` are checked for — the
+// intent simply never fires, and nothing but a run would have shown it.
+type WiredEvents<I> =
+  | (I extends { writes: infer W } ? keyof W & string : never)
+  | (I extends { on: infer H } ? keyof H & string : never)
+  | (I extends { intents: infer N } ? keyof N & string : never);
 
 /**
  * The half of a region the HOST may still assign — everything it does not declare an island to
@@ -565,13 +596,55 @@ export type TagsOf<T> = [T] extends [string] ? T : keyof T & string;
  * a config's declared sources, and a second `sources:` in the same file would be the first thing they
  * found.
  */
+/**
+ * DID THE COMPILER KEEP YOUR LITERAL, or quietly give up on it?
+ *
+ * `const A` asks TypeScript to infer the config as narrowly as it can — literal slot names, and the
+ * islands as a TUPLE of distinct entries rather than an array of one merged type. Every check below is
+ * derived from that: two islands writing one key are only distinguishable while they are still two
+ * members of a tuple.
+ *
+ * It is BEST EFFORT. On a large enough config TypeScript stops and falls back to the CONSTRAINT
+ * (`readonly IslandSpec[]`), which is a legal outcome and therefore silent — the value still satisfies
+ * it. But the constraint declares `writes?:` as OPTIONAL, and every derivation here asks "does this
+ * entry have `writes`?", which an optional property does not answer. So every key set comes back
+ * `never`, every check trivially passes, and a region gets a full row of green ticks that mean nothing.
+ *
+ * A tuple's `length` is a literal (`4`); a plain array's is `number`. That one difference is the whole
+ * detector, and it turns the silent case into this error. The fix at the call site is `as const` on the
+ * config, which makes the argument narrow BEFORE inference, so there is nothing left to give up on.
+ *
+ * Found in peps, whose two largest regions had crossed the threshold: `ownership`, `wiring` and
+ * `sourced` were all passing vacuously and only `produced` could notice, because it alone compares
+ * against a type declared outside the config.
+ */
+type ConstInferenceLost<A> = A extends { islands: { length: infer L } } ? (number extends L ? true : false) : false;
+
 export interface ArchipelagoChecks<A, TElements, TProduced extends string> {
-  /** Every bound key has exactly one owner. The one check every region can make, so it is required. */
-  ownership: RegionOwnershipOk<A>;
-  /** Every wired event is one its own island declares. Needs the project's elements map as `TElements`. */
-  wiring?: RegionWiringOk<A, TElements>;
+  /**
+   * Every bound key has exactly one owner. The one check every region can make, so it is required —
+   * which also makes it the right place to report a config the compiler gave up on narrowing.
+   */
+  ownership: ConstInferenceLost<A> extends true
+    ? [
+        'motu: the compiler stopped narrowing this config, so every check here would pass without checking anything. Add `as const` to the config object (the first argument).',
+      ]
+    : RegionOwnershipOk<A>;
+  /**
+   * Every wired event is one its own island declares.
+   *
+   * Needs the project's generated elements MAP as `TElements`. Given a bare tag union instead, it has
+   * no way to look up any island's events and resolves to `true` for everything — proved by wiring a
+   * region to `'TOTALLY-BOGUS-EVENT'` and watching it compile. So the union case is an error naming
+   * the fix, rather than a check that quietly agrees with whatever you wrote.
+   */
+  wiring: [TElements] extends [string]
+    ? [
+        'motu: `wiring` needs the generated elements map as the second type argument (`ElementTypes`). A bare tag union cannot see any island\'s events, so this check would pass without checking anything.',
+      ]
+    : RegionWiringOk<A, TElements>;
   /** The produced set and the app's own `Produced…Keys` are the same set. */
-  produced?: ProducedKeysAre<A, TProduced>;
+  produced: ProducedKeysAre<A, TProduced>;
   /** Every host-fed key is claimed by a declared source. */
   sourced?: RegionSourcesOk<A>;
 }
@@ -982,7 +1055,10 @@ export function channelFrom<
   for (const island of spec.to.islands) for (const key of writtenKeys(island)) islandOwned.add(key);
 
   const channel: Channel = ({ store }) => {
-    const source = declared.create!(...(spec.args as unknown[]));
+    // THE SOURCE'S OWN WINDOW, so what it reaches is attributed to the source rather than to whichever
+    // island happened to be rendering when its request went out. Read at REQUEST time, so an async
+    // answer landing later is still charged to the right owner.
+    const source = runWithSource(spec.id, () => declared.create!(...(spec.args as unknown[])));
 
     const publish = () => {
       const state = source.getState() as Record<string, unknown>;
@@ -1006,7 +1082,7 @@ export function channelFrom<
         const signature = JSON.stringify(inputs.map((key) => values[key] ?? null));
         if (signature === last) return; // our own echo, or a key we do not consume
         last = signature;
-        source.applyInputs!(values);
+        runWithSource(spec.id, () => source.applyInputs!(values));
       };
       onRegionChange();
       unsubscribe = store.subscribe(onRegionChange);
@@ -1015,7 +1091,7 @@ export function channelFrom<
     // What this source answers when an island asks the host for something.
     const answers = new Map<string, (detail: unknown) => void>();
     for (const [name, handler] of Object.entries(source.intents ?? {})) {
-      answers.set(name, (detail) => (handler as (d: unknown) => void)(detail));
+      answers.set(name, (detail) => runWithSource(spec.id, () => (handler as (d: unknown) => void)(detail)));
     }
     // MERGED PER REGION, not assigned. A region may declare SEVERAL sources — the login page has one
     // for signing in and one for asking for a fresh invite link — and each answers its own intents.
@@ -1149,7 +1225,7 @@ export function regionIdOfStore(store: Store): string | null {
 export function hostFedKeys(config: AnyArchipelagoConfig): Set<string> {
   const produced = new Set<string>();
   for (const island of config.islands) for (const key of writtenKeys(island)) produced.add(key);
-  const out = new Set<string>((config.provides ?? []) as readonly string[]);
+  const out = new Set<string>();
   for (const island of config.islands) {
     for (const [, key] of bindEntries(island)) if (!produced.has(key)) out.add(key);
   }

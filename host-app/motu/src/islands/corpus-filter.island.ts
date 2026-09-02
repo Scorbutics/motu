@@ -15,7 +15,7 @@ export const element = islandElement({
       // WHAT IT DECIDES. The region reads this as `filter` — see the archipelago's `writes`.
       output: { onFilterChange: 'filter-changed' },
       // Nothing ambient: it reaches for no host module. The corpus is read on the server.
-      ambient: [],
+      effects: [],
     },
   },
 });

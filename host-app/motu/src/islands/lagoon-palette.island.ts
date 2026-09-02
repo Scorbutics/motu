@@ -22,7 +22,7 @@ export const element = islandElement({
       // NOTHING AMBIENT, and the ⌘K listener does not change that: `ambient` is about host MODULES,
       // and `window.addEventListener` is the platform. There is no navigation here either — every
       // entry is an anchor, so ↵ is the browser's.
-      ambient: [],
+      effects: [],
     },
   },
 });

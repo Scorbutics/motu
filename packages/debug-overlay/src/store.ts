@@ -310,7 +310,9 @@ class LensStore {
     const rows = computeProps(info, def);
     const awaiting = rows.filter((r) => r.state === 'bound-empty').length;
     const dead = this.inboundChannels(info).filter((c) => c.fireCount === 0).length;
-    const hostScope = def?.coupling?.hostScope?.length ?? 0;
+    // The `{ scope }` entries of `effects` — names resolved from a host scope rather than handed in,
+    // which is the reach most likely to be missing on another page.
+    const hostScope = (def?.effects ?? []).filter((e) => typeof e === 'object' && e !== null && 'scope' in e).length;
     const parts: string[] = [];
     if (awaiting) parts.push(`${awaiting} input${awaiting > 1 ? 's' : ''} awaiting`);
     if (dead) parts.push(`${dead} channel${dead > 1 ? 's' : ''} never fired`);

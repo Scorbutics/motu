@@ -19,6 +19,7 @@ import { readRegions } from '../lib/eject.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { hostSources, conditionallyPlaced } from './integration.mjs';
 import { islandContract, contractsDrift, readGeneratedContracts } from '../lib/contracts.mjs';
+import { readEffectEntries, isKinded, isDataKind, coversEffect } from '../lib/effects.mjs';
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
@@ -444,16 +445,22 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
     );
   }
 
-  // --- ambient: the third leg of the boundary ---------------------------------------------------
+  // --- effects: the third leg of the boundary ---------------------------------------------------
   //
-  // Input and output are declared. AMBIENT — the host capabilities a component reaches for without
-  // being handed them: a React context, a session hook, a feature gate, a service module it imports
-  // directly — was not, and it is the coupling most likely to make an island unmountable somewhere
-  // else. It hid in the lagoon's `alias` table, where standing a module down looked like build
-  // configuration rather than a declared dependency.
+  // Input and output are declared. EFFECTS — everything a component reaches that it was not handed:
+  // a React context, a session hook, a feature gate, a service module it imports directly — was not,
+  // and it is the reach most likely to make an island unmountable somewhere else. It hid in the
+  // lagoon's `alias` table, where standing a module down looked like build configuration rather than
+  // a declared dependency.
+  //
+  // ONLY THE MODULE ENTRIES ARE ANSWERABLE HERE. `effects` is one list of everything an island
+  // reaches, tagged by kind, and the kinds are checked where each can be known: a bare specifier is a
+  // module and is compared against the component's own imports, below; `scope:` is the AngularJS
+  // adapter's to check; `table:`/`rpc:`/`fn:`/`route:` are runtime facts and belong to `data-reach`.
+  // Comparing a prefixed entry against an import list would report every one of them as undeclared.
   //
   // It is DERIVED, not asked for twice: the lagoon's alias keys are exactly the modules this project
-  // has had to stand down, so an island importing one of them requires it. Declaring `ambient` makes
+  // has had to stand down, so an island importing one of them requires it. Declaring it in `effects` makes
   // that visible in the island, in the seam lens and in the contract snapshot.
   {
     const lagoonCfg = resolve(paths.lagoonDir, 'lagoon.config.json');
@@ -475,22 +482,26 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
       // Either place the boundary can live: written in the island file, or generated from the
       // component into the contracts file. Reading only the island file reported every short-form
       // island as declaring nothing.
-      const declaredText = readFileSync(elementPath, 'utf8').match(/ambient:\s*\[([^\]]*)\]/)?.[1];
-      const declared = (
+      // `[\s\S]*?` up to the closing bracket, because an entry may now be an OBJECT and the old
+      // `[^\]]*` stopped at the first one containing a bracket. `readEffectEntries` then normalises
+      // both forms to the canonical strings the runtime records.
+      const declaredText = readFileSync(elementPath, 'utf8').match(/effects:\s*\[([\s\S]*?)\]/)?.[1];
+      const all =
         declaredText !== undefined
-          ? declaredText.split(',').map((x) => x.trim().replace(/['"]/g, '')).filter(Boolean)
-          : islandContract({ kebab, element: elementPath }, { islandComponentPath, islandComponentExport, names }).ambient
-      ).slice().sort();
+          ? readEffectEntries(declaredText)
+          : islandContract({ kebab, element: elementPath }, { islandComponentPath, islandComponentExport, names }).effects.slice();
+      // The MODULE entries only — see the note above about the other kinds.
+      const declared = all.filter((e) => !isKinded(e)).sort();
       const missing = used.filter((u) => !declared.includes(u));
       const stale = declared.filter((d) => !used.includes(d));
       if (missing.length) {
-        report.warn('ambient', `reaches host capability not declared: ${missing.join(', ')} — add it to \`contract.ambient\``);
+        report.warn('effects', `reaches a host module it does not declare: ${missing.join(', ')} — add it to \`contract.effects\``);
       }
       if (stale.length) {
-        report.warn('ambient', `declares ambient it does not use: ${stale.join(', ')}`);
+        report.warn('effects', `declares a host module it does not import: ${stale.join(', ')}`);
       }
       if (!missing.length && !stale.length) {
-        report.ok('ambient', used.length ? `declares its host capabilities: ${used.join(', ')}` : 'reaches no host capability');
+        report.ok('effects', used.length ? `declares the host modules it reaches: ${used.join(', ')}` : 'reaches no host module');
       }
     }
   }
@@ -691,11 +702,6 @@ function keysIn(blocks) {
   return blocks.flatMap((b) => [...b.matchAll(/:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
 }
 
-/** Every quoted string in a block (used for the `provides: [...]` array). */
-function quotedIn(block) {
-  return block ? [...block.body.matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]) : [];
-}
-
 /** True if any archipelago file contains the given substring. */
 function archipelagoFilesInclude(needle) {
   const dir = paths.archipelagosDir;
@@ -708,8 +714,96 @@ function archipelagoFilesInclude(needle) {
   return false;
 }
 
+
+/** A data entry — the kinds the runtime can observe, as opposed to a module or a host-scope name. */
+const isDataReach = isDataKind;
+
+/**
+ * WHAT EACH OWNER SAYS IT REACHES, keyed the way `DataReach.by` keys what it observed.
+ *
+ * One concept, declared where the reaching happens. An island that hits a backend directly declares it
+ * in its own `contract.effects`, beside the host modules it stands down — a data entry is what an
+ * module entry USED to imply, before wire mocking pushed the stub below the import graph and the
+ * module check (direct imports only) stopped being able to see it. A declared SOURCE reads inside a
+ * channel, at region level and outside any island's window, so it declares its own `reaches` and the
+ * runtime attributes to it directly — charging a source's tables to whichever island was rendering
+ * would report a correct declaration as a violation.
+ */
+function declaredReach({ tag = null, regionId = null } = {}) {
+  const out = {};
+  // FROM THE ISLAND FILE, not from `contracts.generated.ts`.
+  //
+  // The generated contract's `effects` is DERIVED — read from the component's own imports — so it only
+  // ever holds module entries. A `{ table: … }` is a decision nobody can infer from an import, so it is
+  // hand-written in the island file and is invisible here otherwise: this read the generated map and
+  // would have reported every island's data reach as undeclared, forever, while the declaration sat in
+  // the file next to it. Caught by round-tripping one through `island sync`.
+  const byTag = new Map();
+  for (const i of listIslands(paths.islandsDir)) {
+    const text = readFileSync(i.element, 'utf8');
+    const tag = (text.match(/\btag:\s*'([^']+)'/) ?? text.match(/\bisland\(\s*'([^']+)'/))?.[1] ?? `${names(i.kebab).tag}`;
+    const declared = text.match(/effects:\s*\[([\s\S]*?)\]/)?.[1];
+    if (declared !== undefined) byTag.set(tag, readEffectEntries(declared));
+  }
+  const addIsland = (t) => {
+    const entries = (byTag.get(t) ?? []).filter(isDataReach);
+    if (entries.length) out[`island:${t}`] = [...entries].sort();
+  };
+  if (tag) addIsland(tag);
+  if (regionId) {
+    const region = readRegions(paths.archipelagosDir).find((r) => r.id === regionId);
+    for (const i of region?.islands ?? []) if (i.element) addIsland(i.element);
+    for (const [name, src] of Object.entries(declaredSources(regionId))) {
+      const entries = (src.reaches ?? []).filter(isDataReach);
+      if (entries.length) out[`source:${name}`] = [...entries].sort();
+    }
+  }
+  return out;
+}
+
+/**
+ * Observed reach against declared reach — the half `data-reach` could not do while it was a readout.
+ *
+ * WARNINGS, both ways, and deliberately not errors: every project that adopts this lights up on the
+ * day it lands, and the module half of `effects` — the declaration this extends — is warnings-only for exactly
+ * that reason. An entry observed under an owner that declared nothing at all is NOT reported: the
+ * declaration is opt-in per island and per source, and reporting its absence would make adopting the
+ * feature indistinguishable from failing it.
+ */
+export function reportReachDrift(report, observed, declared, label) {
+  const owners = Object.keys(declared);
+  if (!owners.length) return;
+  let clean = 0;
+  for (const owner of owners) {
+    const saw = [...new Set(observed?.[owner] ?? [])].sort();
+    const said = declared[owner];
+    // `{ table: 'shots' }` covers every operation on that table and `{ route: '/api/x' }` every method
+    // on that route — naming a dependency without pinning how it is used is a legitimate declaration.
+    const missing = saw.filter((e) => !said.some((d) => coversEffect(d, e)));
+    const stale = said.filter((d) => !saw.some((e) => coversEffect(d, e)));
+    if (missing.length) {
+      report.warn('data-reach', `${owner} reaches undeclared: ${missing.join(', ')} (${label}) — add it to ${owner.startsWith('source:') ? '`reaches`' : '`contract.effects`'}`);
+    }
+    if (stale.length) {
+      // NOT "declares what it does not use" — that is the module half's wording, and it can say it
+      // because it reads the component's imports STATICALLY. This half is observed at runtime, so an
+      // unreached declaration has two causes and only one of them is a stale claim: the review
+      // region's own accept route is declared, real, and simply not driven by any flow. Say what was
+      // actually seen and name both readings, or the honest answer to a true warning is to delete a
+      // correct declaration.
+      report.warn(
+        'data-reach',
+        `${owner} declares reach that nothing exercised: ${stale.join(', ')} (${label}) — either the ` +
+          `declaration is stale, or no flow drives that path`,
+      );
+    }
+    if (!missing.length && !stale.length) clean++;
+  }
+  if (clean) report.ok('data-reach', `${clean} owner(s) reach exactly what they declare (${label})`, clean);
+}
+
 /** Map the runtime result's diagnostics + remount signal onto report findings (shared by both engines). */
-function reportRuntimeDiagnostics(report, r, label) {
+function reportRuntimeDiagnostics(report, r, label, declared = null) {
   const diagnostics = r?.diagnostics ?? [];
   if (diagnostics.length === 0) {
     report.ok('no-console-errors', `no console errors / unhandled rejections (${label})`);
@@ -745,13 +839,18 @@ function reportRuntimeDiagnostics(report, r, label) {
 
   // WHAT DOES THIS ISLAND NEED FROM THE BACKEND? Observed, not declared — see `DataReach` in
   // `@motu/runtime/postgrest-fetch` for why this exists at all: mocking at the wire made an island's
-  // data dependency transitive, so `ambient` (direct imports only) stopped being able to see it. A
+  // data dependency transitive, so the module half of `effects` stopped being able to see it. A
   // table-and-RPC list is a better answer than the module name it replaces, and it is already the
   // vocabulary `.assay/operations.json` uses — which is where a motu↔assay drift check would compare.
   //
-  // REPORTED, NOT CHECKED, on purpose: there is nothing to compare against yet. Declaring a per-island
-  // table list before assay's comparison exists would invent a format that then has to survive contact
-  // with it. This makes the dependency legible now and leaves the declaration for when it has a peer.
+  // IT NOW HAS SOMETHING TO COMPARE AGAINST. This was a readout, on the argument that "declaring a
+  // per-island table list before assay's comparison exists would invent a format that then has to
+  // survive contact with it". What changed is the format question: the entries below are already
+  // assay's granularity (tables read/written, functions called), so the declaration is not an
+  // invention — and the readout alone left a real hole. An island that reached a table nobody expected
+  // failed `fixture-coverage`, and the fix was to add the table to the lagoon's `tables:` — so the
+  // FIXTURE SET was doing double duty as the declaration, and widening it was a one-line edit made by
+  // whoever was trying to get to green. `reportReachDrift` is the missing half; it stays a WARNING.
   if (r?.fixtureCoverage?.reach !== undefined) {
     const { tables, rpcs, functions = [], routes = [] } = r.fixtureCoverage.reach;
     const tableNames = Object.keys(tables).sort();
@@ -767,6 +866,7 @@ function reportRuntimeDiagnostics(report, r, label) {
       n: tableNames.length + rpcs.length + functions.length + routes.length,
       of: 'backend dependencies',
     });
+    if (declared) reportReachDrift(report, r.fixtureCoverage.reach.by, declared, label);
   }
 
   // DID ANYTHING LEAVE THE MACHINE? The counterpart to `fixture-coverage`: that one asks whether the
@@ -1052,7 +1152,7 @@ async function runtimeCheckBrowser(report, tag, fit, port) {
     if (r.ok) report.ok('lagoon-render', `renders in the real-browser lagoon (fit=${fit})`);
     else if (!r.mounted) report.error('lagoon-render', `island tag <${tag}> did not upgrade (fit=${fit})`);
     else report.warn('lagoon-render', `mounts but renders nothing from default props (fit=${fit}) — confirm this island's empty state is intentional (e.g. a pure projection)`);
-    reportRuntimeDiagnostics(report, r, `fit=${fit}`);
+    reportRuntimeDiagnostics(report, r, `fit=${fit}`, declaredReach({ tag }));
   } catch (err) {
     const msg = lagoonFailure(err);
     const env = environmentalCause(err);
@@ -1105,15 +1205,23 @@ function extractCoupling(elementPath) {
     return init && init.getKind() === SyntaxKind.StringLiteral ? init.getText().replace(/['"]/g, '') : undefined;
   };
   for (const obj of sf.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+    // MECHANISM AND BOUNDARY, READ APART. `mount` says how the element attaches to a legacy scope;
+    // the names it RESOLVES from that scope are boundary facts and live in `contract.effects` as
+    // `scope:…`, beside the modules and tables. One list for everything an island reaches.
     const contract = obj.getProperty('contract')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
-    const coupling = contract?.getProperty('coupling')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
-    if (!coupling) continue;
-    const hsProp = coupling.getProperty('hostScope');
+    const mount = obj.getProperty('mount')?.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+    // Through the shared reader, so an authored `{ scope: 'search' }` and the canonical `scope:search`
+    // this check wants are the same fact read once. Reading the array's TEXT rather than its AST nodes
+    // keeps one implementation for the island file, the source module and the generated contracts.
+    const effectsProp = contract?.getProperty('effects');
+    const effects = effectsProp ? readEffectEntries(effectsProp.getText()) : undefined;
+    const hostScope = effects?.filter((e) => e.startsWith('scope:')).map((e) => e.slice('scope:'.length));
+    if (!mount && !hostScope?.length) continue;
     return {
-      adopt: strAt(coupling, 'adopt'),
-      inheritScope: strAt(coupling, 'inheritScope'),
-      hostScopeKey: strAt(coupling, 'hostScopeKey'),
-      hostScope: hsProp ? objectArrayStrings(hsProp) : undefined,
+      adopt: mount && strAt(mount, 'adopt'),
+      inheritScope: mount && strAt(mount, 'inheritScope'),
+      hostScopeKey: mount && strAt(mount, 'hostScopeKey'),
+      hostScope: hostScope?.length ? hostScope : undefined,
     };
   }
   return {};
@@ -1520,7 +1628,7 @@ async function responsiveCheck(report, tag, kebab, port) {
  * A stub opts in by wrapping its exports in `traced`, and then this says what was called. Two things
  * become visible that nothing else here can see: an island that renders content while calling NOTHING
  * (its data came from somewhere it did not declare), and a module the island imports but never reaches
- * (the `ambient` declaration is stale, or the stub stands in for something unused).
+ * (the `effects` declaration is stale, or the stub stands in for something unused).
  */
 function provenanceCheck(report, id, region, calls) {
   if (!calls.length) {
@@ -2480,12 +2588,10 @@ function archipelagoConfigChecks(report, id) {
       .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
 
     // WHO OWNS WHAT (docs/plan-key-ownership.md). Three declarations, all static:
-    //   provides: [...]        the host feeds these
     //   writes:   { ev: key }  an island owns these, and the mapping is what makes them ejectable
     //   bind:     { prop: key} who reads
     // A `store.set` left inside an `on` handler still writes, but opaquely — it is counted as written
     // and reported, because nothing can draw it or generate wiring from it.
-    const declaredProvided = new Set(quotedIn(blockAfter(code, 'provides:', '[')));
     const declaredWritten = new Set(keysIn(blocksAfter(code, 'writes:', '{')));
     const opaqueWritten = new Set([...code.matchAll(/store\.set\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]));
     const written = new Set([...declaredWritten, ...opaqueWritten]);
@@ -2498,7 +2604,12 @@ function archipelagoConfigChecks(report, id) {
     const read = new Set([...boundKeysIn(code), ...declaredReads]);
     // Host-fed is DERIVED — bound here, written by no island — with the explicit list still honoured
     // for a key nothing binds.
-    const provided = new Set([...declaredProvided, ...[...read].filter((k) => !written.has(k))]);
+    // HOST-FED, DERIVED: read by an island, written by none. This used to union a declared
+    // `provides: [...]` on top, and that list is gone — it restated exactly this subtraction, had to be
+    // maintained by hand, and its only checks (`unowned`, `disputed`) were empty by construction:
+    // `unowned` subtracted a set that already covered every read key, and `disputed` needed a
+    // `provides` no region had written since the derivation existed.
+    const provided = new Set([...read].filter((k) => !written.has(k)));
     const shared = [...written].filter((k) => read.has(k));
 
     // Keys more than one island READS and no island writes: the host drives them, and two islands
@@ -2607,28 +2718,7 @@ function archipelagoConfigChecks(report, id) {
       );
     }
 
-    const unowned = [...read].filter((k) => !provided.has(k) && !written.has(k));
-    const disputed = [...declaredWritten].filter((k) => declaredProvided.has(k));
     const owned = [...read].filter((k) => provided.has(k) || written.has(k));
-
-    if (disputed.length) {
-      report.error(
-        'ownership',
-        `key(s) declared in \`provides\` AND written by an island: ${disputed.join(', ')} — two owners is ` +
-          `the ambiguity the declaration exists to remove. Drop it from \`provides\` if the island owns ` +
-          `it, or stop writing it if the host does`,
-      );
-    }
-    if (unowned.length) {
-      // A warning, not an error: ownership is adopted per key (D3), so an un-migrated region is not
-      // broken — it is un-migrated, and this is its backlog.
-      report.warn(
-        'ownership',
-        `key(s) read here with no declared owner: ${unowned.join(', ')} — add them to \`provides\` if the ` +
-          `host feeds them, or to an island's \`writes\` if one produces them. Until then nothing stops ` +
-          `the page wiring two islands together through its own state`,
-      );
-    }
     if (read.size) {
       report.ok(
         'ownership',
@@ -3102,15 +3192,38 @@ function declaredSources(id) {
   // identifier in — the same fact, read from the one place it is written.
   for (const [, name, ref] of block.matchAll(/(\w+):\s*(\w+),/g)) {
     const module = text.match(new RegExp(`import\\s*\\{[^}]*\\b${ref}\\b[^}]*\\}\\s*from\\s*'([^']+)'`))?.[1];
-    if (module) out[name] = { module, produces: [], byReference: true };
+    if (module) out[name] = { module, produces: [], byReference: true, reaches: reachesOfSourceModule(module, paths.archipelagoFile(id)) };
   }
   // A source declared by module NAME: no channel installs it, the page fetches it itself.
   for (const m of block.matchAll(/(\w+):\s*\{([\s\S]*?)\}/g)) {
     const module = m[2].match(/module:\s*'([^']+)'/)?.[1];
     const produces = [...(m[2].match(/produces:\s*\[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]);
-    if (module) out[m[1]] = { module, produces };
+    const reaches = readEffectEntries(m[2].match(/reaches:\s*\[([\s\S]*?)\]/)?.[1] ?? '');
+    if (module) out[m[1]] = { module, produces, reaches };
   }
   return out;
+}
+
+/**
+ * A by-reference source's `reaches`, read from the SOURCE MODULE.
+ *
+ * `shots: shotsSource` puts the declaration in the app's own file, beside `produces` — one place that
+ * says what this source hands over and what it touches. The archipelago cannot see either; the
+ * compiler checks `produces`, and this reads `reaches` the same way `declaredSources` reads a module
+ * specifier: from the one place it is written.
+ */
+function reachesOfSourceModule(module, fromFile) {
+  try {
+    // `resolveAppImport` takes the importing file (a relative specifier needs it) and returns the path
+    // WITHOUT an extension, so the candidates have to be tried here.
+    const base = resolveAppImport(fromFile, module);
+    const file = base && ['.ts', '.tsx', '/index.ts', ''].map((e) => `${base}${e}`).find((f) => existsSync(f));
+    if (!file) return [];
+    const text = stripComments(readFileSync(file, 'utf8'));
+    return readEffectEntries(text.match(/reaches:\s*\[([\s\S]*?)\]/)?.[1] ?? '');
+  } catch {
+    return [];
+  }
 }
 
 /** The file a channel identifier resolves to, or null. */
@@ -3242,7 +3355,7 @@ export async function runArchipelagoVerify(argv, id) {
         } else {
           report.error('lagoon-render', `archipelago <${id}> did not render — unknown id or boot failure`);
         }
-        reportRuntimeDiagnostics(report, r, 'region');
+        reportRuntimeDiagnostics(report, r, 'region', declaredReach({ regionId: id }));
       } catch (err) {
         const msg = String(err?.message || err).split('\n')[0];
         const env = environmentalCause(err);

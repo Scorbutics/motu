@@ -196,7 +196,7 @@ motu island create <name> [--from <specifier>] [--export <name>] [--force]
 | `--export` | The component's export name inside that module, when it is not the island's Pascal name | Pascal name (`:185`) |
 | `--force` | Overwrite an existing scaffolded component | off (`:189`) |
 
-**Reads** — with `--from`, the target component's own source, to derive `input`, `output` and `ambient`
+**Reads** — with `--from`, the target component's own source, to derive `input`, `output` and `effects`
 rather than asking for them again (`commands/create.mjs:218`, `lib/component-props.mjs`). Also
 `@motu/contract`, for the comment listing mockable methods (`:139-153`).
 

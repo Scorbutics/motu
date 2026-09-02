@@ -11,10 +11,10 @@ import { sourceFileAt } from './ts-project.mjs';
 import { lagoonAliases } from './util.mjs';
 
 /**
- * Host capabilities an island reaches for without being handed them — declared as `contract.ambient`.
+ * Everything an island reaches without being handed it — declared as `contract.effects`.
  *
  * CANDIDATES ONLY. These patterns are a heuristic for "looks like a host capability"; what makes one
- * ACTUALLY ambient is that the lagoon has to stand it in (`lagoonAliases()`), and the derivation
+ * ACTUALLY an effect is that the lagoon has to stand it in (`lagoonAliases()`), and the derivation
  * below intersects with that whenever a lagoon config exists. Keeping the patterns as the fallback
  * means a project with no lagoon still gets a sensible contract.
  */
@@ -80,7 +80,7 @@ function calledFromEffect(fn, prop) {
 export function readComponentContract(file, exportName) {
   if (!existsSync(file)) return null;
   // Reading a component means parsing it and resolving its props type, which is the expensive part of
-  // a static verify. A sweep asks for the same file several times (props-match, ambient, the generated
+  // a static verify. A sweep asks for the same file several times (props-match, effects, the generated
   // contract), so the answer is remembered for the life of the process.
   const cacheKey = `${file}::${exportName ?? ''}`;
   if (contractCache.has(cacheKey)) return contractCache.get(cacheKey);
@@ -112,12 +112,12 @@ function readComponentContractUncached(file, exportName) {
   }
 
   // A TYPE import is not a capability: it erases, the island never calls it, and declaring it as
-  // ambient would ask the lagoon to stand in for a module nothing reaches at runtime.
+  // declaring it would ask the lagoon to stand in for a module nothing reaches at runtime.
   //
-  // Intersected with what the lagoon actually stands down, so this agrees with the `ambient` check by
+  // Intersected with what the lagoon actually stands down, so this agrees with the `effects` check by
   // construction rather than by coincidence — see `lagoonAliases()` for the split this closed.
   const stoodDown = lagoonAliases();
-  const ambient = [...new Set(
+  const effects = [...new Set(
     readFileSync(file, 'utf8')
       .split('\n')
       .filter((l) => !/^\s*import\s+type\b/.test(l))
@@ -140,6 +140,6 @@ function readComponentContractUncached(file, exportName) {
     output: names
       .filter((n) => CALLBACK.test(n))
       .map((n) => ({ prop: n, event: eventNameFor(n), effectDriven: calledFromEffect(fn, n) })),
-    ambient,
+    effects,
   };
 }

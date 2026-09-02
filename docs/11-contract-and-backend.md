@@ -4,7 +4,9 @@ An island never fetches. It calls a contract, and a **transport** — chosen onc
 root, by code the island cannot see — decides how that call leaves the process. This page is the
 whole seam: the four transports that exist, where the choice is made and what it costs in security,
 the source/port/adapter distinction that decides how much a green lagoon actually claims, the
-generated artifacts (`@motu/contract`, `contracts.generated.ts`) and which command produces which, how fixtures are recorded and replayed, and what the `java/` subtree is for.
+generated artifacts (`@motu/contract`, `contracts.generated.ts`) and which command produces which,
+where a fake goes when you mock at the wire rather than swapping a module, how fixtures are recorded
+and replayed, and what the `java/` subtree is for.
 
 ---
 
@@ -315,14 +317,88 @@ whole surface, which would be noise (`stubs.mjs:9-12`, `59-94`, `102-113`). It r
 `host-stubs` check id (`packages/cli/src/commands/verify.mjs:2494-2512`). Type-only imports are
 exempt (`stubs.mjs:50-51`).
 
+`stubParity` keeps a module swap honest; §4 is the other answer to the same problem — do not swap the
+module at all, and fake one layer below it, where the app's own logic still runs.
+
 ---
 
-## 4. Two things are called "contract" — which is which
+## 4. Mocking at the WIRE — `@motu/runtime/postgrest-fetch`
+
+A lagoon stub replaces a whole service module by hand, which means the module's OWN logic — the
+orchestration, the derived visibility rules, the period maths, whatever the real function does beyond
+"read a table" — never runs in the lagoon at all. Nobody notices, because there is nothing to notice:
+the swap is silent by construction.
+
+`createPostgrestFetch` moves that boundary one layer down. It returns a fake `fetch`, PostgREST-shaped,
+for injecting where the application builds its database client
+(`packages/runtime/src/postgrest-fetch.ts:342`):
+
+```ts
+import { createPostgrestFetch, installFakeFetch } from '@motu/runtime/postgrest-fetch';
+
+const fetch = createPostgrestFetch({
+  baseUrl: 'https://project.supabase.co',
+  tables: { shots: { rows: () => shotRows() } },
+  fixtures: [{ service: 'accept_shots', method: 'rpc', status: 500, after: 2 }],
+  appRoutes: ['/api/admin'],
+});
+createClient(url, key, { global: { fetch } });   // or createBrowserClient — same option
+installFakeFetch(fetch, { appRoutes: ['/api/admin'], baseUrl });
+```
+
+Every repository and service function then runs FOR REAL — in the lagoon, in a runtime check, under
+Playwright — answered by synthetic DATA instead of synthetic LOGIC. `tables[].rows` may be a function
+so a scenario's seed can change what a read returns, and it is called fresh on every GET: a table
+computed once at import would answer every later scenario with the first one's seed
+(`postgrest-fetch.ts:25-36`).
+
+**It is deliberately not a PostgREST clone.** It supports the operators a real project's client code
+was found to use — `eq`, `is`, `gte`, `lt`, `in`, `not.is.null`, a two-clause `or=`, `order`,
+`limit`/`offset`, `select` as flat columns/`*`/one embed shape, `.single()`/`.maybeSingle()` via
+`Accept: vnd.pgrst.object+json`, `count=exact`, writes with `Prefer: return=…`, and `rpc`. Anything
+outside that set is an **UNSCOPED REQUEST**, recorded and reported, never a silent wrong answer
+(`postgrest-fetch.ts:16-22`, `:68-101`). The fixture author is meant to notice and extend the fake,
+not have it guess.
+
+`installFakeFetch` patches `globalThis.fetch` for what the database client never sees — a service
+calling `fetch('/api/…')` itself. It **delegates by default**, claiming only `baseUrl` and declared
+`appRoutes` and passing everything else to the original: intercepting every same-origin request would
+swallow the dev server's own modules, HMR and source maps, "and a lagoon that cannot load its own
+bundle would be a far worse failure than an unanswered route" (`postgrest-fetch.ts:509-546`). It is
+idempotent, so a hot reload does not build a chain of patches.
+
+`Fixture.after` exists for this seam: a fixture applies from the Nth call on. Matching was by ARGUMENTS
+only, so "the first read succeeds, a later one fails" had no fixture to write — a refetch usually
+repeats the same arguments and only the ORDER differs (`packages/runtime/src/mock.ts:30-41`).
+
+**Three checks watch the seam**, and they are [07 — Checks and
+verification](07-checks-and-verification.md)'s to define: `fixture-coverage` (every request matched a
+declared table or fixture), `network-sealed` (nothing left the machine — invisible before, because a
+missing stub failed, the island caught it, an empty state rendered and every check stayed green), and
+`data-reach` (the tables, RPCs, functions and routes an island actually touched).
+
+`data-reach` is the replacement for something wire mocking took away. When each service module was
+stood down BY NAME, an island's `effects` said `@/lib/services/challenges` and you could read its data
+dependency off the contract. Now the service runs for real and only the database client is stood down,
+several modules below the component, so the module half of `effects` — direct imports — can no longer see it.
+The dependency did not disappear; it stopped being legible. A table-and-RPC list is strictly better
+than what it replaces: it is what the island actually needs, at the granularity assay's
+`.assay/operations.json` already speaks (`postgrest-fetch.ts:111-151`).
+
+> **No project in this repository uses it yet.** It was built against a real adopting project's
+> PostgREST surface, and its own suite covers it (`packages/runtime/test/postgrest-fetch.test.mjs`,
+> 32 assertions; `mock-fixture-after.test.mjs`, 8). motu's own hosts talk to their backend through
+> other seams, so the in-tree consumer that would keep it honest does not exist — worth knowing when
+> reading the support matrix above as if it were exhaustive.
+
+---
+
+## 5. Two things are called "contract" — which is which
 
 | artifact | what it describes | produced by | committed? |
 |---|---|---|---|
 | `@motu/contract` (`<app>/contract/src/index.ts`) | the **backend's callable surface**, as typed TS functions over `call()` | `motu codegen` from `motu-manifest.json` (Jakarta hosts) — or, on a TS host, hand-written as `createContract<AppServices>()` with no generator at all | yes |
-| `contracts.generated.ts` (in `islands/`) | each **island's** boundary: `input`, `output`, `ambient`, read from the component it mounts | `motu island sync` → `syncContracts()` (`packages/cli/src/lib/contracts.mjs:177-184`) | yes |
+| `contracts.generated.ts` (in `islands/`) | each **island's** boundary: `input`, `output`, `effects`, read from the component it mounts | `motu island sync` → `syncContracts()` (`packages/cli/src/lib/contracts.mjs:177-184`) | yes |
 
 `motu check` gates *drift* of `contracts.generated.ts` against the components
 (`packages/cli/src/commands/check.mjs:26-31`, using `contractsDrift()` at
@@ -341,7 +417,7 @@ override for a callback the component does not have is deliberately kept out of 
 
 ---
 
-## 5. Codegen — `motu-manifest.json` → `@motu/contract`
+## 6. Codegen — `motu-manifest.json` → `@motu/contract`
 
 ```
 motu codegen [manifest] [outDir]
@@ -406,7 +482,7 @@ That is strictly better here: "there is no regeneration step to forget, and a si
 
 ---
 
-## 6. Fixtures — `motu fixtures record`
+## 7. Fixtures — `motu fixtures record`
 
 ```
 motu fixtures record <island> [--transport http|mock] [--out <path>]
@@ -485,7 +561,7 @@ stub for verifying the ISLAND's wiring", not backend fidelity (`packages/runtime
 
 ---
 
-## 7. The JVM side — `java/`
+## 8. The JVM side — `java/`
 
 **What it is.** Two Maven modules under `java/`, aggregated by `java/pom.xml`, groupId `dev.motu`,
 version `0.1.0-SNAPSHOT`:
@@ -565,7 +641,7 @@ open whether the framework jar should couple to the demo app's Vite output
 
 ---
 
-## 8. The rule: never widen the backend surface
+## 9. The rule: never widen the backend surface
 
 > Never widen backend surface beyond the specific `@BrowserCallable` method you need.
 
@@ -600,7 +676,7 @@ is a FIXTURE — the source ships, the stand-in must not"
 
 ---
 
-## 9. Worked end-to-end
+## 10. Worked end-to-end
 
 An island needs server data. Six steps, in order.
 
@@ -639,7 +715,7 @@ export const contract = createContract<AppServices>();
 
 *Jakarta host*: annotate the one method — `@BrowserCallable` on the method, not the class
 (`BrowserCallable.java:20-25`) — build the backend so `dev.motu:apt` emits
-`motu-manifest.json`, then `motu codegen` (§5).
+`motu-manifest.json`, then `motu codegen` (§6).
 
 **2 — Call it from the component.** `contract.directory.getSectors()`. Never a repository, never a
 client, never `fetch` — "reaching around it (importing a repository into a component) would make the

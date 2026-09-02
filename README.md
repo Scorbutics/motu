@@ -231,7 +231,7 @@ The full reference set lives in [`docs/`](docs/README.md). Read in order if you 
 | [08 — The lagoon](docs/08-lagoon.md) | dev, states as addresses, publish, serve, hosting, visual baselines. |
 | [09 — Coverage](docs/09-coverage.md) | the production fold: fingerprints, corpus, `archipelago coverage`. |
 | [10 — Evidence and testing](docs/10-evidence-and-testing.md) | scenarios, flows, evidence files, what each check reads. |
-| [11 — Contract and backend](docs/11-contract-and-backend.md) | the contract seam, transports, fixtures, codegen. |
+| [11 — Contract and backend](docs/11-contract-and-backend.md) | the contract seam, transports, wire-level mocking, fixtures, codegen. |
 | [12 — Hosts and adapters](docs/12-hosts-and-adapters.md) | Next, AngularJS, none; `removal-check`. |
 | [13 — Agents and skills](docs/13-agents-and-skills.md) | the shipped skills and the multi-agent workflow. |
 | [14 — Migrating an ocean](docs/14-ocean-migration.md) | coexistence, `legacy-toggle`, inbound channels, how the ocean recedes. |

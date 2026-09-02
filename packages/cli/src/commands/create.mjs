@@ -63,10 +63,10 @@ function elementSource(pascal, camel, tag, kebab, from, exportName, contract) {
   // first day. What is left for a human is the part that is a decision: the event NAMES (renamed here
   // to the region's vocabulary if it has a better word) and, in the archipelago, what they bind to.
   const lines = [];
-  if (contract?.ambient?.length) {
+  if (contract?.effects?.length) {
     lines.push('      // AMBIENT — host capabilities this island reaches for without being handed them.');
-    lines.push('      ambient: [');
-    for (const a of contract.ambient) lines.push(`        '${a}',`);
+    lines.push('      effects: [');
+    for (const a of contract.effects) lines.push(`        '${a}',`);
     lines.push('      ],');
   }
   if (contract?.input?.length) {
@@ -94,7 +94,7 @@ export const element = islandElement({
   tag: '${tag}',
   component: ${pascal},
   options: {
-    // The island's boundary in one place — input (props), output (events), ambient (host reach).
+    // The island's boundary in one place — input (props), output (events), effects (what it reaches).
     contract: {
 ${lines.join('\n')}
     },${legacy}
@@ -233,7 +233,7 @@ export async function createCommand(argv) {
       '  ' +
         color.dim(
           `read from the component: ${contract.input.length} input(s), ${contract.output.length} output(s)` +
-            `${contract.ambient.length ? `, ${contract.ambient.length} ambient` : ''}`,
+            `${contract.effects.length ? `, ${contract.effects.length} effect(s)` : ''}`,
         ),
     );
   }

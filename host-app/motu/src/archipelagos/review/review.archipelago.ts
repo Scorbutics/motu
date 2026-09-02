@@ -90,7 +90,7 @@ export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, Produce
     // effects in the page — the lagoon installs the same object over fixtures.
     shots: shotsSource,
   },
-},
+} as const,
 // THE CROSS-CHECKS THE REGION ASSERTS. Every key is owned, every wired event exists on the island
 // that is wired to it, and the produced set is the one the app's own type names. Each property is
 // the check's result type, so `true` is the only value that compiles and a drift is an error on

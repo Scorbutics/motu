@@ -124,4 +124,11 @@ export function createShotsSource(port: ShotsPort) {
 export const shotsSource: Source<ReviewRegion, ShotsKeys, [ShotsPort]> = {
   create: createShotsSource,
   produces: ["shots", "busy", "error"],
+  // WHAT IT TOUCHES, beside what it hands over — the same list `contract.ambient` carries for an island
+  // that reaches a backend directly, declared here because a source reads inside a channel, outside
+  // any island's window. `data-reach` observes these as the region runs and warns both ways: a route
+  // reached and not declared is a dependency that grew quietly, one declared and never reached is a
+  // stale claim. Written here rather than in the archipelago so it sits beside `produces` — one place
+  // saying what this source gives and what it needs.
+  reaches: [{ route: "/api/baselines", method: "GET" }, { route: "/api/baseline/accept", method: "POST" }],
 }

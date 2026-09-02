@@ -85,7 +85,7 @@ export const indexArchipelago = archipelago<
       bind: [{ repos: 'repos', cap: 'cap' }, 'query'],
     },
   ],
-},
+} as const,
 /**
  * Every key an island reads has exactly one owner, every wired event exists on the island wired to
  * it, and the region's produced keys are the set the app's own type names — here, none.

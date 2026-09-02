@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { defineIsland } from '@motu/core';
 import { runWithIsland } from '@motu/runtime';
-import type { MotuTheme, MotuFit, LegacyStrategy, IslandElementOptions, IslandIsolation, IslandCoupling } from '@motu/core';
+import type { MotuTheme, MotuFit, LegacyStrategy, IslandElementOptions, IslandIsolation, IslandMount } from '@motu/core';
+import type { EffectEntry } from '@motu/types';
 
 // Stripped in production (see the debug overlay). Only in debug builds does rendering run inside an
 // island attribution window, so contract calls made in effects are tied to this island.
@@ -16,7 +17,7 @@ type PropEntry<P> = (keyof P & string) | { name: keyof P & string; default?: unk
 
 export interface DefineOptions<P> {
   /**
-   * The island contract (input / output / coupling) in one place — the same grouped form the AngularJS
+   * The island contract (input / output / effects) in one place — the same grouped form the AngularJS
    * adapter uses, so an island's whole boundary is declared here rather than as loose props/events.
    * When set, `contract.input` supplies props and `contract.output` supplies events.
    */
@@ -31,19 +32,24 @@ export interface DefineOptions<P> {
      * never fired"); here it is a build error.
      */
     output?: Readonly<Partial<Record<keyof P & string, string>>>;
-    /** COUPLING — dependencies beyond the store (usually absent for a React island). */
-    coupling?: IslandCoupling;
     /**
-     * AMBIENT — host capabilities this island reaches for without being handed them: a React context,
-     * a session hook, a feature gate, a service module it imports directly.
+     * EFFECTS — everything this island reaches that it was not handed: a service module it imports, a
+     * React context, a session hook, an AngularJS scope name, a database table.
      *
-     * The third leg of the boundary. Input and output were always declared; this was not, and it is
-     * the coupling most likely to make an island unmountable somewhere else — it hid in the lagoon's
-     * `alias` table, where standing a module down looks like build configuration rather than a
-     * dependency. Verify derives the true list from that table and reconciles it with this one.
+     * The third leg of the boundary, and the one that used to be two. `ambient` lived here (typed only
+     * for React islands) while `coupling` lived in `@motu/core` (typed for everyone and holding
+     * AngularJS mount mechanisms) — one idea under two names, in two files, neither complete. See
+     * `IslandContract.effects`; the kind prefixes are documented there.
+     *
+     * It is the reach most likely to make an island unmountable somewhere else, and it hides: standing
+     * a module down in the lagoon's `alias` table looks like build configuration rather than a
+     * dependency. Verify derives the true list — from that table for modules, from what the region
+     * actually reached for data — and reconciles it with this one.
      */
-    ambient?: readonly string[];
+    effects?: readonly EffectEntry[];
   };
+  /** How it attaches to a legacy scope (AngularJS). Mechanism, not boundary — see `IslandMount`. */
+  mount?: IslandMount;
   /**
    * Props set imperatively from JS (structured data goes here, never attributes). Either a bare name
    * or a `{ name, default?, required? }` spec so the wrapper fills defaults / flags a missing required

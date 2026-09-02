@@ -12,7 +12,8 @@
     }
   },
   "dependencies": {
-    "@motu/chrome": "workspace:*"
+    "@motu/chrome": "workspace:*",
+    "@motu/types": "workspace:*"
   },
   "files": [
     "dist"

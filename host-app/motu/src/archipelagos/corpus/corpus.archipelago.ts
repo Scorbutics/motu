@@ -46,7 +46,7 @@ export const corpusArchipelago = archipelago<
       bind: ['states', 'filter', 'regionId'],
     },
   ],
-},
+} as const,
 /**
  * The compile-time guards this region asserts, in the declaration itself.
  *

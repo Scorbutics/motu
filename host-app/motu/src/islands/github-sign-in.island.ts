@@ -31,7 +31,7 @@ export const element = islandElement({
       // NOTHING AMBIENT, and that is a claim worth making explicitly rather than by omission. The
       // control reaches for no host module at all: signing in lives in `app/signin/signin-source.ts`,
       // over a port. If `@supabase/...` ever appears in this array, the source has been bypassed.
-      ambient: [],
+      effects: [],
     },
   },
 });

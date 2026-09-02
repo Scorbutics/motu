@@ -1,4 +1,5 @@
 import { MotuError } from './index';
+import { reachOwner } from '@motu/core';
 import { MockTransport, type Fixture } from './mock';
 
 /**
@@ -115,6 +116,17 @@ export interface DataReach {
   functions: string[];
   /** Same-origin application routes called, as `GET /api/…`. */
   routes: string[];
+  /**
+   * The same reach, split by WHO asked, in the vocabulary a declaration uses.
+   *
+   * Keys are `island:<tag>`, `source:<id>`, or `unattributed`; values are entries like
+   * `table:shots(select)`, `rpc:accept_shots`, `fn:notify`, `route:GET /api/x`. The aggregate above
+   * answers "what did this screen touch"; this answers "who has to have declared it", which is the
+   * only form a check can compare — an island's reach is its own `contract.ambient`, a source's is
+   * `reaches` on its `sources` entry, and charging one to the other would report a correct
+   * declaration as a violation.
+   */
+  by: Record<string, string[]>;
 }
 
 /**
@@ -135,9 +147,42 @@ export interface DataReach {
  * dependency, whether or not this lagoon happened to have data for it.
  */
 const reachKey = '__motuDataReach';
+
+/**
+ * Who is reaching, right now.
+ *
+ * `reachOwner()` lives in @motu/core beside the island window `traced` already uses, so a host-module
+ * call and a backend reach agree about who asked. Imported lazily-safe: this module is also loaded in
+ * plain node by the fixture tests, where no window is ever open and the answer is `unattributed`.
+ */
+function ownerNow(): string {
+  try {
+    return reachOwner() ?? 'unattributed';
+  } catch {
+    return 'unattributed';
+  }
+}
+
+/** One reach, as a DECLARATION spells it — the string an `ambient` or `reaches` entry is compared to. */
+function reachEntry(kind: 'table' | 'rpc' | 'function' | 'route', name: string, method?: string): string {
+  if (kind === 'table') return method ? `table:${name}(${method})` : `table:${name}`;
+  if (kind === 'rpc') return `rpc:${name}`;
+  if (kind === 'function') return `fn:${name}`;
+  return `route:${method} ${name}`;
+}
+
 function recordReach(kind: 'table' | 'rpc' | 'function' | 'route', name: string, method?: string): void {
   const g = globalThis as unknown as Record<string, DataReach | undefined>;
-  const reach = (g[reachKey] ??= { tables: {}, rpcs: [], functions: [], routes: [] });
+  const reach = (g[reachKey] ??= { tables: {}, rpcs: [], functions: [], routes: [], by: {} });
+  // BACK-FILLED, because a reach recorded before this field existed (a page held open across a
+  // reload, an older bundle) would otherwise crash the split on `undefined`.
+  reach.by ??= {};
+  // AT REQUEST TIME, like `traced` reads its island: a fetch starts inside the owner's window and
+  // resolves long after it has closed, so asking afterwards attributes everything to nobody.
+  const owner = ownerNow();
+  const declaredForm = reachEntry(kind, name, method);
+  const mine = (reach.by[owner] ??= []);
+  if (!mine.includes(declaredForm)) mine.push(declaredForm);
   if (kind === 'rpc' || kind === 'function' || kind === 'route') {
     const list = kind === 'rpc' ? reach.rpcs : kind === 'function' ? reach.functions : reach.routes;
     const entry = kind === 'route' ? `${method} ${name}` : name;
@@ -150,8 +195,8 @@ function recordReach(kind: 'table' | 'rpc' | 'function' | 'route', name: string,
 
 export function readDataReach(clear = true): DataReach {
   const g = globalThis as unknown as Record<string, DataReach | undefined>;
-  const found = g[reachKey] ?? { tables: {}, rpcs: [], functions: [], routes: [] };
-  if (clear) g[reachKey] = { tables: {}, rpcs: [], functions: [], routes: [] };
+  const found = g[reachKey] ?? { tables: {}, rpcs: [], functions: [], routes: [], by: {} };
+  if (clear) g[reachKey] = { tables: {}, rpcs: [], functions: [], routes: [], by: {} };
   return found;
 }
 
@@ -305,7 +350,16 @@ function originBase(): string {
   return typeof location !== 'undefined' && location.href ? location.href : 'http://lagoon.local';
 }
 
-async function normalize(input: RequestInfo | URL, init?: RequestInit): Promise<ParsedRequest> {
+/**
+ * SYNCHRONOUS, and that is load-bearing rather than tidiness.
+ *
+ * A reach is attributed to whoever's window is open when the request is MADE (see `ownerNow`). This
+ * function does no awaiting — it never did — but being `async` meant the caller's `await` yielded a
+ * microtask before any `recordReach` ran, by which time `runWithIsland`/`runWithSource` had already
+ * restored the previous owner and every reach recorded as `unattributed`. Keep the whole path from
+ * the fake's entry to `recordReach` synchronous.
+ */
+function normalize(input: RequestInfo | URL, init?: RequestInit): ParsedRequest {
   // Resolved against the origin BEFORE constructing the Request, because an app route is called with
   // a relative path (`fetch('/api/…')`) and that is exactly the case this fake was extended for.
   const absolute = input instanceof Request ? input : new URL(String(input), originBase()).href;
@@ -344,7 +398,7 @@ export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeo
   const transport = new MockTransport(options.fixtures ?? []);
 
   return async function motuFakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const req = await normalize(input, init);
+    const req = normalize(input, init);
     recordSeen();
 
     // BEFORE the baseUrl guard, deliberately: an application route is SAME-ORIGIN, so it never

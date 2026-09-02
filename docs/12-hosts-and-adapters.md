@@ -131,7 +131,7 @@ collects intents instead of performing them, so nothing silently no-ops (`host-b
 The RSC boundary is Next's analogue of AngularJS's host-scope coupling: both police the one way an
 island can silently bind itself to its host (`packages/adapters/next/verify.mjs:1-15`). The core
 `motu island verify` runs the framework-neutral checks and hands this adapter the component's source
-text plus the structured `coupling` it extracted by AST — the CLI owns parsing, the adapter owns
+text plus the structured `mount` + `{ scope }` effects it extracted by AST — the CLI owns parsing, the adapter owns
 semantics (`verify.mjs:12-15`).
 
 - **Errors** on server-only imports — `server-only`, `next/headers`, `next/server`, `next/cache`,

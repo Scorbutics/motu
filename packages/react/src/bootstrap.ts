@@ -3,7 +3,7 @@
 // native placement markers. Keeps composition roots to transport + mode overrides + this one call.
 
 import type { ComponentType } from 'react';
-import type { MotuTheme, MotuFit } from '@motu/core';
+import type { MotuTheme, MotuFit, IslandContract } from '@motu/core';
 import {
   defineArchipelago,
   defineArchipelagoElement,
@@ -53,16 +53,42 @@ export interface ReactElementSpec<P extends object = any> {
  * can check its `writes` and `on` keys against the events this island actually declares (see
  * `RegionWiringOk`). Without it the tag and every event name widen and the wiring is unverifiable.
  */
-export function islandElement<const S extends IslandElementShape>(spec: S & ContractOf<S>): S {
+export function islandElement<const S extends IslandElementShape>(spec: S & ContractOf<S> & NoStrayContractKeys<S>): S {
   return spec;
 }
+
+/**
+ * A contract key that is not part of the contract, turned into an error ON THAT KEY.
+ *
+ * Nothing caught these before. `const S` is inferred from the literal before it is checked, so
+ * excess-property checking — which only applies to a fresh literal assigned straight to a target —
+ * never runs; and `S & ContractOf<S>` is an intersection, which widens rather than rejects. So
+ * `ambiantTypo: ['@/lib/x']` compiled, and the check that reads the contract then reported the island
+ * as declaring nothing. Silently, which is the failure mode this codebase already has a rule about.
+ *
+ * Intersecting the stray keys with a message OBJECT is what puts the error on the offending line and
+ * says what is wrong there. A tuple put the error in the right place but reported `Type 'string' is
+ * not assignable to type 'never'`, which names neither the key nor the rule; an object type is printed
+ * whole, so the compiler's own message carries the sentence.
+ */
+type NoStrayContractKeys<S> = S extends { options: { contract: infer C } }
+  ? {
+      options: {
+        contract: {
+          [K in Exclude<keyof C, keyof IslandContract>]: {
+            'motu: unknown contract key. The contract is input / output / effects': K;
+          };
+        };
+      };
+    }
+  : unknown;
 
 /** The loose shape S is inferred against — literals intact, nothing checked yet. */
 interface IslandElementShape {
   standalone?: boolean;
   tag: string;
   component: ComponentType<any>;
-  options: { contract?: { input?: readonly unknown[]; output?: Readonly<Record<string, string>> } } & Record<string, unknown>;
+  options: { contract?: Record<string, unknown> } & Record<string, unknown>;
 }
 
 /**

@@ -14,7 +14,7 @@ export const element = islandElement({
       // WHAT IT DECIDES. The region reads it as `query` — see the archipelago's `writes`.
       output: { onQueryChange: 'query-changed' },
       // Nothing ambient: it reaches for no host module. It never sees a list.
-      ambient: [],
+      effects: [],
     },
   },
 });

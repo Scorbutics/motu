@@ -36,7 +36,7 @@ One page, one region, its islands, its store, and the lagoon that previews it:
         ▼                           ▼                             ▼
   ISLAND (a component)  ◄─────►  STORE (region keys)          HOST BRIDGE
    declared by islandElement       one producer per key        navigate / action
-   contract: input/output/ambient  ▲            ▲
+   contract: input/output/effects  ▲            ▲
                                    │            │
                             seed()/provide()   CHANNEL (host signal in)
                                                 SOURCE (app module that produces keys)
@@ -59,7 +59,7 @@ These are prose only. They never appear in an import or a type name — those st
 
 | Term | Is | Is not |
 |---|---|---|
-| **Island** | A component embedded in a host page, behind a declared boundary: input props, output events, ambient host reach (`README.md`). | A micro-frontend. Islands are a compile-time composition mechanism: one build, one contract, one version (`README.md`). |
+| **Island** | A component embedded in a host page, behind a declared boundary: input props, output events, declared effects (`README.md`). | A micro-frontend. Islands are a compile-time composition mechanism: one build, one contract, one version (`README.md`). |
 | **Ocean** | The legacy application the islands sit in (`README.md`). The reference one is a Jakarta EE + AngularJS app. | Required. A greenfield or Next host has no ocean; `--host none` and `--host next` are ocean-free. |
 | **Archipelago** | The islands of ONE PAGE, referenced by slot, sharing a `Store` instead of talking to each other (`README.md`). A declared grouping. | A DOM container. Scoping one to a subtree puts a boundary through the middle of any coupling that crosses it (`.github/host-rules.md`, "the scope of a region is the PAGE, never a DOM subtree"). |
 | **Region** | The same thing as an archipelago, named from the state side: the *keys* one archipelago owns, and the app-side TYPE those keys are declared against (`packages/core/src/archipelago.ts:201`, the `TRegion` parameter). | A second construct. `motu archipelago init` and `motu archipelago create` scaffold the same object at different scopes — see [Archipelagos and regions](05-archipelagos-and-regions.md). |
@@ -82,7 +82,7 @@ against literal event names (`packages/react/src/bootstrap.ts:56`).
 export const element = islandElement({
   tag: 'x-github-sign-in',
   component: GithubSignIn,
-  options: { contract: { input: ['error', 'authError', 'isSubmitting'], output: { onSignIn: 'sign-in-requested' }, ambient: [] } },
+  options: { contract: { input: ['error', 'authError', 'isSubmitting'], output: { onSignIn: 'sign-in-requested' }, effects: [] } },
 });
 ```
 — `host-app/motu/src/islands/github-sign-in.island.ts`
@@ -128,11 +128,30 @@ The whole boundary, declared in one place — `options.contract` on the island f
 |---|---|---|
 | INPUT | `contract.input` | Props fed from the store or host. Bare names, or `{ name, default, required }` so the island renders from defaults alone (`packages/core/src/island.ts:47`, `:86`). |
 | OUTPUT | `contract.output` | Callback prop → CustomEvent name, e.g. `{ onReset: 'reset' }`. The prop is `keyof P`, so a declared output that does not exist on the component is a build error, not a silent no-op (`packages/react/src/defineReactElement.ts:26-32`). |
-| AMBIENT | `contract.ambient` | Host capabilities the island reaches for without being handed them: a React context, a session hook, a service module it imports (`packages/react/src/defineReactElement.ts:35-45`). The coupling most likely to make an island unmountable elsewhere. |
-| COUPLING | `contract.coupling` | Dependencies beyond the store, and for AngularJS the *mechanism* — `hostScope`, `adopt`, `inheritScope` (`packages/core/src/island.ts:61`). Empty for a well-behaved island. |
+| EFFECTS | `contract.effects` | Everything it reaches that is not a prop, one list. A bare string is a host **module** it imports — the common case; every other kind is an object naming it: `{ scope }`, `{ table, operation? }`, `{ rpc }`, `{ fn }`, `{ route, method? }`. The reach most likely to make an island unmountable elsewhere. |
 
-Precision: `ambient` is declared on the React side (`DefineOptions`) but is absent from
-`@motu/core`'s `IslandContract` (`packages/core/src/island.ts:86`). Author it in the island file.
+```ts
+effects: [
+  '@/lib/supabase/client',                    // a module — the common case, unwrapped
+  { scope: 'search' },                        // an AngularJS host-scope name
+  { table: 'shots', operation: 'select' },    // omit `operation` to cover every operation
+  { route: '/api/baselines', method: 'GET' }, // omit `method` to cover every method
+]
+```
+
+Objects rather than prefixed strings (`'scope:search'`) for the reason the contract's own keys are
+checked: `'scpoe:search'` is a valid string that silently becomes an entry nothing recognises, while
+`{ scpoe: … }` is a build error listing the kinds. A declaration whose kinds only a regex enforces
+would have reintroduced, one level down, the bug this whole boundary exists to prevent.
+
+`mount` sits beside `contract`, not inside it: `hostScopeKey`, `adopt`, `inheritScope` say **how the
+element attaches** to a legacy scope, which is the socket rather than the box.
+
+This used to be four axes, and two of them were one idea. `ambient` (modules) was typed only on the
+React side; `coupling` (typed in `@motu/core`) held the AngularJS mount mechanisms plus `hostScope` —
+so the box labelled COUPLING did not contain the coupling, and the declaration that did was checked by
+nothing: a misspelled key compiled and silently became `[]`. Now there is one list, one type, and a
+stray key is a build error naming itself.
 
 **Isolation** is a separate, orthogonal axis: `'shadow'` cuts the island off from the host cascade
 both ways, `'light'` renders into the element itself and inherits it
@@ -165,8 +184,9 @@ the region's vocabulary, and every key has exactly one of two origins:
 | **Island-produced** | `writes: { <event>: <key> }` on the archipelago entry (`packages/core/src/archipelago.ts:158`) | `ProducedKeys` (`:353`) |
 | **Host-fed** | nothing — it is what is left | `HostFedKeys = BoundKeys − ProducedKeys` (`:380`) |
 
-There is no third case, which is why `provides` (`:214`) is documented as declarable only for the one
-thing derivation cannot see: a host-fed key no island binds.
+There is no third case. A `provides: [...]` list used to sit beside this for host-fed keys and is
+gone: it restated the subtraction the compiler already does, had to be maintained by hand, and the two
+checks that read it were empty by construction.
 
 Ownership is a **compile** failure, not a report: the required `ownership` property of the
 declaration's second argument, typed `RegionOwnershipOk<A>`
@@ -275,7 +295,7 @@ A name that resolves to nothing REFUSES to render rather than falling back to a 
 1. A **page** in the host app is the scope of one **region**, declared as one **archipelago** file.
 2. The archipelago names the app's own **root** component and maps its props to **slots**.
 3. Each slot entry names an **element** by **tag**; the element pairs a **component** with its
-   **contract** (input / output / ambient).
+   **contract** (input / output / effects).
 4. Islands read region **keys** through `bind` and update the ones they own through `writes`.
    Everything else is host-fed, by **channel** or **source**, or established with **seed**/**provide**.
 5. Outputs with no store effect leave as **intents**, answered by a source or by the **host bridge**.

@@ -383,7 +383,7 @@ async function readUnscopedRequests(page) {
       }
       const unscoped = window.__motuUnscopedRequests || [];
       const seen = window.__motuFakeFetchRequestCount || 0;
-      const reach = window.__motuDataReach || { tables: {}, rpcs: [] };
+      const reach = window.__motuDataReach || { tables: {}, rpcs: [], by: {} };
       return { unscoped, seen, reach };
     })
     .catch(() => undefined);

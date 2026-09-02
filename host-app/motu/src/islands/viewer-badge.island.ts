@@ -15,7 +15,7 @@ export const element = islandElement({
       // NOTHING OUT. Signing out is a form POST, because the consequence is a navigation and a
       // region has no key for one — the same call `github-sign-in` records from the other direction.
       output: {},
-      ambient: [],
+      effects: [],
     },
   },
 });

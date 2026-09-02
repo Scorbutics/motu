@@ -14,7 +14,7 @@ export const element = islandElement({
       input: ['states', 'filter', 'regionId'],
       // It shows; it does not act. Accepting a state takes the admin token and is not this control's.
       output: {},
-      ambient: [],
+      effects: [],
     },
   },
 });

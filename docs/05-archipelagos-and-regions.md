@@ -321,12 +321,12 @@ installer, which only exists if the generated registry imported `@motu/coverage`
 (`packages/core/src/archipelago.ts:1149-1155`; `packages/core/src/sandbox.ts`). The fold itself is
 [09 — Coverage](09-coverage.md).
 
-## `sources` and channels — the inbound seam
+## `sources` and channels — declaring the inbound seam
 
 `writes` names who UPDATES a key. The other direction had no name: a key bound by an island and
 written by no island was "host-fed" — derived, anonymous, unenforceable — so nothing could say that
 the page and the lagoon must feed it from the SAME logic
-(`packages/core/src/archipelago.ts:302-323`). `sources` closes that. Each entry points at an
+(`packages/core/src/archipelago.ts:302-341`). `sources` closes that. Each entry points at an
 APPLICATION module and lists the keys it produces, either as the source object itself (a value import,
 so the module a channel installs and the module the region declares are the same object by
 construction) or as a `{ module, produces }` pair for a key no channel installs:
@@ -340,19 +340,51 @@ sources: {
 
 A **channel** is what installs one. `ArchipelagoOptions.channels` (and `createRegion`'s `channels`)
 takes `Channel[]` — `(ctx: { store }) => (() => void) | void`, the inbound counterpart to the
-`HostBridge` (`packages/core/src/channel.ts:15-20`, `packages/core/src/archipelago.ts:566-573`).
-`installChannels` wires them at `defineArchipelago` (`packages/core/src/archipelago.ts:1146-1148`).
+`HostBridge` (`packages/core/src/channel.ts:15-20`, `packages/core/src/archipelago.ts:627-633`).
+`installChannels` wires them at `defineArchipelago` (`packages/core/src/archipelago.ts:1208`).
 Channels are not hand-written: `channelFrom({ to, id, args })` builds one from a declared source, and
 the type system checks the archipelago declares that source id, that the module exports the creator,
-and that the arguments match its signature (`packages/core/src/archipelago.ts:876-950`). A source
-declared by module name only throws — there is nothing to install (`:914-919`). `rawChannel(reason,
+and that the arguments match its signature (`packages/core/src/archipelago.ts:956-1010`). A source
+declared by module name only throws — there is nothing to install (`:975-979`). `rawChannel(reason,
 channel)` is the escape hatch and it costs a sentence: an empty reason throws
-(`packages/core/src/archipelago.ts:852-855`). Transports, contracts and fixtures are
-[11 — Contract and backend](11-contract-and-backend.md).
+(`packages/core/src/archipelago.ts:913-916`).
 
 The channel's publish loop is where ownership meets the inbound seam: a key an island owns is SEEDED,
 not written, because writing it from the host is the violation the store guard reports
-(`packages/core/src/archipelago.ts:920-936`).
+(`packages/core/src/archipelago.ts:988-993`).
+
+### This is not the only inbound seam, and it answers a different question
+
+A channel is about OWNERSHIP: which module feeds a host-fed key, so the page and the lagoon cannot
+answer the same coupling differently. It is a declaration.
+
+Where the fake DATA enters is a separate axis, one layer below, and motu now mocks at the WIRE:
+`@motu/runtime/postgrest-fetch` is a fake `fetch` injected into the app's database client, so the
+app's own services and repositories execute for real against synthetic rows
+([11 — Contract and backend](11-contract-and-backend.md)). The two compose — a region can declare a
+source AND have that source's reads answered at the wire — and neither replaces the other. What wire
+mocking did change is the ARGUMENT for extracting a source: a port used to exist partly so the lagoon
+could substitute data, and the fake fetch now does that beneath the real service. What is left is
+orchestration across calls — a generation guard, a debounce, reset-on-new-search — which is an
+application decision, not a motu rule.
+
+### `sourced` is opt-in, and cannot always be turned on
+
+`RegionSourcesOk` — the `sourced` property of the checks argument — asserts that every host-fed key
+has a declared source. Being optional is not only about regions that declare no `sources`: a region
+that declares one may still be unable to assert it, because some keys have no module to name.
+
+Two shapes, from motu's own host app. `repos` in the review region is fetched by the page itself
+(`listRepos(cfg)` in an effect), so `sourced` reports it as host-fed and claimed by nobody; that one
+is answerable, by extracting the source the check is asking for. `authError` and `returnTo` in the
+signin region arrive on the QUERY STRING and the page hands them down — there is no producing module
+at all, and the name-only form does not help, because `integrate check` holds it to a module a host
+file actually imports (`source`), and declaring a source for a key the page `provide()`s is itself an
+error (`source-owned`).
+
+So: turn `sourced` on for a region whose host-fed keys all come from modules. A region fed by its
+route cannot currently satisfy it, and that is a limit of the mechanism rather than a fact about the
+region.
 
 ## The type-level guards
 
@@ -362,7 +394,7 @@ declaration's SECOND ARGUMENT (`packages/core/src/archipelago.ts:568-577`):
 
 ```ts
 export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, ProducedReviewKeys>()(
-  { id: 'review', /* … */ },
+  { id: 'review', /* … */ } as const,
   { ownership: true, wiring: true, produced: true },
 );
 ```
@@ -392,6 +424,23 @@ declaration, where the conditional resolves to the union of both branches — so
 own line and never on the call. A second argument is the one position where `A` is already inferred
 and the error lands on the `true` that failed.
 
+**Write `as const` on the config.** The checks are derived from the config's *literal* type — slot names
+as literals, and the islands as a TUPLE, because two islands writing one key are only distinguishable
+while they are still two members of a tuple. `const A` asks TypeScript for that, but it is BEST EFFORT:
+past a certain config size the compiler stops and falls back to the CONSTRAINT, which is a legal
+outcome and therefore silent. The constraint declares `writes?:` as optional, every derived key set
+comes back `never`, and every check passes without checking anything. `as const` makes the argument
+narrow before inference, so there is nothing left to give up on.
+
+Forgetting it is now a build error rather than a green row — a tuple's `length` is a literal and a
+plain array's is `number`, which is the whole detector (`ConstInferenceLost`,
+`packages/core/src/archipelago.ts`). It reports on `ownership`, and says what to add.
+
+This was found in peps, where two large regions had crossed the threshold: `ownership`, `wiring` and
+`sourced` were all passing vacuously and only `produced` could notice, because it alone compares
+against a type declared outside the config. With the detector in place, seven more regions turned out
+to be in the same state.
+
 **Why required.** These used to be `const _x: Check<typeof arch> = true` lines below the config, and
 the repetition was not the problem: a file that omitted all three looked identical to one that
 asserted all three, so the guards were opt-in by silence. `ownership` being a required property is
@@ -405,32 +454,38 @@ invisible as the missing `const` was.
 
 | Type | Definition | Line |
 |---|---|---|
-| `ProducedKeys<A>` | every key some island's `writes` claims | `packages/core/src/archipelago.ts:353` |
-| `BoundKeys<A>` | every key some island's `bind` reads | `:362` |
-| `ProvidedKeys<A>` | the explicit `provides` list, in the rare case there is one | `:372` |
-| `HostFedKeys<A>` | `Exclude<BoundKeys, ProducedKeys>` — bound, written by none | `:380` |
-| `SourcedKeys<A>` | every key a declared source claims to produce | `:383` |
-| `UnownedKeys<A>` | bound, and claimed by nobody | `:404` |
-| `DisputedKeys<A>` | `ProvidedKeys & ProducedKeys` — claimed twice | `:407` |
+| `ProducedKeys<A>` | every key some island's `writes` claims | `packages/core/src/archipelago.ts:363` |
+| `BoundKeys<A>` | every key some island's `bind` reads | `:372` |
+| `HostFedKeys<A>` | `Exclude<BoundKeys, ProducedKeys>` — bound, written by none | `:387` |
+| `SourcedKeys<A>` | every key a declared source claims to produce | `:390` |
+| `DuplicateProducers<A>` | a key written by two different ELEMENTS | `:433` |
 
-`HostFedKeys` is why nothing can be "unowned" any more: a key either has an island that writes it, or
-the host feeds it, and there is no third case (`:374-380`). It is also why `provides` is nearly
-always absent — it restated a subtraction the compiler can do, and had to be maintained: sixteen
-entries in peps' actions region, each one a place to typo a key
-(`packages/core/src/archipelago.ts:204-214`). The runtime twin is `hostFedKeys(config)` (`:1088`).
+`HostFedKeys` is why nothing can be "unowned": a key either has an island that writes it, or the host
+feeds it, and there is no third case. The runtime twin is `hostFedKeys(config)`.
 
 ### `RegionOwnershipOk<A>`
 
-`packages/core/src/archipelago.ts:409-429`. Catches, at compile time, two things `verify` can only
-say after the fact:
+`packages/core/src/archipelago.ts:451`. One key, one producer — checked at compile time, in the editor,
+before any agent runs anything:
 
 ```ts
-export type RegionOwnershipOk<A> = [UnownedKeys<A>] extends [never]
-  ? [DisputedKeys<A>] extends [never]
-    ? true
-    : ['declared in `provides` AND written by an island:', DisputedKeys<A>]
-  : ['bound but owned by nobody — add to `provides`, or to an island\'s `writes`:', UnownedKeys<A>];
+export type RegionOwnershipOk<A> = [DuplicateProducers<A>] extends [never]
+  ? true
+  : ['written by more than one island — a key has ONE producer:', DuplicateProducers<A>];
 ```
+
+Grouped by ELEMENT, not by slot: one island placed twice (peps' filter panel, desktop + mobile) is one
+producer and stays legal. `ProducedKeys` cannot answer this on its own — it is a union over every
+island, so two writers of one key collapse into the same member — which is why `DupWalk` walks the
+island tuple pairwise.
+
+**It used to assert nothing.** The old form tested `UnownedKeys` and `DisputedKeys`, and both were
+`never` BY CONSTRUCTION: `UnownedKeys` excluded `HostFedKeys`, which is itself
+`Exclude<BoundKeys, ProducedKeys>`, so every bound key fell on one side or the other and nothing was
+ever left over; `DisputedKeys` needed `provides`, which no region had used since `HostFedKeys` began
+deriving it. So the one REQUIRED check on every region resolved to `true` for every region that
+exists, and a second island claiming a key compiled cleanly. Found by writing exactly that and
+watching `tsc` pass — the CLI's own `ownership` check had been carrying the rule alone.
 
 What CANNOT move here, and is why `verify` still exists: whether a declared output ever fires, and
 whether a declaration is HONEST. Both are runtime facts.
@@ -462,9 +517,11 @@ ISLAND only when the config is declared through `archipelago()` — see the call
 
 ### `RegionSourcesOk<A>`
 
-`packages/core/src/archipelago.ts:391-401`. Every host-fed key has a declared source. It resolves to
+`packages/core/src/archipelago.ts:397-401`. Every host-fed key has a declared source. It resolves to
 `true` while a region declares no `sources` at all — adoption is per region — and once it declares
-one, every host-fed key has to be accounted for, or the tuple names those that are not.
+one, every host-fed key has to be accounted for, or the tuple names those that are not. Which is why
+declaring a source does not automatically let you assert it: see [`sourced` is opt-in, and cannot
+always be turned on](#sourced-is-opt-in-and-cannot-always-be-turned-on) above.
 
 Its property on the checks argument is spelled `sourced`, not `sources`: the CLI's text readers find
 a config's declared sources by looking for `sources:` (`packages/cli/src/lib/eject.mjs:184`), and a

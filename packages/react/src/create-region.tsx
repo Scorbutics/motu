@@ -23,6 +23,7 @@ import {
   slotNameOf,
   type RegionOf,
   type SlotsOf,
+  type ProducedKeys,
 } from '@motu/core';
 import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot } from './react-island';
 import type { ElementSpec } from './bootstrap';
@@ -46,7 +47,12 @@ export interface CreateRegionOptions {
   channels?: Channel[];
 }
 
-export interface RegionBinding<TRegion, TSlot extends string, TRootProps = Record<string, unknown>> {
+export interface RegionBinding<
+  TRegion,
+  TSlot extends string,
+  TRootProps = Record<string, unknown>,
+  TProduced extends string = never,
+> {
   /** Wraps the host's tree: declares the archipelago and puts its store in context. */
   Region: (props: { children?: ReactNode }) => ReactElement;
   /**
@@ -76,8 +82,17 @@ export interface RegionBinding<TRegion, TSlot extends string, TRootProps = Recor
   useRegion: () => Partial<TRegion>;
   /** Establish a key's starting value — the only legitimate way to touch a key an island produces. */
   seed: <K extends keyof TRegion & string>(key: K, value: TRegion[K]) => void;
-  /** Feed a key the region declares as host-owned. */
-  provide: <K extends keyof TRegion & string>(key: K, value: TRegion[K]) => void;
+  /**
+   * Feed a key the region declares as host-owned — and ONLY such a key.
+   *
+   * `TProduced` is the archipelago's own `writes`, so a key an island owns is not in this signature at
+   * all. It used to be: `provide` took `keyof TRegion`, which made "the page assigns a key an island
+   * produces" compile, and the runtime guard next to it only refuses keys a declared SOURCE produces —
+   * so island-owned keys had no guard on either side. motu's own review console did exactly that
+   * (`Review.provide('selectedRepo', …)` from a fetch callback, under a comment asserting it would be
+   * a compile error), and every check stayed green. `seed` is the way to establish such a key.
+   */
+  provide: <K extends Exclude<keyof TRegion & string, TProduced>>(key: K, value: TRegion[K]) => void;
   /** The archipelago's id, for the rare call that still needs it. */
   id: string;
 }
@@ -97,7 +112,7 @@ export type RootPropsOf<C> = (C extends { slots?: infer S } ? { [K in keyof S]?:
 export function createRegion<C extends AnyArchipelagoConfig>(
   config: C,
   opts: CreateRegionOptions,
-): RegionBinding<RegionOf<C>, SlotsOf<C>, RootPropsOf<C>> {
+): RegionBinding<RegionOf<C>, SlotsOf<C>, RootPropsOf<C>, ProducedKeys<C> & string> {
   // Module scope on purpose: a transport is a property of this composition root, not of a render.
   if (opts.transport) configure(opts.transport);
 
@@ -167,8 +182,8 @@ export function createRegion<C extends AnyArchipelagoConfig>(
 
   return {
     Region,
-    Root: Root as RegionBinding<RegionOf<C>, SlotsOf<C>, RootPropsOf<C>>['Root'],
-    Island: Island as RegionBinding<RegionOf<C>, SlotsOf<C>, RootPropsOf<C>>['Island'],
+    Root: Root as RegionBinding<RegionOf<C>, SlotsOf<C>, RootPropsOf<C>, ProducedKeys<C> & string>['Root'],
+    Island: Island as RegionBinding<RegionOf<C>, SlotsOf<C>, RootPropsOf<C>, ProducedKeys<C> & string>['Island'],
     useRegion: () => useRegionSnapshot<RegionOf<C>>(),
     seed: (key, value) => seedArchipelago(config.id, key, value),
     provide: (key, value) => provideToArchipelago(config.id, key, value),

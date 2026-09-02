@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { relative, resolve, dirname } from 'node:path';
 import { Project, SyntaxKind } from 'ts-morph';
-import { paths, color } from '../lib/util.mjs';
+import { paths, color, blankComments } from '../lib/util.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
 import { listIslands } from '../lib/islands.mjs';
@@ -310,7 +310,12 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     } catch {
       continue;
     }
-    if (!/\bcreateRegion\s*\(/.test(text)) continue;
+    // COMMENTS BLANKED FIRST, the same rule every other text match here follows: a file that merely
+    // MENTIONS `createRegion` in a comment does not compose a region. peps' `mission-helpers.tsx`
+    // explains in prose which module holds its region binding, and was reported as an undeletable
+    // composition root for saying so — an error whose advice was to restructure a file that was
+    // already correct.
+    if (!/\bcreateRegion\s*\(/.test(blankComments(text))) continue;
     const offenders = specs.filter((spec) => {
       if (INFRA.test(spec) || isMotuSpec(spec)) return false;
       const target = resolveSpec(p, spec);

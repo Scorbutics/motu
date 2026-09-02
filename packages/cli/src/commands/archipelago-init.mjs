@@ -113,15 +113,28 @@ export type ${pascal}Region = Record<string, never>
     skipped.push(archFile);
   }
   const archText = readFileSync(archFile, 'utf8');
-  if (!/ArchipelagoConfig</.test(archText)) {
+  if (!/ArchipelagoConfig<|archipelago</.test(archText)) {
+    // UPGRADED TO THE CHECKED CALL, which this step is the first that can do it: the cross-checks are
+    // stated against the app-side region type, and `archipelago init` is what just wrote that type.
+    // `archipelago create` cannot — there is nothing to check against yet — which is why the plain
+    // config form still exists and why a region scaffolded that way is asserting nothing.
+    //
+    // `as const` is not decoration. The checks are derived from the config's LITERAL type, and `const A`
+    // is best effort: past a certain size TypeScript falls back to the constraint and every check
+    // silently passes without checking. `ConstInferenceLost` turns that into an error, and this is what
+    // stops a new region ever meeting it.
     writeFileSync(
       archFile,
       archText
         .replace(
           "import type { ArchipelagoConfig } from '@motu/core';",
-          `import type { ArchipelagoConfig } from '@motu/core';\n// TYPE-ONLY, from the app: the page's vocabulary is the application's to name.\nimport type { ${pascal}Region } from '${hostSpecifier(archFile, typeFile)}';`,
+          `import { archipelago } from '@motu/core';\n// TYPE-ONLY, from the app: the page's vocabulary is the application's to name.\nimport type { ${pascal}Region } from '${hostSpecifier(archFile, typeFile)}';`,
         )
-        .replace(`: ArchipelagoConfig = {`, `: ArchipelagoConfig<${pascal}Region> = {`),
+        .replace(`export const ${camel}Archipelago: ArchipelagoConfig = {`, `export const ${camel}Archipelago = archipelago<${pascal}Region>()({`)
+        .replace(
+          /\n\};\n$/,
+          `\n} as const,\n// The region's cross-checks, as the declaration's SECOND ARGUMENT. Each property is the check's\n// own result type, so \`true\` is the only value that compiles and a drift errors on that line naming\n// the offending key. Add \`wiring\` once this region has islands (it needs the generated elements map\n// as the second type argument) and \`produced\` once the app declares its produced-key type.\n{ ownership: true });\n`,
+        ),
     );
   }
 

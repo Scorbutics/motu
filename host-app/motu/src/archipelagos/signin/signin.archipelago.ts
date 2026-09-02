@@ -67,7 +67,7 @@ export const signinArchipelago = archipelago<
      */
     signin: signinSource,
   },
-},
+} as const,
 /**
  * Every key an island reads has exactly one owner, every wired event exists on the island wired to
  * it, and the produced keys are the set the app's own type names.

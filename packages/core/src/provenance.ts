@@ -53,6 +53,43 @@ export function runWithIsland<T>(id: string | null, fn: () => T): T {
 /** The island whose window is open, if any. */
 export const ambientIsland = (): string | null => currentIsland;
 
+// WHICH SOURCE ASKED. The same window, for the other thing that reaches a backend.
+//
+// A declared source does its reading inside a CHANNEL, at region level, outside any island's window —
+// so a table it reads would otherwise be attributed to whichever island happened to be rendering, or
+// to nobody. That matters because the two are declared in different places: an island's reach is its
+// own `contract.ambient`, a source's is `reaches` on the source entry. Attributing one to the other
+// would report a correct declaration as a violation.
+let currentSource: string | null = null;
+
+/** Run `fn` with `id` as the ambient source, so anything it reaches is attributed to that source. */
+export function runWithSource<T>(id: string | null, fn: () => T): T {
+  const prev = currentSource;
+  currentSource = id;
+  try {
+    return fn();
+  } finally {
+    currentSource = prev;
+  }
+}
+
+/** The source whose window is open, if any. */
+export const ambientSource = (): string | null => currentSource;
+
+/**
+ * Who to attribute a backend reach to, as the reach checks name owners.
+ *
+ * A source WINS over an island: a channel's work can run while an island's window is open (a source
+ * reacting to a store change the island's own render triggered), and the source is the one that
+ * declared the reach. Neither open means nobody claimed it, which the check reports as unattributed
+ * rather than silently charging it to someone.
+ */
+export function reachOwner(): string | null {
+  if (currentSource) return `source:${currentSource}`;
+  if (currentIsland) return `island:${currentIsland}`;
+  return null;
+}
+
 /**
  * The same window, opened and closed imperatively — for React's COMMIT phase, which no single
  * function call brackets.

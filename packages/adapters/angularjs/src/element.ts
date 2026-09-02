@@ -57,7 +57,7 @@ export interface AngularElementSpec {
    * is re-compiled — the exact working component is reused, then restored on unmount. If the selector
    * matches nothing (e.g. offline preview with no legacy DOM), it falls back to `template`.
    *
-   * DECLARE in element.ts `contract.coupling.adopt` — defineAngularElement injects it here. (Authoring
+   * DECLARE in element.ts `mount.adopt` — defineAngularElement injects it here. (Authoring
    * it directly on the spec still works as a fallback.) The `onAdopt` behaviour hook stays on the spec.
    */
   adopt?: string;
@@ -85,7 +85,7 @@ export interface AngularElementSpec {
    * it, so those names resolve up the prototype chain. Requires light isolation (the island must live
    * in the host's Angular DOM to have a parent scope). This is the "extract existing code" path.
    *
-   * DECLARE in element.ts `contract.coupling.inheritScope` — defineAngularElement injects it here.
+   * DECLARE in element.ts `mount.inheritScope` — defineAngularElement injects it here.
    */
   inheritScope?: 'parent' | string;
   /**
@@ -97,14 +97,14 @@ export interface AngularElementSpec {
    * logged-in user, suggest callbacks) up the prototype chain and would abort the render without them.
    *
    * NOT authored here — this is the render-time MECHANISM. Declare it (and the host-scope names it
-   * pulls in) in the island's element.ts `contract.coupling` (`hostScopeKey` + `hostScope`); the
+   * pulls in) in the island's element.ts (`mount.hostScopeKey` + `contract.effects` `scope:…`); the
    * `defineAngularElement` wrapper injects the key into this spec. Keeping it out of the `.ng.ts`
    * render body is what leaves the whole contract in one place.
    */
   hostScopeKey?: string;
 }
 
-/** The AngularJS island contract shaped like defineReactElement's — input/output/coupling live in one place. */
+/** The AngularJS island contract shaped like defineReactElement's — input/output/effects in one place. */
 export type DefineAngularElementOptions = IslandElementOptions;
 
 const NOOP: IslandInstance = { update() {}, unmount() {} };
@@ -363,7 +363,7 @@ function render(container: HTMLElement, host: HTMLElement, initialProps: Record<
  * Registers an island whose body is authored in AngularJS. Same registration contract as
  * defineReactElement (input/output/coupling via `contract`, plus legacy/fit), so it drops into the
  * archipelago and the element registry identically — only the rendering technology differs. The
- * host-scope MECHANISM (`hostScopeKey`) comes from the element's `contract.coupling` and is injected
+ * host-scope MECHANISM (`hostScopeKey`) comes from the element's `mount` and is injected
  * into the render spec here, so the `.ng.ts` body stays pure render (template + controller) and the
  * whole contract lives in element.ts. Isolation defaults to 'light'.
  */
@@ -372,10 +372,14 @@ export function defineAngularElement(
   spec: AngularElementSpec,
   opts: DefineAngularElementOptions,
 ): void {
-  // The reach MECHANISMS (adopt / inheritScope / hostScopeKey) are declared in the element's
-  // contract.coupling and injected into the render spec here, so the whole boundary lives in
-  // element.ts and the `.ng.ts` body stays pure render. Values authored on the spec remain a fallback.
-  const c = opts.contract?.coupling ?? {};
+  // The ATTACH mechanisms (adopt / inheritScope / hostScopeKey) are declared in the element's `mount`
+  // and injected into the render spec here, so the `.ng.ts` body stays pure render. Values authored on
+  // the spec remain a fallback.
+  //
+  // They used to live in `contract.coupling`, which read as part of the island's boundary and is not:
+  // they say WHERE in a legacy scope tree this element attaches. The names it RESOLVES from that scope
+  // are boundary facts and live in `contract.effects` as `scope:…`, beside the modules and the tables.
+  const c = opts.mount ?? {};
   const effectiveSpec: AngularElementSpec = {
     ...spec,
     adopt: c.adopt ?? spec.adopt,

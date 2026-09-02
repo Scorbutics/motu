@@ -12,7 +12,7 @@ export const element = islandElement({
       // it comes from the slot's own props rather than from state everyone shares.
       input: ['states', 'flow'],
       output: { onFlowChange: 'flow-changed' },
-      ambient: [],
+      effects: [],
     },
   },
 });

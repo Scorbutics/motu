@@ -490,10 +490,10 @@ asked for:
 
     ✓ provenance  islands fetched: fetchClubCounters() ×4, fetchClubFeed(11) ×4  · 8 host call(s)
 
-`ambient` says which host modules an island IMPORTS; this says which it CALLED, with what arguments,
+`contract.effects` says which host modules an island IMPORTS; this says which it CALLED, with what arguments,
 and how often. Two things become visible that nothing else catches: an island that renders content
 while calling NOTHING (its data came from somewhere it never declared), and a module it imports but
-never reaches (a stale `ambient`, or a stub standing in for something unused).
+never reaches (a stale `effects` entry, or a stub standing in for something unused).
 
 It is also the integration list. The calls recorded here are exactly what the real page has to answer,
 which is the closest thing motu has to confronting the lagoon with the page it targets.

@@ -102,7 +102,11 @@ function ReviewPage({ cfg, viewer, repo }: { cfg: HostConfig; viewer: Viewer | n
         // project they were just looking at rather than on a picker. Only if it is one they can
         // actually see — the list is already filtered by whoever is asking, so an unknown name is
         // either private to someone else or gone, and silently selecting nothing is the honest answer.
-        if (repo && r.some((x) => x.repo === repo)) Review.provide("selectedRepo", repo)
+        //
+        // SEED, not provide: `selectedRepo` is repo-picker's to update, and this is its STARTING
+        // value — a default the page cannot know until the list arrives, not a page that keeps
+        // assigning the key afterwards. `provide` no longer accepts a key an island produces.
+        if (repo && r.some((x) => x.repo === repo)) Review.seed("selectedRepo", repo)
       })
       .catch((e: Error) => setError(e.message))
   }, [cfg, repo])

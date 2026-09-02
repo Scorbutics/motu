@@ -30,7 +30,7 @@ export {
   resetTransport,
 } from './foreign-transport';
 export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport';
-export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls, runWithIsland, ambientIsland, openIslandWindow, closeIslandWindow } from './provenance';
+export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls, runWithIsland, ambientIsland, runWithSource, ambientSource, reachOwner, openIslandWindow, closeIslandWindow } from './provenance';
 export type { HostCall } from './provenance';
 export { checkCatalogue } from './catalogue';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue';
@@ -42,12 +42,10 @@ export type {
   ArchipelagoConfig,
   AnyArchipelagoConfig,
   ProducedKeys,
+  DuplicateProducers,
   BoundKeys,
-  ProvidedKeys,
   HostFedKeys,
   BindDeclaration,
-  UnownedKeys,
-  DisputedKeys,
   DeclaredChannel,
   SourceLike,
   RegionOwnershipOk,
@@ -83,7 +81,7 @@ export type {
   IslandIsolation,
   IslandElementOptions,
   IslandContract,
-  IslandCoupling,
+  IslandMount,
   PropSpec,
   IslandInstance,
   IslandMountContext,

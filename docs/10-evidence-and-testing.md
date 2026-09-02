@@ -125,7 +125,7 @@ import type { DirectoryFacetCounts, DirectoryMember, DirectorySearchParams } fro
 The actions module says the negative form outright: "A VALUE import of an `@/` module would break
 those loaders, so there is none" (`peps_ta_boite/motu/src/shared/actions-evidence.ts:9`).
 
-The same erasure principle is used by the `ambient` check, which strips `import type` lines before
+The same erasure principle is used by the `effects` check, which strips `import type` lines before
 deciding what a component actually reaches for (`packages/cli/src/commands/verify.mjs:467`).
 
 ---

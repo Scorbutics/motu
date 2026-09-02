@@ -8,6 +8,10 @@
 // export (`@motu/adapter-angularjs/verify`), resolved from the adapter the island actually imports.
 
 /**
+ * `hostScope` is the `scope:…` half of `contract.effects`, already unprefixed by the caller; the rest
+ * is `mount`. One argument still, because the question spans both: a mechanism that creates an
+ * inherited scope is only safe if the names it resolves are declared.
+ *
  * @param {{ coupling?: { adopt?: string, inheritScope?: string, hostScopeKey?: string, hostScope?: string[] } }} input
  * @returns {{ level: 'error'|'warn'|'ok', check: string, msg: string }[]}
  */
@@ -48,7 +52,7 @@ export function checkCoupling({ coupling } = {}) {
     findings.push({
       level: 'error',
       check: 'host-coupling',
-      msg: `reaches host scope via ${scopeReach.join('/')} but declares no \`hostScope\` — list the host-scope names it depends on (contract.coupling.hostScope)`,
+      msg: `reaches host scope via ${scopeReach.join('/')} but declares no scope names — list them in \`contract.effects\` as \`scope:…\``,
     });
     return findings;
   }

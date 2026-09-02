@@ -18,7 +18,8 @@
   "dependencies": {
     "@motu/chrome": "workspace:*",
     "@motu/core": "workspace:*",
-    "@motu/runtime": "workspace:*"
+    "@motu/runtime": "workspace:*",
+    "@motu/types": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",

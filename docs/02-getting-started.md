@@ -184,7 +184,7 @@ Then it regenerates `islands/registry.ts` and `islands/contracts.generated.ts` f
 (`packages/cli/src/commands/create.mjs:215-229`). The registry is generated, not edited: adding an
 island is a file operation, and reconciling is what keeps a deleted or renamed one from lingering.
 
-With `--from`, the contract is **read from the component** — inputs, outputs and ambient reach are
+With `--from`, the contract is **read from the component** — inputs, outputs and declared effects are
 transcribed automatically, because transcribing them by hand is how an island's contract drifts from
 its component on its first day (`create.mjs:61-63`, `:218`). What is left for you is the part that is
 a decision: the event NAMES, renamed to the region's vocabulary if it has a better word.

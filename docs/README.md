@@ -36,6 +36,6 @@ detail behind it — read in order if you are new; jump straight in if you are n
 
 | | |
 |---|---|
-| [11 — Contract and backend](11-contract-and-backend.md) | the contract seam, transports, fixtures, codegen. |
+| [11 — Contract and backend](11-contract-and-backend.md) | the contract seam, transports, wire-level mocking, fixtures, codegen. |
 | [12 — Hosts and adapters](12-hosts-and-adapters.md) | Next, AngularJS, none; `@motu/adapter-next`; `removal-check`. |
 | [13 — Agents and skills](13-agents-and-skills.md) | the shipped skills, host rules, and the multi-agent workflow. |

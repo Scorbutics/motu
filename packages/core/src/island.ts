@@ -5,6 +5,8 @@
 // lets an island be authored in any framework, including the legacy host's own, behind one stable
 // custom-element boundary.
 
+import type { EffectEntry } from '@motu/types';
+
 import type { MotuTheme, MotuFit, LegacyStrategy } from './theme';
 
 // Stripped in production (see the debug overlay). The definition registry below only populates when
@@ -58,18 +60,16 @@ export interface PropSpec {
  * for a well-behaved island (its only inbound coupling is the store, its only outbound is events).
  * Populated only when an island reaches into the host environment, which the lagoon can't reproduce.
  */
-export interface IslandCoupling {
-  /**
-   * External names the island inherits from the host environment (not the store) — the generic,
-   * cross-adapter DECLARED dependency. For the AngularJS adapter these are host-scope keys the
-   * island's markup resolves up the prototype chain (e.g. `['hostSearchConfig', 'search']`). Declaring them turns an implicit external dependency into a
-   * checked contract (see the adapter's verify layer); it does not prove the real embedded host
-   * provides them — that stays the integration suite's job.
-   */
-  hostScope?: string[];
-  // --- AngularJS adapter reach MECHANISMS (how the coupling is wired; injected into the render spec by
-  //     defineAngularElement so the `.ng.ts` body stays pure render). Declared here so the whole
-  //     boundary — what it depends on AND how — lives in one place (element.ts).
+/**
+ * HOW THE ELEMENT ATTACHES — the socket, not the box.
+ *
+ * These are AngularJS mechanisms, and they were inside `contract.coupling` where they read as part of
+ * the island's boundary. They are not: they say where in a legacy scope tree this element mounts, which
+ * is a fact about the host page and changes nothing about what the island takes or produces. The names
+ * it RESOLVES from that scope are a boundary fact, and those live in `contract.effects` as `scope:…`.
+ */
+export interface IslandMount {
+  // Injected into the render spec by `defineAngularElement`, so the `.ng.ts` body stays pure render.
   /** AngularJS: host-scope anchor key used to LOCATE the scope to attach to (must be a key that scope owns). */
   hostScopeKey?: string;
   /** AngularJS: relocate (adopt) the live legacy node(s) matching this selector into the island. */
@@ -83,22 +83,57 @@ export interface IslandCoupling {
  * `motu island verify` use — so an island's whole boundary is declared in ONE place (its element.ts)
  * instead of split between the registration and the render spec.
  */
+/**
+ * THE ISLAND AS A BLACK BOX: what goes in, what comes out, and what it touches besides.
+ *
+ * The third leg used to be `coupling`, and it was wrong twice. It did not CONTAIN the coupling — the
+ * declaration of which host modules an island reaches, `ambient`, grew up outside it and was never
+ * typed at all, so a misspelling compiled and silently became `[]`. And it contained things that are
+ * not coupling: `hostScopeKey`, `adopt` and `inheritScope` describe how the element ATTACHES to a
+ * legacy scope, which is the socket rather than the box. Those moved to `mount`.
+ *
+ * `effects` is the honest name for what is left. An island that reads a name it was not handed — a
+ * host module, an AngularJS scope key, a database table — has stepped outside its parameters, and
+ * that is an effect whether it reads or writes. Declaring it is the whole point: not pure, but
+ * exposed.
+ *
+ * It also frees the word. `coupling` means something else in motu — the REGION's graph of who feeds
+ * whom, which the lens draws and `motu check` reports — and one word for two ideas was a tax on
+ * every conversation about either.
+ */
 export interface IslandContract {
   /** INPUT — props fed from the store/host (data in). Bare names or `{name,default,required}` specs. */
   input?: (string | PropSpec)[];
   /** OUTPUT — injected callback prop -> CustomEvent name it dispatches (data out), e.g. `{ onReset: 'reset' }`. */
   output?: Record<string, string>;
-  /** COUPLING — dependencies beyond the store (the integration-risk axis; usually absent). */
-  coupling?: IslandCoupling;
+  /**
+   * EFFECTS — everything it reaches that is not a prop, one list:
+   *
+   *   '@/lib/supabase/client'                     a host module it imports
+   *   { scope: 'hostSearchConfig' }               an AngularJS host-scope name
+   *   { table: 'shots', operation: 'select' }     a backend table (omit `operation` to cover all)
+   *   { rpc: 'accept_shots' }                     a database function
+   *   { fn: 'notify' }                            an edge / serverless function
+   *   { route: '/api/baselines', method: 'GET' }  a same-origin application route
+   *
+   * A bare string is a MODULE; every other kind is an object whose single key names it, so a
+   * misspelling is a build error rather than an entry nothing recognises. The module entries are
+   * checked statically against the component's own imports; the rest are checked against what the
+   * region actually reached at runtime (`data-reach`). Both directions warn: reached-but-undeclared is
+   * a dependency that grew quietly, declared-but-unreached is a stale claim or an undriven path.
+   */
+  effects?: readonly EffectEntry[];
 }
 
 export interface IslandElementOptions {
   /**
-   * The island contract (input / output / coupling) in one place. Preferred over the loose
+   * The island contract (input / output / effects) in one place. Preferred over the loose
    * `props`/`events` below — when set, `contract.input` supplies props and `contract.output` supplies
    * events. `props`/`events` remain for islands that haven't adopted the grouped form.
    */
   contract?: IslandContract;
+  /** HOW it attaches to a legacy scope (AngularJS). Not part of the contract — see `IslandMount`. */
+  mount?: IslandMount;
   /** Property names (or richer {name,default,required} specs) set imperatively from JS. Superseded by `contract.input`. */
   props?: (string | PropSpec)[];
   /** Attribute names + coercion type (attributes are always strings in the DOM). */
@@ -163,8 +198,10 @@ export interface IslandDefinition {
   defaultFit: MotuFit;
   defaultTheme: MotuTheme;
   isolation: IslandIsolation;
-  /** Declared external coupling beyond the store (e.g. AngularJS host-scope reach) — the overlay's EXTERNAL axis. */
-  coupling?: IslandCoupling;
+  /** Declared reach beyond its props — the overlay's EXTERNAL axis. See `IslandContract.effects`. */
+  effects?: readonly EffectEntry[];
+  /** How it attaches to a legacy scope. Mechanism, not boundary. */
+  mount?: IslandMount;
 }
 
 const islandDefinitions = new Map<string, IslandDefinition>();
@@ -205,7 +242,8 @@ export function registerIslandDefinition(tag: string, opts: IslandElementOptions
     defaultFit: opts.defaultFit ?? 'native',
     defaultTheme: opts.defaultTheme ?? 'legacy',
     isolation: opts.isolation ?? defaultIsolation,
-    coupling: opts.contract?.coupling ? { ...opts.contract.coupling } : undefined,
+    effects: opts.contract?.effects ? [...opts.contract.effects] : undefined,
+    mount: opts.mount ? { ...opts.mount } : undefined,
   });
 }
 

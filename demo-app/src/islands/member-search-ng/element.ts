@@ -12,19 +12,18 @@ export const memberSearchNgElement: ElementSpec = {
   tag: 'x-member-search-ng',
   define: ({ css, defaultTheme }) =>
     defineAngularElement('x-member-search-ng', memberSearchNgAngular, {
-      // The whole boundary in one place — input (props), output (events), coupling (host-scope reach).
+      // The whole boundary in one place — input (props), output (events), effects (what it reaches).
       contract: {
         input: ['criteria', 'config'],
         output: { onCriteriaChanged: 'criteria-changed', onReset: 'reset' },
-        coupling: {
-          // Host-scope names inherited via hostScopeKey: the island mounts as a non-isolate child of
-          // the scope that owns the search, so host state beside it stays resolvable. Must be provided
-          // by the lagoon host stub; the real embedded host is the integration suite's job (checked by
-          // the adapter's verify layer).
-          hostScope: ['hostSearchConfig', 'search'],
-          hostScopeKey: 'hostSearchConfig',
-        },
+        // Host-scope names it resolves rather than receives: the island mounts as a non-isolate child
+        // of the scope that owns the search, so host state beside it stays resolvable. Reaching a name
+        // it was not handed is an effect, and it sits in the same list as a module or a table. Must be
+        // provided by the lagoon host stub; the real embedded host stays the integration suite's job.
+        effects: [{ scope: 'hostSearchConfig' }, { scope: 'search' }],
       },
+      // HOW it attaches — mechanism, not boundary.
+      mount: { hostScopeKey: 'hostSearchConfig' },
       legacy: 'fill',
       css,
       defaultTheme,

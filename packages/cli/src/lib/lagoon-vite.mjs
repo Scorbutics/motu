@@ -441,7 +441,37 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
         : env.MOTU_ALLOW_ANY_HOST
           ? { allowedHosts: true }
           : {}),
-      ...(host.server ?? {}),
+      // WHAT THE LAGOON WATCHES, because on a large host it runs out of the machine's watches first.
+      //
+      // Vite watches its root and everything it serves — and the lagoon serves the WHOLE host
+      // application, so on a monorepo it registers an inotify watch per source file across every
+      // package. Measured on Formbricks: the dev server booted, then died with
+      // `ENOSPC: System limit for number of file watchers reached` at the default 65536. It blocked
+      // work in three separate bench rounds and an experiment, was read as a machine problem each
+      // time, and is why `ENOSPC` had to be taught to the exit-2 classifier.
+      //
+      // Two mitigations, because the ignore list alone was not enough on a host whose own source tree
+      // exceeds the budget:
+      //   - ignore what the lagoon never re-renders for;
+      //   - `MOTU_WATCH_POLL=1` switches to POLLING, which uses no inotify watches at all. Slower and
+      //     hungrier for CPU, and the difference between a lagoon that runs on a big repository and
+      //     one that cannot start. A machine where the limit can be raised should raise it instead:
+      //     `sudo sysctl -w fs.inotify.max_user_watches=524288`.
+      watch: {
+        ignored: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/.next/**',
+          '**/.turbo/**',
+          '**/coverage/**',
+          '**/target/**',
+          ...(host.server?.watch?.ignored ?? []),
+        ],
+        ...(env.MOTU_WATCH_POLL === '1' ? { usePolling: true, interval: 400 } : {}),
+        ...(host.server?.watch ?? {}),
+      },
+      ...(host.server ? Object.fromEntries(Object.entries(host.server).filter(([k]) => k !== 'watch')) : {}),
     },
   };
 }

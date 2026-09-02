@@ -687,6 +687,31 @@ decided by the same `rsc-boundary` analysis the island's own check reports, so t
 `MOTU_NO_EXCLUDE=1` restores the old all-or-nothing behaviour, for when you want the raw bundler
 failure.
 
+## `latest` follows the DEV SERVER when one is running
+
+`<host>/<repo>/latest/<slug>` is not "the last publish" — it is *the current answer*. When a dev
+server has announced itself, the host proxies that URL to it and a viewer sees what you are editing;
+when none has, it falls back to the last published bytes. Immutable commit URLs are never live, on
+purpose: a URL keyed by content must keep meaning what it meant.
+
+`motu lagoon dev` announces automatically:
+
+    live at: http://<host>/<repo>/latest/<slug>
+    the host will fetch it from: http://127.0.0.1:5173
+
+`--no-live` opts out, for a dev server on a shared machine that should not become the address a team
+is looking at. `motu lagoon serve --watch` also announces, and additionally offers `--live-url` (tell
+the host a name it can reach, gated by `MOTU_LIVE_ALLOW` on the host) and `--live-push` (send bytes
+instead of being fetched, for when the host cannot reach you at all).
+
+A live member expires after 90 seconds and the CLI heartbeats every 30, so a dev server that dies
+decays back to the last publish on its own rather than leaving a dead address. Stopping the server
+deregisters immediately.
+
+**Live is not yet HOT.** The host proxies HTTP, not the WebSocket upgrade, so Vite's HMR channel does
+not reach a remote viewer: a refresh shows current code, an edit does not push itself. Proxying the
+upgrade is what closes that gap.
+
 ## Known traps
 
 **Absolute asset paths.** `/images/…` works under `lagoon dev`, because Vite serves it, and 404s the

@@ -652,3 +652,79 @@ by convention.
 That is the honest shape of the comparison, and it is not "motu is faster": **26 tool calls against
 174.** It is that the cheaper path ends with a change nobody has seen, whose author names a timing
 risk they had no way to check, on a screen that costs a database and an auth session to look at once.
+
+### Correction: file counts are not comparable artifacts
+
+Every control comparison above reports files and tool calls side by side — "2 files vs 5", "26 calls
+vs 174" — as though the two sides produced the same KIND of output. They did not. Part of what motu
+costs is `*.evidence.ts`: island scenarios and region flows, which are executable regression coverage
+that `motu check --runtime` drives. **Every control arm wrote zero tests.** Not "fewer" — none, in all
+three, and none of them was asked to.
+
+So the counts above understate motu twice over: its extra files include automated coverage, and the
+control's smaller footprint is smaller partly because it leaves nothing behind that can fail later.
+The honest way to read those tables is as ADOPTION COST, not as a like-for-like artifact count — and
+adoption cost is motu's worst case, since it is paid once while the coverage accrues to every change
+afterwards.
+
+None of which is a measurement of VALUE. See the next section.
+
+---
+
+# Measuring VALUE: defect detection, not effort
+
+Four rounds measured ADOPTION COST on a first change — motu's worst case, since adoption is paid once
+while whatever it buys accrues afterwards. And effort could not settle the question anyway: runs 2 and
+3 of the identical task on the identical CLI differed 2x on every metric, purely from the order an
+agent worked in.
+
+So: inject the SAME user-visible regression into two implementations of the SAME feature (formbricks'
+sign-in screen, region vs props), run each side's own checks, and record what each CATCHES.
+Deterministic, no agent in the loop. Harness: `bench/agent-cold-start/mutate.mjs`.
+
+**The regressions were authored blind** by an agent given both implementations, asked for plausible
+developer mistakes, and explicitly forbidden from investigating what tooling either side has — because
+a mutation set written by the framework's author measures the author's imagination.
+
+## Result: the props arm
+
+Baseline clean on both gates. Then, per regression:
+
+| gate | caught |
+|---|---|
+| `tsc` (the app's own typecheck) | **0** |
+| `eslint` (the app's own config) | **0** |
+
+Stronger than the table reads: two mutations (M2, M5) silently failed to revert mid-run, so later
+typechecks ran with **three simultaneous regressions** in the file — an inverted disable condition and
+two cross-wired providers at once — and the app's typecheck still passed. The control's own journal had
+already conceded the principle: *"proves the types line up… proves nothing about runtime behavior,
+timing, or actual pixels."* This puts a number on it.
+
+## Result: the region arm could not be measured, and that IS the finding
+
+Its baseline is red before any mutation — and not from a harness fault. Formbricks' `sso-options`
+island reaches a Next server action, so it cannot be bundled for the lagoon; the exclusion fix keeps
+the rest of the lagoon building, but that slot renders a placeholder, so any flow asserting its
+content fails. Four of the eight regressions target that island.
+
+**motu's defect detection is contingent on the region being previewable.** A host coupling that stops
+an island bundling does not merely cost that island's preview — it removes detection for everything
+asserted through it. Exclusion contains the blast radius for OTHER islands; it does not restore the
+excluded one's coverage. That conditional belongs next to every claim motu makes about catching
+regressions, and no effort-based round could have surfaced it.
+
+## What this does and does not establish
+
+ESTABLISHED: on this screen, with these eight blind regressions, the control's gates catch **none** —
+including with several bugs live at once.
+
+NOT ESTABLISHED: that motu would have caught them. That measurement needs a pairing whose region is
+fully bundlable. Arm C's shlink region qualifies (green, with flows) but has no control implementation,
+and the author of motu writing one would bias it.
+
+Two flaws in the set, both found while running it rather than by inspection: **four of eight
+regressions are the same class** (provider cross-wire), so any arm catching that class would score it
+four times — results must be read by CLASS, not count; and three of those four are **ambiguous to
+apply**, because cross-wiring one provider produces a line identical to another's. The harness refused
+them rather than mutating the wrong line, which is the behaviour it was built for.

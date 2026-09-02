@@ -72,6 +72,7 @@ ${color.bold('Usage:')}
     --forget <id> | --forget-all                    remove a state the instrument recorded wrongly
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
+  motu lagoon dev --no-live                         ...without announcing it to the lagoon host
   motu lagoon states [island|region]                every state the lagoon can be OPENED in, as a URL
   motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish

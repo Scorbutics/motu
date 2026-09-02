@@ -904,6 +904,67 @@ export function lagoonServeCommand(argv) {
  * carried its own package.json and vite.config.ts. Runs the dev server in THIS process (foreground,
  * Ctrl-C to stop) rather than spawning one, since nothing here needs to outlive the command.
  */
+/**
+ * Tell the lagoon host where this dev server is, so `<host>/<repo>/latest/<slug>` serves IT.
+ *
+ * The host has proxied a registered live endpoint since it was written — `latest` resolves to a live
+ * dev server when one is announced and falls back to the last publish when none is. What it had was
+ * no announcer on this path: only `lagoon serve --watch` registered, and `lagoon dev` is what a
+ * person iterating — and every agent in four bench rounds — actually runs. So the live axis existed
+ * and the command that would have used it never said hello, and the gallery showed the last publish
+ * with nothing to explain why.
+ *
+ * Pull mode only. Pushing bytes is `serve --watch --live-push`'s business, because it has bytes; a
+ * dev server has a port.
+ *
+ * BEST EFFORT, and LOUD ON REFUSAL. A preview must never fail because a host is down — but "best
+ * effort" implemented as swallowing the response is how a rejected registration produced no output
+ * at all, which `serve` learned the hard way and this inherits: said once, not every beat.
+ */
+function announceDevServer({ slug, port, liveUrl }) {
+  const cfg = loadHostConfig();
+  const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
+  const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
+  if (!base || !hostToken) return () => {}; // no host configured: serving locally is the whole feature
+  // The SAME identity publishing uses, or the gallery has a live member it can match to nothing.
+  const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
+  const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
+  const call = (path, body) =>
+    fetch(`${base}${path}?${qs}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${hostToken}` },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }).catch(() => null);
+
+  const announceUrl = liveUrl || `http://127.0.0.1:${port}`;
+  let announced = false;
+  let refused = false;
+  const beat = async () => {
+    const res = await call('/api/live', { url: announceUrl });
+    if (res && !res.ok && !refused) {
+      refused = true;
+      const why = await res.json().catch(() => null);
+      console.error(color.red(`  ✗ the host refused this as a live member: ${why?.error ?? res.status}`));
+      console.error(color.dim(`    announced: ${announceUrl}`));
+    }
+    if (res?.ok && !announced) {
+      announced = true;
+      console.log(color.dim(`  live at: ${base}/${repo}/latest/${slug}`));
+      console.log(color.dim(`  the host will fetch it from: ${announceUrl}`));
+    }
+  };
+  void beat();
+  // The host expires a live member after 90s, so a dev server that dies decays back to the last
+  // publish on its own — the heartbeat is what keeps a RUNNING one from decaying with it.
+  const timer = setInterval(beat, 30_000);
+  timer.unref?.();
+  return async () => {
+    clearInterval(timer);
+    // Bounded: leaving must not hang on a host that has gone away.
+    await Promise.race([call('/api/live/off'), new Promise((r) => setTimeout(r, 2000))]);
+  };
+}
+
 export async function lagoonDevCommand(argv) {
   const { entry, target } = resolveTarget(argv);
   const { buildLagoonViteConfig, resolveVite } = await import('../lib/lagoon-vite.mjs');
@@ -926,6 +987,22 @@ export async function lagoonDevCommand(argv) {
   console.log(color.dim(`  lagoon: ${paths.rel(cfg.lagoonDir)}  (host: ${cfg.host})`));
   if (target) console.log(color.dim(`  focused on ${target} — open /lagoon.html`));
   server.printUrls();
+
+  // ANNOUNCE, unless told not to. `--no-live` is for the case the flag exists to serve: a dev server
+  // on a shared machine that should not become the address a whole team is looking at.
+  if (argv.live !== false && !argv['no-live']) {
+    const resolvedPort = server.config.server.port ?? Number(argv.port) ?? 5173;
+    const stopAnnouncing = announceDevServer({
+      slug: paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all',
+      port: resolvedPort,
+      liveUrl: typeof argv.liveUrl === 'string' ? argv.liveUrl : argv['live-url'],
+    });
+    const leave = () => {
+      void stopAnnouncing().finally(() => process.exit(0));
+    };
+    process.on('SIGINT', leave);
+    process.on('SIGTERM', leave);
+  }
 }
 
 

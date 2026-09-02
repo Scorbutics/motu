@@ -328,7 +328,20 @@ export function loadMotuConfig() {
     uiDir: inApp(cfg.ui),
     archipelagosDir: inApp(cfg.archipelagos),
     sharedDir: inApp(cfg.shared),
-    barrel: inApp(cfg.barrel),
+    /**
+     * The app barrel — DERIVED from where the islands actually live, unless stated.
+     *
+     * `barrel` defaulted to a literal `src/index.ts` no matter where the project's motu directories
+     * were, so a layout that is not `src/`-shaped pointed it at a file that does not exist. Measured
+     * on a Rails application whose JS root is `app/javascript`: the adopter moved motu's directories
+     * to match, and `archipelago create` died with a raw ts-morph `File not found: …/src/index.ts` —
+     * an exception from a library the adopter has no reason to have heard of, naming a path they had
+     * deliberately not used. `barrel` was configurable all along and mentioned in no output.
+     *
+     * The islands directory already says where motu lives, so its parent is the answer. An explicit
+     * `barrel` still wins.
+     */
+    barrel: found?.config?.barrel ? inApp(cfg.barrel) : resolve(dirname(inApp(cfg.islands)), 'index.ts'),
     contractSrcDir: inApp(cfg.contract),
     lagoonDir: inApp(cfg.lagoon),
     /** Declared for the layout's sake; no CLI command reads it. See `bridge` in DEFAULTS. */

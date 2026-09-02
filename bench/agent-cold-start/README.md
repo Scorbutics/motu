@@ -65,6 +65,31 @@ meaningless, and an agent that spends its budget repairing someone else's build 
 - The agent is not a person. It reads faster, complains less, and never walks away — so the
   friction counts here are a *lower* bound on what a human would feel, not an estimate of it.
 
+## After every run: look at what it left behind
+
+An arm's journal says what the agent believes it did. The trace says what it ran. **Neither says
+whether the result is any good**, and for three rounds nothing checked that — the gap was noticed by
+the person reading the reports, not by the protocol. So this is a step, not a habit:
+
+1. **Does the HOST still work?** Run the application's own gate — `pnpm typecheck`, `npm run types`,
+   `yarn typecheck` — and diff against the arm's recorded baseline. A region that landed on a page
+   while breaking the app's build is a failed run however green motu is.
+2. **Does the lagoon still render, and does it look like the application?** Boot it
+   (`motu lagoon dev`, or `serve` when the build survives), open a state from `motu lagoon states`,
+   and read the screen. **This must be a FRESH agent** — the one that built the region is the worst
+   reader of it, for the reason CLAUDE.md gives — handed only the URL, the app's own components and
+   vocabulary, and the question "does this screen belong to THIS application?".
+3. **Read the code the agent wrote.** Not the diff stat — the files. An island wrapper that duplicates
+   a component instead of wrapping it, a frame that redraws the page's arrangement, a `bind` that
+   launders one island's output into another's input, an evidence file whose scenarios do not differ:
+   all of these pass every check and are the wrong shape. `motu check` cannot see taste.
+4. **Record the answer in RESULTS.md even when it is "fine"** — an unlooked-at run is not evidence,
+   and "we looked and it was fine" is a different claim from "we did not look".
+
+The first three rounds were graded on journals, traces and the arms' own fresh-eyes looks. Steps 1
+and 3 were done ad hoc where something drew attention, and not systematically — so any claim in this
+file about code QUALITY, as opposed to defects found, is weaker than the claims about the defects.
+
 ## Grading
 
 The countable half is `analyze.mjs` and needs no judgement. The qualitative half — reading the

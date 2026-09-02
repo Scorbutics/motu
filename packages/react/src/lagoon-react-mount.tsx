@@ -8,7 +8,7 @@
 //
 // So the React host's lagoon renders through the same `<ArchipelagoProvider>` / `<Island>` its pages
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
-import { createElement, type ReactNode } from 'react';
+import { createElement, Fragment, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { lagoonHarness } from './lagoon-harness';
 import {
@@ -232,7 +232,13 @@ export function mountReactLagoon(
         <div className="motu-frame__stage">{islandNode(island.slot)}</div>
       </section>
     ) : (
-      islandNode(island.slot)
+      // KEYED, like the branch above. This one returned the node bare, so the region view rendered an
+      // ARRAY of elements without keys and React logged "missing key prop" against
+      // `ArchipelagoProvider` — motu's own component, on motu's own render path, in every region view.
+      // Seen by two independent cold-start agents on two applications; one chased it and could not
+      // reproduce it by navigating to the same state by hand, because the warning fires once per
+      // mount and the console had been cleared by then.
+      <Fragment key={island.slot}>{islandNode(island.slot)}</Fragment>
     ),
   );
 

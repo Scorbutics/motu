@@ -553,3 +553,60 @@ motu?"*: the directory allowlist, the fixpoint seeding, and the candidate filter
 different agent on a different repository, and each looked like an isolated bug. They are one design
 error repeated — a specifier is how a module is SPELLED, and spelling varies with where the importer
 sits. Worth a sweep for the remaining instances rather than waiting for a fourth to be reported.
+
+---
+
+# Round 4 — a Rails host and a store motu does not own
+
+Chosen for DISCOVERY, not measurement: the three previous targets were standalone React apps whose
+state motu could own. Mastodon is a Rails application whose React frontend lives under
+`app/javascript`, is built by Vite, and uses Redux. 28 invocations, 43% failed, all 6 steps completed.
+
+**A first attempt was cancelled mid-run** (an unintended stop, not a result) after reaching step 2;
+its journal and trace are kept at `runs/arm-d-partial/`, which gives the Vite-plugin wall below two
+independent observations on the same repository.
+
+## The deliverable was a NEGATIVE result, and it is the most useful thing here
+
+`StoreAdapter`, `observeForeignStore` and `reads:` were **never exercised** — not because they failed,
+but because the region did not need them. The agent followed "a host that already has a state
+architecture should not move it into motu's store" literally: every Redux slice was left untouched,
+and motu was given only three keys (`searchTerm`, `searchActive`, `searchResultIds`) that had been
+page `useState`. Redux only had to be REACHABLE — a Provider — so the wrapped component's own hooks
+would not throw.
+
+So after four rounds the least-proven road in the framework is **still unproven**, and the reason
+matters more than the fact: the natural adoption shape is *motu owns the UI-local state, the app keeps
+its domain state, and the page reads both* — which needs none of that machinery. Either it serves a
+rarer case than the docs imply, or a target must be chosen specifically to force it (an island
+subscribing to an atom with no prop).
+
+## What the shape found
+
+| # | Finding | Witnesses |
+|---|---|---|
+| A | the Vite adapter folds the HOST's already-instantiated plugins into the LAGOON's config, whose `root`/`envDir` differ from what those closures captured — Mastodon's themes plugin threw `Unknown project directory` | 2 (also shlink's `vite-plugin-pwa`) |
+| B | **motu bundles Vite 5.4.21; the host runs 8.2.1.** The host resolves bare `mastodon/…` via `resolve.tsconfigPaths`, a Vite 8 feature that is a SILENT NO-OP in 5.x — so `tsc` and the app's own dev server resolved fine while the lagoon 500'd on every bare import | 1 |
+| C | `barrel` is not derived from `app`, so a non-`src/` layout crashes `archipelago create` with a raw ts-morph `File not found` instead of a motu message | 2 |
+| D | `archipelago create` is not atomic: it wrote the archipelago file, crashed, and the retry then reported "already exists — nothing to do" while skipping the registry and barrel re-export it still owed | 1 |
+| E | `removal-check`'s C2 rewriter can unwrap `<X.Island>` / `<X.Region>` but has **no fallback for a bare `useRegion()` hook call** — so removal fails on the very shape the docs recommend | 1 |
+| F | `ArchipelagoProvider` renders a list without a React `key`, producing a console error | 2 (run 3 arm A saw it and could not reproduce it) |
+| G | `hostViteConfig` is a real `lagoon.config.json` key, undocumented in `--help` and the CLI reference; found by reading the adapter's source | 1 |
+
+Findings A and B are one theme: **the lagoon's build is not the host's build**, and every place it
+borrows from the host without inheriting the host's context is a seam. A was dismissed earlier in this
+bench as "too framework specific to fix" on the strength of the shlink sighting alone; the Mastodon
+sighting shows it is one shared cause, and that dismissal was wrong.
+
+## Post-run check (the protocol step this round introduced)
+
+1. **Host build** — `yarn typecheck` exit 0, 0 errors against the 0-error baseline, verified
+   independently rather than taken from the agent's report.
+2. **Fresh-eyes look** — BELONGS, renders cleanly. Every string traced to the app's own `en.json`
+   (`lists.search` -> "Search", `column_search.cancel` -> "Cancel"), both states resolved
+   (`__motuLagoonState.ok: true`). It also caught finding F.
+3. **Code read** — good. The page SHRANK (-40/+24) into the documented shape, and
+   `list_search_header.tsx` is a genuine 73-line extraction over the app's own `ColumnSearchHeader`
+   and `useSearchAccounts`, not a shim. One real cost: the adopter had to write
+   `vite.config.motu-lagoon.mts`, a forked Vite config living in the app's repository — motu-only
+   code of exactly the kind the rules warn against, and a direct consequence of findings A and B.

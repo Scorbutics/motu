@@ -23,6 +23,7 @@ const ARMS = [
   { id: 'arm-a-next', match: /motu-bench\/formbricks/ },
   { id: 'arm-b-vite', match: /motu-bench\/novu/ },
   { id: 'arm-c-npm', match: /motu-bench\/shlink/ },
+  { id: 'arm-d-foreign-store', match: /motu-bench\/mastodon/ },
   { id: 'control', match: /motu-bench\/control/ }, // control runs no motu commands; kept for future arms
 ];
 const armOf = (cwd) => ARMS.find((a) => a.match.test(cwd))?.id ?? 'other';

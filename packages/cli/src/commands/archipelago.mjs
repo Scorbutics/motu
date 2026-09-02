@@ -5,7 +5,7 @@
 //   2. Registers it in <archipelagos>/registry.ts (value import + ARCHIPELAGOS map) and
 //      re-exports it from the app barrel.
 // Islands are added later with `motu island integrate <name> --archipelago <id>`.
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
 import { paths, color, FMT } from '../lib/util.mjs';
@@ -66,13 +66,39 @@ export async function archipelagoCreateCommand(argv) {
   const { id, constName } = archNames(raw);
   const archPath = paths.archipelagoFile(id);
 
+  // "ALREADY EXISTS" IS NOT "ALREADY DONE". Creating a region is three writes — the config, the
+  // registry entry, the barrel re-export — and only the first had a guard. So a run that wrote the
+  // config and then failed (a bad `barrel` path throwing out of ts-morph, say) left the project
+  // half-created, and the RETRY reported "nothing to do" and exited 0 while the registry and barrel
+  // it still owed were never written. Measured on a cold adoption: the region existed, was
+  // unregistered, and the command that should have finished the job said there was nothing to finish.
+  //
+  // So the guard asks whether the region is COMPLETE, not whether one file is present, and when it is
+  // not it carries on and finishes the missing halves.
+  const alreadyRegistered = () => {
+    try {
+      return (
+        readFileSync(paths.archipelagosRegistry, 'utf8').includes(constName) &&
+        readFileSync(paths.barrel, 'utf8').includes(`${id}.archipelago`)
+      );
+    } catch {
+      return false;
+    }
+  };
   if (existsSync(archPath) && !argv.force) {
-    console.log(color.yellow(`! ${archPath} already exists — nothing to do`));
-    process.exit(0);
+    if (alreadyRegistered()) {
+      console.log(color.yellow(`! ${archPath} already exists — nothing to do`));
+      process.exit(0);
+    }
+    console.log(
+      color.yellow(`! ${paths.rel(archPath)} exists but is not fully registered — finishing what a previous run left`),
+    );
   }
 
   mkdirSync(dirname(archPath), { recursive: true });
-  writeFileSync(archPath, archipelagoSource(id, constName));
+  // The existing config is KEPT when it is only the registration that is missing: a half-finished run
+  // must not silently discard edits made to the file it did manage to write.
+  if (!existsSync(archPath) || argv.force) writeFileSync(archPath, archipelagoSource(id, constName));
 
   const project = new Project({
     manipulationSettings: { quoteKind: QuoteKind.Single, useTrailingCommas: true },

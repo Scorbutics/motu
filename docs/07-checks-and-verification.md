@@ -392,6 +392,29 @@ PASS          5 warning(s)
 
 A sweep (`--all`, or `motu check`) collapses each clean member to one line and prints only its errors and warnings (`printSweep`, `verify.mjs:1189-1209`).
 
+### What is new since your last run
+
+`motu check` re-presents every finding, every time. Measured across three cold-start adoptions and 34
+`check` invocations, **half of every finding an agent read was a repeat of one it had already seen** —
+in the worst case the same coupling seven times across seven consecutive runs. The messages were not
+the problem; the report having no memory was.
+
+So findings are hashed and remembered, and a repeat is marked:
+
+    ✗ rsc-boundary   reaches modules/ee/sso/actions.ts, which is a 'use server' module …  · unchanged
+
+    FAIL  1 error(s), 0 warning(s) · all unchanged since your last run
+    FAIL  5 error(s), 2 warning(s) · 4 unchanged, 3 new since your last run
+
+The memory lives in `.motu/cache/last-findings.json` and is **scoped by command**: `motu island verify
+<one>` reports a fraction of what `motu check` does, so comparing across them would mark almost
+everything "new" and make the marker worthless. Each command remembers its own set. A run that printed
+nothing does not overwrite — a command that died early has no opinion, and letting it clear the memory
+would make the next delta a lie.
+
+Nothing about the verdict changes: `unchanged` is a reading aid, not a lower standard. A finding that
+has not moved is still a finding.
+
 ### `--json`
 
 `motu island verify <name> --json` (`verify.mjs:1067`):

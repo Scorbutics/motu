@@ -667,6 +667,26 @@ running (`.github/host-rules.md:120-123`). `MOTU_DEBUG=0` strips the lens entire
 
 ---
 
+## An island that cannot be bundled does not take the lagoon with it
+
+The lagoon builds every archipelago as ONE chunk. So an island whose import graph cannot be bundled
+for a browser — a Next server action reaching `node:async_hooks` five hops down, say — used to kill
+the whole build: rollup died thousands of modules deep, and NO state in the project was openable. A
+cold-start adoption ended with a fully green `motu check --runtime` and not one URL to hand over,
+which is the worst state for a tool whose promise is that every declared state has an address.
+
+Such islands are now left OUT of the build and their slots render a placeholder naming the reason:
+
+    ! 1 island(s) left out of this build — they cannot be bundled, and the rest of the lagoon still works:
+        · sso-options — reaches modules/ee/sso/actions.ts, which is a 'use server' module …
+
+The island's own verdict is unchanged: `motu island verify <name>` still fails, and its preview is
+still broken. What changes is the blast radius — every other island stays previewable. Exclusion is
+decided by the same `rsc-boundary` analysis the island's own check reports, so the two cannot disagree.
+
+`MOTU_NO_EXCLUDE=1` restores the old all-or-nothing behaviour, for when you want the raw bundler
+failure.
+
 ## Known traps
 
 **Absolute asset paths.** `/images/…` works under `lagoon dev`, because Vite serves it, and 404s the

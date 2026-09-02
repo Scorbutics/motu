@@ -191,6 +191,50 @@ for (const c of CASES) {
   process.stdout.write(`  ${verify.ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} motu archipelago verify things\n`);
   if (!verify.ok) note(c, 'the scaffolded region does not pass its own checks', verify.out);
 
+  // THE WHOLE-PROJECT GATES, and the reason they are here is a bug this suite let through.
+  //
+  // `removal-check` shipped broken for EVERY project across two bench rounds, under the words
+  // "mutation-tested" — true of the scaffolder checks above and false of `removal-check`, which was
+  // not in this file. A cold-start agent found it two rounds later. The coverage boundary was the
+  // entire difference, so the boundary moves: a scaffolded project must also survive the checks that
+  // judge a project as a whole.
+  //
+  // Non-zero is not automatically a failure here. A region with no host page legitimately has
+  // integration findings, so what is asserted is that the command RAN and reached a verdict rather
+  // than dying — an exit of 2 (could not run) or a crash is the defect.
+  const check = run('node', [CLI, 'check'], app);
+  const checkRan = /PASS|FAIL|INCONCLUSIVE/.test(check.out) && check.code !== 2;
+  process.stdout.write(`  ${checkRan ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} motu check reaches a verdict\n`);
+  if (!checkRan) note(c, 'motu check did not reach a verdict on a freshly scaffolded project', check.out);
+
+  // `removal-check` must be able to SEE motu. The bug it is here to catch reported a fully
+  // integrated project as having nothing of motu's in it, so the assertion is that it classified the
+  // generated files — not that removal necessarily succeeds.
+  // THE ASSERTION IS THE SYMPTOM, not a proxy for it. The first version of this check asked whether
+  // removal recognised ANY motu file — and it passed with the shipped bug reintroduced, because the
+  // files reachable by a literal `@motu/` specifier were still classified while the ones reached by a
+  // relative path were not. What the bug actually produced is this line, on a project where it cannot
+  // be true: a freshly scaffolded composition root imports nothing but motu, by construction, so
+  // "composes a region but is NOT deletable" is always a defect in the classifier here.
+  // NAME THE FILES, because weaker forms of this assertion did not bite. "Did it recognise ANY motu
+  // file" passed with the shipped bug (two lagoon files still classified). "Did it say NOT deletable"
+  // passed too — that line depends on how the binding happens to be reached. What the bug actually
+  // did was collapse recognition from ELEVEN files to two, and the ones it lost are the ones reached
+  // by a relative path rather than a literal `@motu/` specifier. So assert those by name: they are
+  // motu's own generated files, and a classifier that cannot see them is broken however green it looks.
+  const removal = run('node', [CLI, 'removal-check', '--force'], app);
+  const mustClassify = ['things.archipelago.ts', 'thing-card.island.ts', 'islands/registry.ts', 'index.ts'];
+  // COLOUR STRIPPED FIRST. The captured output carries ANSI escapes, so `delete\\s+` never matched:
+  // what follows the word is `\\x1b[0m`, not whitespace. The assertion reported every file missing,
+  // with the fix in place and the files plainly listed in the very output it was testing — a check
+  // that fails for a reason unrelated to what it is checking, which is as useless as one that passes.
+  const plain = String(removal.out).replace(/\x1b\[[0-9;]*m/g, '');
+  const missed = mustClassify.filter((f) => !new RegExp(`delete\\s+\\S*${f.replace('.', '\\.')}`).test(plain));
+  process.stdout.write(`  ${missed.length ? '\x1b[31m✗\x1b[0m' : '\x1b[32m✓\x1b[0m'} removal-check recognises motu's own generated files\n`);
+  if (missed.length) {
+    note(c, `removal-check did not classify ${missed.join(', ')} as motu's — its allowlist cannot see files reached by a relative path`, removal.out);
+  }
+
   if (keep) process.stdout.write(`  \x1b[2mkept: ${app}\x1b[0m\n`);
   else rmSync(dir, { recursive: true, force: true });
 }

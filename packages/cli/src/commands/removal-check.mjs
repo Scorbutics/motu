@@ -414,7 +414,14 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     // "the check could not answer", never as a crash that hides every other result in the run.
     try {
     const tags = unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec);
-    if (!tags.size && !sf.getImportDeclarations().some((i) => isMotuSpec(i.getModuleSpecifierValue()))) continue;
+    // RESOLVED, not just spelled — the last instance of a mistake this file made three times. Named
+    // imports are already covered (`unwrappableTags` resolves, so `tags` would not be empty), but a
+    // SIDE-EFFECT import of a motu-only module by relative path has no named import to catch it, and
+    // spelling alone would skip the file and leave the import dangling after its target is deleted.
+    const reachesMotu = sf
+      .getImportDeclarations()
+      .some((i) => isMotuSpec(i.getModuleSpecifierValue()) || motuOnly.has(resolveSpec(sf, i.getModuleSpecifierValue()) ?? ''));
+    if (!tags.size && !reachesMotu) continue;
     touched.push(p);
     // EJECT FIRST, while `<Island slot="…">` is still there to say which element produces what: region
     // reads and seeds become plain state, and the producer's output prop is wired to its setters.

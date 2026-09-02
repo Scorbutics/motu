@@ -43,7 +43,7 @@ test('every inlined SVG is encoded — a raw # truncates a data URI silently', a
 
 test('the kit cannot reach a host application it is injected into', async () => {
   // WHY THIS IS A TEST AND NOT A CONVENTION. The tide line injects `motuKitCss('#tide')` into
-  // whatever application is rendering a lagoon — peps, Twenty, anyone who adopted motu. Handing that
+  // whatever application is rendering a lagoon — acme, Twenty, anyone who adopted motu. Handing that
   // application our `--ink`, or a rule that paints its <button>s, because it happens to show a dock
   // would be indefensible. Two properties make it safe, and both are silent when they break.
   const { motuKitCss } = await import('../src/kit.mjs');
@@ -163,8 +163,8 @@ test('no dock handler captures the lagoon control it was painted with', async ()
 test('the dock asks for no safe-area inset', async () => {
   // TWICE NOW, IN TWO CODEBASES. On Firefox for Android env(safe-area-inset-bottom) comes back
   // non-zero even though nothing here sets viewport-fit=cover, and a bottom bar that folds it into
-  // its padding arrives about twice as tall as it should. peps deleted every one of these rather
-  // than working around it (peps_ta_boite e0eeea7); this keeps them from coming back here.
+  // its padding arrives about twice as tall as it should. acme deleted every one of these rather
+  // than working around it (acme e0eeea7); this keeps them from coming back here.
   const { motuDockCss } = await import('../src/dock.mjs');
   const withoutComments = motuDockCss().replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(!withoutComments.includes('env('), 'an env() inset is back in the dock stylesheet');

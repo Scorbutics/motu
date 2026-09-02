@@ -58,7 +58,7 @@ create table if not exists memberships (
   primary key (org_id, user_id)
 );
 
--- `repo` is literally what the host already calls a project: 'Scorbutics/peps_ta_boite_app'. Same
+-- `repo` is literally what the host already calls a project: 'acme/example-app'. Same
 -- normalisation as access.mjs — `name` or `owner/name`, [A-Za-z0-9._-] — because a second spelling of
 -- the same repo is a second set of permissions nobody knows about.
 create table if not exists projects (

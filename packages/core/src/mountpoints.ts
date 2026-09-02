@@ -7,7 +7,7 @@
 // Why this is its own module. The markup has always been emitted by BOTH mount paths — the
 // `<motu-archipelago>` custom element and @motu/react's React mount, which produce identical class
 // names — but the stylesheet was inlined in the element path only. So a host mounting through React
-// (Twenty, peps) got the structure with none of the chrome: a bare slot name as body text, no frame,
+// (Twenty, acme) got the structure with none of the chrome: a bare slot name as body text, no frame,
 // no padding, islands running into each other. The view looked broken on exactly the hosts that most
 // need it, and nothing failed, because the class names were all correct.
 //

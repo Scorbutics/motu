@@ -435,7 +435,7 @@ interface Command {
  * The kit's shapes, for the dock to use instead of redrawing them.
  *
  * SCOPED TO #tide, and that is the whole reason this is not just `installMotuChrome()`. The dock is
- * injected into somebody ELSE'S application — peps, Twenty, whatever adopted motu — and the chrome
+ * injected into somebody ELSE'S application — acme, Twenty, whatever adopted motu — and the chrome
  * sheet sets custom properties on :root and resets the page. Handing a host application our --ink and
  * our body background because it happens to render a dock would be indefensible. `motuKitCss('#tide')`
  * puts the VARIABLES under the dock's own id; the shape rules are class-based and live in motu's own

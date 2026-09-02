@@ -80,7 +80,7 @@ export function changedScope(base) {
   const unattributed = [];
 
   // AN ISLAND'S COMPONENT MAY NOT LIVE UNDER motu AT ALL. On a React host the island wraps a component
-  // the application already owns — peps' `src/ui` is empty and every component sits in the app — so
+  // the application already owns — acme's `src/ui` is empty and every component sits in the app — so
   // mapping by directory alone would attribute the most common edit to nothing and widen every run
   // back to the whole project. Follow each island to the file it actually mounts.
   const byComponent = new Map();

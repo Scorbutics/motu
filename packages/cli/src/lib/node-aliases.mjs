@@ -7,7 +7,7 @@ import { loadMotuConfig } from './config.mjs';
 /**
  * The browser env the lagoon declares, for the node harness.
  *
- * `lagoon.config.json`'s `env` is what the app's modules read at import time — peps' Supabase client
+ * `lagoon.config.json`'s `env` is what the app's modules read at import time — acme's Supabase client
  * throws without it. Vite hands it to the browser through `define`; nothing handed it to node, so an
  * island whose graph touches that client died on a missing variable rather than on anything about the
  * island. One declaration, both paths.

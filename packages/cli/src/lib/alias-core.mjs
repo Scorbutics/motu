@@ -1,7 +1,7 @@
 // The alias map, shared by the ESM hook and the CJS patch so the two cannot disagree.
 //
 // Two module systems reach for the same specifier: an island's ESM `import` and, further down, a
-// dependency's CJS `require`. peps got past `@/app` through the ESM hook and then died on
+// dependency's CJS `require`. acme got past `@/app` through the ESM hook and then died on
 // `require('@/lib/utils')`, because a resolver hook is not in that path at all.
 import { existsSync, statSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';

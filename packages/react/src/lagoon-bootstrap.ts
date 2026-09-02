@@ -404,7 +404,7 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   //
   // A single-island mount was given `overrides.seed[regionId]` so it would "render meaningfully" in
   // the lagoon — reasonable for a human looking at it, and fatal for `default-props`, whose whole
-  // claim is that the island renders from DEFAULTS alone. peps' week navigator crashed on an empty
+  // claim is that the island renders from DEFAULTS alone. acme's week navigator crashed on an empty
   // week list and the browser reported nothing, because the region seed handed it a populated one;
   // the same island under happy-dom, which seeds nothing, threw immediately. The check was passing on
   // data it invented for the preview.

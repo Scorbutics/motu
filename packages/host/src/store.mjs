@@ -298,7 +298,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   //
   // WHY THE HOST AND NOT THE REPOSITORY. Committed PNGs are what makes a visual tier unmaintainable:
   // re-recording is a binary diff nobody reviews, so baselines drift, the check goes permanently red,
-  // and people stop looking — which is exactly the state peps was in, with one island baselined and
+  // and people stop looking — which is exactly the state acme was in, with one island baselined and
   // its baselines stale. Every hosted tool in this space (Chromatic, Percy) keeps them server-side for
   // the same reason.
   //
@@ -611,7 +611,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
    * Remove recorded states — the corpus is a worklist, and a worklist you cannot cross things off is
    * a worklist people stop reading.
    *
-   * THE CASE THIS EXISTS FOR is not a mistake in the data but a mistake in the INSTRUMENT. peps'
+   * THE CASE THIS EXISTS FOR is not a mistake in the data but a mistake in the INSTRUMENT. acme's
    * corpus recorded `isCurrentWeek:true isOtherWeek:true`, where the second is defined as the negation
    * of the first: a state the page cannot compute, recorded because the region was published one key
    * at a time. Fixing the publishing does not un-record it, and a report that keeps offering an

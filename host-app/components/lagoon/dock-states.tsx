@@ -4,7 +4,7 @@
 // ONE ISLAND, PLACED TWICE. The panel's list on a desktop and the strip on a phone's bar are the same
 // control in two arrangements — `layout` decides which slot is filled, and the `compact` prop decides
 // how it draws. They are deliberately NOT two islands: "either of these writes `flow`" is not a
-// producer, and motu's ownership guard is right to refuse it. peps hit this first with a filter panel
+// producer, and motu's ownership guard is right to refuse it. acme hit this first with a filter panel
 // that appears in a sidebar and in a mobile drawer.
 //
 // "AS SEEDED" IS NOT A FLOW. It is the region as the page establishes it, so it is `null` rather than

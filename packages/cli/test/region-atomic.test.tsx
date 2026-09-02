@@ -1,6 +1,6 @@
 // CAN A SUBSCRIBER SEE A COMBINATION NO RENDER PRODUCED?
 //
-// peps' actions page computes `isOtherWeek: selectedWeekIndex !== -1 && !isCurrentWeek`, so
+// acme's actions page computes `isOtherWeek: selectedWeekIndex !== -1 && !isCurrentWeek`, so
 // `isOtherWeek` is DEFINED as `!isCurrentWeek` and both can never be true in one render. Its
 // production corpus holds a state with both true, recorded by a fold that samples only at microtask
 // boundaries — so the store really did settle there, long enough to paint.
@@ -113,12 +113,12 @@ const impossible = (s: string[]) => s.filter((x) => x === 'true/true' || x === '
 //
 //     true/true | true/false | false/false | false/true
 //
-// `true/true` is impossible by construction — `isOtherWeek` is `!isCurrentWeek` — and peps' production
+// `true/true` is impossible by construction — `isOtherWeek` is `!isCurrentWeek` — and acme's production
 // corpus holds it. The page was not changed to fix this; the mechanism was.
 t('no subscriber is told an impossible pair', impossible(run.raw).length === 0, run.raw.join(' | '));
 t('one notification per change, not one per key', run.raw.length === 2, `${run.raw.length} notification(s)`);
 t('...and the real states still arrive', run.raw.includes('true/false') && run.raw.includes('false/true'), run.raw.join(' | '));
-// A coalesced fold — which is how peps' corpus is recorded — samples at microtask boundaries and so
+// A coalesced fold — which is how acme's corpus is recorded — samples at microtask boundaries and so
 // could never have seen the intermediate here anyway. It is the RAW view above that shows the cause,
 // and this line records that the two now agree.
 t('a coalesced fold agrees', run.seen.length === 2, `${run.seen.length} settled state(s)`);

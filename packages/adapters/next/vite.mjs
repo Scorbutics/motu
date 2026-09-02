@@ -34,7 +34,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * plugin was installed unconditionally and pointed at `<hostRoot>/tailwind.config`, so a Next host
  * without one got a lagoon that 500s on the first CSS request with "Cannot find module" naming a
  * generated file the project never wrote. Found by motu's own lagoon host, which is deliberately
- * Tailwind-free — peps, the adapter's only other consumer, has Tailwind, so nothing had ever asked.
+ * Tailwind-free — acme, the adapter's only other consumer, has Tailwind, so nothing had ever asked.
  */
 function hostTailwindConfig(paths) {
   for (const name of ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.cjs']) {

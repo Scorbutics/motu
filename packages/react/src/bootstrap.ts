@@ -104,7 +104,7 @@ type ContractOf<S extends IslandElementShape> = {
 // parameter is OPTIONAL, so against React 19's `FunctionComponent<P> = (props: P) => ReactNode` the
 // inference is `Props | undefined` — and `keyof (Props | undefined)` is `never`, which silently turns
 // every declared `contract.input` name into a type error naming no valid alternative. Found by
-// integrating into Twenty; peps never saw it because its React 18 types infer differently.
+// integrating into Twenty; acme never saw it because its React 18 types infer differently.
 type PropsOf<C> = C extends ComponentType<infer P> ? NonNullable<P> : never;
 
 export interface CustomElementSpec {

@@ -35,7 +35,7 @@ ${motuShadowCss('mock')}
 .box.sel { box-shadow: 0 0 0 2px rgba(255,255,255,.7), 0 0 0 4px currentColor; }
 
 /* pointer-events:none, deliberately. The label overlaps the top-left corner of every island, and with
-   it clickable that corner stopped belonging to the page — a control there (peps' view toggle sits
+   it clickable that corner stopped belonging to the page — a control there (acme's view toggle sits
    exactly at the top-left of its island) could not be clicked while the lens was open. Selecting an
    island already has two ways in that do not steal a pixel from the page: the picker, and Alt-click. */
 .tag {

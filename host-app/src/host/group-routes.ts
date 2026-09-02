@@ -1,7 +1,7 @@
 // THE COMPOSED GROUP VIEW, moved into the app.
 //
 // WHY IT HAD TO MOVE, and it is the same reason the read routes did, found the same way — by looking
-// at the screen. Signed in, the front page listed `Scorbutics/peps_ta_boite_app`, which is private in
+// at the screen. Signed in, the front page listed `acme/example-app`, which is private in
 // access.json and readable to this viewer because the DATABASE says so: a `repo_access` row from the
 // GitHub grant. Opening the `everything` group, it was gone. The page and the gallery disagreed about
 // what one person may see.

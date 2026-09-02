@@ -2,7 +2,7 @@
 //
 // The lagoon replaces a host module with a stub — that is what lets an island render with no backend —
 // and the replacement is total: no request leaves the page, nothing appears in the network panel, and
-// the lens shows region keys but never the CALL that produced them. Looking at peps' club region, the
+// the lens shows region keys but never the CALL that produced them. Looking at acme's club region, the
 // honest reaction is "I see no HTTP feeding these islands", and there is no way to tell whether the
 // feed fetched once, fetched twice, or rendered from a constant nobody asked for.
 //
@@ -167,7 +167,7 @@ export function traced<F extends (...args: never[]) => unknown>(module: string, 
  * down, and standing a module down IS the statement that it is a host boundary. So the build wraps
  * them all (see the `motu:provenance` plugin in the lagoon's vite config).
  *
- * ONLY WHAT IS AWAITED IS RECORDED. A stub exports its reads next to its pure helpers — peps' club
+ * ONLY WHAT IS AWAITED IS RECORDED. A stub exports its reads next to its pure helpers — acme's club
  * stub has two fetches and five formatters, one of which runs per feed row — and recording every call
  * would turn a provenance list into a call log, burying the two lines worth reading under 24 copies of
  * `buildFeedSentence`. A request is something you wait for: the wrapper records when the return value

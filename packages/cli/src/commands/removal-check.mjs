@@ -212,7 +212,7 @@ const INFRA = /^react$|^react-dom|^next\//;
  * Which files exist ONLY because motu does — computed to a fixpoint.
  *
  * Two things the first version got wrong, both found by running it:
- *   1. An import can reach motu WITHOUT a motu specifier: peps' composition root imports
+ *   1. An import can reach motu WITHOUT a motu specifier: acme's composition root imports
  *      `@/motu/src/services`, an app-alias path INTO the motu project directory. Anything importing
  *      from that directory is motu's.
  *   2. It is TRANSITIVE. The dev page's only import is the composition root — no motu specifier at
@@ -311,7 +311,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       continue;
     }
     // COMMENTS BLANKED FIRST, the same rule every other text match here follows: a file that merely
-    // MENTIONS `createRegion` in a comment does not compose a region. peps' `mission-helpers.tsx`
+    // MENTIONS `createRegion` in a comment does not compose a region. acme's `mission-helpers.tsx`
     // explains in prose which module holds its region binding, and was reported as an undeletable
     // composition root for saying so — an error whose advice was to restructure a file that was
     // already correct.

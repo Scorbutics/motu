@@ -239,7 +239,7 @@ watch the fix refuse it.
 
 Two islands declaring `writes` for the same key is an error, statically — not a runtime store-guard
 complaint you reach after the work is done. Grouped by ELEMENT, not by slot: one island placed in two
-slots (peps' filter panel, desktop + mobile drawer) is one producer and must stay legal.
+slots (acme's filter panel, desktop + mobile drawer) is one producer and must stay legal.
 
 This is what makes parallel agents safe without any new mechanism. Declare the WHOLE region in the
 survey — every slot, every owner — before any island is implemented. Each agent then branches from an
@@ -484,7 +484,7 @@ against something that rendered.
 `integrate check` reads the host's SOURCE: it can see `<X.Island slot="y">` and cannot see whether the
 branch containing it ever runs. A slot inside `{isOpen && …}`, a ternary or a `.map()` callback now
 reports as conditionally placed — a WARNING, because a drawer or a permission gate is often exactly
-right, and what is not right is not knowing. peps' actions page places eight islands inside
+right, and what is not right is not knowing. acme's actions page places eight islands inside
 `{weeksLoaded ? (availableWeeks.length > 0 …)}`, which is the same branch that hid a crash on the empty
 list for months.
 

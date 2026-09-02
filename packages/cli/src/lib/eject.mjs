@@ -64,7 +64,7 @@ export function readRegions(archipelagosDir) {
  * the annuaire's is composing the annuaire.
  *
  * SCORED, not "the first region with a prop in common" — which is what this was, and it broke the
- * moment a second region declared a root: both peps' regions have a `header`, so the annuaire's page
+ * moment a second region declared a root: both acme's regions have a `header`, so the annuaire's page
  * matched the actions region, was typed with `ActionsRegion`, and had its host-slot prop rewritten
  * with the wrong mapping. Two type errors in a page that had not changed.
  */

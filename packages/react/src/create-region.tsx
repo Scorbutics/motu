@@ -154,7 +154,7 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     for (const [prop, value] of Object.entries(props)) {
       const slot = slots[prop];
       if (slot) {
-        // NULL MEANS ABSENT, and this is the main path rather than an edge case: peps' actions page
+        // NULL MEANS ABSENT, and this is the main path rather than an edge case: acme's actions page
         // decides five of its seven optional slots with a condition, and the false branch is `null`.
         //
         // Mounting the island anyway would not render nothing — an `<Island>` with no child renders

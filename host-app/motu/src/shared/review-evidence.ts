@@ -8,7 +8,7 @@ import type { ShotRef } from "@/app/console/review-region"
 
 export const REPOS = [
   { repo: "Scorbutics/motu", records: 3, slugs: ["all"] },
-  { repo: "Scorbutics/peps_ta_boite_app", records: 4, slugs: ["all"] },
+  { repo: "acme/example-app", records: 4, slugs: ["all"] },
   { repo: "twentyhq/twenty", records: 3, slugs: ["all"] },
 ] satisfies RepoSummary[]
 
@@ -38,7 +38,7 @@ export const SELECTED: ShotRef = { island: "week-actions", shot: "compact-rows@m
  * a project mid-review, a project that has never published, and a project where everything is settled.
  */
 export const SHOTS_BY_REPO: Record<string, Shot[]> = {
-  "Scorbutics/peps_ta_boite_app": SHOTS,
+  "acme/example-app": SHOTS,
   "Scorbutics/motu": [
     { island: "region-actions", shot: "default@desktop", status: "new", accepted: null, acceptedAt: null, last: at("ddd4") },
     { island: "region-actions", shot: "default@mobile", status: "new", accepted: null, acceptedAt: null, last: at("eee5") },

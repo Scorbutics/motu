@@ -388,7 +388,7 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
   // Fitting an island to a legacy skin is only meaningful when the host HAS one. On a React host
   // (next/none) the island mounts directly, so requiring the strategy would be dead ceremony.
   // POSTURE FIRST. Testing for the field first (as this did) makes the skip branch unreachable for any
-  // project that declares it — which is every project, because the type used to require it. peps' eight
+  // project that declares it — which is every project, because the type used to require it. acme's eight
   // islands each reported "declares a required legacy-fit strategy" under `host: next`, asserting a
   // requirement that does not exist there.
   if (!LEGACY_FIT) {
@@ -2306,7 +2306,7 @@ function frameModuleFor(id) {
  * flowed and snapshotted is a different region from the one that ships: an island nobody mounts looks
  * proven, and an island the page mounts is never looked at.
  *
- * This is the drift `region-root` cannot see. peps' annuaire frame simply omitted `header`, and its
+ * This is the drift `region-root` cannot see. acme's annuaire frame simply omitted `header`, and its
  * actions frame omits `ambassador-card` — both under green checks, because every other check reads
  * motu's declarations and the page's placements separately, and nothing compared the two.
  *
@@ -2370,7 +2370,7 @@ function islandCompositionCheck(report, id, region, composedBy, sources) {
     );
   }
   // A slot the page places CONDITIONALLY may legitimately be missing from the frame: the frame shows
-  // one STATE of the page, and peps' `ambassador-card` is the empty-week fallback that the normal week
+  // one STATE of the page, and acme's `ambassador-card` is the empty-week fallback that the normal week
   // does not reach. That is a different state, not a different composition — so it is said, not failed.
   // A slot placed UNCONDITIONALLY and never mounted is the real finding: it ships on every render and
   // the region has never once looked at it.
@@ -2516,7 +2516,7 @@ function frameIsPageCheck(report, id, region) {
   const islandNames = [...new Set((region?.islands ?? []).map((i) => i.element).filter(Boolean))];
   // WHERE THIS REGION IS COMPOSED: the files placing its slots, plus one hop up — a page that renders
   // a screen component which places the islands is composing this region too, and it is usually the
-  // page that holds the layout (peps' `/forgot-password` is exactly that shape).
+  // page that holds the layout (acme's `/forgot-password` is exactly that shape).
   const composing = new Map();
   const slotRe = /<[A-Z][A-Za-z0-9]*\.Island\s[^>]*?slot=["'`]([^"'`]+)/g;
   const declaredSlots = new Set((region?.islands ?? []).map((i) => i.slot).filter(Boolean));
@@ -2582,7 +2582,7 @@ function archipelagoConfigChecks(report, id) {
   const text = readFileSync(archPath, 'utf8');
 
   // The region's declared shape (D8). Under a host that owns its own page state, the page and the
-  // archipelago otherwise name the same values twice with nothing linking them — peps' page called it
+  // archipelago otherwise name the same values twice with nothing linking them — acme's page called it
   // `loadingReceived` while the store key was `receivedLoading`. Requiring the parameter makes the
   // app's own type the single vocabulary, and a rename becomes a compile error.
   //
@@ -2745,7 +2745,7 @@ function archipelagoConfigChecks(report, id) {
     // the region is declared UP FRONT (the survey writes every slot and owner before implementation),
     // that meeting happens in each agent's own branch on their first `motu check` — which is why this
     // has to be static, in the fast loop, and not a runtime gate they reach after the work is done.
-    // Grouped by ELEMENT, not by slot. peps caught the first version of this rule as a false positive:
+    // Grouped by ELEMENT, not by slot. acme caught the first version of this rule as a false positive:
     // its filter panel is one island placed twice (`filters-desktop`, `filters-mobile`), both writing
     // `filters` — which is exactly what "two slots, one island" has to mean, and the region's evidence
     // says so on purpose. Two SLOTS may share a producer; two IMPLEMENTATIONS may not.

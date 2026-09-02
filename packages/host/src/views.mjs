@@ -213,8 +213,8 @@ aside .motu-home .motu-mark { width: 22px; height: 22px; border-radius: 6px; }
     transform: translateY(100%);
     transition: transform 220ms cubic-bezier(.2,.9,.3,1);
     /* NO SAFE-AREA INSET. Nothing here sets viewport-fit=cover, so this is specified to be zero —
-       and on Firefox for Android it is not, which is what doubled the dock's bottom bar. peps deleted
-       every one of these for the same reason (peps_ta_boite e0eeea7). */
+       and on Firefox for Android it is not, which is what doubled the dock's bottom bar. acme deleted
+       every one of these for the same reason (acme e0eeea7). */
   }
   body.sheet-open aside { transform: translateY(0); }
   body.sheet-dragging aside { transition: none; }
@@ -524,7 +524,7 @@ ${PRIMARY_DETECT_JS}
     clearPrimary(f);
     var btn = document.querySelector('button.member[data-i="' + i + '"]');
     // A DECLARED COLOUR WINS, and costs nothing to honour. Detection exists so that nobody HAS to set
-    // chrome.brand, not to overrule the projects that did -- peps tuned its gold by hand (a 25%
+    // chrome.brand, not to overrule the projects that did -- acme tuned its gold by hand (a 25%
     // darkening of its own control colour), and inferring over the top of that would be replacing a
     // decision with a guess.
     var declared = btn && btn.dataset.brand ? { primary: btn.dataset.brand } : null;

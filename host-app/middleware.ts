@@ -1,6 +1,6 @@
 // REFRESH THE SESSION ON EVERY REQUEST, and write the result where the browser can see it.
 //
-// The `getAll`/`setAll` shape below is peps' working one, copied deliberately rather than rewritten:
+// The `getAll`/`setAll` shape below is acme's working one, copied deliberately rather than rewritten:
 // re-creating `NextResponse.next({ request })` AFTER `setAll` is the part that is easy to get subtly
 // wrong, and getting it wrong loses the session on some requests and not others — the worst shape a
 // bug can have. See docs/plan-lagoon-host.md.

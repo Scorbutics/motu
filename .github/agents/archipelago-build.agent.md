@@ -197,14 +197,14 @@ page must pass. Do both, or the island is declared and never placed.
 Moving a page to `root` is not "the JSX moved" — that part is checkable. These two are not:
 
 - **EXCLUSIVITY GETS DEMOTED.** A ternary whose branches are mutually exclusive by construction
-  becomes two independent props, and nothing enforces that at most one is non-null. peps' actions page
+  becomes two independent props, and nothing enforces that at most one is non-null. acme's actions page
   went from `weeksLoaded ? <WeekNavigator/> : <Skeleton/>` to a `weekNav` prop and a
   `weekNavPlaceholder` prop rendered adjacently, with a comment where the guarantee used to be. When
   `slots` cannot express an either/or, KEEP the ternary in the page and pass one node — not two props
   and a promise.
 - **THE SERVER/CLIENT BOUNDARY MOVES.** The root is rendered from inside `<X.Region>`, which is a
   client component. A layout the page used to render as a server component crosses into the client
-  bundle when it becomes the root — peps' `AuthLayout` did, and the nesting inverted from
+  bundle when it becomes the root — acme's `AuthLayout` did, and the nesting inverted from
   `page → AuthLayout → Screen` to `page → Screen → Region → AuthLayout`. Same pixels, different tree.
   Check what the extracted layout imports before you move it.
 

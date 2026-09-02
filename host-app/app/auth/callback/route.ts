@@ -1,7 +1,7 @@
 // AUTH CALLBACK — where a GitHub round-trip becomes a session.
 //
-// The PKCE half of peps' callback and nothing else: no `verifyOtp` branch, because phase 1 has no
-// email path to verify. What it adds, and what peps has nothing to copy for, is spending the provider
+// The PKCE half of acme's callback and nothing else: no `verifyOtp` branch, because phase 1 has no
+// email path to verify. What it adds, and what acme has nothing to copy for, is spending the provider
 // token once — see src/auth/repo-access.ts for why the ANSWER is kept and the token is not.
 //
 // It issues HTTP redirects rather than rendering, so nobody sees an intermediate page.

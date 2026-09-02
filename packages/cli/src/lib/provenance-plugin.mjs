@@ -6,7 +6,7 @@
 // rendered row came from.
 //
 // This was per-export (`traced(...)` by hand in the stub) and that is the wrong shape for a fact
-// about the boundary rather than about the function: peps' club stub had opted in, so the club region
+// about the boundary rather than about the function: acme's club stub had opted in, so the club region
 // showed its two fetches while the actions and directory regions — whose stubs nobody had wrapped —
 // reported "traced export(s), none called", which reads as "these islands fetched nothing" and is a
 // different claim entirely. A stub added tomorrow is traced the day it lands.

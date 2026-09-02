@@ -1,14 +1,14 @@
 // The browser half of identity — one function, and it is the whole port the sign-in source needs.
 //
-// Kept apart from anything that runs on the server, the way peps keeps `lib/auth/client.ts` and
+// Kept apart from anything that runs on the server, the way acme keeps `lib/auth/client.ts` and
 // `lib/auth/server.ts` apart with no barrel index between them: that split IS the privilege boundary,
 // and a barrel is how one import reaches across it.
 import { createClient } from '@/src/supabase/client'
 
 /**
- * THE SCOPES, and they are the reason there was nothing to copy from peps.
+ * THE SCOPES, and they are the reason there was nothing to copy from acme.
  *
- * peps calls `signInWithOAuth` with no scopes at all and never touches `provider_token`, because
+ * acme calls `signInWithOAuth` with no scopes at all and never touches `provider_token`, because
  * nothing in that app asks GitHub a question. This host's whole access model does: `authorize` answers
  * "may this user read owner/name", and only GitHub knows.
  *

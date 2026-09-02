@@ -1,6 +1,6 @@
 // The BROWSER half of identity.
 //
-// Kept apart from `./server` with no barrel index between them, the way peps keeps `lib/auth/client`
+// Kept apart from `./server` with no barrel index between them, the way acme keeps `lib/auth/client`
 // and `lib/auth/server` apart: that split IS the privilege boundary, and a barrel is how one import
 // reaches across it. Nothing in this file may ever hold the service-role key.
 import { createBrowserClient } from '@supabase/ssr'

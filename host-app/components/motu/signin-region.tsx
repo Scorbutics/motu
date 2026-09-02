@@ -5,7 +5,7 @@
 // deletable whole. This host declares `removable: false` — motu is load-bearing on motu's own surfaces
 // by choice — so `removal-check` reports a SKIP here rather than a pass. That is not a licence to put
 // application code in this file: the shape is what makes the same pattern honest in an adopting app,
-// and it is the shape peps had to be taught the hard way (installing the source here dragged the auth
+// and it is the shape acme had to be taught the hard way (installing the source here dragged the auth
 // client in, the file stopped qualifying, and removal left `createRegion` behind with its imports
 // gone). The port belongs where the application is — the screen creates the source and renders the
 // real component inside the island wrapper.
@@ -15,7 +15,7 @@ import { ELEMENT_REGISTRY } from 'motu-host-islands';
 // The ARCHIPELAGO comes from its own module, not from the barrel beside the registry.
 // A barrel that exports the island registry pulls in every island, so an island whose view
 // reaches an application page — and that page composing a region — closes a cycle back to this
-// file, and `createRegion` then reads the archipelago before it is initialised. It cost peps a
+// file, and `createRegion` then reads the archipelago before it is initialised. It cost acme a
 // day: eight hops, every region blank, and a page that said nothing. `integrate check` warns
 // about it now (`root-imports`); this is the shape it asks for.
 import { signinArchipelago } from '@/motu/src/archipelagos/signin/signin.archipelago';
@@ -42,7 +42,7 @@ export const MotuRegion = Signin.Region;
 /**
  * NO NAMED RE-EXPORTS OF THE BINDING'S PIECES.
  *
- * There was a `SigninRoot = Signin.Root` here, copied from peps, where it exists because that app's
+ * There was a `SigninRoot = Signin.Root` here, copied from acme, where it exists because that app's
  * region is composed by a SERVER component and a server component may not read a property off an
  * object a client module exported. This app's screen is already `"use client"`, so it can reach
  * `Signin.Root` directly — and it must: `motu integrate check` recognises the wrap form by the tag

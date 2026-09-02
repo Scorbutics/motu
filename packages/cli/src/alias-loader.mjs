@@ -5,7 +5,7 @@
 // own app, which is every island in a real project.
 //
 // NOT tsconfig `paths`, which is the obvious answer and the wrong one: those are a TYPE resolution
-// map, and a project may legitimately point one at a `.d.ts`. peps maps `react` to
+// map, and a project may legitimately point one at a `.d.ts`. acme maps `react` to
 // `@types/react/index.d.ts` on purpose, to force one React type definition across a checkout boundary
 // — follow that at runtime and node tries to execute a declaration file.
 //

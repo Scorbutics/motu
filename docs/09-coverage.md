@@ -219,7 +219,7 @@ One filter keeps the whole check alive (`packages/coverage/src/index.ts:281`):
 
 > THE FIRST PAINT IS NOT A STATE OF THE REGION, and counting it here silences this whole check. A
 > wholly-absent fingerprint is what a region looks like before anything has been established — every
-> page load passes through it […] Measured on peps: fifteen keys reported disjoint, then zero the
+> page load passes through it […] Measured on acme: fifteen keys reported disjoint, then zero the
 > moment that one state arrived — the strongest finding the tool had, switched off by the most
 > ordinary state there is.
 
@@ -600,7 +600,7 @@ reason `island create` stopped scaffolding `fixtures.mock.ts`"
 | `--json` | the same findings as data: `region`, `declaration`, `keys`, `recorded`, `covered`, `systemic`, `uncovered[]` (with `id`, `share`, `count`, `differsBy`, `fingerprint`, `scenario` skeleton), `unreachable`, `keysDiffer`, `caveats`, `failAbove`, `pass` (`:474`). It **owns stdout** — prose is suppressed and errors go to stderr, because the first version printed the header before the JSON and broke parsing on the first character (`:155`) |
 | `--ids` | print each uncovered state's `fingerprintId` under its row, "so the third answer to an uncovered state is reachable without deriving it by hand" (`:525`) |
 | `--accept <id…>` | **a decision**: "we looked and chose not to preview this". POSTs the ids to `<host>/api/coverage/accept?repo=&region=&h=` under the **admin** token, never the ingest one — "nothing may promote a state to known except a flow or a person, and a reporting credential that could also accept would let the tool mark its own findings resolved" (`:402`) |
-| `--forget <id…>` / `--forget-all` | remove a recorded state, which is **not** accepting it. "Accepting says 'we looked and chose not to preview this'. Forgetting says 'this was never true' — and the case it exists for is a mistake in the INSTRUMENT, not in the application." peps recorded `isCurrentWeek:true isOtherWeek:true`, where the second is the negation of the first — a state the page cannot compute (`:365`). POSTs to `/api/coverage/forget` (`:386`) |
+| `--forget <id…>` / `--forget-all` | remove a recorded state, which is **not** accepting it. "Accepting says 'we looked and chose not to preview this'. Forgetting says 'this was never true' — and the case it exists for is a mistake in the INSTRUMENT, not in the application." acme recorded `isCurrentWeek:true isOtherWeek:true`, where the second is the negation of the first — a state the page cannot compute (`:365`). POSTs to `/api/coverage/forget` (`:386`) |
 | `--fail-above <n>` | gate CI: exit 1 when any uncovered state's share is at or above `n` percent (`:466`, `:554`). Without it the run is advisory and exits 0 — "An uncovered state is information, and a check that goes red for information is a check people learn to skip" (`:5`) |
 
 Two more flags exist in the implementation but are absent from `--help`: `--save`, which writes the
@@ -680,7 +680,7 @@ too" (`:303`).
 
 ## 10. End-to-end setup
 
-The worked example is peps (`peps:motu/motu.config.json`).
+The worked example is acme (`acme:motu/motu.config.json`).
 
 **1. Turn it on in `motu.config.json`** — deployment facts only, and no addresses:
 
@@ -689,7 +689,7 @@ The worked example is peps (`peps:motu/motu.config.json`).
   "coverage": {
     "enabled": true,
     "regions": ["*"],
-    "corpusUrl": "https://motu.tail77d0a9.ts.net/api/coverage?repo=Scorbutics/peps_ta_boite_app&region=actions"
+    "corpusUrl": "https://motu.tail77d0a9.ts.net/api/coverage?repo=acme/example-app&region=actions"
   }
 }
 ```
@@ -723,8 +723,8 @@ about coverage belongs here.
 (`packages/cli/src/lib/archipelagos.mjs:25`, `:66`). Verify it names `@motu/coverage` — if coverage is
 off, the module is an empty `export {}` by design.
 
-**4. Wire the server routes.** On Next, two files of two lines each — peps'
-`peps:app/api/motu/coverage/route.ts` and `peps:app/api/motu/coverage/known/route.ts`:
+**4. Wire the server routes.** On Next, two files of two lines each — acme's
+`acme:app/api/motu/coverage/route.ts` and `acme:app/api/motu/coverage/known/route.ts`:
 
 ```ts
 export const dynamic = "force-dynamic"
@@ -741,8 +741,8 @@ and `MOTU_COVERAGE_REPO` in the server environment; add `MOTU_HOST_READ_TOKEN` u
 public on the host (`packages/coverage/src/server/index.ts:24`). On any other runtime, call
 `handleCoverage`/`handleKnown` from `@motu/coverage/server` behind whatever adapter that host uses.
 
-**5. Render the two meta tags** in the application's document head — peps does this in
-`peps:app/layout.tsx`:
+**5. Render the two meta tags** in the application's document head — acme does this in
+`acme:app/layout.tsx`:
 
 ```html
 <meta name="motu-coverage-endpoint" content="/api/motu/coverage" />

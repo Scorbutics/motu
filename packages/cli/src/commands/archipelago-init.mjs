@@ -170,7 +170,7 @@ export function ${pascal}RegionFrame({ island }: { island: (slot: string) => Rea
   // where the region TYPE already lives as `<id>-region.ts`; TypeScript resolves `./<id>-region` to
   // the `.ts` and the composition root is unreachable, so the screen importing `MotuRegion` fails to
   // compile with no hint that a second file is involved. A project with a precedent never sees it —
-  // peps' binding sits in `components/motu/` and its type in `app/`.
+  // acme's binding sits in `components/motu/` and its type in `app/`.
   const collides = bindingDir === dirname(typeFile);
   const bindingFile = resolve(bindingDir, `${id}-${collides ? 'binding' : 'region'}.tsx`);
   const transportLine = model?.text.match(/^\s*transport:.*$/m)?.[0]?.trim() ?? 'transport: undefined, // TODO(motu): the transport this environment uses';

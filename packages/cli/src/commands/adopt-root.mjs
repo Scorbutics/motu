@@ -10,7 +10,7 @@
 //   - each `island('x')` and the prop it sits in      -> `slots`
 // and prints, rather than guesses, the half that is not: the page's own rewrite.
 //
-// It REFUSES rather than approximating. A frame that nests two host components (peps' actions page
+// It REFUSES rather than approximating. A frame that nests two host components (acme's actions page
 // stacks `ActionsPageStack` around `ActionsLayout`) has an arrangement no single component expresses
 // yet, and the answer is a decision about the application's structure — which is exactly the kind of
 // thing a codemod should hand back.
@@ -126,7 +126,7 @@ export async function archipelagoAdoptRootCommand(argv) {
 
   // prop -> slot, from `prop={island('x')}`; plus the nesting form, `<X>{island('x')}</X>` -> children.
   //
-  // A prop holding MORE THAN ONE island is the shape `slots` cannot express: peps' sign-in shows
+  // A prop holding MORE THAN ONE island is the shape `slots` cannot express: acme's sign-in shows
   // EITHER `auth-error` OR `login-form` in one child, and a region cannot declare that two slots are
   // exclusive. Taking the first match would have written a map that silently drops the other island —
   // which this did, on its first run, and produced a plausible wrong answer instead of a refusal.

@@ -163,7 +163,7 @@ export async function lagoonPublishCommand(argv) {
   //
   // DECLARED, not only passed. It used to be a flag alone, so a republish that did not repeat the
   // flag silently renamed the project back to 'Motu Lagoon' in every gallery — which is exactly what
-  // happened to peps here. The flag still wins for a one-off.
+  // happened to acme here. The flag still wins for a one-off.
   const title =
     typeof argv.title === 'string' ? argv.title.slice(0, 200) : (declaredTitle() ?? resolved.title);
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
@@ -212,7 +212,7 @@ export async function lagoonPublishCommand(argv) {
  * The project's own colour, from `lagoon.config.json`'s `chrome.brand`.
  *
  * NOT `chrome.primary`, deliberately. That one is for the lagoon itself and is allowed to reference
- * the host's own CSS variables (peps writes `hsl(var(--primary-control))`), which resolve inside that
+ * the host's own CSS variables (acme writes `hsl(var(--primary-control))`), which resolve inside that
  * app and nowhere else — a host listing repositories would be handed a colour it cannot compute.
  * `brand` is the same decision written so it travels: any self-contained CSS colour.
  */

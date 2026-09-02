@@ -59,7 +59,7 @@ export interface StateRequest {
   /**
    * Which region a `flow` belongs to, when its name alone does not say.
    *
-   * Flow names are scoped to their region and they DO collide across regions — peps has "each slot
+   * Flow names are scoped to their region and they DO collide across regions — acme has "each slot
    * renders its own island" in two, which is a good name in both. Resolving that by taking the first
    * match would open a different region than the one asked for and look exactly like success.
    */
@@ -299,7 +299,7 @@ async function waitForQuiet(stillMs = 200, budgetMs = 2000): Promise<void> {
  * PLAY AN ISLAND SCENARIO'S INTERACTIONS, so the state a name PROMISES is the state a URL opens in.
  *
  * Without this, a scenario carrying `interactions` was addressable and unfaithful: the lagoon applied
- * the seed, ran nothing, and reported `ok: true` under the scenario's own name. Opening peps'
+ * the seed, ran nothing, and reported `ok: true` under the scenario's own name. Opening acme's
  * "une sélection réelle survit à un refetch qui échoue" showed the plain seeded panel — no selection
  * made, no refetch failed, identical to the scenario before it — while the one signal a viewer is
  * told to trust before believing a screenshot vouched for it. A snapshot baseline took the picture

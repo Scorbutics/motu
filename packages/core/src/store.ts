@@ -329,7 +329,7 @@ export class Store {
    * Apply several keys as ONE observable change.
    *
    * A region is written a key at a time, and `set` notifies as it goes — so a caller holding a whole
-   * region object publishes every step in between as if it were a state of the region. peps' actions
+   * region object publishes every step in between as if it were a state of the region. acme's actions
    * page computes
    *
    *     const isCurrentWeek = …

@@ -472,7 +472,7 @@ async function handleFunction(req: ParsedRequest, transport: MockTransport): Pro
  *
  * This closes a gap `network-sealed` structurally cannot see: a relative request goes to the lagoon's
  * OWN origin, so it is loopback, so it is not an escape — it just 404s against the dev server, the
- * caller catches it, and an empty state renders. peps' announcement banner did exactly that. Routed
+ * caller catches it, and an empty state renders. acme's announcement banner did exactly that. Routed
  * through the fixture layer, the same miss is an unscoped request and `fixture-coverage` says so.
  */
 async function handleAppRoute(req: ParsedRequest, transport: MockTransport): Promise<Response> {

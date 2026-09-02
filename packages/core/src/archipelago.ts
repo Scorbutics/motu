@@ -107,7 +107,7 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    *
    * The store key is `keyof TRegion`, so a region that declares its shape gets the binding checked by
    * the compiler: rename the key in the app and this fails to build. That matters because the page and
-   * the archipelago otherwise name the same value twice and nothing links them — in peps the page
+   * the archipelago otherwise name the same value twice and nothing links them — in acme the page
    * already called it `loadingReceived` while the store key was `receivedLoading`.
    *
    * `| undefined` is not an invitation to write one: it is what lets a region be declared with
@@ -210,7 +210,7 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * DERIVED, and only declarable for the case derivation cannot see: a key the host feeds that no
    * island binds. Host-fed is what is LEFT after ownership — every bound key an island does not write
    * is fed from outside, by definition, so listing them restated a subtraction the compiler can do
-   * (`HostFedKeys`). The list also had to be maintained: sixteen entries in peps' actions region, each
+   * (`HostFedKeys`). The list also had to be maintained: sixteen entries in acme's actions region, each
    * of them a place to typo a key that `keyof TRegion` would have caught anyway.
   /**
    * Which of this region's keys are CLOSED SETS, for the coverage fold.
@@ -233,7 +233,7 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    *
    * This is where the region's ARRANGEMENT is declared, and declaring it here is what leaves only one
    * copy of it. Before, the prop -> island mapping was written twice — once in the page's JSX and once
-   * in a hand-written lagoon frame — with nothing comparing them. The frame drifted every time: peps'
+   * in a hand-written lagoon frame — with nothing comparing them. The frame drifted every time: acme's
    * lagoon showed a `/forgot-password` heading that existed nowhere in the application, and its
    * annuaire rendered with no header at all, both under a green PASS.
    *
@@ -267,7 +267,7 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
   /**
    * Root props the HOST fills, and the application component that fills them: prop -> component.
    *
-   * For region UI that reads no region key and writes none — peps' annuaire header is a title, a link
+   * For region UI that reads no region key and writes none — acme's annuaire header is a title, a link
    * and two buttons acting on the member, none of it region state. Islanding it would invent an island
    * that binds nothing, so it is declared host-filled instead.
    *
@@ -412,7 +412,7 @@ export type RegionSourcesOk<A> = [SourcedKeys<A>] extends [never]
 /**
  * A key more than one ISLAND writes — the thing ownership exists to forbid.
  *
- * Grouped by ELEMENT, not by slot: one island placed twice (peps' filter panel, desktop + mobile) is
+ * Grouped by ELEMENT, not by slot: one island placed twice (acme's filter panel, desktop + mobile) is
  * one producer and stays legal. `ProducedKeys` cannot answer this — it is a union over every island,
  * so two writers of one key collapse into the same member — which is why the walk is per island.
  *
@@ -614,7 +614,7 @@ export type TagsOf<T> = [T] extends [string] ? T : keyof T & string;
  * detector, and it turns the silent case into this error. The fix at the call site is `as const` on the
  * config, which makes the argument narrow BEFORE inference, so there is nothing left to give up on.
  *
- * Found in peps, whose two largest regions had crossed the threshold: `ownership`, `wiring` and
+ * Found in acme, whose two largest regions had crossed the threshold: `ownership`, `wiring` and
  * `sourced` were all passing vacuously and only `produced` could notice, because it alone compares
  * against a type declared outside the config.
  */
@@ -748,7 +748,7 @@ export function getArchipelagoStore(id: string): Store | undefined {
  * has no props, so a scenario's `seed` reaches nothing. The lagoon replaces that module with a stub,
  * and a stub returning a constant makes every scenario render identically — `data-flow` then either
  * fails honestly or is skipped, and `responsive`, `a11y` and the snapshots all run against ONE state.
- * Three of the four islands on peps' club page were in exactly that position.
+ * Three of the four islands on acme's club page were in exactly that position.
  *
  * A stub calls this instead of returning a constant, and the scenario becomes the input again:
  *

@@ -1,6 +1,6 @@
 // How a click becomes a GitHub redirect — ONCE, for both places that need it.
 //
-// A source rather than a call inside the button, for the reason peps' login source records: a
+// A source rather than a call inside the button, for the reason acme's login source records: a
 // component that calls the auth client itself makes signing in something only that component can do,
 // and makes every way it can FAIL unreachable from anywhere else. Here that matters more than usual,
 // because the happy path leaves the page — so the failures are the ONLY states left to look at, and

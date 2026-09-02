@@ -160,7 +160,7 @@ export const Club = createRegion(clubArchipelago, {
 });
 ```
 
-`peps:components/motu/club-region.tsx:25-34`. Every region file in
+`acme:components/motu/club-region.tsx:25-34`. Every region file in
 that project makes the same choice deliberately — "environment choices this application already made
 once, and answering them differently by accident is how two regions end up with two securities"
 (`club-region.tsx:8-10`).
@@ -224,7 +224,7 @@ Deny-by-default has to mean the map, exactly" (`direct-transport.ts:31-32`).
 whatever they already use — a session-bound client, row-level security, an existing `@Roles`
 interceptor — decides what the caller may see. "motu adds no credential and can widen nothing"
 (`direct-transport.ts:18-20`; the same sentence in the adopting project at
-`peps:motu/src/services/index.ts:11-13`).
+`acme:motu/src/services/index.ts:11-13`).
 
 `HttpTransport` exists because the Jakarta ocean keeps data access on the server, where the browser
 cannot reach it without a request. **That is not universal.** What motu needs is not a network
@@ -278,13 +278,13 @@ claims, and it is routinely read backwards.
   dispatch — all of that executes" (`.github/host-rules.md:363-366`). In the adopting project the
   source is `createDirectorySource` — debounce, page-one reset, append-on-more, and a `generation`
   counter so a slow first request cannot land after a faster second one
-  (`peps:app/dashboard/directory/directory-source.ts:56-64`). It owns
+  (`acme:app/dashboard/directory/directory-source.ts:56-64`). It owns
   no framework and no motu, "so it runs in a React effect, in a motu channel, and in a vitest test
   with three lines of setup" (`directory-source.ts:9-10`).
 - **The PORT is the stand-in.** "production hands it Supabase and the services, the lagoon hands it
   fixtures" (`host-rules.md:366-367`). The port is a declared interface —
   `DirectoryPort { search, counts }` (`directory-source.ts:23-26`). The page passes the real services
-  (`peps:app/dashboard/directory/page.tsx:56-58`); the lagoon passes fixture functions through
+  (`acme:app/dashboard/directory/page.tsx:56-58`); the lagoon passes fixture functions through
   `channelFrom` (`motu/roots/lagoon/src/regions/directory.tsx:37-48`). The archipelago names the
   source itself, by import, not by string (`motu/src/archipelagos/directory/directory.archipelago.ts:97-99`),
   and `RegionSourcesOk` makes a host-fed key with no declared producer a build error
@@ -313,8 +313,8 @@ inch of this design. It is a few lines by construction, which is the mitigation"
 ### The related trap: a stub that stopped mirroring
 
 The lagoon's `alias` table swaps whole host modules for stubs
-(`peps:motu/roots/lagoon/lagoon.config.json`, the `alias` block).
-Nothing used to check that a stub still stands in for all of it: "in peps, two exports went missing
+(`acme:motu/roots/lagoon/lagoon.config.json`, the `alias` block).
+Nothing used to check that a stub still stands in for all of it: "in acme, two exports went missing
 from stubs and only surfaced because the lagoon BUILD happened to import them — a bundler error, by
 luck" (`packages/cli/src/lib/stubs.mjs:3-7`). `stubParity()` walks the import graph from each island's
 component and compares each stub against **what the islands actually reach for** — not the module's
@@ -673,8 +673,8 @@ aspirational:
 
 - deny-by-default is **structural** on both stacks — reachable only if annotated
   (`BrowserCallable.java:15-18`) or only if named in the map
-  (`services.ts:10-12`; the peps instance says the same at
-  `peps:motu/src/services/index.ts:8-9`);
+  (`services.ts:10-12`; the acme instance says the same at
+  `acme:motu/src/services/index.ts:8-9`);
 - and an unexposed method is a 404 indistinguishable from a nonexistent one, on all three dispatchers
   (`MotuEndpoint.java:51-54`, `packages/adapters/next/src/server.ts:26`,
   `packages/runtime/src/direct-transport.ts:33-39`) — so "just try it" is not a discovery channel.
@@ -682,7 +682,7 @@ aspirational:
 A related rule from the same files, for the same reason: keep the *stand-in* out of the shipped
 graph. The archipelago imports the real component and the real source, and "what it must never import
 is a FIXTURE — the source ships, the stand-in must not"
-(`peps:motu/src/archipelagos/directory/directory.archipelago.ts:15-19`).
+(`acme:motu/src/archipelagos/directory/directory.archipelago.ts:15-19`).
 
 ---
 
@@ -692,7 +692,7 @@ An island needs server data. Six steps, in order.
 
 **1 — Declare the callable surface.** One entry, the narrowest thing that answers the question.
 
-*TypeScript host* (`peps:motu/src/services/index.ts:14-25`):
+*TypeScript host* (`acme:motu/src/services/index.ts:14-25`):
 
 ```ts
 import { defineServices } from '@motu/adapter-next';
@@ -714,7 +714,7 @@ comes back exactly as it does everywhere else" (`services/index.ts:11-13`). Keep
 widening it to `MotuServiceMap` loses every signature (`packages/adapters/next/src/services.ts:23-25`).
 
 The island side is one file
-(`peps:motu/src/contract.ts:8-11`):
+(`acme:motu/src/contract.ts:8-11`):
 
 ```ts
 import { createContract } from '@motu/adapter-next';
@@ -730,7 +730,7 @@ export const contract = createContract<AppServices>();
 **2 — Call it from the component.** `contract.directory.getSectors()`. Never a repository, never a
 client, never `fetch` — "reaching around it (importing a repository into a component) would make the
 island unverifiable, which is what `motu island verify` exists to prevent"
-(`peps:motu/src/contract.ts:6-7`). If the data needs orchestration
+(`acme:motu/src/contract.ts:6-7`). If the data needs orchestration
 (debounce, paging, a reset rule), that belongs in a **source** with a **port** (§3), not in the
 island.
 
@@ -744,7 +744,7 @@ export const Directory = createRegion(directoryArchipelago, {
 });
 ```
 
-`peps:components/motu/directory-region.tsx:27-35` (and its siblings).
+`acme:components/motu/directory-region.tsx:27-35` (and its siblings).
 `DirectTransport` when the app reads from the browser under row-level security;
 `HttpTransport('/api/motu')` + `createMotuRoute` when the work must run on a server. The composition
 root is the only file that knows, and `contract-only-io` makes sure it stays that way
@@ -755,7 +755,7 @@ one `scenario` — two scenarios whose distinct output proves inputs actually re
 (`packages/cli/src/commands/create.mjs:109-135`, and `Scenario` at
 `packages/runtime/src/mock.ts:78-90`). If the island's data is host-fed rather than island-fetched,
 the stand-in is the **port**, installed by `channelFrom` in the lagoon region file
-(`peps:motu/roots/lagoon/src/regions/directory.tsx:37-48`). Either way
+(`acme:motu/roots/lagoon/src/regions/directory.tsx:37-48`). Either way
 the lagoon must have `"transport": "mock"` (`.../roots/lagoon/lagoon.config.json`), which is also the
 default when there is nothing to talk to (`packages/react/src/lagoon-gallery.ts:185-186`).
 

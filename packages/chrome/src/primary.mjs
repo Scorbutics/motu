@@ -161,7 +161,7 @@ export function dominantPrimary(data, opts = {}) {
 /**
  * A raw app colour, made usable as motu's primary.
  *
- * NOT OPTIONAL, and peps proves why: its hand-written brand is
+ * NOT OPTIONAL, and acme proves why: its hand-written brand is
  * color-mix(in srgb, hsl(var(--primary-control)) 75%, #000) -- a 25% darkening somebody applied by
  * eye because the app's own colour was too light to carry white text or to sit under the water ramp.
  * Detection has to do that correction itself or it ships confident, unreadable chrome.

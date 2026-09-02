@@ -7,7 +7,7 @@ a region promises, and the checks in [07 — Checks and verification](07-checks-
 drive those declarations through a real lagoon. There is no `describe`, no `expect(...)`, no runner.
 There is a `Scenario[]` and a `RegionScenario[]`, and everything else is machinery that reads them.
 
-Citations prefixed `peps_ta_boite/motu/…` are excerpts from a real production evidence corpus (a
+Citations prefixed `acme/motu/…` are excerpts from a real production evidence corpus (a
 Next.js club application: 23 island evidence files, 10 region evidence files, 11 shared modules) and
 are quoted verbatim, comments included — the comments are where the failures are recorded.
 
@@ -65,8 +65,8 @@ the mock transport's corpus and change what every existing island check replays
 Evidence is always a **sibling file, never the island or the archipelago**. The registry imports the
 island; keeping evidence out of that module keeps test data out of the application's production bundle
 by construction rather than by trusting tree-shaking
-(`peps_ta_boite/motu/src/islands/member-results.evidence.ts:1`,
-`peps_ta_boite/motu/src/archipelagos/actions/actions.evidence.ts:3`).
+(`acme/motu/src/islands/member-results.evidence.ts:1`,
+`acme/motu/src/archipelagos/actions/actions.evidence.ts:3`).
 
 ### The relative-specifier rule, and why the failure is silent
 
@@ -88,7 +88,7 @@ mitigation is real but it is not a fix: on the snapshot path, four islands were 
 their coverage before the shot count gave it away
 (`packages/cli/src/commands/snapshot.mjs:39`). The same trap has a second face — a `.js` specifier
 pointing at a `.ts` sibling, which is the convention these files use the moment they share a module
-(`peps_ta_boite/motu/src/archipelagos/actions/actions.evidence.ts:12`).
+(`acme/motu/src/archipelagos/actions/actions.evidence.ts:12`).
 
 The corpus states the rule in the file itself, every time:
 
@@ -98,7 +98,7 @@ The corpus states the rule in the file itself, every time:
 // scenarios and says nothing.
 import { FAVORITE_IDS, FIRST_PAGE, MEMBERS } from '../shared/directory-evidence';
 ```
-— `peps_ta_boite/motu/src/islands/member-results.evidence.ts:7`
+— `acme/motu/src/islands/member-results.evidence.ts:7`
 
 The same rule, stated for regions, is why **evidence must not import the lagoon frame**: keep the rows
 in a module with no application imports and let both sides import *that*
@@ -120,10 +120,10 @@ plain-node loaders never try to resolve it. Aliased **type** imports are therefo
 import type { DirectoryFilterValue } from '@/components/directory/directory-filters';
 import type { DirectoryFacetCounts, DirectoryMember, DirectorySearchParams } from '@/lib/services/directory';
 ```
-— `peps_ta_boite/motu/src/shared/directory-evidence.ts:9`
+— `acme/motu/src/shared/directory-evidence.ts:9`
 
 The actions module says the negative form outright: "A VALUE import of an `@/` module would break
-those loaders, so there is none" (`peps_ta_boite/motu/src/shared/actions-evidence.ts:9`).
+those loaders, so there is none" (`acme/motu/src/shared/actions-evidence.ts:9`).
 
 The same erasure principle is used by the `effects` check, which strips `import type` lines before
 deciding what a component actually reaches for (`packages/cli/src/commands/verify.mjs:467`).
@@ -158,13 +158,13 @@ export const scenarios: Scenario[] = [
   { name: 'a query typed', seed: { value: 'Bêta' } },
 ];
 ```
-— `peps_ta_boite/motu/src/islands/directory-search.evidence.ts:4`
+— `acme/motu/src/islands/directory-search.evidence.ts:4`
 
 `fixtures` feeds `MockTransport` (`packages/runtime/src/mock.ts:157`); `roles` is unioned across all
 islands and handed to the lagoon's role selector (`packages/cli/src/lib/scaffold.mjs:214`); an island
 that fetches nothing exports empty arrays for both, and that is normal — "everything it shows is
 host-fed, which is exactly why its evidence is seeds"
-(`peps_ta_boite/motu/src/islands/member-results.evidence.ts:4`).
+(`acme/motu/src/islands/member-results.evidence.ts:4`).
 
 ### A scenario is an address
 
@@ -193,7 +193,7 @@ as "scenarios rendered identically" and `responsive` as "renders nothing": three
 none naming the cause. `seed-transport` names it once, before those checks run
 (`packages/cli/src/commands/verify.mjs:1243`). The fix is always at the component: take the iterable,
 rebuild the `Set` inside. The corpus records the same lesson at the seed
-(`peps_ta_boite/motu/src/islands/member-results.evidence.ts:26`).
+(`acme/motu/src/islands/member-results.evidence.ts:26`).
 
 ### The rule: an island's scenarios must assert its own render
 
@@ -203,10 +203,10 @@ another's. Two useful patterns from the corpus:
 
 - **One key apart.** "More to load" differs from "one full page" only in `total` — "and it is what
   makes the button exist. If those two ever render alike, the button has stopped depending on the
-  count" (`peps_ta_boite/motu/src/islands/member-results.evidence.ts:30`).
+  count" (`acme/motu/src/islands/member-results.evidence.ts:30`).
 - **A state that only exists in transit.** "Loading the week" had no scenario, "which is how the
   column shipped rendering the settled 'Aucune action pour cette semaine.' for the whole round-trip"
-  (`peps_ta_boite/motu/src/islands/week-actions.evidence.ts:75`).
+  (`acme/motu/src/islands/week-actions.evidence.ts:75`).
 
 ---
 
@@ -348,7 +348,7 @@ claim — "this slot renders THIS island" — which is not a data flow and is st
   steps: [{ expectRender: { 'network-stats': 'dans le club cette semaine' } }],
 }
 ```
-— `peps_ta_boite/motu/src/archipelagos/actions/actions.evidence.ts:69`
+— `acme/motu/src/archipelagos/actions/actions.evidence.ts:69`
 
 That step's own comment records what it caught: `isCurrentWeek` drives the banner's read-only notice,
 every other check looked only at keys, "so the region could hold the wrong answer for it and still
@@ -364,7 +364,7 @@ did."
   steps: [{ emit: { slot: 'directory-search', event: 'query-changed', detail: 'Bêta' }, expect: { query: 'Bêta' } }],
 }
 ```
-— `peps_ta_boite/motu/src/archipelagos/directory/directory.evidence.ts:49`
+— `acme/motu/src/archipelagos/directory/directory.evidence.ts:49`
 
 Note what is deliberately absent, from the same file: "`load-more` is deliberately NOT here: it is an
 intent, it ends in the host, and a flow can only end in a region key."
@@ -372,7 +372,7 @@ intent, it ends in the host, and a flow can only end in a region key."
 And note the seed constant one region above it. `weekMissions` was seeded by the page and by no flow,
 so every flow ran against a region one column narrower than the real one — "not a missing scenario: a
 missing column, and internally consistent on both sides"
-(`peps_ta_boite/motu/src/archipelagos/actions/actions.evidence.ts:14`). Factor the page's own seed into
+(`acme/motu/src/archipelagos/actions/actions.evidence.ts:14`). Factor the page's own seed into
 a `PAGE_SEED` constant and spread it into every flow.
 
 ---
@@ -583,15 +583,15 @@ part stays a human's job (`packages/cli/src/commands/verify.mjs:1287`).
 
 **Seed the state the page really establishes.** A flow that runs against a region missing a key the
 page always seeds is testing a narrower region than the one that ships
-(`peps_ta_boite/motu/src/archipelagos/actions/actions.evidence.ts:14`). Likewise, do not seed a state
+(`acme/motu/src/archipelagos/actions/actions.evidence.ts:14`). Likewise, do not seed a state
 the app cannot be in — "a flow that seeds an index past the end is testing a state the app cannot be
-in" (`peps_ta_boite/motu/src/archipelagos/actions/actions.evidence.ts:52`).
+in" (`acme/motu/src/archipelagos/actions/actions.evidence.ts:52`).
 
 **End on something you did not just write.** A key another island produces, or `expectRender` of an
 island that is not the one being driven (`packages/cli/src/commands/verify.mjs:1640`).
 
 **Invent the data.** The lagoon publishes as a shareable artifact, so real people do not belong in it,
-screenshots included (`peps_ta_boite/motu/src/shared/directory-evidence.ts:74`).
+screenshots included (`acme/motu/src/shared/directory-evidence.ts:74`).
 
 ### Failure modes host-rules records from real runs
 

@@ -190,7 +190,7 @@ function checkRegion(region, sources) {
   // closes a cycle back to this file — and then `createRegion(<archipelago>)` runs while the
   // archipelago is still in its temporal dead zone.
   //
-  // That is not hypothetical. On peps it was eight hops:
+  // That is not hypothetical. On acme it was eight hops:
   //   directory-fiche root -> barrel -> islands/registry -> week-actions.island -> WeekActionsView
   //   -> BoosterStrip -> mission-helpers -> directory-member-fiche -> directory-fiche root
   // The whole lagoon is one module graph, so one module throwing took EVERY region blank, not just
@@ -227,7 +227,7 @@ function checkRegion(region, sources) {
   // A server component may RENDER a client component; it may not read a property off a client
   // module's export. So `<Login.Island slot="…">` cannot appear in an RSC page at all — the
   // composition root has to re-export it (`export const LoginIsland = Login.Island`) and the page
-  // renders that name. This scan knew only the member form, so peps' sign-in page — the project's
+  // renders that name. This scan knew only the member form, so acme's sign-in page — the project's
   // first server-component region — reported its one island as never placed while it was placed,
   // seeded and rendering. Take every name that resolves to the binding's Island, exactly as
   // `wrappers` above already does for its Region.

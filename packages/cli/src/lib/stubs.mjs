@@ -1,7 +1,7 @@
 // The seam where the lagoon's isolation can become a lie.
 //
 // A host stub stands in for a real module so an island can render with no backend. Nothing checked
-// that it still stands in for all of it: in peps, two exports went missing from stubs and only
+// that it still stands in for all of it: in acme, two exports went missing from stubs and only
 // surfaced because the lagoon BUILD happened to import them — a bundler error, by luck. An export
 // nothing imports at build time would have gone unnoticed, and the lagoon would have been quietly
 // green about a module it no longer mirrors.

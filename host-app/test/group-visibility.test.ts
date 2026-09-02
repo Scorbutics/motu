@@ -1,6 +1,6 @@
 // WHO A GALLERY SHOWS, and in what order.
 //
-// THE BUG THIS PINS. Signed in, the front page listed `Scorbutics/peps_ta_boite_app` — private in
+// THE BUG THIS PINS. Signed in, the front page listed `acme/example-app` — private in
 // access.json, readable to that viewer because a `repo_access` row from the GitHub grant says so —
 // and the `everything` group did not. The page and the gallery disagreed about one person, because
 // the group view was rendered by the node host, whose `readable()` is `canRead(access.json, …)` and

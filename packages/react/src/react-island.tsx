@@ -66,7 +66,7 @@ interface ArchipelagoValue {
    * AN ISLAND MUST NOT WRITE THE STORE DIRECTLY, and that is the whole fix. Each island publishes its
    * own slice of the page's props from its own effect, so one value computed in one render reached
    * the store through N writes — and a subscriber told between two of them saw a combination no
-   * render produced. peps' corpus holds `isCurrentWeek:true isOtherWeek:true`, where the second is
+   * render produced. acme's corpus holds `isCurrentWeek:true isOtherWeek:true`, where the second is
    * DEFINED as `!isCurrentWeek`.
    *
    * React runs effects child-first and parents last, so the provider's own effect is the one moment
@@ -83,7 +83,7 @@ interface ArchipelagoValue {
    * subtree, the provider's effect never runs, and every island's contribution sits in `pending`
    * unread. The store then keeps the props of the FIRST render for the life of the page, and since a
    * bound key that HAS BEEN SET wins over the page's own prop, the island renders the mount-time
-   * value forever. peps' annuaire spun on `loading: true` from the first paint with the fetch long
+   * value forever. acme's annuaire spun on `loading: true` from the first paint with the fetch long
    * since settled.
    *
    * So the flush is scheduled by whoever enqueues, in a microtask: every island of the commit has run
@@ -246,7 +246,7 @@ export function useMotuStore(): Store {
  * an EJECT rather than an unwrap (docs/plan-key-ownership.md, D1).
  *
  * A page that has handed a value's ownership to an island still has chrome of its own to render with
- * it (peps' week navigator shows the same progress the banner does). Before ownership, the page kept
+ * it (acme's week navigator shows the same progress the banner does). Before ownership, the page kept
  * deriving it a second time, which is two sources of truth for one number; this is the one source,
  * read. Eject materialises the call into `useState` + the producer's callback.
  *

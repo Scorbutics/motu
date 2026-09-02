@@ -83,7 +83,7 @@ test('motu teal survives normalisation unchanged', () => {
   assert.ok(Math.max(...a.map((v, i) => Math.abs(v - b[i]))) <= 2, 'got ' + primary);
 });
 
-test('a too-light brand is darkened, keeping its hue -- the correction peps made by hand', () => {
+test('a too-light brand is darkened, keeping its hue -- the correction acme made by hand', () => {
   const raw = '#f5c542';
   const { primary } = normalisePrimary(raw);
   const before = rgbToHsl(...parseHex(raw));

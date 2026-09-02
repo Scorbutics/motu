@@ -301,7 +301,7 @@ export async function initCommand(argv) {
     // JSX, so overrides must live in a `.tsx`, which is the entry's name. Following the scaffold
     // produced a lagoon that served the overrides file as its entry and rendered an empty div.
     //
-    // peps never hit it because peps has no index.html: it materializes, and its `src/lagoon.tsx` is
+    // acme never hit it because acme has no index.html: it materializes, and its `src/lagoon.tsx` is
     // the overrides. That is the working shape, so it is now the shape `init` creates — entries,
     // index.html and the vite config are rendered into `.motu/cache` by `motu lagoon dev|build`,
     // which is where generated code belongs anyway.
@@ -309,7 +309,7 @@ export async function initCommand(argv) {
     // The materializer renders it — with `fixturesGlob` AND `flowsGlob`, which only it computes — so
     // init's copy was a duplicate that also could not parse: `vars` here has no `flowsGlob`, so the
     // file went out carrying a literal `{{flowsGlob}}` and any project that typechecked its lagoon
-    // directory failed on it. Neither peps nor the review console has the file at all, which is why
+    // directory failed on it. Neither acme nor the review console has the file at all, which is why
     // nothing noticed. `motu lagoon eject` materializes into the project's own lagoon dir, so the
     // rendered version is what a project gets the moment it wants one on disk.
     // Declared, not coded: what the lagoon IS lives here; what it DOES lives in @motu/react.

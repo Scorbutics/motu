@@ -35,14 +35,14 @@
       }
     ],
     "paths": {
-      // The WHOLE app is addressable, not just `src/` — Next's own convention, peps' convention, and
+      // The WHOLE app is addressable, not just `src/` — Next's own convention, acme's convention, and
       // what motu's scaffolding derives host import specifiers from. `@/src/upstream` rather than
       // `@/upstream` is the cost, and it is worth paying: under `./src/*` the generated composition
       // root and lagoon modules would resolve `@/app/...` to `src/app/...`, which does not exist.
       "@/*": ["./*"],
       // ONE React type definition — the app's. motu's checkout carries @types/react 18 and this app
       // has 19; without this, motu's components compile against 18 while the app compiles against 19,
-      // and the two ReactNode types are incompatible (19 added bigint). peps needs the same line.
+      // and the two ReactNode types are incompatible (19 added bigint). acme needs the same line.
       "react": ["./node_modules/@types/react/index.d.ts"],
       "react-dom": ["./node_modules/@types/react-dom/index.d.ts"]
     }
@@ -56,6 +56,6 @@
   ],
   // The lagoon is a separate Vite app with its own toolchain (import.meta.glob, ?inline imports). It
   // is not part of the Next compilation, and typechecking it here only reports Vite globals this
-  // tsconfig has no reason to know about. peps excludes it for the same reason.
+  // tsconfig has no reason to know about. acme excludes it for the same reason.
   "exclude": ["node_modules", "motu/roots/lagoon"]
 }

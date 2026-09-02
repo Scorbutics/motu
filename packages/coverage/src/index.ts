@@ -285,7 +285,7 @@ export function compareCoverage(
   // `absent` appears in the recorded set for EVERY key, which overlaps whatever the flows show, so no
   // key is ever disjoint and nothing is ever systemic.
   //
-  // Measured on peps: fifteen keys reported disjoint, then zero the moment that one state arrived —
+  // Measured on acme: fifteen keys reported disjoint, then zero the moment that one state arrived —
   // the strongest finding the tool had, switched off by the most ordinary state there is. The check
   // asks "do the flows ever show the region in the shape production creates?", and the shape before
   // anything exists is not one of those shapes.

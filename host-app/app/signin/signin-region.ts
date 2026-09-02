@@ -33,7 +33,7 @@ export type SigninRegion = {
    *
    * Host-fed: the page reads it from `searchParams` and seeds it. They got all the way to GitHub and
    * returned — they denied the authorization, or the code expired — so trying again is a real option
-   * in a way it is not for `signInError`. Kept in the provider's own words for peps' reason: two
+   * in a way it is not for `signInError`. Kept in the provider's own words for acme's reason: two
    * different situations flattened into one sentence is how somebody retries the wrong thing.
    */
   authError: string | null

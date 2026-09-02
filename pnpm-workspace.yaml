@@ -11,5 +11,5 @@ packages:
   # every route it does not own yet. See docs/plan-lagoon-host.md.
   - 'host-app'
   # The host's islands package (`motu-host-islands`). A separate package because the Next app root is
-  # its parent — peps' layout exactly, which is the arrangement known to work with `"host": "next"`.
+  # its parent — acme's layout exactly, which is the arrangement known to work with `"host": "next"`.
   - 'host-app/motu'

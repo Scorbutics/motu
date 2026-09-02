@@ -23,7 +23,7 @@ export function SignInScreen({ authError, returnTo }: { authError: string | null
     source.getState,
   )
 
-  // NO NAVIGATION EFFECT HERE, unlike peps' login screen — and the absence is the point. A successful
+  // NO NAVIGATION EFFECT HERE, unlike acme's login screen — and the absence is the point. A successful
   // OAuth handoff navigates the browser itself, to GitHub, and comes back to the callback route. There
   // is no `signedIn` fact for this screen to read and act on: the next thing that knows anything is a
   // different request. That asymmetry is why the source has no success branch.

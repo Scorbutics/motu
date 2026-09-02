@@ -3,7 +3,7 @@
 //
 // NO `.js` ON THESE SPECIFIERS, and the scaffold writes them with one. Turbopack has no
 // `extensionAlias`, so `./islands/registry.js` is simply an unresolved module and `next build` stops
-// here — the same failure peps' next.config.mjs records having fixed inside motu's own packages, back
+// here — the same failure acme's next.config.mjs records having fixed inside motu's own packages, back
 // again in the files motu generates. `moduleResolution: "Bundler"` makes the extension optional, so
 // dropping it works for every bundler rather than adding a mapping per host.
 export { ELEMENT_REGISTRY } from './islands/registry';

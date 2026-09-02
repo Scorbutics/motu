@@ -455,7 +455,7 @@ app; and islands render in light DOM. `host` is left at `angularjs`, so `legacyF
 fit gate applies. Note what is NOT here: no `removable`, even though motu's own surfaces set
 `removable: false` where motu is load-bearing.
 
-### A real adopting project (peps, a Next host)
+### A real adopting project (acme, a Next host)
 
 `motu/motu.config.json` inside the host repository:
 
@@ -476,7 +476,7 @@ fit gate applies. Note what is NOT here: no `removable`, even though motu's own 
   "coverage": {
     "enabled": true,
     "regions": ["*"],
-    "corpusUrl": "https://motu.tail77d0a9.ts.net/api/coverage?repo=Scorbutics/peps_ta_boite_app&region=actions"
+    "corpusUrl": "https://motu.tail77d0a9.ts.net/api/coverage?repo=acme/example-app&region=actions"
   }
 }
 ```
@@ -495,7 +495,7 @@ deprecation warning and the derived checkout.
 
 ### motu's own Next host (`host-app/motu/motu.config.json`)
 
-The third real shape in this repository, and the one to read beside peps — same posture, two keys peps
+The third real shape in this repository, and the one to read beside acme — same posture, two keys acme
 does not have:
 
 ```json

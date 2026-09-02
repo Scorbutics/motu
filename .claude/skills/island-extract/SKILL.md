@@ -308,7 +308,7 @@ sets `"regionRoot": "required"` in `motu.config.json`, and a frame becomes an er
   the app's repository.
 - **Never invent arrangement in a frame.** A frame may hold only the application's own components,
   fragments and `island(slot)`. `region-root` fails on an intrinsic element or a literal string,
-  because a frame that draws its own version of the page drifts from it — peps shipped a lagoon saying
+  because a frame that draws its own version of the page drifts from it — acme shipped a lagoon saying
   "On récupère ton accès" over a page saying "Mot de passe oublié ?" for weeks, entirely green.
 - Never add runtime module loading, federation, per-island versioning, or island-to-island imports
   (see README "Non-goals"). Islands coordinate only through the archipelago store and DOM events.

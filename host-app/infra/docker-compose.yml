@@ -6,7 +6,7 @@
 # API this app does not want, because a Next app talks to Postgres directly; Realtime has nothing to
 # be live about; and pooling solves a problem that serving static HTML does not have.
 #
-# NOT the machine's other Supabase stack. peps runs a full `supabase start` on 54321-54327, and these
+# NOT the machine's other Supabase stack. acme runs a full `supabase start` on 54321-54327, and these
 # ports are chosen to sit clear of it — two projects on one laptop must not share a database, and a
 # port collision here would look like an auth bug for an afternoon.
 #

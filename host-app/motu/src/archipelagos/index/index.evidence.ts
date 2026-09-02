@@ -45,7 +45,7 @@ export const scenarios: RegionScenario[] = [
     name: 'a filtered list shows only what it was given',
     seed: { repos: REPOS, stats: STATS, cap: CAP, query: '', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
     steps: [
-      { expectRender: { repositories: 'Scorbutics/peps_ta_boite_app' } },
+      { expectRender: { repositories: 'acme/example-app' } },
       {
         provide: { repos: FILTERED_REPOS },
         // It renders what it now has…

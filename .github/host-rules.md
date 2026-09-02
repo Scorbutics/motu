@@ -229,7 +229,7 @@ watch the fix refuse it.
 
 Two islands declaring `writes` for the same key is an error, statically — not a runtime store-guard
 complaint you reach after the work is done. Grouped by ELEMENT, not by slot: one island placed in two
-slots (peps' filter panel, desktop + mobile drawer) is one producer and must stay legal.
+slots (acme's filter panel, desktop + mobile drawer) is one producer and must stay legal.
 
 This is what makes parallel agents safe without any new mechanism. Declare the WHOLE region in the
 survey — every slot, every owner — before any island is implemented. Each agent then branches from an
@@ -426,13 +426,13 @@ A MIGRATION SWEEP ACROSS EVERY REGION IS THE WRONG SHAPE, and the reason is not 
 change in a move to `root` that no check sees:
 
  - EXCLUSIVITY GETS DEMOTED. A ternary whose branches cannot both render becomes two independent
-   props, and nothing enforces that at most one is non-null — peps' actions page traded
+   props, and nothing enforces that at most one is non-null — acme's actions page traded
    `weeksLoaded ? <WeekNavigator/> : <Skeleton/>` for a `weekNav` prop and a `weekNavPlaceholder` prop
    rendered adjacently, with a comment standing where the guarantee used to be. When `slots` cannot
    express an either/or, keep the ternary in the page and pass ONE node.
  - THE SERVER/CLIENT BOUNDARY MOVES. The root renders inside `<X.Region>`, a client component. A
    layout the page rendered on the server crosses into the client bundle when it becomes the root, and
-   the nesting inverts: peps' `/forgot-password` went from `page → AuthLayout → Screen` to
+   the nesting inverts: acme's `/forgot-password` went from `page → AuthLayout → Screen` to
    `page → Screen → Region → AuthLayout`. Same pixels, different tree, different bundle. Read what the
    extracted layout imports before moving it.
 
@@ -515,7 +515,7 @@ against something that rendered.
 `integrate check` reads the host's SOURCE: it can see `<X.Island slot="y">` and cannot see whether the
 branch containing it ever runs. A slot inside `{isOpen && …}`, a ternary or a `.map()` callback now
 reports as conditionally placed — a WARNING, because a drawer or a permission gate is often exactly
-right, and what is not right is not knowing. peps' actions page places eight islands inside
+right, and what is not right is not knowing. acme's actions page places eight islands inside
 `{weeksLoaded ? (availableWeeks.length > 0 …)}`, which is the same branch that hid a crash on the empty
 list for months.
 

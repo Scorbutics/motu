@@ -1,7 +1,7 @@
 // `motu island defaults [name]` — classify every default an island declares, and say where it belongs.
 //
 // An island's `contract.input` defaults exist so the lagoon's "renders from default props alone" gate
-// can hold. But most of them are not motu's business at all: measured across peps' eight islands,
+// can hold. But most of them are not motu's business at all: measured across acme's eight islands,
 // THIRTEEN of fourteen declared defaults are honest component defaults (`isLoading: false`,
 // `missions: []`, `overallProgress: 0`) — values the app's own component should carry, where they are
 // an improvement rather than a motu artifact. Exactly one is a lagoon fiction: a real-looking phone

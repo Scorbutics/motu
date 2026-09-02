@@ -288,7 +288,7 @@ export async function regionCoverageCommand(argv) {
     return {
       v: 1,
       // `declaration` IS THE STAMP, `declarations` IS A COUNT. This read `body.declarations?.[0]`,
-      // which is `undefined` against every status route that exists — peps' answers a NUMBER there
+      // which is `undefined` against every status route that exists — acme's answers a NUMBER there
       // (how many key lists the host is keeping) and puts the hash in `declaration`. So the fallback
       // fired every time and recomputed a hash from the keys of a TRUNCATED top-N, which is only the
       // host's stamp by luck. Prefer what the route actually says.
@@ -365,7 +365,7 @@ export async function regionCoverageCommand(argv) {
   // --forget <id…> / --forget-all: remove a recorded state, which is NOT the same act as accepting it.
   //
   // Accepting says "we looked and chose not to preview this". Forgetting says "this was never true" —
-  // and the case it exists for is a mistake in the INSTRUMENT, not in the application. peps recorded
+  // and the case it exists for is a mistake in the INSTRUMENT, not in the application. acme recorded
   // `isCurrentWeek:true isOtherWeek:true`, where the second is defined as the negation of the first:
   // a state the page cannot compute, recorded because the region was published one key at a time.
   // Fixing the publishing does not un-record it, and a report that keeps offering an impossible state

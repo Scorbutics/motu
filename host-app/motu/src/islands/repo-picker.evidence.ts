@@ -12,8 +12,8 @@ export const scenarios: Scenario[] = [
   { name: 'one selected', seed: { repos: REPOS, value: 'Scorbutics/motu' } },
   // The two verdicts the selected row can carry. They are what makes the rail worth looking at rather
   // than merely clicking, so each gets a scenario of its own.
-  { name: 'the selected project has work waiting', seed: { repos: REPOS, value: 'Scorbutics/peps_ta_boite_app', shots: SHOTS } },
-  { name: 'the selected project is settled', seed: { repos: REPOS, value: 'Scorbutics/peps_ta_boite_app', shots: SHOTS_ALL_GREEN } },
+  { name: 'the selected project has work waiting', seed: { repos: REPOS, value: 'acme/example-app', shots: SHOTS } },
+  { name: 'the selected project is settled', seed: { repos: REPOS, value: 'acme/example-app', shots: SHOTS_ALL_GREEN } },
   // A SELECTED PROJECT WITH NOTHING IN IT — twenty is in exactly this state on the real host. Neither
   // verdict may appear: "all settled" on a project that has published no shots would be a reassuring
   // sentence about nothing, which is worse than saying nothing at all.

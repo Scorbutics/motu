@@ -584,7 +584,7 @@ class Overlay {
    * The OTHER coupling — two islands asking the same source.
    *
    * The store graph draws what islands share through the region. It cannot see the sharing that
-   * happens outside it: peps' counters banner and its feed both call `@/lib/services/club-feed`, and
+   * happens outside it: acme's counters banner and its feed both call `@/lib/services/club-feed`, and
    * on the store graph they are two unrelated islands. They are not. They fetch from one place, they
    * go stale together, and the page that replaces that module has to satisfy both — which is exactly
    * the kind of fact this graph exists to make visible without reading four files.
@@ -634,7 +634,7 @@ class Overlay {
         this.#wires.append(spoke);
         // WHAT THIS ISLAND CALLED, on the spoke rather than on the hub. The hub is the module, and a
         // module label alone answers the wrong question the moment two islands call different things
-        // in it: peps' banner and feed share `@/lib/services/club-feed`, and one hub reading
+        // in it: acme's banner and feed share `@/lib/services/club-feed`, and one hub reading
         // "club-feed" said neither which function each called nor that the word was a module at all —
         // next to an island literally named `x-club-feed` it read as the island's own name.
         if (spokes.length <= 4) {

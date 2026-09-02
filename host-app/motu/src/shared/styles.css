@@ -14,7 +14,7 @@
    and every --_* resolved to nothing, which silently drops border, background and every colour while
    leaving padding and font working. It renders a plausible, wrong screen.
 
-   peps never hit this because peps styles its islands with Tailwind, so it never asked these locals
+   acme never hit this because acme styles its islands with Tailwind, so it never asked these locals
    for anything. This host is the first consumer of the scaffolded sheet that does.
 
    Splitting the block is what makes it safe: the LOCALS go global (they are only fallback

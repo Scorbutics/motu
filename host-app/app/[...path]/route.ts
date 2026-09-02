@@ -387,7 +387,7 @@ const serve = async (request: Request) => {
  * exact moment there is something to see. The listener is for the artifacts that do not.
  *
  * AND IT WEARS THE PROJECT'S COLOUR, not motu's. The shell around this frame already follows the
- * lagoon -- peps' rail is gold -- so a teal loader inside a gold shell was the one moment the host
+ * lagoon -- acme's rail is gold -- so a teal loader inside a gold shell was the one moment the host
  * attributed its own colour to somebody else's application, and it was the FIRST thing anyone saw of
  * that project. The ramp is built by `primaryVars`, the same function `applyMotuChrome` and the
  * shell's detector use, so there is no second set of percentages to drift.
@@ -395,7 +395,7 @@ const serve = async (request: Request) => {
  * Two ways to know the colour, in the order the rest of the host already ranks them:
  *
  *   1. DECLARED (`chrome.brand`) -- known on the server, so it is in the first bytes and the splash
- *      is never briefly teal. peps tuned its gold by hand; that decision wins, verbatim.
+ *      is never briefly teal. acme tuned its gold by hand; that decision wins, verbatim.
  *   2. DETECTED -- read from the artifact's own pixels, which cannot happen until the artifact has
  *      painted, which is precisely what this splash is covering. So it can only come from a PREVIOUS
  *      visit, via the same sessionStorage entry the shell writes.
@@ -421,7 +421,7 @@ const BOOT_RAMP = primaryVars('var(--mb)') as Record<string, string>;
 
 /**
  * A DECLARED COLOUR IS NOT A HEX, and assuming it was is what made the first version of this ship
- * teal. peps declares `color-mix(in srgb, hsl(55 90% 48%) 75%, #000)` — the console's own contract
+ * teal. acme declares `color-mix(in srgb, hsl(55 90% 48%) 75%, #000)` — the console's own contract
  * says any self-contained CSS colour, and `normalisePrimary` parses hex only, so it answered null and
  * the splash fell straight back to motu's teal on the one project that had bothered to say otherwise.
  *

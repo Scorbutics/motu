@@ -8,7 +8,7 @@ import { LAGOON_SIGNIN } from '../../../../src/shared/signin-evidence.js';
 /**
  * What the PAGE establishes on first paint.
  *
- * Seeded to null rather than to a failure, the opposite of peps' login: that region exists FOR the
+ * Seeded to null rather than to a failure, the opposite of acme's login: that region exists FOR the
  * dead-link screen, and this one exists for the ordinary arrival. The refusals are one flow and two
  * scenarios away, each with its own address.
  */

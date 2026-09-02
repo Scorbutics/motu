@@ -23,7 +23,7 @@ export const actionsArchipelago = archipelago<ActionsRegion, ElementTypes, Produ
   { ownership: true, wiring: true, produced: true },
 );
 ```
-— `peps:motu/src/archipelagos/actions/actions.archipelago.ts:34`
+— `acme:motu/src/archipelagos/actions/actions.archipelago.ts:34`
 
 `archipelago()` is a curried identity function whose only job is to keep types and to make the
 region's cross-checks part of the declaration (`packages/core/src/archipelago.ts:605`):
@@ -224,7 +224,7 @@ usually that is a page, and it does not have to be.
 
 Declaring it here is what leaves ONE copy of the arrangement. Before, the prop → island mapping was
 written twice — once in the page's JSX and once in a hand-written lagoon frame — with nothing
-comparing them, and the frame drifted every time: peps' lagoon showed a `/forgot-password` heading
+comparing them, and the frame drifted every time: acme's lagoon showed a `/forgot-password` heading
 that existed nowhere in the application, and its annuaire rendered with no header at all, both under a
 green PASS. With a root declared, neither side composes: the page renders `<X.Root prop={…} />` using
 the APPLICATION's own prop names and never writes a slot; the lagoon renders the same component with
@@ -436,7 +436,7 @@ Forgetting it is now a build error rather than a green row — a tuple's `length
 plain array's is `number`, which is the whole detector (`ConstInferenceLost`,
 `packages/core/src/archipelago.ts`). It reports on `ownership`, and says what to add.
 
-This was found in peps, where two large regions had crossed the threshold: `ownership`, `wiring` and
+This was found in acme, where two large regions had crossed the threshold: `ownership`, `wiring` and
 `sourced` were all passing vacuously and only `produced` could notice, because it alone compares
 against a type declared outside the config. With the detector in place, seven more regions turned out
 to be in the same state.
@@ -474,7 +474,7 @@ export type RegionOwnershipOk<A> = [DuplicateProducers<A>] extends [never]
   : ['written by more than one island — a key has ONE producer:', DuplicateProducers<A>];
 ```
 
-Grouped by ELEMENT, not by slot: one island placed twice (peps' filter panel, desktop + mobile) is one
+Grouped by ELEMENT, not by slot: one island placed twice (acme's filter panel, desktop + mobile) is one
 producer and stays legal. `ProducedKeys` cannot answer this on its own — it is a union over every
 island, so two writers of one key collapse into the same member — which is why `DupWalk` walks the
 island tuple pairwise.

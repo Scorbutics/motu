@@ -810,8 +810,8 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
      * was whatever content plus padding came to and the safe-area inset was folded into the same
      * shorthand.
      *
-     * peps hit exactly this and fixed it by DELETING every env(safe-area-inset-bottom) rather than
-     * working around it (peps_ta_boite e0eeea7, "fix: firefox mobile bottom bar padding", which also
+     * acme hit exactly this and fixed it by DELETING every env(safe-area-inset-bottom) rather than
+     * working around it (acme e0eeea7, "fix: firefox mobile bottom bar padding", which also
      * dropped viewportFit: 'cover'). Nothing motu serves sets viewport-fit=cover, so these insets are
      * specified to be zero here and buy nothing — while an engine that reports one anyway silently
      * doubles a bar whose height was never stated. So: state the height, and do not ask.

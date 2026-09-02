@@ -10,7 +10,7 @@
 import type { Scenario } from '@motu/runtime/mock';
 import { SELECTED, SHOTS, SHOTS_ALL_GREEN } from '../shared/review-evidence.js';
 
-const REPO = 'Scorbutics/peps_ta_boite_app';
+const REPO = 'acme/example-app';
 
 export const scenarios: Scenario[] = [
   // Work waiting, nothing picked — only "accept all" can fire, and the two narrow scopes say what

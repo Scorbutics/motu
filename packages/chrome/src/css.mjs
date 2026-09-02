@@ -26,7 +26,7 @@ export function motuRootVars(state = 'mock', scope = ':root') {
   --motu-primary-deep: #0b5b55;
   --motu-on-primary: #fff;
   /* DERIVED, not fixed — the same shape the tide line already used.
-     applyMotuChrome rebuilds the ramp around a host's own primary (peps is gold), and the dock
+     applyMotuChrome rebuilds the ramp around a host's own primary (acme is gold), and the dock
      followed while everything painted from these tokens stayed motu teal: the same four variable
      names defined two ways in one package, one adaptive and one not. The literals stay as the
      fallback, so a page that never sets a palette is unchanged. */

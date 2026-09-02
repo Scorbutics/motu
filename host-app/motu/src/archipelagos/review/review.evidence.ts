@@ -18,7 +18,7 @@ const SEED = {
   // parameter, and no amount of clicking around a running host produces it.
   scopedRepo: null,
   repos: REPOS,
-  selectedRepo: 'Scorbutics/peps_ta_boite_app',
+  selectedRepo: 'acme/example-app',
   shots: SHOTS,
   viewMode: 'last' as const,
   busy: false,
@@ -100,13 +100,13 @@ export const scenarios: RegionScenario[] = [
      * two together are what make the condition visible: one address each.
      */
     name: 'arriving scoped to one project',
-    seed: { ...SEED, scopedRepo: 'Scorbutics/peps_ta_boite_app' },
+    seed: { ...SEED, scopedRepo: 'acme/example-app' },
     steps: [{ expectRender: { 'shot-list': 'compact-rows@mobile' } }],
   },
   {
     /** The browsable console: no project decided yet, so the picker is how you choose one. */
     name: 'browsable, with the project picker',
     seed: SEED,
-    steps: [{ expectRender: { 'repo-picker': 'Scorbutics/peps_ta_boite_app' } }],
+    steps: [{ expectRender: { 'repo-picker': 'acme/example-app' } }],
   },
 ];

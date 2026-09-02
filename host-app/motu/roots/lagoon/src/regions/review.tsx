@@ -59,7 +59,7 @@ export const reviewSeed: NonNullable<LagoonOverrides['seed']>[string] = {
   // A project IS selected on open, because a console that opens on nothing shows nothing. `shots` is
   // NOT seeded: the channel answers the selection, and a seeded list would sit in front of it — the
   // first paint would show one project's shots and never move again, which is the bug this fixes.
-  selectedRepo: 'Scorbutics/peps_ta_boite_app',
+  selectedRepo: 'acme/example-app',
   viewMode: 'last',
   busy: false,
   error: null,

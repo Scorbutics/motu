@@ -10,7 +10,7 @@ export default {
   // answers differently per viewer. Keep the framework from adding its own layer in front.
   poweredByHeader: false,
   // motu's own packages ship raw TypeScript for the islands project, so Next compiles them rather
-  // than treating them as prebuilt deps. Peps needs a twenty-entry resolveAlias block for this
+  // than treating them as prebuilt deps. Acme needs a twenty-entry resolveAlias block for this
   // because it consumes motu as a vendored sibling checkout; in-tree the workspace resolves them and
   // only the compile step is left.
   transpilePackages: ['motu-host-islands', '@motu/host', '@motu/chrome'],

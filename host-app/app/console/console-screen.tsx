@@ -3,7 +3,7 @@
 //
 // APPLICATION CODE, deliberately, and not beside the composition root: the port reaches the network
 // and localStorage, and a composition root that imports either stops being deletable whole. That is
-// the trap `signin-region.tsx` records having cost peps an afternoon.
+// the trap `signin-region.tsx` records having cost acme an afternoon.
 //
 // This was `review-console/src/App.tsx` and is the same file with three differences: the region
 // binding moved out to `components/motu/`, the fetch of the project list stayed here where it always
@@ -114,9 +114,9 @@ function ReviewPage({ cfg, viewer, repo }: { cfg: HostConfig; viewer: Viewer | n
   /**
    * WEAR THE COLOUR OF THE PROJECT BEING REVIEWED.
    *
-   * The same thing motu's own chrome does over a host application — peps is gold, so the dock over
-   * peps is gold. This console reviews someone else's screenshots, and looking like motu while
-   * showing peps' work made the two hard to tell apart at a glance.
+   * The same thing motu's own chrome does over a host application — acme is gold, so the dock over
+   * acme is gold. This console reviews someone else's screenshots, and looking like motu while
+   * showing acme's work made the two hard to tell apart at a glance.
    *
    * IT NOW SHARES A DOCUMENT WITH THE REST OF THE HOST, which is new and which the cleanup below
    * already handled by accident: `applyMotuChrome` only ever SETS, so leaving a project has to clear

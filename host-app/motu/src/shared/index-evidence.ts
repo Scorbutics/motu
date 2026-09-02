@@ -7,7 +7,7 @@ import type { LagoonRepo } from '../../../app/index-region'
 
 /** What this host actually holds, so the preview is not a fiction about a fictional host. */
 export const REPOS: LagoonRepo[] = [
-  { repo: 'Scorbutics/peps_ta_boite_app', slugs: ['all'], records: 24 },
+  { repo: 'acme/example-app', slugs: ['all'], records: 24 },
   { repo: 'twentyhq/twenty', slugs: ['all'], records: 3 },
   { repo: 'motu-review', slugs: ['all'], records: 12 },
   { repo: 'Scorbutics/motu-demo-app', slugs: ['all'], records: 1 },

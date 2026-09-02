@@ -56,7 +56,7 @@ function waitForPort(port, timeoutMs = 30000) {
 // One server, one browser, for the whole run.
 //
 // Every runtime check used to boot its own Vite and its own Chromium: four per island, sixty for a
-// project the size of peps, each paying a cold dep-optimize before it could answer a question that
+// project the size of acme, each paying a cold dep-optimize before it could answer a question that
 // takes 200ms. The target is now read from the URL as well as the env, so the SAME server can serve
 // every island and every region — a check navigates instead of booting. What still forces a separate
 // server is what is baked at build time (fit, isolation, forced error, transport), so the pool is
@@ -1290,7 +1290,7 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
  * drives anything BOUND to a prop and drives NOTHING in an island that fetches its own data through a
  * stubbed host module — that island's effect already ran, against whatever the previous scenario left
  * behind. The happy-dom lane mounts once per scenario, so the two runtimes disagreed on the same
- * evidence: peps' club-feed passed `data-flow` under `--fast` with three distinct renders and failed
+ * evidence: acme's club-feed passed `data-flow` under `--fast` with three distinct renders and failed
  * in the browser with "3 scenarios rendered identically". A stub answering with `seededValue()` only
  * becomes a per-scenario input if something makes the effect run again.
  *

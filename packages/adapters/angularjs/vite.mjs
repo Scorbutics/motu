@@ -4,12 +4,16 @@
 // node_modules already. What it does add is the part a legacy backend forces — a single-origin dev
 // proxy and HTTPS.
 //
-// The standalone lagoon runs the SAME components as the embedded bridge, but against the real legacy
-// backend through a dev proxy — NOT CORS. The browser talks only to https://localhost:5173; Vite
-// forwards /api/* to the running app server. Auth is why this must be HTTPS: the login page is
-// reCAPTCHA site-key locked, so you do NOT log in through the proxy — you log in at the real origin,
-// and its session + XSRF cookies are host-only `localhost` Secure cookies, which therefore also flow
-// to https://localhost:5173 (same host, port-agnostic).
+// WHAT THE PROXY IS FOR, now that the lagoon is mock-only to look at: `motu fixtures record <island>
+// --transport http` boots this server against the real legacy backend and captures the responses
+// into fixtures. That build is the only one that ever asks for the `http` transport — a human
+// browsing the lagoon always gets mock, because an address has to resolve to a declared state.
+//
+// It is a dev proxy, NOT CORS. The browser talks only to https://localhost:5173; Vite forwards
+// /api/* to the running app server. Auth is why this must be HTTPS: the login page is reCAPTCHA
+// site-key locked, so you do NOT log in through the proxy — you log in at the real origin, and its
+// session + XSRF cookies are host-only `localhost` Secure cookies, which therefore also flow to
+// https://localhost:5173 (same host, port-agnostic).
 //
 // The proxy TARGET is a project fact, so it comes from lagoon.config.json ("proxy"), not from here.
 export async function contribute({ lagoonJson, env, resolveBuildDep }) {

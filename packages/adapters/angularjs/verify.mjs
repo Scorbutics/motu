@@ -57,10 +57,17 @@ export function checkCoupling({ coupling } = {}) {
     return findings;
   }
 
+  // THE CAVEAT RIDES ON THE OK LINE, and used to be its own standing `host-scope-stub` WARNING.
+  // It fired unconditionally whenever a host-scope contract was declared, so there was no state in
+  // which it could be cleared except deleting the correct declaration it was praising — and on the
+  // ocean project it was 100% of the warnings. A warning nobody can action teaches people to stop
+  // reading warnings, which is expensive here because warnings carry real findings elsewhere.
   findings.push({
     level: 'ok',
     check: 'host-coupling',
-    msg: `declares host-scope contract via ${scopeReach.join('/')}: [${declared.join(', ')}]`,
+    msg:
+      `declares host-scope contract via ${scopeReach.join('/')}: [${declared.join(', ')}] — the lagoon ` +
+      `stub must supply these; verify cannot reach the real embedded host, so an integration check is still owed`,
   });
 
   // The hostScopeKey anchor is itself a host-scope dependency; it should appear in the declaration.
@@ -72,13 +79,6 @@ export function checkCoupling({ coupling } = {}) {
     });
   }
 
-  // Honest limit: verify can't reach the real embedded host — the declared keys must be provided by the
-  // lagoon host stub, and that's all this layer can align.
-  findings.push({
-    level: 'warn',
-    check: 'host-scope-stub',
-    msg: `lagoon host stub must provide [${declared.join(', ')}]; verify can't confirm the real embedded host does — keep an integration check`,
-  });
 
   return findings;
 }

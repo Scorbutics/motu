@@ -638,17 +638,31 @@
     z-index: 46;
   }
   .gm-filterbar--open .gm-popover { transform: translateY(0); }
-  /* Grabber handle: the drag affordance at the top of the sheet (JS handles the drag-to-dismiss). */
+  /* Grabber handle: the drag affordance at the top of the sheet (JS handles the drag-to-dismiss).
+     The ELEMENT is the grab surface — full width, thumb-sized tall; the 4px bar people see is drawn
+     by ::before. Sizing the box to the bar made the target 4px tall, i.e. near ungrabbable. */
   .gm-filterbar .gm-sheet-handle {
     display: block;
-    width: 40px;
-    height: 4px;
-    margin: 8px auto 2px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--_muted) 45%, transparent);
+    position: relative;
+    width: 100%;
+    height: 28px;
+    margin: 0;
     cursor: grab;
     touch-action: none;
   }
+  .gm-filterbar .gm-sheet-handle::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--_muted) 45%, transparent);
+  }
+  /* The handle now carries the sheet's top breathing room, so the head no longer pays for it. */
+  .gm-filterbar .gm-popover__head { padding-top: 2px; }
   /* The sheet body scrolls; the Done footer (hidden by the inline branch) returns as the sheet action. */
   .gm-filterbar .gm-popover__body { flex: 1; max-height: none; overflow: auto; }
   .gm-filterbar .gm-popover__foot { display: flex; }

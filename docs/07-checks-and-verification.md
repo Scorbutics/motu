@@ -87,7 +87,7 @@ Run on every `motu island verify` / `motu check`, no flags needed. Source: `stat
 | Check id | Proves | Severities | Run by | Line |
 |---|---|---|---|---|
 | `component` | The island has a component at all; nothing else can run without it. | error | IV, C | `verify.mjs:1094` |
-| `adapter-island` | This is an AngularJS island (a `*.ng.ts`, no React component), so the React-only checks are legitimately not run. | ok | IV, C | `verify.mjs:1104` |
+| `adapter-island` | This is an AngularJS island (a `*.ng.ts`, no React component), so the React-only checks are legitimately not run. A **skip**, not an `ok`: it reports that checks did not happen, and "a rule silently reported as passing is indistinguishable from a rule that ran" (§1). | skip | IV, C | `verify.mjs:1341` |
 | `no-bare-fetch` | No `fetch()` call and no `XMLHttpRequest` — all I/O crosses the contract seam, so the lagoon can stand in for the backend. | ok, error | IV, C | `verify.mjs:155`, `:160`, `:185` |
 | `no-history` | No `history.pushState/replaceState`, no `history`, no `location.*` (except `.origin`) — the ocean owns the URL; navigation is a host intent. | ok, error | IV, C | `verify.mjs:169`–`:177`, `:186` |
 | `no-doc-reachout` | No `document.querySelector/querySelectorAll/getElementById/getElementsByClassName` — an island never reaches into the host DOM. | ok, error | IV, C | `verify.mjs:181`, `:187` |
@@ -124,12 +124,10 @@ The CLI parses; the adapter judges. Discovery is by the adapter the island impor
 
 | Check id | Proves | Severities | Adapter | Line |
 |---|---|---|---|---|
-| `adapter-verify` | Meta: the adapter's verify contribution could be loaded and run at all. | warn | core | `verify.mjs:1041` |
-| `host-coupling` | An AngularJS island that reaches host scope (`inheritScope` / `hostScopeKey`) declares the host-scope names it depends on as `{ scope: … }` entries in `contract.effects`. `adopt` relocates a live node and needs no manifest. Also flags an unused declaration and a `hostScopeKey` missing from the list. | ok, warn, error | angularjs | `packages/adapters/angularjs/verify.mjs:29`, `:41`, `:48`, `:57`, `:65` |
-| `host-scope-stub` | Honest limit, stated as a standing warning whenever a host-scope contract is declared: verify cannot reach the real embedded host, so the lagoon stub must supply those keys and an integration check is still owed. | warn | angularjs | `packages/adapters/angularjs/verify.mjs:73` |
-| `rsc-boundary` | A Next island imports no server-only module (`server-only`, `next/headers`, `next/server`, `next/cache`, `next/og`) and contains no `'use server'` action — either makes it unmountable in the lagoon, which has no Next runtime. Type-only imports are erased first and never flagged. | ok, warn, error | next | `packages/adapters/next/verify.mjs:56`, `:63`, `:88`, `:94` |
+| `adapter-verify` | Meta: the adapter's verify contribution could be loaded and run at all. **Inconclusive**, not a warning — a warning does not affect the exit code, so an adapter that failed to load meant its checks silently did not run and the island still reported PASS. | inconclusive | core | `verify.mjs:1278` |
+| `host-coupling` | An AngularJS island that reaches host scope (`inheritScope` / `hostScopeKey`) declares the host-scope names it depends on as `{ scope: … }` entries in `contract.effects`. `adopt` relocates a live node and needs no manifest. Also flags an unused declaration and a `hostScopeKey` missing from the list. Its `ok` line carries the honest limit: verify cannot reach the real embedded host, so the lagoon stub must supply those keys and an integration check is still owed. | ok, warn, error | angularjs | `packages/adapters/angularjs/verify.mjs:29`, `:41`, `:48`, `:57`, `:65` |
+| `rsc-boundary` | A Next island imports no server-only module (`server-only`, `next/headers`, `next/server`, `next/cache`, `next/og`) and contains no `'use server'` action — either makes it unmountable in the lagoon, which has no Next runtime. Type-only imports are erased first and never flagged. Also reports, on its `ok` line, any use of `next/link` / `next/image` / `next/navigation`, which the lagoon renders **inert** — it passes here and can still be wrong in the host. | ok, warn, error | next | `packages/adapters/next/verify.mjs:56`, `:63`, `:88`, `:94`, `:104` |
 | `use-client` | The component declares `'use client'`. An **error** once it actually uses hooks (the exit path — importing the component directly — breaks mechanically); a **warning** otherwise, because a pure projection is safe either way. | ok, warn, error | next | `packages/adapters/next/verify.mjs:74`, `:77`, `:82` |
-| `next-stubs` | Visibility, not prohibition: the island uses `next/link` / `next/image` / `next/navigation`, which the lagoon renders **inert**. It will pass here and can still be wrong in the host. | warn | next | `packages/adapters/next/verify.mjs:105` |
 
 ### 4.5 Island checks — runtime (`--runtime` / `--audit`)
 
@@ -146,8 +144,7 @@ Opt-in. Everything here drives a lagoon: a real browser (Playwright/Chromium) by
 | `data-flow` | Opt-in at two or more declared `scenarios`: distinct seeds produce **distinct rendered output**, so data flows past the seam rather than merely type-checking. A scenario that rendered nothing is an error with its own message — a blank cannot be compared. Duplicate renders warn. | ok, warn, error, inconclusive | both | `verify.mjs:861`, `:872`, `:878`, `:889`, `:896` |
 | `responsive` | The island fits every declared viewport, in every scenario. Horizontal overflow is an **error** (a page the member must pan sideways is broken); rendering nothing at any viewport is a warning. | ok, warn, error | browser, `--audit` only | `verify.mjs:1365`–`:1385` |
 | `a11y` | axe finds no violation, per declared scenario, scoped to the island's subtree. The fail bar is `lagoon.config.json` → `a11y.fail`, **default `never`** — so by default every violation is a warning. | ok, warn, error, inconclusive | browser, `--audit` only | `verify.mjs:1223`, `:1229`, `:1238`, `:1239` |
-| `fixture-coverage` | Every request the fake fetch saw matched a declared table or fixture. A request that matched nothing is an **error**, named with its method, path and the reason it missed — the island was standing on a stub that does not exist. | ok, error | browser | `verify.mjs:735`, `:738-742` |
-| `network-sealed` | Nothing escaped the lagoon: every backend call was answered locally. A request that reached a real host is an error, because "the failure is normally invisible: the island catches it and renders empty". The `ok` counts the fake-fetch requests, not the escapes — zero escapes over zero requests proves nothing. | ok, error | browser | `verify.mjs:784-788`, `:794` |
+| `stubs-sealed` | Is this island standing on its stubs? **Three** halves under one id: every request the fake fetch saw matched a declared table or fixture; nothing got past the stubs to a real host; and nothing the fake *delegated* was answered by the dev server instead of a stub. Each is an error, named with its method, path and reason. Their preconditions differ — the escape half applies to every runtime run, including a project still on module-alias stubs — so each reports only when it has something to say and the `ok` names whichever held. The `ok` counts the fake-fetch requests, not the escapes: zero escapes over zero requests proves nothing. | ok, error | browser | `verify.mjs:826-880` |
 | `data-reach` | Reports which tables, RPCs, functions and routes the island actually touched. A readout rather than a gate — it is what makes "where did this island's data come from" answerable without reading the component. | ok | browser | `verify.mjs:766-769` |
 | `interaction-effective` | Every scripted `Scenario.interactions` step moved the render or caused a request. A step that changed nothing observable **warns**: either it is decorative, or what it moved is not captured — "a seed describing the same end state is the honest form". | ok, warn | browser | `verify.mjs:956`, `:960-967` |
 | `audit` | Meta: says out loud that `responsive` and `a11y` were **not** run, because this was not an `--audit` run. | skip | — | `verify.mjs:1153` |
@@ -166,7 +163,7 @@ Opt-in. Everything here drives a lagoon: a real browser (Playwright/Chromium) by
 | `host-stubs` | The lagoon's stand-ins still stand in: every export the islands reach for is exported by the stub, and every stub specifier resolves. | ok, error | AV, C | `verify.mjs:2500`, `:2502`, `:2511` |
 | `planned` | The survey flag is honest. Errors when a `planned: true` island **is** registered — the flag removes itself, or a survey silently becomes a list of things nobody built. Warns to keep the pending ones visible. | warn, error | AV, C | `verify.mjs:2540`, `:2548` |
 | `islands-registered` | Every `element:` tag the config references is a registered island tag, excluding `planned` ones. Skips (rather than warning "declares no islands") when every declared island is still planned. | ok, warn, error, skip | AV, C | `verify.mjs:2557` (computed level), `:2564`, `:2569` |
-| `channel-source` | Every channel installed for this region was built by the tool — `channelFrom({ to, id, args })`, whose copy into the region comes from the archipelago's `sources`, or the excused `rawChannel('<why>', fn)`. Hand-written channels forget keys, rename them in transit and re-derive what the page already derives. | ok, error | AV, C | `verify.mjs:2692`, `:2701` |
+| `channel-source` | Every channel installed for this region was built by the tool — `channelFrom({ to, id, args })`, whose copy into the region comes from the archipelago's `sources`, or the excused `rawChannel('<why>', fn)`. Hand-written channels forget keys, rename them in transit and re-derive what the page already derives. Reads **both** authoring shapes: the per-region `<lagoon>/src/regions/<id>.tsx` module and the shared `src/lagoon.tsx` map. A region with no channels is a **skip**, said out loud — it used to return silently, which is indistinguishable from the check being broken. | ok, error, skip | AV, C | `verify.mjs:2952`, `:2999`, `:3010` |
 | `render-coverage` | Every declared slot is asserted by some flow's `expectRender`. A slot no flow looks at can be wired to anything and stay green — this is the gap that let a merge make one island render another's data. Warning by design, so pre-existing regions do not go red wholesale. | ok, warn | AV, C | `verify.mjs:1524`, `:1527` |
 | `writes-covered` | Every declared write is driven by some flow's `emit`. Narrow on purpose: it proves the coupling is exercised **at all**, not that the component still emits it (that is `emitted-live`). | ok, warn | AV, C | `verify.mjs:1576`, `:1582` |
 | `catalogue` | For `membership: 'catalogue'` regions: the declared member types are the ones the data actually produces, read from the app's own captured payloads and its own enum. Errors on a member type in the capture that no island declares, and on one absent from the app's enum (unreachable, not merely unexercised). Warns on a declared type absent from the capture, and on a missing `capture` export. | ok, warn, error | AV, C | `verify.mjs:1431`, `:1436`, `:1459`, `:1472`, `:1478`, `:1484`, `:1486` |
@@ -213,6 +210,15 @@ Skipped under `--fast`, which says so via `region-runtime`. Gated at `verify.mjs
 | `duplicated` | The page keeps no `useState` copy of a key an island produces — two copies of one value drift, and the user sees whichever the page renders. | warn | `integration.mjs:571` |
 | `contract` | A catalogue member declares no `writes` — it may own nothing, or ownership may simply be undeclared. | warn | `integration.mjs:153` |
 | `catalogue` | Informational, never fails: the region is `membership: 'catalogue'`, and this many members are data-summoned rather than source-placed. | ok | `integration.mjs:144` |
+
+**What "sealed" covers, exactly.** The escape half watches for requests leaving to a **non-loopback**
+host (`playwright-lagoon.mjs:355`), so a same-origin app route was invisible to it: it goes to the dev
+server, which answers an unknown path with its SPA fallback — **200, and `index.html`** — and the
+caller then fails trying to read JSON out of a web page. Neither a 404 nor an escape, so nothing
+reported it. The third half closes that at the one seam that knows a request was unclaimed:
+`installFakeFetch` delegates it, watches the answer, and records it when the reply is an error *or*
+HTML. The dev server's own traffic (modules, CSS, source maps) is never HTML, which is what makes the
+signal narrow enough to be an error rather than a warning.
 
 **Boundary, stated in `.github/host-rules.md` "Placed is not the same as rendered":** `integrate check` reads the host's source. It can see `<X.Island slot="y">`; it cannot see whether the branch containing it ever runs. The lagoon renders every declared slot unconditionally, so it cannot see it either. The lagoon proves the island works, `integrate check` proves the page names it, and **nothing proves the page reaches it** — that needs the page rendered, in the host's own test runner.
 
@@ -349,13 +355,24 @@ There is **no comment pragma** — no `motu-ignore`, no inline suppression — a
 `printReport` (`verify.mjs:1888`) renders one line per finding:
 
 ```
-  ✓ no-bare-fetch      no bare fetch / XMLHttpRequest
   ! props-match        prop 'compactMode' isn't registered in element.ts props — it can never be set
   ✗ region-root        roots/lagoon/src/regions/login.tsx: draws 3 element(s) of its own (<div>, <h2>, <p>)  (line 12)
   – audit              responsive + a11y not run — they are the `--audit` gate
   ? lagoon-render      Chromium not installed — run `npx playwright install chromium`
-  ✓ render-coverage    every declared slot is asserted by a flow  · 6 slot(s) asserted
+  ✓ passed             11 check(s)
+    no-bare-fetch, no-history, no-doc-reachout, contract-only-io, ui-layering, default-props,
+    no-island-import, registered, props-match, archipelago, render-coverage
 ```
+
+**The passes collapse; nothing else does.** One island under `--runtime` printed 24 rows, 20 of them
+green, and `motu check --runtime` does that once per island — so the findings worth reading were a
+fifth of the output. Warnings, errors, skips and inconclusives each keep their own line, because each
+is something to act on or to know was not run.
+
+The passing ids are still **named**, not merely counted: a check that examined nothing is already a
+`skip` (§1) and so is never inside that line, but a check that never *ran* would otherwise leave no
+trace at all, and legible silence is the whole point of the seen-count. `--verbose` prints every row
+in full, with its `· N examined`.
 
 | Mark | Level |
 |---|---|

@@ -374,7 +374,10 @@ allowlist. A real published lagoon was grepped and found to contain exactly
 `wI({enabled:!0,endpoint:"/api/motu/coverage",knownUrl:"/api/motu/coverage/known",…})`
 (`packages/coverage/src/index.ts:672-687`). Same reasoning for secrets: a coverage token comes from
 `MOTU_COVERAGE_TOKEN` or `--token` and is never read from config
-(`region-coverage.mjs:235-239`).
+(`region-coverage.mjs:235-239`). Note that on a developer's machine that variable holds a **read**
+credential for the repo — the CLI fetches a corpus — while in an application's server environment the
+same name holds the write-only **ingest** token; they are not interchangeable, and
+`docs/09-coverage.md` has the table.
 
 **3. `enums` is declared on the ARCHIPELAGO, not here.** Whether a key is a closed set is a fact about
 the key, so it travels with the region: `coverage: { enums: [...] }` on the archipelago
@@ -404,8 +407,7 @@ default.
 | Key | Shape | Default | What it changes | Read by |
 |---|---|---|---|---|
 | `about` | string | none | The blurb the Cmd/Ctrl-K palette shows | gallery |
-| `transport` | `"mock"` \| `"http"` | `"mock"` | The BUILD-TIME default. `MOTU_TRANSPORT`, `?transport=`, and the toolbar chip all override it | `lagoon-gallery.ts:293` |
-| `httpBase` | string | none | Where `HttpTransport` points when the transport is `http`. Its presence is also what makes the transport chip a real choice | `lagoon-gallery.ts:299-300`, `:1064` |
+| `httpBase` | string | none | Where `HttpTransport` points under `motu fixtures record --transport http`, the one build that asks for it | `lagoon-gallery.ts:305-306` |
 | `mount` | `"react"` \| `"element"` | host-dependent | Which tree islands render in. **Must match the host application** or `island verify` green-lights a mount path the project never ships | `scaffold.mjs:371`, `:477` |
 | `chrome` | `{ primary, onPrimary, … }` | motu teal | Points motu's own tooling at the host's colours. Prefer a REFERENCE to the host's token (`"hsl(var(--primary))"`) over a copied hex, so a rebrand moves the tooling with it. `onPrimary` is required whenever `primary` is light | `lagoon-gallery.ts:242`, `:289`; `scaffold.mjs:369` |
 | `viewports` | `{ name: width }` | `{ mobile: 390, desktop: 1280 }` | The widths the `responsive` check measures AND the lagoon's own width switcher — one list, so what you look at is what CI measures | `util.mjs:255-260` |
@@ -594,3 +596,8 @@ Related: [01-concepts](01-concepts.md) · [02-getting-started](02-getting-starte
 [09-coverage](09-coverage.md) · [10-evidence-and-testing](10-evidence-and-testing.md) ·
 [11-contract-and-backend](11-contract-and-backend.md) · [12-hosts-and-adapters](12-hosts-and-adapters.md) ·
 [13-agents-and-skills](13-agents-and-skills.md)
+
+There is deliberately **no `transport` key**. The mode is a build-time input (`MOTU_TRANSPORT`, set by
+`motu fixtures record`) and nothing a person can flip: a committed `"transport": "http"` would make
+every developer's lagoon render live data at addresses that promise declared states, which is the
+browser toggle again in configuration form. See [08 — Lagoon](08-lagoon.md).

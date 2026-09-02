@@ -1,7 +1,6 @@
 {
-  "about": "The reference ocean's lagoon: the same components the bridge embeds, run standalone against fixtures or through a dev proxy to the real legacy backend.",
+  "about": "The reference ocean's lagoon: the same components the bridge embeds, run against fixtures. The dev proxy is here for `motu fixtures record --transport http`, which captures those fixtures from the real legacy backend.",
   "title": "motu demo-app",
-  "transport": "mock",
   "proxy": {
     "/api": "https://localhost:8443"
   },

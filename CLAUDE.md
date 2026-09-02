@@ -94,10 +94,16 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    diffs.
  - The lagoon override file is a MAP, not a page. `layout` points at the APPLICATION's own layout
    component — never a second JSX copy of the arrangement, which drifts for the same reason a second
-   copy of the region's vocabulary does. `seed` is data. Anything that REACTS — the stand-in for the
-   page's fetch, answering an island's intent — is a `channel`: it is installed in every view, so the
-   checks that drive the region see the same answers a human does, and the lens can show it fired.
-   Behaviour written inside the frame runs only in the region view, where those checks are not.
+   copy of the region's vocabulary does. `seed` is data. Anything that REACTS has one of TWO homes,
+   and neither is the frame. A `channel` installs the application's own SOURCE over a port, which is
+   what answers an island's intent. The WIRE FAKE — `createPostgrestFetch` + `installFakeFetch`, at
+   the region module's top level — answers HTTP BENEATH the app's real service, so the service itself
+   runs instead of being replaced. Reach for the wire when the app's own client code is what you want
+   exercised, and for a channel when the region needs a key fed; a region commonly has both. Both are
+   installed for every view, which is the property that matters: the checks that drive the region see
+   the same answers a human does. What fired is legible either way — the lens shows a channel, and
+   `data-reach` / `provenance` show what went over the wire. Behaviour written inside the frame runs
+   only in the region view, where those checks are not.
  - VISUAL BASELINES live on the lagoon host, not in the repository: `motu island snapshot --all
    --remote` pictures every island (scenario × viewport) and `motu archipelago snapshot --all --remote`
    pictures the COMPOSED page — the arrangement, which is not declared and which no island shot can

@@ -489,11 +489,11 @@ migration — around four hundred lines before a single state was recorded."
 | Option | Env fallback | Meaning |
 | --- | --- | --- |
 | `host` | `MOTU_HOST_URL` | the motu host, e.g. `https://motu.example.ts.net` |
-| `token` | `MOTU_COVERAGE_TOKEN` | a **write-only** ingest token for ONE repo — `motu-host access --repo <r> --ingest` |
+| `token` | `MOTU_COVERAGE_TOKEN` | a **write-only** ingest token for ONE repo — `motu-host access --repo <r> --ingest`. In the SERVER's environment this is the ingest token; the same variable name means something else on a developer's machine — see [Two secrets, one variable name](#two-secrets-one-variable-name) |
 | `repo` | `MOTU_COVERAGE_REPO` | which repo this application publishes as |
 | `regions` | — | restrict which regions may be forwarded: "the difference between 'our regions' and 'whatever a stranger types'" (`:31`) |
 | `maxBytes` | — | largest body accepted; default 256 kB (`:56`) |
-| `readToken` | `MOTU_HOST_READ_TOKEN` | the host's READ secret, for serving the accepted set back. "Deliberately not the ingest token: that one is write-only so a credential sitting in an application's environment cannot read what the host holds for anyone" (`:40`) |
+| `readToken` | `MOTU_HOST_READ_TOKEN` | the host's READ secret, for serving the accepted set back. "Deliberately not the ingest token: that one is write-only so a credential sitting in an application's environment cannot read what the host holds for anyone" (`:40`). Required when the repo is **private**; a public repo needs none. Prefer the repo-scoped `motu-host access --repo <r> --read` over the host-wide secret, which opens every private lagoon. Its absence is SILENT — `handleKnown` answers `[]` on any refusal (`:177`), so a missing read token shows up as browsers re-beaconing states you already accepted, never as an error |
 
 `handleCoverage(request, opts)` (`packages/coverage/src/server/index.ts:82`) **never throws**. Its
 answers: `405` for a non-POST; `503` when the host, token or repo are unset — "MISCONFIGURATION IS
@@ -606,7 +606,38 @@ reason `island create` stopped scaffolding `fixtures.mock.ts`"
 Two more flags exist in the implementation but are absent from `--help`: `--save`, which writes the
 merged corpus to `<lagoon>/src/coverage/<id>.json` for the lens to display, with the URL and token
 assertion described above (`:343`), and `--token`, which supplies the bearer token for a URL corpus in
-place of `MOTU_COVERAGE_TOKEN` (`:239`).
+place of `MOTU_COVERAGE_TOKEN` (`:239`). That bearer is a READ credential, not the ingest token — see
+below.
+
+### Two secrets, one variable name
+
+`MOTU_COVERAGE_TOKEN` names a DIFFERENT secret depending on which machine reads it, and the two are
+deliberately not interchangeable:
+
+| Where | What it must hold | Minted with |
+| --- | --- | --- |
+| the application's SERVER environment, read by the forwarder (`packages/coverage/src/server/index.ts:85`) | the repo's **ingest** token — write-only, one repo, corpus route only | `motu-host access --repo <r> --ingest` |
+| a DEVELOPER's machine (or CI), read by `motu archipelago coverage` to fetch `--corpus`/`corpusUrl` (`region-coverage.mjs:239`) | a **read** credential for that repo, when `corpusUrl` points at the host and the repo is private | `motu-host access --repo <r> --read` |
+
+Putting the ingest token in a developer's shell fails, and that is the design rather than an
+oversight: `canRead` accepts the repo's read secret or the host-wide one and never the ingest hash
+(`packages/host/src/access.mjs:83`), "so a credential sitting in somebody else's production
+environment cannot be used to read what is stored here".
+
+**It fails as a `404`, not a `401`** — the host answers "no such repo" to a reader it will not serve,
+because "a 403 confirms the repo exists" (`packages/host/src/server.mjs:341`, `:694`). The CLI's
+"set `MOTU_COVERAGE_TOKEN`, or pass `--token`" hint is attached to `401`/`403`
+(`region-coverage.mjs:317`), so a wrong or missing credential against the host's read API reads as a
+bare `answered 404` and looks like a bad URL. If a `corpusUrl` you know is right answers 404, suspect
+the token before the address. The everyday configuration points
+`corpusUrl` at the host's own read API — `https://<host>/api/coverage?repo=…&region=…` — which is a
+READ, so on a private repo the CLI needs the read token.
+
+A PUBLIC repo needs neither: `isPublic` short-circuits `canRead`, so `motu archipelago coverage` with
+no token at all works, and only ingest stays credentialed.
+
+`--accept` is a third credential again — the host's **admin** token, never either of these, because
+"a reporting credential that could also accept would let the tool mark its own findings resolved".
 
 ### Exit codes
 

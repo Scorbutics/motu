@@ -99,15 +99,19 @@ export function checkCoupling({ source, coupling } = {}) {
     });
   }
 
-  // 4. Stubbed Next modules are allowed but reported, so the coupling stays visible: what the lagoon
-  //    renders for them is inert, and an island leaning on their real behaviour will pass here and
-  //    still be wrong in the host.
+  // 4. Stubbed Next modules, REPORTED ON THE OK LINE rather than as their own standing warning.
+  //
+  // `next-stubs` used to be a warning of its own, fired whenever the island imported one of these —
+  // legitimate imports, with no state in which the warning could be cleared except not using them.
+  // The information is worth having (what the lagoon renders for them is inert, so an island leaning
+  // on their real behaviour passes here and is still wrong in the host); the unclearable warning was
+  // not, because a warning nobody can action is how a project learns to skim past the real ones.
   const stubbed = imports.filter((s) => STUBBED.includes(s));
   if (stubbed.length) {
     findings.push({
-      level: 'warn',
-      check: 'next-stubs',
-      msg: `uses ${stubbed.join(', ')} — inert in the lagoon (navigation is a host intent, not an island concern)`,
+      level: 'ok',
+      check: 'rsc-boundary',
+      msg: `uses ${stubbed.join(', ')} — INERT in the lagoon (navigation is a host intent), so this passes here and can still be wrong in the host`,
     });
   }
 

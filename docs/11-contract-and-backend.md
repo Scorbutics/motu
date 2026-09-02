@@ -169,21 +169,26 @@ once, and answering them differently by accident is how two regions end up with 
 (`packages/react/src/lagoon-gallery.ts:184-194`):
 
 ```ts
-const mode = resolveTransportMode(typeof opts.transport === 'string' ? opts.transport : config.transport ?? '');
+const mode = resolveTransportMode(typeof opts.transport === 'string' ? opts.transport : '');
 const custom = overrides.transportFor?.(mode);
 if (custom) configure(custom);
 else if (mode === 'http' && config.httpBase) configure(new HttpTransport(config.httpBase));
 else configure(new MockTransport(opts.fixtures ?? [], opts.roles ?? []));
 ```
 
-`resolveTransportMode` reads, most specific first: `?transport=http|mock` in the URL → localStorage
-`motu:transport` → the build default → `mock` (`packages/react/src/transport-toggle.ts:16-40`). The
-build default is `__MOTU_TRANSPORT__`, injected from the `MOTU_TRANSPORT` env var
-(`packages/cli/src/lib/lagoon-vite.mjs:273`, `packages/cli/src/lib/scaffold.mjs:383`, `398`, `475`);
-`motu lagoon` sets it to `'mock'` (`packages/cli/src/commands/lagoon.mjs:83`). A chip in the toolbar
-flips it in the browser and reloads (`transport-toggle.ts:42-56`); HTTP wears the caution colour
-because "HTTP means real backend + real session, which is the state worth noticing"
-(`transport-toggle.ts:54-55`).
+`resolveTransportMode` reads ONE input — the build default, `'mock'` unless it is literally `'http'`
+(`packages/react/src/transport-mode.ts`). The build default is `__MOTU_TRANSPORT__`, injected from the
+`MOTU_TRANSPORT` env var (`packages/cli/src/lib/lagoon-vite.mjs:278`,
+`packages/cli/src/lib/scaffold.mjs:455`, `472`); `motu lagoon` sets it to `'mock'`
+(`packages/cli/src/commands/lagoon.mjs:84`).
+
+There is no browser leg and no `transport` key in `lagoon.config.json`. A `?transport=` param, a
+remembered `motu:transport` and a chip in the toolbar all existed and were removed together: they let
+a lagoon ADDRESS — which promises a declared state — render whatever the backend held at that moment,
+with `window.__motuLagoonState.ok` still `true`. See
+[08 — Lagoon](08-lagoon.md#what-it-is-and-what-it-is-not) for the full argument. The one build that
+still asks for `http` is `motu fixtures record --transport http`, which writes fixtures to disk rather
+than showing anyone a page; `httpBase` and `transportFor` exist to serve it.
 
 **The focused lagoon** — the entry every check drives — never negotiates:
 
@@ -372,8 +377,8 @@ only, so "the first read succeeds, a later one fails" had no fixture to write �
 repeats the same arguments and only the ORDER differs (`packages/runtime/src/mock.ts:30-41`).
 
 **Three checks watch the seam**, and they are [07 — Checks and
-verification](07-checks-and-verification.md)'s to define: `fixture-coverage` (every request matched a
-declared table or fixture), `network-sealed` (nothing left the machine — invisible before, because a
+verification](07-checks-and-verification.md)'s to define: `stubs-sealed` (every request matched a
+declared table or fixture, and nothing left the machine — the latter invisible before, because a
 missing stub failed, the island caught it, an empty state rendered and every check stayed green), and
 `data-reach` (the tables, RPCs, functions and routes an island actually touched).
 
@@ -509,10 +514,15 @@ through the archipelago boundary, and records each contract call's request **and
 (`fixtures.mjs:96-99`). Missing Chromium is detected and reported with the install command
 (`fixtures.mjs:64-66`).
 
-**`--transport http` is the point of it.** It records the **real backend**; the default records the
-mock, which is a self-consistency check of the pipeline (`fixtures.mjs:4-6`, `55`). The flag is passed
-through to the lagoon process as the `MOTU_TRANSPORT` env var
-(`packages/cli/src/playwright-lagoon.mjs:216`).
+**`--transport http` is the point of it, and it is the only caller of the HTTP transport left.** It
+records the **real backend**; the default records the mock, which is a self-consistency check of the
+pipeline (`fixtures.mjs:4-6`, `55`). The flag is passed through to the lagoon process as the
+`MOTU_TRANSPORT` env var (`packages/cli/src/playwright-lagoon.mjs:246`).
+
+This is the one place live data is legitimate, and the distinction is what it PRODUCES: a file on
+disk, declared, that every downstream check compares against — the capture-refresh shape, not a live
+view. Nothing is previewed and nothing is asserted against a backend's current contents. That is why
+the browser-facing mode went and this stayed.
 
 **Output.** Calls are deduped by `(service, method, args)` with key ordering stabilised
 (`fixtures.mjs:32-39`, `76-84`), and written to `<islandDir>/fixtures.recorded.ts` unless `--out`

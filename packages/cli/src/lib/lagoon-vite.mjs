@@ -206,6 +206,11 @@ export function noInstallAliases(paths) {
     { find: /^@motu\/react$/, replacement: motu('packages/react/src/index.ts') },
     { find: /^@motu\/react\/define$/, replacement: motu('packages/react/src/defineReactElement.ts') },
     { find: /^@motu\/runtime\/mock$/, replacement: motu('packages/runtime/src/mock.ts') },
+    // MISSING FOR A WHILE, and invisibly: without it `@motu/runtime/postgrest-fetch` is a bare
+    // specifier, so it resolves through the exports map to `dist/` and Vite pre-bundles it — every
+    // edit to the wire fake was then invisible in the lagoon until someone rebuilt AND cleared
+    // `node_modules/.vite`. Found while testing a new check that kept passing against stale code.
+    { find: /^@motu\/runtime\/postgrest-fetch$/, replacement: motu('packages/runtime/src/postgrest-fetch.ts') },
     { find: /^@motu\/runtime$/, replacement: motu('packages/runtime/src/index.ts') },
     { find: /^@motu\/debug-overlay$/, replacement: motu('packages/debug-overlay/src/index.ts') },
     { find: /^@motu\/adapter-next$/, replacement: motu('packages/adapters/next/src/index.ts') },

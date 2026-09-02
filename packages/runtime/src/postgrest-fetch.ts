@@ -101,6 +101,20 @@ function recordSeen(): void {
   g[countKey] = (g[countKey] ?? 0) + 1;
 }
 
+/**
+ * Requests the fake DELEGATED that then failed — an app route nobody stubbed, most often.
+ *
+ * Read alongside the unscoped list: unscoped means "the fake saw it and had nothing for it", this
+ * means "the fake never claimed it and the real answer was an error". Both say the island is standing
+ * on something that is not there; they differ only in whether `appRoutes`/`baseUrl` reached it.
+ */
+export function readUnansweredRequests(clear = true): { method: string; url: string; status: number; why: string }[] {
+  const g = globalThis as unknown as { __motuUnansweredRequests?: { method: string; url: string; status: number; why: string }[] };
+  const found = g.__motuUnansweredRequests ?? [];
+  if (clear) g.__motuUnansweredRequests = [];
+  return found;
+}
+
 export function readFakeFetchRequestCount(clear = true): number {
   const g = globalThis as unknown as Record<string, number | undefined>;
   const n = g[countKey] ?? 0;
@@ -594,7 +608,33 @@ export function installFakeFetch(fake: typeof fetch, options: { appRoutes?: stri
     } catch {
       return original(input as RequestInfo, init);
     }
-    return claims(url) ? fake(input, init) : original(input as RequestInfo, init);
+    if (claims(url)) return fake(input, init);
+    // DELEGATED, AND THEN WATCHED. Everything the fake does not claim goes to the real fetch, which in
+    // a lagoon is the dev server — and that is right for the dev server's own traffic. It is also
+    // where an unstubbed APP route goes: it 404s, the caller catches it, an empty state renders, and
+    // nothing says so. `network-sealed` cannot see it either, because it only counts requests that
+    // left for a non-loopback host.
+    //
+    // The signal is not "a same-origin 404" — favicons and source maps 404 all day. It is a request
+    // the app made, that NO STUB CLAIMED, whose real answer was an error. Recorded, not blocked: the
+    // page still gets the response it would have got.
+    const res = await original(input as RequestInfo, init);
+    // NOT JUST `!res.ok`. A Vite dev server answers an unknown path with its SPA fallback — 200, and
+    // `index.html` — so an unstubbed API route comes back "successful" and the caller fails later
+    // trying to read JSON out of a web page. That was this gap's real shape: the first attempt looked
+    // for a 404 and found none. An HTML answer to a request the app made with `fetch` is the
+    // signature, because the dev server's own traffic (modules, css, source maps) is never HTML.
+    const html = (res.headers.get('content-type') ?? '').includes('text/html');
+    if (!res.ok || html) {
+      const g2 = globalThis as unknown as { __motuUnansweredRequests?: { method: string; url: string; status: number; why: string }[] };
+      (g2.__motuUnansweredRequests ??= []).push({
+        method: (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase(),
+        url: url.pathname + url.search,
+        status: res.status,
+        why: html ? 'answered with the dev server\'s HTML fallback, not data' : `HTTP ${res.status}`,
+      });
+    }
+    return res;
   };
   g.__motuFakeFetchInstalled = true;
 }

@@ -823,16 +823,64 @@ function reportRuntimeDiagnostics(report, r, label, declared = null) {
   // false pass for a mechanism that never ran. `seen` is the TOTAL request count, not the unscoped
   // one: a run that made zero requests has zero unscoped requests too, and `report.ok`'s own "0 seen
   // is a skip, not an ok" rule is what tells those two apart, the same as every other check here.
-  if (r?.fixtureCoverage !== undefined) {
-    const { unscoped, seen } = r.fixtureCoverage;
-    if (unscoped.length === 0) {
-      report.ok('fixture-coverage', `every request the fake fetch saw matched a declared table/fixture (${label})`, seen);
-    } else {
+  // IS THIS ISLAND STANDING ON ITS STUBS? Two halves of one question, under one id.
+  //
+  // They were `fixture-coverage` and `network-sealed`, and the second's own comment called it "the
+  // counterpart" to the first: one asks whether the requests the fake fetch SAW were declared, the
+  // other whether any request got PAST the stubs entirely. Both are errors, both mean the island is
+  // standing on something that is not there, and reading them as separate results invited fixing one.
+  //
+  // The preconditions differ and that is why this is not a concatenation: the escape half applies to
+  // EVERY runtime run, including a project still on module-alias stubs where no fake fetch is
+  // installed and `fixtureCoverage` is undefined. So each half reports only when it has something to
+  // say, and the single `ok` names whichever halves actually held.
+  if (r?.fixtureCoverage !== undefined || r?.networkEscapes !== undefined) {
+    const unscoped = r?.fixtureCoverage?.unscoped ?? [];
+    const escapes = r?.networkEscapes ?? [];
+    // THE THIRD HALF, and the one that made the name only two-thirds true. `escapes` counts requests
+    // that left for a non-loopback host; an unstubbed APP route is SAME-ORIGIN, so it 404s against the
+    // dev server and neither of the other two ever saw it. Recorded at the delegate seam inside
+    // `installFakeFetch`, which is the one place that knows a request was not claimed.
+    const unanswered = r?.fixtureCoverage?.unanswered ?? [];
+    if (unscoped.length) {
       const first = unscoped[0];
       report.error(
-        'fixture-coverage',
+        'stubs-sealed',
         `${unscoped.length} request(s) matched no declared table/fixture (${label}): ` +
           `${first.method} ${first.path} — ${first.reason}`,
+      );
+    }
+    if (escapes.length) {
+      const first = escapes[0];
+      const hosts = [...new Set(escapes.map((e) => { try { return new URL(e.url).host; } catch { return e.url; } }))];
+      report.error(
+        'stubs-sealed',
+        `${escapes.length} request(s) escaped the lagoon to ${hosts.join(', ')} (${label}): ` +
+          `${first.method} ${first.url} — a host module reached a real backend, so this island is not ` +
+          `standing on its stubs. The failure is normally invisible: the island catches it and renders empty`,
+      );
+    }
+    if (unanswered.length) {
+      const first = unanswered[0];
+      report.error(
+        'stubs-sealed',
+        `${unanswered.length} request(s) reached the dev server instead of a stub (${label}): ` +
+          `${first.method} ${first.url} — ${first.why}. No fixture claimed it, so the island is standing on ` +
+          `nothing. Add the path to \`appRoutes\` (and a fixture for it), or point \`baseUrl\` at its origin`,
+      );
+    }
+    if (!unscoped.length && !escapes.length && !unanswered.length) {
+      // `seen` is the FAKE-FETCH request count, not the escape count: zero escapes proves nothing on
+      // its own (an island that made no backend call at all also escapes nothing). Passing the count
+      // of requests actually answered lets `report.ok`'s "0 examined is a skip" rule tell the two
+      // apart — which is precisely "is the fake fetch wired, or is this check vacuous?".
+      const answered = r?.fixtureCoverage !== undefined;
+      report.ok(
+        'stubs-sealed',
+        answered
+          ? `every request matched a declared table/fixture, and nothing escaped the lagoon (${label})`
+          : `nothing escaped the lagoon — every backend call was answered locally (${label})`,
+        r?.fixtureCoverage?.seen,
       );
     }
   }
@@ -869,31 +917,6 @@ function reportRuntimeDiagnostics(report, r, label, declared = null) {
     if (declared) reportReachDrift(report, r.fixtureCoverage.reach.by, declared, label);
   }
 
-  // DID ANYTHING LEAVE THE MACHINE? The counterpart to `fixture-coverage`: that one asks whether the
-  // requests the fake fetch SAW were declared, this one asks whether any request got past the stubs
-  // entirely. Both must hold for "self-contained" to mean anything, and this half applies to every
-  // project — including one still on module-alias stubs, where a missing stub is otherwise invisible
-  // (the request fails, the island catches it, an empty state renders, and `NOISE` silences the
-  // console line that would have said so).
-  if (r?.networkEscapes !== undefined) {
-    const escapes = r.networkEscapes;
-    if (escapes.length > 0) {
-      const first = escapes[0];
-      const hosts = [...new Set(escapes.map((e) => { try { return new URL(e.url).host; } catch { return e.url; } }))];
-      report.error(
-        'network-sealed',
-        `${escapes.length} request(s) escaped the lagoon to ${hosts.join(', ')} (${label}): ` +
-          `${first.method} ${first.url} — a host module reached a real backend, so this island is not ` +
-          `standing on its stubs. The failure is normally invisible: the island catches it and renders empty`,
-      );
-    } else {
-      // `seen` is the FAKE-FETCH request count, not the escape count: zero escapes proves nothing on
-      // its own (an island that made no backend call at all also escapes nothing). Passing the count
-      // of requests actually answered lets `report.ok`'s "0 examined is a skip" rule tell the two
-      // apart — which is precisely "is the fake fetch wired, or is this check vacuous?".
-      report.ok('network-sealed', `nothing escaped the lagoon — every backend call was answered locally (${label})`, r.fixtureCoverage?.seen);
-    }
-  }
 }
 
 
@@ -1252,7 +1275,11 @@ async function adapterChecks(report, kebab, componentPath) {
     const mod = await import(specifier);
     for (const f of mod.checkCoupling({ coupling, source, elementSource: text })) report[f.level](f.check, f.msg);
   } catch (err) {
-    report.warn('adapter-verify', `could not run ${specifier}: ${String(err?.message || err)}`);
+    // INCONCLUSIVE, NOT A WARNING. A warning does not affect the exit code, so an adapter that failed
+    // to load meant its checks silently did not run and the island still reported PASS — the exact
+    // case exit 2 exists for ("a check could not run — retry, do NOT repair"). It is an environment
+    // failure, not a finding about the island.
+    report.inconclusive('adapter-verify', `could not run ${specifier}: ${String(err?.message || err)} — the ${specifier} checks did not run`);
   }
 }
 
@@ -1315,7 +1342,10 @@ export async function runIslandVerify(argv, name) {
     componentProps = staticChecks(report, componentPath, componentName);
     resolvedTag = configChecks(report, kebab, componentName, tag, argv.standalone, componentProps, componentPath) ?? tag;
   } else {
-    report.ok('adapter-island', `AngularJS island (no React component) — running config-lite + adapter + runtime checks`);
+    // A SKIP, NOT AN OK. This says the React-only checks did not run — which is the report model's own
+    // definition of a skip ("a rule silently reported as passing is indistinguishable from a rule that
+    // ran"). Reported as `ok` it added a green tick for checks that never happened.
+    report.skip('adapter-island', `AngularJS island (no React component) — the React checks do not apply; running config-lite + adapter + runtime`);
   }
 
   // Adapter-owned checks (e.g. the AngularJS host-scope contract) fold in regardless of island kind.
@@ -1501,7 +1531,9 @@ async function seedTransportCheck(report, kebab) {
         `which breaks EVERY scenario, not just this one. Take an iterable/plain value in the component and rebuild the Set inside.`,
     );
   } else {
-    report.ok('seed-transport', `${scenarios.length} scenario seed(s) cross into the browser intact`);
+    // The count goes in `seen`, not the message: that is what makes `report.ok`'s "0 examined is a
+    // skip" rule apply, so a run with no scenarios reports a SKIP instead of a green tick over nothing.
+    report.ok('seed-transport', 'every scenario seed crosses into the browser intact', { n: scenarios.length, of: 'scenario seed(s)' });
   }
 }
 
@@ -2118,7 +2150,7 @@ function declaredWrites(id) {
 /** Pretty-print a report's findings + the PASS/FAIL summary line (shared by island + archipelago verify). */
 function printReport(report, title, errors, warns) {
   console.log(color.bold(`\n${title}\n`));
-  for (const f of report.findings) {
+  const line = (f) => {
     const mark =
       f.level === 'error'
         ? color.red('✗')
@@ -2136,6 +2168,24 @@ function printReport(report, title, errors, warns) {
     const seen =
       f.examined === undefined ? '' : color.dim(`  · ${f.examined} ${f.examinedOf ?? 'examined'}`);
     console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${at}`);
+  };
+
+  // THE PASSES COLLAPSE; EVERYTHING ELSE DOES NOT.
+  //
+  // One island under `--runtime` printed 24 rows, 20 of them green, and `motu check --runtime` does
+  // that once per island — so the findings worth reading were a fifth of the output and got skimmed
+  // past. Warnings, errors, skips and inconclusives keep their own line, because each is something to
+  // act on or to know was not run.
+  //
+  // The ids are still NAMED, not just counted. `report.ok(check, msg, 0)` already becomes a `skip`, so
+  // a check that examined nothing is never inside this line — but a check that never RAN would leave
+  // no trace at all, and the whole point of the seen-count is that silence must be legible. Listing
+  // them keeps a missing check visible; `--verbose` prints the full rows with their counts.
+  const passed = report.findings.filter((f) => f.level === 'ok');
+  for (const f of report.findings) if (verbose || f.level !== 'ok') line(f);
+  if (!verbose && passed.length) {
+    console.log(`  ${color.green('✓')} ${color.dim('passed'.padEnd(18))} ${passed.length} check(s)`);
+    console.log(`    ${color.dim(passed.map((f) => f.check).join(', '))}`);
   }
   console.log('');
   const unknown = report.findings.filter((f) => f.level === 'inconclusive');
@@ -2680,7 +2730,7 @@ function archipelagoConfigChecks(report, id) {
           `island slot(s) filled with an island this region does not declare: ${missing.join(', ')}`,
         );
       } else if (filled.length) {
-        report.ok('composition', `${filled.length} island(s) nested inside another by declaration`);
+        report.ok('composition', 'every nested slot is one this region declares', { n: filled.length, of: 'nested island(s)' });
       }
     }
 
@@ -2757,7 +2807,7 @@ function archipelagoConfigChecks(report, id) {
     }
     if (results.length && !broken.length) {
       const covered = results.reduce((n, r) => n + r.needed.length, 0);
-      report.ok('host-stubs', `${results.length} stub(s) cover the ${covered} export(s) the islands reach for`);
+      report.ok('host-stubs', `stubs cover the ${covered} export(s) the islands reach for`, { n: results.length, of: 'stub(s)' });
     }
   }
 
@@ -2900,16 +2950,39 @@ function reportStoreComplaints(report, diagnostics, where) {
  * imports the app's source is doing the right thing by construction, whatever it does with it.
  */
 function channelSourceCheck(report, id, region) {
-  const overridesFile = ['src/lagoon.tsx', 'src/lagoon.ts']
-    .map((f) => resolve(paths.lagoonDir, f))
+  // WHERE THE CHANNELS ARE WRITTEN, in both shapes — and this check saw only the older one.
+  //
+  // It looked exclusively for `export const channels = { <id>: [ … ] }` in `src/lagoon.tsx`, the
+  // kind-first override map. Regions have since moved to a per-region module,
+  // `<lagoon>/src/regions/<id>.tsx`, holding `overridesFor(archipelago, { channels: [ … ] })` — so on
+  // every project in this repository the check found nothing and RETURNED SILENTLY. Not a skip, not a
+  // pass: no row at all, for the check that stops hand-written channels. It had been dormant since the
+  // authoring shape changed and nothing could have told you, which is the failure mode a silent return
+  // always is.
+  const perRegion = ['tsx', 'ts']
+    .map((ext) => resolve(paths.lagoonDir, 'src/regions', `${id}.${ext}`))
     .find((f) => existsSync(f));
-  if (!overridesFile) return;
+  const overridesFile =
+    perRegion ??
+    ['src/lagoon.tsx', 'src/lagoon.ts'].map((f) => resolve(paths.lagoonDir, f)).find((f) => existsSync(f));
+  if (!overridesFile) {
+    report.skip('channel-source', 'no lagoon overrides module — nothing declares channels for this region');
+    return;
+  }
   const overrides = stripComments(readFileSync(overridesFile, 'utf8'));
 
-  // `channels: { <id>: [ … ] }` — the ENTRIES installed for this region.
+  // The per-region module holds ONE region's channels, so the array is unqualified; the shared module
+  // keys them by id. Try the qualified form first, since the shared module also contains bare arrays.
   const map = overrides.match(/export const channels[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1];
-  const list = map?.match(new RegExp(`['"\`]?${id}['"\`]?\\s*:\\s*\\[([\\s\\S]*?)\\n  \\]`))?.[1];
-  if (!list) return;
+  const keyed = map?.match(new RegExp(`['"\`]?${id}['"\`]?\\s*:\\s*\\[([\\s\\S]*?)\\n  \\]`))?.[1];
+  const bare = overrides.match(/\bchannels:\s*\[([\s\S]*?)\n\s*\],/)?.[1];
+  const list = keyed ?? bare;
+  if (!list) {
+    // SAID, not silent: a region with no channels is a fact worth one dim line, because the alternative
+    // is indistinguishable from this check being broken again.
+    report.skip('channel-source', `no channels declared for "${id}" in ${paths.rel(overridesFile)}`);
+    return;
+  }
 
   // Split on top-level commas: each element is one channel, and the question is what BUILT it.
   const entries = [];
@@ -2947,7 +3020,7 @@ function channelSourceCheck(report, id, region) {
     );
   }
   if (vouched === entries.length && vouched > 0) {
-    report.ok('channel-source', `${vouched} channel(s) built from a declared source`);
+    report.ok('channel-source', 'every channel is built from a declared source', { n: vouched, of: 'channel(s)' });
   }
 }
 

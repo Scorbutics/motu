@@ -309,6 +309,11 @@ MOTU_COVERAGE_TOKEN=… motu archipelago coverage actions \
   --corpus https://your-app/api/motu/coverage/status?region=actions --save
 ```
 
+Here `MOTU_COVERAGE_TOKEN` is whatever credential READS that address — the app's own read token above,
+or, when `--corpus` points at the motu host's `/api/coverage` on a private repo,
+`motu-host access --repo <r> --read`. It is NOT the ingest token that the same variable name holds in
+this package's server environment: that one is write-only and cannot read anything back.
+
 **The token cannot travel into the page, and that is enforced rather than promised.** It is read from
 the environment only — never from `motu.config.json`, because committed config is baked into the
 generated island registry, which the lagoon imports and publishes. And `--save` scans the bytes it is

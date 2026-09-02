@@ -89,7 +89,8 @@ Read by the CLI itself:
 | `MOTU_ROOT` | `lib/config.mjs:308` | The framework checkout, overriding the derived one. Never written into a generated config — it stays in the environment. |
 | `MOTU_HOST_URL` | `commands/lagoon.mjs:184`, `:198`, `:518`; `commands/region-coverage.mjs:377`, `:413`; `lib/baselines.mjs:21` | Default lagoon host for `publish --remote`, snapshot baselines, coverage accept/forget, and live-gallery registration. |
 | `MOTU_HOST_TOKEN` | `commands/lagoon.mjs:255`, `:519`; `commands/region-coverage.mjs:378`, `:414`; `lib/baselines.mjs:22` | Bearer token for the same host. |
-| `MOTU_COVERAGE_TOKEN` | `commands/region-coverage.mjs:239` | Token for fetching a coverage corpus over HTTP. Deliberately not a config key — config is baked into the generated registry the lagoon publishes. |
+| `MOTU_COVERAGE_TOKEN` | `commands/region-coverage.mjs:239` | Bearer for FETCHING a coverage corpus over HTTP — a **read** credential (`motu-host access --repo <r> --read`) when `corpusUrl` points at the host and the repo is private, and unnecessary when it is public. Not the ingest token, which the same variable name holds in an APPLICATION's server environment (`@motu/coverage`'s forwarder) and which cannot read (`packages/host/src/access.mjs:83`). Deliberately not a config key — config is baked into the generated registry the lagoon publishes. |
+| `MOTU_HOST_READ_TOKEN` | `packages/coverage/src/server/index.ts:185` | Read by the APPLICATION's `known` route, not by this CLI: the secret it uses to serve the accepted set back from the host. Needed only for a private repo, and its absence is silent — an empty set, so states stay un-suppressed. |
 | `MOTU_CONFIG_HOME` | `lib/remote.mjs:24` | Directory holding `host.json` (default `~/.config/motu`). |
 
 Precedence for the host is the same everywhere it is resolved: `--remote`/`--token` flag →
@@ -622,7 +623,7 @@ motu archipelago coverage <id> [--corpus <file|url>] [<more corpora>…] [--toke
 | --- | --- | --- |
 | `<id>` positional | Region id | required (`commands/region-coverage.mjs:160`) |
 | `--corpus` + extra positionals | Corpus files or URLs, merged (`:215`, `:328`) | `coverage.corpusUrl` from config, with `region` filled in (`:200-218`) |
-| `--token` | Bearer token for an HTTP corpus | `MOTU_COVERAGE_TOKEN` (`:239`) |
+| `--token` | Bearer token for an HTTP corpus — a READ credential for the repo, never its ingest token (`packages/host/src/access.mjs:83`) | `MOTU_COVERAGE_TOKEN` (`:239`) |
 | `--save` | Write the corpus into `<lagoon>/src/coverage/<id>.json`, refusing if the body contains the token or its source URL (`:343-363`) | off |
 | `--accept <id>` | Mark a recorded state as looked-at on the host; needs `MOTU_HOST_URL` + `MOTU_HOST_TOKEN` (`:409-438`) | off |
 | `--forget <id>` / `--forget-all` | Remove a state the instrument recorded wrongly — a different act from accepting (`:373-400`) | off |

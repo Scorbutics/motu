@@ -21,7 +21,7 @@ import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
-import { resolveTransportMode, mountTransportToggle, type TransportMode } from './transport-toggle';
+import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
 import { mountReactLagoon } from './lagoon-react-mount';
@@ -45,9 +45,13 @@ import {
 export interface LagoonConfig {
   /** Prose the palette shows under "About this lagoon". */
   about?: string;
-  /** Build-time transport default. `MOTU_TRANSPORT` overrides; a browser toggle overrides that. */
-  transport?: TransportMode;
-  /** Base URL for the HTTP transport, when this project has a dispatcher to talk to. */
+  /**
+   * Base URL for the HTTP transport, used only by `motu fixtures record --transport http`.
+   *
+   * There is deliberately no `transport` key beside it. A committed `"transport": "http"` would make
+   * every developer's lagoon render live data at addresses that promise declared states — the mode in
+   * configuration form. The recorder passes the mode as an env var for the one build that needs it.
+   */
   httpBase?: string;
   /** Skin. The lagoon previews the end design, so 'motu' unless a project says otherwise. */
   defaultTheme?: MotuTheme;
@@ -77,7 +81,11 @@ export interface LagoonOverrides extends RegionOverrideMaps {
   /**
    * Build the transport yourself, when `httpBase` cannot say enough — a dispatcher behind XSRF
    * cookie/header names, a custom session hook. Return undefined to fall back to the default for that
-   * mode. The lagoon must still work offline, so 'mock' should normally be left alone.
+   * mode.
+   *
+   * It is called with `'http'` only under `motu fixtures record --transport http`; every other build
+   * is mock. Leave 'mock' alone — the lagoon must work offline, and it is the only mode a human ever
+   * looks at.
    */
   transportFor?: (mode: TransportMode) => Transport | undefined;
 }
@@ -290,7 +298,9 @@ markSandbox();
   wearOwnColour(config);
   overrides.setup?.();
 
-  const mode = resolveTransportMode(typeof opts.transport === 'string' ? opts.transport : config.transport ?? '');
+  // BUILD-TIME ONLY — see `transport-mode.ts`. `http` is reachable from `motu fixtures record` and
+  // from nowhere a human clicks, because a lagoon address has to resolve to a DECLARED state.
+  const mode = resolveTransportMode(typeof opts.transport === 'string' ? opts.transport : '');
   // Mock by default and mock whenever there is nothing to talk to: the lagoon has to work with no
   // backend, no session and no login, or it is not a place a loop can close in.
   const custom = overrides.transportFor?.(mode);
@@ -1058,11 +1068,10 @@ markSandbox();
 
   // Chips adopted into the tide bar — each only where it is a real choice.
   //
-  // MOCK/HTTP needs somewhere for http to GO. With no `httpBase` and no `transportFor`, flipping it
-  // points the lagoon at the default dispatcher path, which for a project that has none means the
-  // region simply stops answering: a switch whose other position is "broken" is not a choice.
-  const canSwitchTransport = Boolean(config.httpBase || opts.overrides?.transportFor || config.transport === 'http');
-  if (canSwitchTransport) mountTransportToggle(mode);
-  // And the fit needs a legacy skin to fit TO.
+  // THERE IS NO MOCK/HTTP CHIP. It was not removed for being broken on a published artifact (it was,
+  // having no proxy behind it) but for what it claimed: two positions on one switch says the two are
+  // peers, and they are not. Only one of them renders the state the address names.
+  //
+  // The fit needs a legacy skin to fit TO.
   if (opts.legacyFit !== false) mountFitToggle();
 }

@@ -1,7 +1,7 @@
 // The lagoon gallery entry.
 //
 // MIGRATED FROM A HAND-ROLLED GALLERY. This file used to be the gallery itself: it configured the
-// transport, mounted the transport and fit toggles, built its own archipelago switcher with its own
+// transport, mounted the fit toggle, built its own archipelago switcher with its own
 // localStorage keys, injected the frame stylesheets, and mounted the tide line. All of that now lives
 // in @motu/react (`startLagoon`), which is what `motu init` scaffolds and what every other project
 // uses — so improvements to the gallery arrive with the framework instead of needing this file
@@ -48,8 +48,9 @@ import { setupLagoonAngularHost } from './angular-host.js';
 // island styles still win.
 import './ocean.css';
 
-// Build/dev default for the transport, injected by vite.config from the MOTU_TRANSPORT env var.
-// Empty string means "unset" → mock, so agents get backend-free data.
+// Build default for the transport, injected by vite.config from the MOTU_TRANSPORT env var. Empty
+// string means "unset" → mock, which is every build a person opens; `motu fixtures record --transport
+// http` is the only one that sets it, and it writes fixtures rather than showing anyone a page.
 declare const __MOTU_TRANSPORT__: string;
 // Present in the lagoon by default (the sandbox); MOTU_DEBUG=0 strips it.
 declare const __MOTU_DEBUG__: boolean;
@@ -104,7 +105,8 @@ startLagoon({
     // whichever happened to import this module first.
     setup: setupLagoonAngularHost,
     /**
-     * HTTP is the only mode this project builds itself.
+     * HTTP is the only mode this project builds itself, and `motu fixtures record --transport http`
+     * is the only thing that asks for it.
      *
      * The real backend sits behind the dev proxy and wants this project's own XSRF cookie and header
      * names, which `httpBase` alone cannot say. Mock is deliberately left to the default: the lagoon

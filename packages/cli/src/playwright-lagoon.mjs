@@ -378,13 +378,24 @@ function currentNetworkEscapes() {
 async function readUnscopedRequests(page) {
   return page
     .evaluate(() => {
-      if (window.__motuUnscopedRequests === undefined && window.__motuFakeFetchRequestCount === undefined) {
+      // ANY of the three, not just the first two. A fake that CLAIMED nothing never initialises its
+      // request counter, so a lagoon whose `appRoutes` miss the path the app actually calls looked
+      // identical to one with no fake installed at all — and the `unanswered` list, which is the whole
+      // evidence for that case, was discarded on the way out. That is the exact shape of the gap this
+      // list was added to close, hiding one layer above it.
+      if (
+        window.__motuUnscopedRequests === undefined &&
+        window.__motuFakeFetchRequestCount === undefined &&
+        window.__motuUnansweredRequests === undefined
+      ) {
         return undefined;
       }
       const unscoped = window.__motuUnscopedRequests || [];
+      // Delegated-and-failed: the fake never claimed it, and the dev server answered with an error.
+      const unanswered = window.__motuUnansweredRequests || [];
       const seen = window.__motuFakeFetchRequestCount || 0;
       const reach = window.__motuDataReach || { tables: {}, rpcs: [], by: {} };
-      return { unscoped, seen, reach };
+      return { unscoped, unanswered, seen, reach };
     })
     .catch(() => undefined);
 }

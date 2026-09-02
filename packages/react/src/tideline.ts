@@ -77,7 +77,7 @@ export interface TideLens {
    * Render the lens' FINDINGS into a container the dock owns, and return the teardown.
    *
    * The direction is inverted on purpose, and it is the same inversion `setMotuToolbarHost` already
-   * uses for the transport chips: the dock hands over a box, the lens fills it. @motu/debug-overlay
+   * uses for the toolbar chips: the dock hands over a box, the lens fills it. @motu/debug-overlay
    * is dev-only and a production root has to shake it out entirely, so the dock cannot import it to
    * ask what a finding looks like — and does not need to.
    *

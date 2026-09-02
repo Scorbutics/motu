@@ -1,7 +1,9 @@
 # The lagoon
 
-The lagoon is the sandbox: the application's own components, mounted with `MockTransport` and the
-project's evidence, with no backend, no session and no host application around them. This page answers
+The lagoon is the sandbox: the application's own components, mounted against the project's evidence
+with no backend, no session and no host application around them. The evidence reaches them through one
+of two mock layers — `MockTransport` at the contract seam, or a fake `fetch` beneath the app's own
+client (see [the two stand-ins](#the-two-stand-ins-and-which-to-reach-for)). This page answers
 how to open it, how to address one state inside it, how to serve or publish it, how to host it for
 other people, and how its visual baselines work. Vocabulary is in
 [01 — Concepts](01-concepts.md); the composition shapes it renders are in
@@ -22,11 +24,37 @@ lagoon (a stateful fake, the schema in pglite) was investigated and declined: it
 logic that cannot be diffed against the original, and the moment the lagoon has a backend it loses
 determinism, one-cause failures, speed, and the artifact with nothing behind it (`README.md`).
 
-**It is always mock-backed.** A published or served artifact is built with `MOTU_TRANSPORT='mock'`
-unconditionally, with the reason in the source: an artifact has no `/api` proxy behind it, so `http`
-would render an island that fails every call (`packages/cli/src/commands/lagoon.mjs:81-84`). The
-transport chip in the chrome can still be flipped at runtime where a dev proxy exists
-(`packages/react/src/transport-toggle.ts`), but the build default for anything shareable is `mock`.
+**It is always mock-backed, and there is no way to make it otherwise from the browser.** The two mock
+layers are guaranteed differently, and it is worth knowing which is which. At the CONTRACT seam a
+published or served artifact is built with `MOTU_TRANSPORT='mock'` unconditionally
+(`packages/cli/src/commands/lagoon.mjs:81-84`), and every other build a person opens is mock because
+nothing offers them a choice (`packages/react/src/transport-mode.ts`) — an env var the browser cannot
+reach. At the WIRE, the fake is installed by the project's own region module, so nothing structural
+stops a project handing its client a real one; what holds the line there is a CHECK rather than a
+build flag. `stubs-sealed` fails the run when any request escaped to a real host, matched no declared
+fixture, or was answered by the dev server instead of a stub
+([07 — Checks and verification](07-checks-and-verification.md)).
+
+The chip that used to offer one is gone, and the reason is the addressing contract rather than the
+artifact. A lagoon address promises a DECLARED state, and a name that resolves to nothing refuses to
+render precisely because being handed a different state while believing it is the one you named is
+the failure worth engineering against. `?transport=http` was that failure through a side door: the
+address still resolved, `window.__motuLagoonState.ok` stayed `true`, and what rendered was whatever
+the backend held that second — different for two people opening the same URL, and useless as a
+snapshot baseline. It was also a data path with no declaration, in a framework where scenarios,
+`seed`, channels, `sources` and `capture` are all declared and therefore comparable; and it answered
+a question the design assigns elsewhere, since the far side of the port belongs to the operations
+ledger and to unit tests, not to the lagoon. The remembered `motu:transport` in localStorage made it
+worse by outliving the intention: one peek turned every address opened afterwards undeclared.
+
+`http` survives as a BUILD-TIME input with exactly one caller — `motu fixtures record <island>
+--transport http`, which boots a headless lagoon against the real backend, drives the island's
+declared scenarios and writes fixtures to disk (`packages/cli/src/commands/fixtures.mjs`). Nothing is
+previewed and nothing is asserted against live data: its output is a declared artifact everything
+downstream compares against, which is the capture-refresh shape rather than a live mode. `httpBase`
+and `transportFor` exist to serve that one build; there is deliberately no `transport` key in
+`lagoon.config.json`, because a committed `"transport": "http"` would be the mode again in
+configuration form.
 
 ---
 
@@ -69,14 +97,48 @@ cannot hold — functions and objects — goes in `roots/lagoon/src/lagoon.tsx` 
 
 > The lagoon override file is a MAP, not a page. `layout` points at the APPLICATION's own layout
 > component — never a second JSX copy of the arrangement, which drifts for the same reason a second
-> copy of the region's vocabulary does. `seed` is data. Anything that REACTS — the stand-in for the
-> page's fetch, answering an island's intent — is a `channel`: it is installed in every view, so the
-> checks that drive the region see the same answers a human does, and the lens can show it fired.
-> Behaviour written inside the frame runs only in the region view, where those checks are not.
-> — `.github/host-rules.md:94-99`
+> copy of the region's vocabulary does. `seed` is data. Anything that REACTS has one of TWO homes, and
+> neither is the frame. A `channel` installs the application's own SOURCE over a port. The WIRE FAKE
+> answers HTTP BENEATH the app's real service, so the service itself runs instead of being replaced.
+> Both are installed for every view, which is the property that matters. Behaviour written inside the
+> frame runs only in the region view, where those checks are not.
+> — `.github/host-rules.md`
 
 One line per region; each region's own seed, arrangement and stand-ins live beside it in `regions/`
 (`host-app/motu/roots/lagoon/src/lagoon.tsx:1-16`).
+
+### The two stand-ins, and which to reach for
+
+A region module holds three kinds of thing, and only two of them are `RegionOverrides` fields:
+
+| | What it is | Where it lives | What runs for real |
+|---|---|---|---|
+| `seed` | data | a field | nothing — it is a value |
+| `channels` | the app's own SOURCE, over a port | a field | the source: its timeout, its generation guard, its error mapping |
+| the **wire fake** | a fake `fetch` under the app's real client | the module's **top level**, not a field | the source AND everything below it — the service, its URL building, its status handling, its error mapping |
+
+```tsx
+// roots/lagoon/src/regions/review.tsx — both, in one module
+const wire = createPostgrestFetch({ appRoutes: ['/api/baselines'], fixtures: [ … ] });
+installFakeFetch(wire, { appRoutes: ['/api/baselines'] });          // top level: patches globalThis.fetch
+
+export const reviewRegion = overridesFor(reviewArchipelago, {
+  seed: reviewSeed,
+  channels: [channelFrom({ to: reviewArchipelago, id: 'shots', args: [shotsWirePort] })],
+});
+```
+
+Reach for the **wire** when the application's own client code is what you want exercised — a module
+swap runs the source and stops there, so the service beneath it never executes and nobody notices,
+because the swap is silent by construction. Reach for a **channel** when the region needs a key fed.
+A region commonly has both, as the one above does.
+
+The rule that has not changed is the one that matters: neither lives in the frame. The wire fake is at
+module scope precisely so it patches `globalThis.fetch` for **every** view, exactly as a channel is
+installed in every view — which is what lets the checks that drive the region see the same answers a
+human does. What fired stays legible either way: the lens shows a channel, and `data-reach` /
+`provenance` show what went over the wire. Transports, fixtures and the fake's supported surface are
+[11 — Contract and backend](11-contract-and-backend.md).
 
 ### `overridesFor(archipelago, { … })`
 
@@ -580,7 +642,8 @@ lagoon is not one (`.github/host-rules.md:86-93`). See
 [10 — Evidence and testing](10-evidence-and-testing.md).
 
 **Behaviour written inside a frame runs only in the region view** — where the flow checks are not. Make
-it a `channel` (`.github/host-rules.md:96-100`).
+it a `channel`, or answer it at the wire (`.github/host-rules.md`). Both are installed for every view;
+a frame is not.
 
 **`mount` must match the host application.** `"mount": "react"` in `lagoon.config.json`, and the same
 value on both entries, or the lagoon shows a mount path the project does not ship

@@ -183,6 +183,28 @@ function hostTsconfigAliases() {
 
 const HOST_ALIASES = hostTsconfigAliases();
 
+/**
+ * A file, written as the specifier the HOST would use for it — `@/pages/x` — or null.
+ *
+ * The inverse of the resolver below, and it has to read the alias's real TARGET rather than assume
+ * `@/*` means "from the host root". Next's own template maps `"@/*": ["./*"]`, so assuming that
+ * worked everywhere until it met a Vite app mapping `"@/*": ["./src/*"]`: `archipelago init` then
+ * generated `@/src/pages/api-keys-region`, a doubled `src/` that resolves to nothing, and the adopter
+ * hand-fixed the import motu had just written for them.
+ *
+ * Longest prefix wins, so a project with both `@/*` and `@/components/*` gets the specific one.
+ */
+export function hostAliasSpecifier(targetFile) {
+  const stripped = targetFile.replace(/\.(tsx?|jsx?)$/, '');
+  const candidates = HOST_ALIASES.filter((a) => a.prefix && !relative(a.target, stripped).startsWith('..')).sort(
+    (a, b) => b.target.length - a.target.length,
+  );
+  const alias = candidates[0];
+  if (!alias) return null;
+  const rest = relative(alias.target, stripped).split('\\').join('/');
+  return rest ? `${alias.prefix}${rest}` : alias.prefix.replace(/\/$/, '');
+}
+
 const TS_EXTENSIONS = ['', '.tsx', '.ts', '/index.tsx', '/index.ts'];
 
 /** Resolve a module specifier found in an island's element.ts to a file on disk (null if it can't). */

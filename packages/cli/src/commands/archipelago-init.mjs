@@ -15,7 +15,7 @@
 // `island create` stopped writing `fixtures.mock.ts`. Evidence appears when there is something real.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
-import { color, paths, HOST_ROOT, APP_ROOT } from '../lib/util.mjs';
+import { color, paths, HOST_ROOT, APP_ROOT, hostAliasSpecifier } from '../lib/util.mjs';
 import { archipelagoCreateCommand } from './archipelago.mjs';
 
 const written = [];
@@ -37,12 +37,17 @@ function names(id) {
   };
 }
 
-/** How this project imports host files: the `@/` alias when tsconfig declares one, else a relative path. */
+/**
+ * How this project imports host files: the host's own alias when one covers the file, else relative.
+ *
+ * Resolved through the tsconfig's real alias TARGET, never by assuming `@/*` means the host root.
+ * The assumption held on Next (`"@/*": ["./*"]`) and broke on a Vite app mapping `"@/*": ["./src/*"]`,
+ * where this generated `@/src/pages/…` — a doubled `src/` resolving to nothing, in a file motu had
+ * just written for the adopter to use.
+ */
 function hostSpecifier(fromFile, targetFile) {
-  const tsconfig = resolve(HOST_ROOT, 'tsconfig.json');
-  const aliased = existsSync(tsconfig) && /"@\/\*"\s*:/.test(readFileSync(tsconfig, 'utf8'));
-  const target = relative(HOST_ROOT, targetFile).replace(/\.tsx?$/, '');
-  if (aliased) return `@/${target}`;
+  const aliased = hostAliasSpecifier(targetFile);
+  if (aliased) return aliased;
   const rel = relative(dirname(fromFile), targetFile).replace(/\.tsx?$/, '');
   return rel.startsWith('.') ? rel : `./${rel}`;
 }
@@ -156,9 +161,18 @@ export const ${camel}Seed: NonNullable<LagoonOverrides['seed']>[string] = {};
  * of the page's shape, rendered by the page with live content and here with islands. Restating the
  * arrangement in JSX here is the drift the region type exists to prevent, one level up.
  */
-export function ${pascal}RegionFrame({ island }: { island: (slot: string) => ReactNode }) {
-  return <div className="flex flex-col gap-6 p-4 lg:p-8">{/* {island('your-slot')} */}</div>;
-}
+export const ${pascal}RegionFrame = (island: (slot: string) => ReactNode): ReactNode => {
+  // A FRAGMENT, NOT A STYLED <div>. \`region-root\` allows a frame to hold only the application's own
+  // components, fragments and \`island(slot)\` calls — so the placeholder that shipped here (a
+  // \`<div className="flex flex-col gap-6 …">\`) failed that check the moment it was first run, and the
+  // adopter's first \`motu check\` reported a violation motu had written for them. Arrangement belongs
+  // to the app's own layout component; reach for \`root\` in the archipelago when the page has one.
+  // THE SIGNATURE IS \`layout\`'s OWN, not a component's. This shipped as a component taking
+  // \`{ island }\` as PROPS while \`layout\` is \`(island) => ReactNode\` — so wiring the frame motu had
+  // just written required an adapter the adopter had to guess, and the first guess (the props shape
+  // the scaffold itself suggested) was wrong. Typed from the override so the two cannot drift again.
+  return <>{/* {island('your-slot')} */}</>;
+};
 `,
   );
 
@@ -181,6 +195,29 @@ export function ${pascal}RegionFrame({ island }: { island: (slot: string) => Rea
         .filter((l) => /^import /.test(l) && !/Archipelago|ELEMENT_REGISTRY/.test(l))
         .join('\n')
     : '';
+  // `createRegion` IS THE ONE IMPORT THIS FILE CANNOT DO WITHOUT, and it was only ever inherited.
+  // `modelImports` copies the precedent's imports, so the FIRST region in a project — the one with no
+  // precedent — got a composition root that calls `createRegion(...)` and never imports it. Measured
+  // on a cold adoption: the adopter's first act after `archipelago init` was hand-adding an import
+  // motu had just made necessary.
+  const createRegionImport = /^import .*\bcreateRegion\b/m.test(modelImports)
+    ? ''
+    : "\nimport { createRegion } from '@motu/react';";
+
+  // THE BARREL, AS A SPECIFIER THAT RESOLVES. `appPackage` defaults to the app directory's name, which
+  // is a real package name only when the directory and the package agree — on a monorepo app called
+  // `apps/dashboard` publishing `@novu/dashboard`, it generated `from 'dashboard'`, importing a
+  // package that does not exist. The barrel is a FILE motu itself wrote, so prefer the host's own way
+  // of naming that file and keep `appPackage` for when it genuinely is a resolvable package.
+  const barrelSpecifier = (() => {
+    const declared = paths.appPackage;
+    const pkgFile = resolve(APP_ROOT, 'package.json');
+    try {
+      if (existsSync(pkgFile) && JSON.parse(readFileSync(pkgFile, 'utf8')).name === declared) return declared;
+    } catch {}
+    return hostSpecifier(bindingFile, paths.barrel) ?? declared;
+  })();
+
   // Compared as SPECIFIERS, not as paths: `a-region.ts` and `a-region.tsx` are different paths and
   // the same module, which is what let the collision above through.
   const specifierOf = (f) => f.replace(/\.tsx?$/, '');
@@ -196,8 +233,8 @@ export function ${pascal}RegionFrame({ island }: { island: (slot: string) => Rea
 // The transport and host bridge are COPIED from this project's existing composition root, not chosen
 // again: they are environment decisions the project already made, and answering them differently by
 // accident is how two regions end up with two securities.
-${modelImports}
-import { ELEMENT_REGISTRY, ${archConst} } from '${paths.appPackage}';
+${modelImports}${createRegionImport}
+import { ELEMENT_REGISTRY, ${archConst} } from '${barrelSpecifier}';
 
 export const ${pascal} = createRegion(${archConst}, {
   elements: ELEMENT_REGISTRY,

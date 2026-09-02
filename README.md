@@ -17,8 +17,47 @@ motu lagoon states
 
 Open either one. It is the real components, still interactive, rendered from a declared seed.
 
-> **Status:** works, used daily, not published to npm. Install from a checkout (below). React hosts
-> today (Next.js, Vite, plain React) plus an AngularJS adapter for legacy hosts. MIT licensed.
+> **Status:** early, and narrower than it looks. Works, used daily, not published to npm — install
+> from a checkout (below). MIT licensed. **motu mounts React components into a page**, so the stack
+> it has to fit is your FRONTEND, not your server. Read the next section before adopting it.
+
+## What this has actually been run against
+
+Stated as evidence rather than intent, because the honest answer to "does it support X" is usually
+"nobody has tried". An island is a React component mounted into a page, and the lagoon is a Vite app,
+so those two facts bound everything below.
+
+| Stack | Evidence |
+|---|---|
+| **Next.js** | `host-app` in this repo (daily), plus three cold-start adoptions of [Formbricks](https://github.com/formbricks/formbricks) (Next 16, pnpm monorepo, Tailwind v4) — `bench/agent-cold-start` |
+| **Vite + React + TypeScript** | `review-console` in this repo, plus cold-start adoptions of [Novu](https://github.com/novuhq/novu)'s dashboard (pnpm monorepo, Tailwind v3), plus a metadata-driven app (Twenty: Jotai, widgets as database rows) |
+| **AngularJS 1.x** | `demo-app`, the reference ocean — a Jakarta EE + JSP application. This is the LEGACY path: islands replace AngularJS UI, they are not written in it |
+
+**`--host none` (plain React) is accepted and thinly evidenced** — the code path exists, no consumer
+here proves it.
+
+### Not supported, and not close
+
+- **Angular 2+.** The `angularjs` adapter is AngularJS **1.x**. The names collide; the frameworks do
+  not. There is no Angular 2+ adapter.
+- **Vue, Svelte, Solid, Lit, htmx.** An island IS a React component. There is no adapter and no
+  partial path — this is not a "not yet", it is a different design.
+- **A page with no JavaScript layer at all** — server-rendered Rails/ERB, Django, Laravel/Blade with
+  no client framework. motu needs somewhere to mount a custom element. Note the inverse: the reference
+  ocean's server IS Java/JSP, and that works, because the page has a JS layer to mount into. **Your
+  backend language is not the question; what renders your components is.**
+- **React without TypeScript.** Island contracts are read from the component's source with `ts-morph`.
+  A plain-JS React app (measured: a `.jsx` app on rsbuild) is a wall today, not a rough edge.
+- **Host bundlers other than Next's or Vite's.** webpack, rsbuild, Parcel, CRA are untested for the
+  HOST build. The lagoon is always Vite regardless, so the risk is your app's own build, not the
+  preview.
+- **npm and yarn are unproven.** Every project above uses pnpm. `npm install` deletes motu's
+  no-install symlinks as extraneous (see [Getting started](docs/02-getting-started.md)), which the CLI
+  works around by re-creating them on every invocation — but nothing here regularly runs on npm.
+
+If your stack is not in the first table, assume it does not work yet. Adding a stack is real work
+(an adapter, its verify layer, a lagoon that can build it), and the project would rather say "no"
+than let you find out over an afternoon.
 
 ---
 

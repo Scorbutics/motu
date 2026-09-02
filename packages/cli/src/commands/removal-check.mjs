@@ -239,7 +239,24 @@ function motuOnlySet(graph, hostRoot, motuDirs) {
   };
   const resolveSpec = (sf, spec) => resolveFrom(typeof sf === 'string' ? sf : sf.getFilePath(), spec);
 
+  // A FILE INSIDE A MOTU-OWNED DIRECTORY IS MOTU'S, whatever it imports.
+  //
+  // The specifier test above can only recognise motu by how a module is SPELLED (`@motu/…`, or a path
+  // through the motu directory), which works while the app reaches motu across a directory boundary
+  // and fails completely for a project whose motu lives in its own `src/`: there the composition root
+  // says `../islands/registry`, a relative specifier that contains no motu marker at all, and the
+  // fixpoint could never seed itself. And it cannot seed itself from the islands either — an island
+  // mount point imports the APPLICATION's component by design, which is exactly what `--from` is for,
+  // so no island is ever "100% motu" by import alone.
+  //
+  // The declared directories settle it: `islands/`, `archipelagos/`, `ui/`, `shared/` and the lagoon
+  // root are motu's by definition — they are what removal DELETES — so seed them directly and let the
+  // fixpoint extend outward from there.
+  const motuRoots = dirs.map((d) => resolve(hostRoot, d));
+  const insideMotuFile = (file) => motuRoots.some((r) => file === r || file.startsWith(r + '/'));
+
   const set = new Set();
+  for (const p of graph.keys()) if (insideMotuFile(p)) set.add(p);
   for (let changed = true; changed; ) {
     changed = false;
     for (const [p, imports] of graph) {
@@ -308,11 +325,18 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   // `ui`, `shared` and the lagoon root are motu's by definition, whether or not they sit under a
   // shared parent.
   const motuDir = relative(hostRoot, cfg.root);
+  //
+  // THE PROPERTY NAMES ARE `…Dir`, and getting that wrong made this worse than the bug it replaced.
+  // `loadMotuConfig()` exposes ABSOLUTE `islandsDir`/`archipelagosDir`/`uiDir`/`sharedDir`/`lagoonDir`;
+  // reading `cfg.islands` & co. gave `undefined` for all five, so the list was always empty, the
+  // regex became match-nothing, and NO project's composition root could be recognised as motu's own.
+  // The old `|| 'motu'` guessed a directory that did not exist; this guessed nothing at all, for
+  // everyone. Found by a cold-start agent that probed `loadMotuConfig()`'s actual return value.
   const motuDirs = motuDir
     ? [motuDir]
-    : [cfg.islands, cfg.archipelagos, cfg.ui, cfg.shared, cfg.lagoon]
+    : [cfg.islandsDir, cfg.archipelagosDir, cfg.uiDir, cfg.sharedDir, cfg.lagoonDir]
         .filter(Boolean)
-        .map((d) => relative(hostRoot, resolve(cfg.root, d)))
+        .map((d) => relative(hostRoot, d))
         .filter((d) => d && !d.startsWith('..'));
   const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(graph, hostRoot, motuDirs);
 
@@ -349,8 +373,17 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   }
 
   // Only the files the surgery can touch get parsed: what motu owns outright, and what mentions it.
+  // A FILE THAT IMPORTS A MOTU-ONLY FILE IS A CANDIDATE, even when the specifier says nothing.
+  //
+  // This selected files by how their imports are SPELLED (`@motu/…`), which misses the page that
+  // imports its own composition root by a relative path — `./manage-servers-binding`. That page was
+  // never loaded into the rewrite project, so its `<X.Island>` tags were never unwrapped and its
+  // import of the now-deleted binding was left dangling: removal then "failed" with
+  // `Cannot find module './manage-servers-binding'`, an error pointing at the one file the surgery
+  // had refused to touch. Same specifier-form-versus-resolution mistake as the allowlist above, one
+  // layer up — and the page is precisely where a relative import is the normal spelling.
   const candidates = [...graph]
-    .filter(([p, specs]) => motuOnly.has(p) || specs.some((spec) => isMotuSpec(spec)))
+    .filter(([p, specs]) => motuOnly.has(p) || specs.some((spec) => isMotuSpec(spec) || motuOnly.has(resolveSpec(p, spec) ?? '')))
     .map(([p]) => p);
   const project = new Project({
     skipAddingFilesFromTsConfig: true,

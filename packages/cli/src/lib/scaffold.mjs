@@ -261,7 +261,11 @@ const g = globalThis as unknown as { process?: { env: Record<string, string> } }
 g.process = g.process ?? { env: {} };
 // Declared under "env" in lagoon.config.json. The lagoon has no backend, so these only have to EXIST;
 // never put a real secret here — a published lagoon is a static page anyone with the link can read.
-Object.assign(g.process.env, { NODE_ENV: 'development', ...(config.env ?? {}) });
+// \`env\` is OPTIONAL in lagoon.config.json and the scaffolded one does not declare it — so with
+// resolveJsonModule TypeScript infers the literal shape and \`config.env\` is a compile error on a
+// freshly generated project. Read it through a widening cast: the key may or may not be there.
+const declared = (config as { env?: Record<string, string> }).env ?? {};
+Object.assign(g.process.env, { NODE_ENV: 'development', ...declared });
 `;
 
 /** Fixture aggregation by glob, so adding an island needs no edit here (the demo app's hand-maintained

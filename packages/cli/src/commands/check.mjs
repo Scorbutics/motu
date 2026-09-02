@@ -22,6 +22,7 @@ import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
 import { renderCoverageModule, COVERAGE_MODULE } from '../lib/archipelagos.mjs';
 import { integrationResults } from './integration.mjs';
+import { unchangedSinceLastRun } from '../lib/finding-memory.mjs';
 import { names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
 
 /** Is `contracts.generated.ts` what the components say it should be? */
@@ -230,7 +231,8 @@ export async function checkCommand(argv) {
         color.dim(errs.length ? `${errs.length} error(s)` : warns.length ? `${warns.length} warning(s)` : 'composed, mounted, placed, read'),
     );
     for (const f of [...errs, ...warns]) {
-      console.log(`      ${f.level === 'error' ? color.red('✗') : color.yellow('!')} ${color.dim(f.check.padEnd(12))} ${f.msg}`);
+      const again = unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
+      console.log(`      ${f.level === 'error' ? color.red('✗') : color.yellow('!')} ${color.dim(f.check.padEnd(12))} ${f.msg}${again}`);
     }
   }
 

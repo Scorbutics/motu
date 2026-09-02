@@ -8,6 +8,7 @@
 // the extraction skill / a human. Injecting the marker into the *legacy* page is stack-specific and is
 // the extract skill's job, not the CLI's.
 import { existsSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
 import { paths, names, color, FMT, islandComponentPath } from '../lib/util.mjs';
 
@@ -31,6 +32,43 @@ function findArchipelago(sf, archId) {
     if (idVal === archId && obj.getProperty('islands')) return obj;
   }
   return null;
+}
+
+
+/**
+ * Give a region's declaration the checks a region WITH islands has to make.
+ *
+ * Idempotent, and additive only: an existing `wiring`/`produced` is left exactly as written, and a
+ * hand-narrowed `Pick<ElementTypes, …>` second type argument is never widened back.
+ */
+function upgradeChecks(sf, arch) {
+  // `archipelago<…>()(config, checks)` — `arch` is `config`, so the checks are the sibling argument
+  // of the call that owns it. `as const` sits between them often enough to be worth stepping over.
+  let node = arch;
+  while (node && !node.asKind?.(SyntaxKind.CallExpression)) node = node.getParent?.();
+  const call = node?.asKind(SyntaxKind.CallExpression);
+  if (!call) return;
+  const checks = call.getArguments()[1]?.asKind(SyntaxKind.ObjectLiteralExpression);
+  if (!checks) return;
+
+  // The elements map, as the second type argument of the INNER call (`archipelago<R, ElementTypes>()`).
+  const inner = call.getExpression().asKind(SyntaxKind.CallExpression);
+  if (inner && inner.getTypeArguments().length === 1) {
+    inner.insertTypeArgument(1, 'ElementTypes');
+    const from = relPosix(dirname(arch.getSourceFile().getFilePath()), resolve(paths.islandsDir, 'registry'));
+    if (!sf.getImportDeclaration((d) => d.getModuleSpecifierValue() === from)) {
+      sf.addImportDeclaration({ moduleSpecifier: from, namedImports: ['ElementTypes'], isTypeOnly: true });
+    }
+  }
+  for (const name of ['wiring', 'produced']) {
+    if (!checks.getProperty(name)) checks.addPropertyAssignment({ name, initializer: 'true' });
+  }
+}
+
+/** POSIX-relative module specifier (never a Windows backslash in generated code). */
+function relPosix(from, to) {
+  const r = relative(from, to).split('\\').join('/');
+  return r.startsWith('.') ? r : './' + r;
 }
 
 export async function integrateCommand(argv) {
@@ -92,6 +130,16 @@ export async function integrateCommand(argv) {
       // bind: { someProp: 'someStoreKey' },
       // on: { 'some-event': (detail, { store }) => store.set('someStoreKey', detail) },
     }`);
+
+  // THE CHECKS THIS REGION CAN NOW MAKE, added with the member that makes them possible.
+  //
+  // `wiring` and `produced` are required of a region WITH islands and meaningless for one without —
+  // so `archipelago create/init` scaffolds neither, and this is the command that changes which of the
+  // two a region is. It did not add them, so adding your FIRST island to a freshly scaffolded region
+  // stopped the project typechecking, with an error on a line motu generated and the adopter had
+  // never edited. `wiring` also needs the generated elements map as the second type argument; a bare
+  // tag union silently makes it check nothing, which the type itself refuses.
+  upgradeChecks(sf, arch);
 
   // WHERE THIS ISLAND IS GOING TO BE PLACED, and the answer depends on how the region composes.
   //

@@ -9,6 +9,31 @@ subject of the second half of this page: whatever the host, motu must stay **rem
 
 ---
 
+## What a host has to be, and what has actually been tried
+
+Two facts bound every answer on this page, and neither is negotiable today:
+
+1. **An island is a React component.** Not a component compiled from something else — React.
+2. **The lagoon is a Vite app.** Whatever your host builds with, the preview builds with Vite.
+
+So the question "does motu support <my stack>" is a question about what renders your components, and
+never about your server. The reference ocean's backend is Jakarta EE serving JSP, and it works,
+because the page has a JavaScript layer to mount a custom element into. A Rails or Django application
+with a React frontend is the same shape; the same application rendering ERB or templates with no
+client framework has nowhere for an island to go.
+
+The evidence table — which stacks have actually been driven, and by what — is in the
+[README](../README.md#what-this-has-actually-been-run-against) so that it is the first thing a
+stranger reads. In summary: **Next.js** and **Vite + React + TypeScript** are exercised by in-repo
+consumers and by repeated cold-start adoptions of two third-party production monorepos;
+**AngularJS 1.x** is exercised by the reference ocean; `--host none` exists and has no consumer
+proving it. **Angular 2+, Vue, Svelte, Solid, non-TypeScript React, and host bundlers other than
+Next's or Vite's have no adapter and no evidence.**
+
+`--host` accepting a value is not evidence that the path works — it is the value the config takes.
+
+---
+
 ## The `host` key
 
 Declared in `motu.config.json`, defaulting to `'angularjs'`

@@ -180,9 +180,27 @@ export async function createCommand(argv) {
   // `--from <specifier>` wraps a component the application already owns (the React-host case: there is
   // nothing to write, only something to mount). Without it, scaffold a new component under ui/ — the
   // extraction case, where the original is not React and a component has to be authored.
-  const from = typeof argv.from === 'string' ? argv.from : null;
+  let from = typeof argv.from === 'string' ? argv.from : null;
   // `--export` names the component INSIDE the module, when it is not the island's Pascal name.
-  const exportName = typeof argv.export === 'string' ? argv.export : null;
+  let exportName = typeof argv.export === 'string' ? argv.export : null;
+
+  // `--from <module>:<Export>` IS ACCEPTED, because it is what people actually type.
+  //
+  // Measured on three cold-start adoptions: two independent agents, on two different applications,
+  // invented exactly this form, spent three invocations each on it, and only recovered via the docs
+  // or `--help`. When two strangers independently guess the same syntax, the syntax is not the
+  // problem — refusing it is. `--export` remains the canonical spelling and still wins if both are
+  // given; this only stops the guess from being a dead end.
+  //
+  // Split on the LAST colon, and only when the tail looks like an export name, so a Windows drive
+  // letter or a `node:`/`virtual:` style specifier is untouched.
+  if (from && !exportName) {
+    const m = from.match(/^(.*[^:]):([A-Za-z_$][\w$]*)$/);
+    if (m && !/^[a-z]+:$/.test(m[1] + ':')) {
+      from = m[1];
+      exportName = m[2];
+    }
+  }
   const componentPath = paths.componentFile(kebab, pascal);
   const fixturesPath = paths.fixturesFile(kebab);
 
@@ -201,9 +219,17 @@ export async function createCommand(argv) {
   // which is why the React hosts never hit it.
   const islandDir = paths.islandsDir;
   if (from && !resolveModuleSpecifier(from, islandDir)) {
+    // SHOW A CORRECT CALL. The old message said what was wrong and never what to type, so an agent
+    // that had guessed the syntax had nothing to correct toward — it guessed twice more, then read
+    // the docs. A message that ends in an example is the difference between three invocations and one.
+    const guessedExt = /\.(tsx?|jsx?)$/.test(from);
     console.error(
       color.red(`✗ --from '${from}' does not resolve to a file from ${paths.rel(islandDir)}`) +
-        color.dim('\n  Use the specifier the app itself uses (e.g. an alias like @/components/foo), or a path relative to that directory.'),
+        (guessedExt ? color.dim('\n  Drop the file extension — this is a module specifier, not a path.') : '') +
+        color.dim('\n  Use the specifier the APP itself uses, and name the export with --export:') +
+        color.dim(`\n      motu island create ${kebab} --from @/components/${kebab} --export ${pascal}`) +
+        color.dim(`\n      motu island create ${kebab} --from ../components/${kebab} --export ${pascal}   (relative to ${paths.rel(islandDir)})`) +
+        color.dim('\n  `--from <module>:<Export>` is also accepted.'),
     );
     process.exit(1);
   }

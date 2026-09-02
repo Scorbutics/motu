@@ -620,7 +620,26 @@ export type TagsOf<T> = [T] extends [string] ? T : keyof T & string;
  */
 type ConstInferenceLost<A> = A extends { islands: { length: infer L } } ? (number extends L ? true : false) : false;
 
-export interface ArchipelagoChecks<A, TElements, TProduced extends string> {
+/**
+ * A REGION WITH NO ISLANDS IS NOT ASKED TO PROVE ANYTHING ABOUT THEM.
+ *
+ * `wiring` and `produced` are required, deliberately — a check that is easy to omit is one nobody
+ * adds. But `archipelago create` / `archipelago init` leave a region with `islands: []`, and there
+ * `wiring` cannot even be satisfied: it needs the generated `ElementTypes`, and
+ * `islands/contracts.generated.ts` does not exist until the first island is synced. So the scaffolded
+ * file did not compile, at all, from the moment it was written — measured on a cold adoption, where
+ * the adopter's freshly generated archipelago failed `tsc` on motu's own generated line.
+ *
+ * They become required again the instant the region has a member, which is the point at which the
+ * claims mean something. Same rule the CLI already applies to `region-root` and `region-type`.
+ */
+export type ArchipelagoChecks<A, TElements, TProduced extends string> = A extends {
+  islands: readonly [];
+}
+  ? Partial<FullArchipelagoChecks<A, TElements, TProduced>> & Pick<FullArchipelagoChecks<A, TElements, TProduced>, 'ownership'>
+  : FullArchipelagoChecks<A, TElements, TProduced>;
+
+interface FullArchipelagoChecks<A, TElements, TProduced extends string> {
   /**
    * Every bound key has exactly one owner. The one check every region can make, so it is required —
    * which also makes it the right place to report a config the compiler gave up on narrowing.

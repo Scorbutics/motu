@@ -18,7 +18,24 @@ the host's `CLAUDE.md` motu rules block. Do not invent rules: the mechanical rul
 
 ## Step 0 — Learn this project's shape before reading the page
 
-`motu.config.json` is the answer to "where does anything go here", and it differs per repo:
+**If the project has no `motu.config.json` yet, that is normal — surveying is what happens BEFORE
+adoption.** Locating a page is read-only and decides whether adopting is worth it, so it is routinely
+run against a repo motu has never touched. Measured on two cold-start adoptions: this step said "read
+`motu.config.json`", the file did not exist, and the agent improvised the whole survey from the page's
+file layout without knowing that was allowed.
+
+When there is no config, answer the same questions from the repository itself, and say in the report
+that you did:
+
+- the paths — from where the app already keeps its components. There is no `islands`/`ui`/
+  `archipelagos` yet; name where they WOULD go and let `motu init` settle it.
+- `tagPrefix` — assume `x-`, the default `init` writes.
+- **`host`** — from the app's own build: a `next.config.*` means `next`, a `vite.config.*` means
+  `vite`, an AngularJS app means `angularjs`, otherwise `none`. This is the one answer that changes
+  the recommendation, so derive it rather than guess it.
+- `isolation` — irrelevant to this decision either way (see below).
+
+With a config present, it is the answer to "where does anything go here", and it differs per repo:
 
 - `islands` / `ui` / `archipelagos` / `shared` / `contract` — the paths you will name in the report.
 - `tagPrefix` — the tag namespace (`x-` → `x-week-actions`).

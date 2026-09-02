@@ -66,6 +66,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # THE GENERATOR, WHICH NOTHING ELSE IN THIS FILE EXERCISES. Every project checked below was
+      # scaffolded ONCE, long ago, and hand-fixed; `motu check` proves they are correct TODAY and says
+      # nothing about what `motu init` would produce now. A cold-start bench found seven defects in
+      # exactly that gap — see bench/agent-cold-start/RESULTS.md. Seconds, no browser.
+      - name: Scaffolder smoke test
+        run: node scripts/smoke-scaffold.mjs
+
       # DEMO-APP RUNS THE TWO SWEEPS, NOT `motu check`, and the reason is structural rather than a
       # standard being lowered.
       #

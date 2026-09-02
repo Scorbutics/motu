@@ -137,7 +137,21 @@ function relPosix(from, to) {
  * printed block a human can paste is honest about which side owns the file.
  */
 function keptPackageJsonNotice(appRoot, skipped, motuDependencies) {
-  if (!motuDependencies) return;
+  // NO WORKSPACE TO SATISFY `@motu/*` — say what DOES resolve them, because nothing else will.
+  //
+  // On a single-package project the dependency block is deliberately not written (a `workspace:*`
+  // range nothing can resolve breaks the next `npm install` outright). The consequence, measured on a
+  // cold adoption of an npm project: `motu init` changed ZERO lines of package.json, so the only
+  // record of motu's presence was raw symlinks in `node_modules/@motu/*` — which a fresh
+  // `npm install` deletes, leaving nothing to say what was needed or why the build then fails.
+  // The CLI re-creates them on every invocation, so this is legibility, not breakage.
+  if (!motuDependencies) {
+    console.log(color.dim('  @motu/* are resolved by symlinks the CLI re-creates in node_modules/ on every run —'));
+    console.log(color.dim('  nothing in package.json records them, because no workspace here could satisfy the range.'));
+    console.log(color.dim('  After `npm install` wipes them, any `motu` command puts them back.'));
+    console.log('');
+    return;
+  }
   const pkgPath = resolve(appRoot, 'package.json');
   if (!skipped.includes(pkgPath)) return;
   let already = false;
@@ -348,7 +362,15 @@ export async function initCommand(argv) {
     writeNew(resolve(lagoonDir, 'src/lagoon.tsx'), LAGOON_OVERRIDES, created, skipped);
     if (host === 'next') {
       writeNew(resolve(lagoonDir, 'src/next-stubs.tsx'), NEXT_STUBS, created, skipped);
-      writeNew(resolve(lagoonDir, 'src/env.ts'), ENV_SHIM, created, skipped);
+      // RENDERED, like every other template here. This one was written RAW, so the scaffolded
+      // `env.ts` kept its `{{lagoonConfigImport}}` placeholder verbatim and the file could not
+      // compile — invisible until something typechecked `roots/`, which nothing did.
+      writeNew(
+        resolve(lagoonDir, 'src/env.ts'),
+        render(ENV_SHIM, { lagoonConfigImport: '../lagoon.config.json' }),
+        created,
+        skipped,
+      );
       // ONLY IF THE HOST HAS TAILWIND. This file's whole body is `import hostConfig from
       // '../../../tailwind.config'`, so writing it for a Next app that styles itself any other way
       // scaffolds a module that cannot resolve. @motu/adapter-next makes the same check before it

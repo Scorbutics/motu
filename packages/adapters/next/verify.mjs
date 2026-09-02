@@ -82,16 +82,24 @@ export function checkCoupling({ source, coupling, graph } = {}) {
       if (bad.length || action) reached.push({ file: node.file, why: bad.length ? `imports server-only '${bad[0]}'` : "is a 'use server' module" });
     }
     if (reached.length) {
-      for (const r of reached.slice(0, 3)) {
-        findings.push({
-          level: 'error',
-          check: 'rsc-boundary',
-          msg: `reaches ${r.file}, which ${r.why} — the island itself is clean, but everything it imports is in the same bundle, and the lagoon has no Next runtime to strip it`,
-        });
-      }
-      if (reached.length > 3) {
-        findings.push({ level: 'error', check: 'rsc-boundary', msg: `…and ${reached.length - 3} more module(s) in this island's import graph` });
-      }
+      // ONE ROOT CAUSE, ONE FINDING. This emitted a line per offending module (three, then "…and N
+      // more"), which read as four separate problems and was counted as four every time the report
+      // was re-run. Measured across three cold-start benches: 50% of every finding an agent read in
+      // the `motu check` loop was a repeat of one already seen, and in the worst arm this single
+      // unfixable coupling accounted for 28 of the 48 findings read — the same four lines, seven
+      // times. The modules are evidence for one boundary violation, so they belong in one finding.
+      const [first, ...rest] = reached;
+      const more = rest.length
+        ? ` Also via ${rest.slice(0, 2).map((r) => r.file).join(', ')}${rest.length > 2 ? ` and ${rest.length - 2} other module(s)` : ''}.`
+        : '';
+      findings.push({
+        level: 'error',
+        check: 'rsc-boundary',
+        msg:
+          `reaches ${first.file}, which ${first.why} — the island itself is clean, but everything it ` +
+          `imports is in the same bundle, and the lagoon has no Next runtime to strip it.${more} ` +
+          `This is the APPLICATION's own coupling: it does not change until that import chain does.`,
+      });
     } else {
       findings.push({
         level: 'ok',

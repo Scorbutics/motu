@@ -90,9 +90,28 @@ function buildSingleFile({ entry, target, fit }) {
   });
   if (res.status !== 0)
     throw new Error(`lagoon build failed:\n${(res.stdout || '') + (res.stderr || '')}`);
+  // WHAT THE BUILD LEFT OUT, surfaced from the child. A successful build that quietly dropped an
+  // island is worse than a failed one: the gallery opens, the island is a placeholder, and nobody
+  // knows why. See the `[motu:excluded]` marker in lagoon-vite.mjs.
+  reportExclusions((res.stdout || '') + (res.stderr || ''));
   const html = resolve(paths.lagoonDir, 'dist', entry === 'lagoon' ? 'lagoon.html' : 'index.html');
   if (!existsSync(html)) throw new Error(`build produced no ${paths.rel(html)}`);
   return html;
+}
+
+
+/** Print the islands a build stubbed out, read from the child's marked lines. */
+export function reportExclusions(output) {
+  const lines = String(output)
+    .split('\n')
+    .filter((l) => l.includes('[motu:excluded]'))
+    .map((l) => l.slice(l.indexOf('[motu:excluded]') + '[motu:excluded]'.length).trim());
+  if (!lines.length) return;
+  console.warn(
+    color.yellow(`! ${lines.length} island(s) left out of this build — they cannot be bundled, and the rest of the lagoon still works:`),
+  );
+  for (const l of lines) console.warn(color.dim(`    · ${l}`));
+  console.warn(color.dim('    Their slots render a placeholder saying why. `motu island verify <name>` gives the full chain.'));
 }
 
 /** Inline a built asset reference's contents, keeping the file safe to embed inside HTML. */

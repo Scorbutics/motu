@@ -201,7 +201,14 @@ async function main() {
   // "a check could not run, retry, do NOT repair". Asking for help is neither a failure nor an
   // environment problem, and this was the FIRST command two cold-start agents typed for each verb.
   // Handled once, here, so every subcommand answers the same way instead of each remembering to.
-  if (argv.help || rest.includes('-h')) {
+  // `sub` IS CHECKED TOO, and leaving it out was worse than the bug it was fixing. On a top-level verb
+  // (`motu init --help`) the flag lands in `sub`, not in `rest`, so `argv.help` was false, dispatch
+  // fell through, and `init` treated the missing positional as "." — `motu init --help` SCAFFOLDED
+  // MOTU INTO THE CURRENT DIRECTORY and exited 0. Found by a cold-start agent typing it in its repo,
+  // where the existing config refused the overwrite and only an exit 1 showed; reproduced in an empty
+  // directory, where it silently created a project.
+  const askedForHelp = ['--help', '-h', 'help'].includes(sub) || argv.help || rest.includes('-h');
+  if (askedForHelp) {
     console.log(USAGE);
     console.log(color.dim(`\n(\`motu ${group}${sub ? ' ' + sub : ''}\` — see the usage block above; each command also prints its own usage when required arguments are missing.)`));
     process.exit(0);

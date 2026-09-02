@@ -11,7 +11,7 @@
 //
 // So `motu lagoon eject` is not a special code path: it is this module writing into the project
 // instead of into the cache.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import {
   render,
@@ -34,11 +34,53 @@ function relPosix(from, to) {
  *  island renders unstyled, a preview that lies about how the component looks in the app. */
 const HOST_GLOBAL_CSS = ['app/globals.css', 'src/app/globals.css', 'styles/globals.css', 'src/styles/globals.css'];
 
+/**
+ * The stylesheet that DECLARES Tailwind, found by content when it is not at a conventional path.
+ *
+ * Tailwind v4 moved the config into CSS (`@import "tailwindcss"`, `@theme { … }`) and dropped
+ * `tailwind.config.js` — so a v4 project has no config file to detect AND commonly keeps its global
+ * stylesheet outside the four paths above. Measured on a cold adoption of a v4 Next app whose CSS
+ * lives at `modules/ui/globals.css`: motu found neither, wired no styles, and the lagoon rendered
+ * every island with correct text, structure and coupling and NO styling at all — silently. The agent
+ * who hit it could not tell a preview bug from an application bug, which is the one thing a preview
+ * must never make ambiguous.
+ *
+ * Bounded, shallow, and skipping the obvious noise: this runs on every lagoon build.
+ */
+function findTailwindCss(hostRoot, depth = 4) {
+  const SKIP = new Set(['node_modules', '.next', '.git', 'dist', 'build', 'coverage', '.motu', '.turbo']);
+  const queue = [{ dir: hostRoot, d: 0 }];
+  while (queue.length) {
+    const { dir, d } = queue.shift();
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (d < depth && !SKIP.has(e.name) && !e.name.startsWith('.')) queue.push({ dir: resolve(dir, e.name), d: d + 1 });
+        continue;
+      }
+      if (!e.name.endsWith('.css')) continue;
+      const abs = resolve(dir, e.name);
+      try {
+        const css = readFileSync(abs, 'utf8');
+        if (/@import\s+['"]tailwindcss|@tailwind\s+(base|utilities)/.test(css)) return abs;
+      } catch {}
+    }
+  }
+  return null;
+}
+
 function hostGlobalCssImport(fromDir, hostRoot) {
   for (const rel of HOST_GLOBAL_CSS) {
     const abs = resolve(hostRoot, rel);
     if (existsSync(abs)) return `import '${relPosix(fromDir, abs)}';\n`;
   }
+  const found = findTailwindCss(hostRoot);
+  if (found) return `import '${relPosix(fromDir, found)}';\n`;
   return '';
 }
 

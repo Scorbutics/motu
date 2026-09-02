@@ -16,13 +16,15 @@ import { SyntaxKind } from 'ts-morph';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
+import { reachableAppSources } from '../lib/bundlability.mjs';
+import { unchangedSinceLastRun } from '../lib/finding-memory.mjs';
 import { stubParity } from '../lib/stubs.mjs';
 import { hostSources, conditionallyPlaced } from './integration.mjs';
 import { islandContract, contractsDrift, readGeneratedContracts } from '../lib/contracts.mjs';
 import { readEffectEntries, isKinded, isDataKind, coversEffect } from '../lib/effects.mjs';
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
-import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y } from '../lib/util.mjs';
+import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
 import {
   runLagoon,
   runArchipelagoLagoon,
@@ -1276,50 +1278,6 @@ function extractCoupling(elementPath) {
  * element.ts) and hand its verify contribution the STRUCTURED coupling we extract by AST — the CLI owns
  * the parsing (it has ts-morph), the adapter owns the semantics.
  */
-/**
- * Every APPLICATION file an island's component can reach, breadth-first from the component.
- *
- * A host boundary is a property of the BUNDLE, not of one file, and judging it from the island's own
- * source alone is how `rsc-boundary` came to print `✓` over a component that could not be built. The
- * real case, measured on a cold adoption: `LoginForm` -> `SSOOptions` -> `SamlButton` -> a
- * `'use server'` action -> the SAML lib -> `import 'server-only'`. Five hops, all of them ordinary
- * application code, and the only symptom was an opaque rollup error at bundle time.
- *
- * Bounded on purpose — package specifiers are not followed (they are not the host's own split, and
- * following them means walking node_modules), and the file count is capped so a check that runs on
- * every island stays cheap. The cap being HIT is itself reported, because a check that quietly
- * examined less than the whole graph is the failure this function exists to fix.
- */
-function reachableAppSources(entry, limit = 400) {
-  const seen = new Set();
-  const out = [];
-  const queue = [entry];
-  let truncated = false;
-  while (queue.length) {
-    const file = queue.shift();
-    const found = ['', '.tsx', '.ts', '/index.tsx', '/index.ts'].map((e) => file + e).find((c) => existsSync(c) && statSync(c).isFile());
-    if (!found || seen.has(found)) continue;
-    seen.add(found);
-    if (out.length >= limit) {
-      truncated = true;
-      break;
-    }
-    let src;
-    try {
-      src = readFileSync(found, 'utf8');
-    } catch {
-      continue;
-    }
-    if (found !== entry) out.push({ file: paths.rel(found), source: src });
-    for (const m of blankComments(src).matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
-      const next = resolveAppImport(found, m[1]);
-      if (next) queue.push(next);
-    }
-  }
-  if (truncated) out.push({ file: '(truncated)', source: '', truncated: true });
-  return out;
-}
-
 async function adapterChecks(report, kebab, componentPath) {
   const elementPath = paths.elementFile(kebab);
   if (!existsSync(elementPath)) return;
@@ -1335,7 +1293,7 @@ async function adapterChecks(report, kebab, componentPath) {
   // Hand over the component source too: some host boundaries (Next's server/client split) live in the
   // component, not in the mount point. The CLI reads; the adapter judges.
   const source = componentPath && existsSync(componentPath) ? readFileSync(componentPath, 'utf8') : undefined;
-  const graph = componentPath ? reachableAppSources(componentPath) : [];
+  const graph = componentPath ? reachableAppSources(componentPath, { aliased: lagoonAliases() ?? [] }) : [];
   try {
     const mod = await import(specifier);
     for (const f of mod.checkCoupling({ coupling, source, elementSource: text, graph })) report[f.level](f.check, f.msg);
@@ -1512,6 +1470,9 @@ export function summaryOf(r) {
  * A full report per island is unreadable at fourteen of them, and what a sweep answers is "is anything
  * wrong, and where" — so a clean island costs one line.
  */
+/** Per-sweep tally of how much of this section the reader has already seen. */
+const sweepSeen = { total: 0, repeated: 0 };
+
 export function printSweep(title, results) {
   console.log(color.bold(`\n${title}\n`));
   for (const r of results) {
@@ -1523,7 +1484,10 @@ export function printSweep(title, results) {
     for (const f of r.report.findings) {
       if (f.level !== 'error' && f.level !== 'warn') continue;
       const m = f.level === 'error' ? color.red('✗') : color.yellow('!');
-      console.log(`      ${m} ${color.dim(f.check.padEnd(18))} ${f.msg}${f.line ? color.dim(`  (line ${f.line})`) : ''}`);
+      const again = unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
+      sweepSeen.total++;
+      if (again) sweepSeen.repeated++;
+      console.log(`      ${m} ${color.dim(f.check.padEnd(18))} ${f.msg}${again}${f.line ? color.dim(`  (line ${f.line})`) : ''}`);
     }
   }
   const failed = results.filter((r) => r.errors.length).length;
@@ -1532,7 +1496,17 @@ export function printSweep(title, results) {
   const head = failed
     ? color.red(color.bold('FAIL')) + `  ${failed}/${results.length} with errors`
     : color.green(color.bold('PASS')) + `  ${results.length}/${results.length} clean`;
-  console.log(head + color.dim(` · ${warned} warning(s) total`));
+  // WHAT MOVED, on the line a reader piping through `tail` will actually see.
+  const { total, repeated } = sweepSeen;
+  const delta =
+    total && repeated === total
+      ? color.dim(' · all unchanged since your last run')
+      : repeated
+        ? color.dim(` · ${repeated} unchanged, ${total - repeated} new since your last run`)
+        : '';
+  console.log(head + color.dim(` · ${warned} warning(s) total`) + delta);
+  sweepSeen.total = 0;
+  sweepSeen.repeated = 0;
 }
 
 /**
@@ -2274,7 +2248,10 @@ function printReport(report, title, errors, warns) {
     // doing the latter is the failure this whole report exists to catch.
     const seen =
       f.examined === undefined ? '' : color.dim(`  · ${f.examined} ${f.examinedOf ?? 'examined'}`);
-    console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${at}`);
+    // UNCHANGED SINCE THE LAST RUN OF THIS SAME COMMAND. Half of everything read in the check loop
+    // was a repeat; saying so is what lets a reader skip it and look at the delta instead.
+    const again = f.level === 'ok' || f.level === 'skip' ? '' : unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
+    console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${again}${at}`);
   };
 
   // THE PASSES COLLAPSE; EVERYTHING ELSE DOES NOT.
@@ -2296,8 +2273,18 @@ function printReport(report, title, errors, warns) {
   }
   console.log('');
   const unknown = report.findings.filter((f) => f.level === 'inconclusive');
+  // THE DELTA, ON THE VERDICT LINE. Every agent observed in the bench piped this report through
+  // `tail`, so the end is the only part reliably read — which makes it where "what moved" belongs.
+  const actionable = report.findings.filter((f) => f.level === 'error' || f.level === 'warn');
+  const repeated = actionable.filter((f) => unchangedSinceLastRun(f)).length;
+  const delta =
+    repeated && repeated < actionable.length
+      ? color.dim(` · ${repeated} unchanged, ${actionable.length - repeated} new since your last run`)
+      : repeated && repeated === actionable.length
+        ? color.dim(' · all unchanged since your last run')
+        : '';
   if (errors.length) {
-    console.log(color.red(color.bold('FAIL')) + `  ${errors.length} error(s), ${warns.length} warning(s)`);
+    console.log(color.red(color.bold('FAIL')) + `  ${errors.length} error(s), ${warns.length} warning(s)` + delta);
   } else if (unknown.length) {
     // NOT a pass: nothing contradicted the declarations, but some of them were never examined.
     console.log(
@@ -2374,7 +2361,7 @@ function frameModuleFor(id) {
       }
       const entry = text.slice(open, end + 1);
       const ident = entry.match(/\blayout\s*:\s*([A-Za-z_$][\w$]*)\s*[,}]/);
-      if (ident) return { module: moduleOf(ident[1]), declared: true };
+      if (ident) return { module: moduleOf(ident[1]), declared: true, exportName: ident[1] };
       if (/\blayout\s*:/.test(entry)) return { module: null, declared: true, inline: true };
       return { module: null, declared: true };
     };
@@ -2382,7 +2369,7 @@ function frameModuleFor(id) {
     const kindFirst = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\s*\};/);
     const inKindFirst = kindFirst && kindFirst[1].match(named);
     if (inKindFirst) {
-      if (inKindFirst[2]) return { module: moduleOf(inKindFirst[2]), declared: true };
+      if (inKindFirst[2]) return { module: moduleOf(inKindFirst[2]), declared: true, exportName: inKindFirst[2] };
       // Kind-first holds the layout VALUE directly, so anything that is not an identifier here — an
       // arrow, a JSX expression — is an inline layout, not a missing one.
       return { module: null, declared: true, inline: true };
@@ -2392,7 +2379,7 @@ function frameModuleFor(id) {
     if (asRecord) {
       const entry = asRecord[1].match(named);
       if (!entry) continue;
-      if (entry[2]) return { module: moduleOf(entry[2]), declared: true };
+      if (entry[2]) return { module: moduleOf(entry[2]), declared: true, exportName: entry[2] };
       const inside = layoutInEntry(asRecord[1], entry.index);
       if (inside) return inside;
       return { module: null, declared: true };
@@ -2558,6 +2545,24 @@ function islandCompositionCheck(report, id, region, composedBy, sources) {
   );
 }
 
+
+/**
+ * The source of the `layout` export alone, or the whole file when it cannot be isolated.
+ *
+ * Falls back deliberately: a frame reached through the array form has no single named export, and
+ * judging nothing would be worse than judging too much.
+ */
+function frameDeclarationText(file, raw, exportName) {
+  if (!exportName) return raw;
+  try {
+    const sf = sourceFileAt(file);
+    const decl = sf.getVariableDeclaration(exportName) ?? sf.getFunction(exportName);
+    return decl ? decl.getText() : raw;
+  } catch {
+    return raw;
+  }
+}
+
 function frameIsPageCheck(report, id, region) {
   // THE ANSWER, when the region has one: `root` names the application's own component and `slots`
   // maps its props to islands, so the page and the lagoon compose from the SAME declaration and
@@ -2618,7 +2623,7 @@ function frameIsPageCheck(report, id, region) {
     return;
   }
 
-  const { module, inline } = frameModuleFor(id);
+  const { module, inline, exportName } = frameModuleFor(id);
   // AN INLINE `layout` IS AN ARRANGEMENT, NOT A MISSING ONE. It renders — both cold-start agents
   // confirmed the region painted correctly from one — so the only thing lost is this file's ability
   // to OPEN the frame and run the checks below (what it draws itself, which slots it places). Say
@@ -2648,7 +2653,15 @@ function frameIsPageCheck(report, id, region) {
     return;
   }
   const raw = readFileSync(module, 'utf8');
-  const body = blankComments(raw);
+  // ONLY THE `layout` EXPORT, when we know which one it is.
+  //
+  // This read the whole FILE, so anything else living in the same module was judged as arrangement
+  // the frame draws itself. Measured on a cold adoption: a region kept its `providers` (a DI
+  // container, a Redux `Provider`, a router) beside its frame — the natural place for them — and
+  // `region-root` reported the providers' own JSX, and a string from a button inside them, as the
+  // frame inventing a layout. The adopter split the file to satisfy a check that was reading the
+  // wrong thing.
+  const body = blankComments(frameDeclarationText(module, raw, exportName));
 
   const excused = body.match(/inventedArrangement\(\s*(['"`])([\s\S]*?)\1/);
 

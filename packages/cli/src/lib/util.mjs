@@ -184,6 +184,19 @@ function hostTsconfigAliases() {
 const HOST_ALIASES = hostTsconfigAliases();
 
 /**
+ * The host tsconfig's path aliases, as Vite `{ find, replacement }` entries.
+ *
+ * motu validates `--from @/components/x` against the tsconfig's `paths`, and the LAGOON resolves it
+ * with Vite's aliases — two different resolvers, so a specifier can pass `island create` and then fail
+ * the build. Measured twice: a bare `mastodon/…` import that `tsc` and the app's dev server both
+ * resolved while the lagoon 500'd, and an `@/…` island whose creation succeeded and whose bundle could
+ * not find it. Feeding the tsconfig's own mappings to Vite makes one answer serve both.
+ */
+export function hostAliasEntries() {
+  return HOST_ALIASES.filter((a) => a.prefix && a.target).map((a) => ({ find: a.prefix, replacement: a.target + '/' }));
+}
+
+/**
  * A file, written as the specifier the HOST would use for it — `@/pages/x` — or null.
  *
  * The inverse of the resolver below, and it has to read the alias's real TARGET rather than assume

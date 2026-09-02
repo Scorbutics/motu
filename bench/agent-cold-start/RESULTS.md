@@ -610,3 +610,45 @@ sighting shows it is one shared cause, and that dismissal was wrong.
    and `useSearchAccounts`, not a shim. One real cost: the adopter had to write
    `vite.config.motu-lagoon.mts`, a forked Vite config living in the app's repository — motu-only
    code of exactly the kind the rules warn against, and a direct consequence of findings A and B.
+
+## Control vs Arm D — same repo, same feature
+
+| | Control (no motu) | Arm D (motu) |
+|---|---|---|
+| tool calls | **26** | 174 *(includes adopting a framework)* |
+| files | 1 modified (+14/−23), 1 new | 1 modified (+24/−40), 4 new |
+| host typecheck | clean | clean |
+| **ever rendered the screen** | **no** | **yes — fresh agent, both states** |
+| verification | typecheck, eslint, re-reading `useSearchAccounts` | the above, plus two openable states read by an agent with no context |
+
+**They converged on the same architecture**, which is worth saying before the contrast. The control
+kept the search state OUT of Redux deliberately — *"it's UI-transient, per-mount, per-visit-to-this-
+screen state… which is exactly what the original code already treated as local `useState`"* — and Arm
+D, following motu's "a host that already has a state architecture should not move it into motu's
+store", made the identical call: Redux untouched, motu given only the UI-local keys. **motu's rule
+produced the design a careful engineer reached independently**, which is the strongest thing that can
+be said for a rule.
+
+The difference is what each could then CHECK.
+
+The control's own stated worst risk is a **state-transition timing bug**: it moved the point where
+search results become visible to the parent from inline `onSettled` logic into a `useEffect`, and
+*"if there's a subtle timing difference… a one-frame flash of stale results when toggling search mode
+on/off is a real possibility I can't rule out"*. It could not look, and said why: the screen needs
+**Postgres, migrations, a seeded account and list, and an auth session** before it will mount at all.
+So it shipped on `yarn typecheck`, `eslint` and reading — and recorded, exactly:
+
+> *"I have not seen any of the four states (idle / searching / results / empty results) with my own
+> eyes. Everything about their correctness is inferred."*
+
+Arm D's region made two of those states **addressable URLs that need no backend at all**, and a fresh
+agent confirmed both render Mastodon's own vocabulary. The states the control could not reach are
+precisely the ones the lagoon hands you.
+
+On ownership the answer is the same as the formbricks control, in the same words: asked whether
+anything stops a second writer, *"Not really, structurally"* — a plain `useState` and a setter passed
+by convention.
+
+That is the honest shape of the comparison, and it is not "motu is faster": **26 tool calls against
+174.** It is that the cheaper path ends with a change nobody has seen, whose author names a timing
+risk they had no way to check, on a screen that costs a database and an auth session to look at once.

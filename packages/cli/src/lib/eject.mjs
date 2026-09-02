@@ -438,6 +438,35 @@ export function ejectFile(sf, regions, outputs) {
     decl.getVariableStatement()?.remove();
   }
 
+  // 1c. `const region = X.useRegion()` — the WHOLE region bound to one name, read as `region.key`.
+  //
+  //     Only the destructured form was handled, so this one fell through untouched and removal left
+  //     `const region = ListMembers.useRegion()` pointing at a module it had just deleted. The page
+  //     then failed to compile and `removal-check` reported motu as load-bearing — on the very shape
+  //     motu's own documentation recommends for reading a region back. Measured on a Rails adoption.
+  //
+  //     The keys are not in the binding, so they are read from how the name is USED: every
+  //     `region.<key>` in the file becomes its own state, and the declaration becomes a plain object
+  //     of those, which keeps every `region.key` read working untouched.
+  for (const call of regionReads) {
+    const decl = call.getParentIfKind(SyntaxKind.VariableDeclaration);
+    const nameNode = decl?.getNameNode();
+    if (!nameNode || nameNode.getKind() !== SyntaxKind.Identifier) continue;
+    const ident = nameNode.getText();
+    const keys = [
+      ...new Set(
+        decl
+          .getSourceFile()
+          .getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
+          .filter((a) => a.getExpression().getText() === ident)
+          .map((a) => a.getNameNode().getText()),
+      ),
+    ];
+    // No `region.x` anywhere: the binding is unused, so the statement is simply dropped.
+    for (const key of keys) claim(key, key, 'undefined');
+    decl.setInitializer(keys.length ? `{ ${keys.join(', ')} }` : '{}');
+  }
+
   // 2. Seeds become a plain setState on that key's state.
   for (const call of seeds) {
     // The archipelago id is only present on the bare form, so find the key by shape, not by position.

@@ -43,8 +43,47 @@ export async function contribute({ paths, lagoonJson }) {
 
   const hostPlugins = (loaded.config.plugins ?? []).flat(Infinity).filter(Boolean);
   const named = hostPlugins.filter((p) => typeof p?.name === 'string');
-  const plugins = named.filter((p) => !DROP.test(p.name));
-  const hasReact = plugins.some((p) => IS_REACT.test(p.name));
+  const kept = named.filter((p) => !DROP.test(p.name));
+
+  // A HOST PLUGIN THAT CANNOT RUN HERE IS DROPPED BY NAME, NOT ALLOWED TO KILL THE LAGOON.
+  //
+  // These are ALREADY-INSTANTIATED plugin objects, whose hooks closed over the config they were built
+  // for. The lagoon's root and envDir are not the host's, so a plugin whose `config`/`configResolved`
+  // hook asserts on them throws — and the throw propagates out of Vite before anything renders.
+  // Measured twice, on unrelated plugins: Mastodon's theme plugin
+  // (`if (!userConfig.root || !userConfig.envDir) throw new Error('Unknown project directory')`) and
+  // shlink's `vite-plugin-pwa` (resolving `srcDir` against the lagoon's copied root). Both times the
+  // whole lagoon was unbootable and the adopter's fix was to fork the app's Vite config into their own
+  // repository — motu-only code in the host, which adopting motu is supposed to avoid.
+  //
+  // So each borrowed plugin's config-time hooks are guarded. One that throws is removed and SAID, and
+  // the rest of the host's pipeline still transforms the host's real components. A dropped transform
+  // may of course mean a component that no longer compiles — which is a legible failure naming the
+  // plugin, instead of an assertion from a file the adopter did not write.
+  const dropped = [];
+  const guard = (plugin) => {
+    const wrapped = { ...plugin };
+    for (const hook of ['config', 'configResolved', 'configureServer', 'buildStart']) {
+      const original = plugin[hook];
+      if (typeof original !== 'function') continue;
+      wrapped[hook] = function (...args) {
+        try {
+          return original.apply(this, args);
+        } catch (err) {
+          if (!dropped.some((d) => d.name === plugin.name)) {
+            dropped.push({ name: plugin.name, hook, message: String(err?.message ?? err).split('\n')[0] });
+          }
+          return undefined;
+        }
+      };
+    }
+    return wrapped;
+  };
+  const plugins = kept.map(guard);
+  // Reported through the returned contribution so the CLI can print it beside its other notices; the
+  // array is filled as the hooks run, which is after this function returns.
+  const droppedHostPlugins = dropped;
+  const hasReact = kept.some((p) => IS_REACT.test(p.name));
 
   // The host's aliases, ABSOLUTE against the host root. A config that wrote them relative meant them
   // relative to itself, and the lagoon's root is elsewhere.
@@ -65,6 +104,8 @@ export async function contribute({ paths, lagoonJson }) {
 
   return {
     plugins,
+    /** Filled while the host's plugins run: those whose config-time hooks threw in this pipeline. */
+    droppedHostPlugins,
     // Told to the lagoon builder, which owns the decision to add its own React plugin or not.
     ownsReactTransform: hasReact,
     alias,

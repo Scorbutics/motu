@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveLagoonRoot } from './lagoon-materialize.mjs';
 import { motuProvenance } from './provenance-plugin.mjs';
 import { unbundlableIslands } from './bundlability.mjs';
+import { hostAliasEntries } from './util.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The motu checkout this CLI is running from — where build deps are resolved from first. */
@@ -122,7 +123,23 @@ function reactFallbackAliases(paths) {
  * it is a namespace.
  */
 export async function resolveVite(paths) {
-  const roots = [FRAMEWORK_ROOT, paths.lagoonDir];
+  // THE HOST'S VITE FIRST, ON A VITE HOST — because on that host the lagoon runs the HOST'S OWN
+  // PLUGINS, and a plugin is written against the Vite its project installed.
+  //
+  // Framework-first was right while the lagoon only ran motu's own pipeline. It stopped being right
+  // the moment the vite adapter began borrowing the host's plugins and resolve options: measured on
+  // Mastodon, the app runs Vite 8.2.1 and resolves its bare `mastodon/…` imports with
+  // `resolve.tsconfigPaths`, a Vite 6+ option that motu's bundled Vite 5.4.21 accepts and SILENTLY
+  // IGNORES. `tsc` and the app's own dev server resolved those imports; the lagoon 500'd on every one
+  // of them, and the adopter had to hand-write an alias table into a forked config to work around a
+  // version skew nothing reported.
+  //
+  // Other hosts keep framework-first: a Next or AngularJS project's Vite, if it has one at all, is not
+  // the build the lagoon is imitating.
+  const hostFirst = paths.host === 'vite';
+  const roots = hostFirst
+    ? [paths.hostRoot, FRAMEWORK_ROOT, paths.lagoonDir]
+    : [FRAMEWORK_ROOT, paths.lagoonDir];
   const mod = await importFrom('vite', roots);
   if (!mod?.build) throw new Error(`motu: cannot resolve vite. Looked in: ${roots.join(', ')}.`);
   return mod;
@@ -314,6 +331,15 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
   // was emitted, captured and discarded on every successful build — so the feature worked and said
   // nothing, which is the exact failure it was written to prevent. The parent greps for this prefix.
   for (const e of excluded) console.warn(`[motu:excluded] ${e.kebab} — ${e.reason}`);
+
+  // HOST PLUGINS THAT COULD NOT RUN HERE. Filled by the vite adapter's guard as the hooks execute, so
+  // it is read after the config is built — printed on the same marked channel as island exclusions
+  // because a silently dropped transform is the same class of lie: a build that quietly did less.
+  process.on('exit', () => {
+    for (const d of host.droppedHostPlugins ?? []) {
+      console.warn(`[motu:excluded] host vite plugin "${d.name}" (${d.hook}) — ${d.message}`);
+    }
+  });
   const host = await hostContribution(ctx);
 
   return {
@@ -368,7 +394,9 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // empty alias list and died on `@motu/react could not be resolved` — the very error the guard
       // above warns about, from a different cause. A project's lagoon must not depend on motu having
       // written an adapter for its framework.
-      alias: [...noInstallAliases(paths), ...(host.alias ?? []), ...reactFallbackAliases(paths)],
+      // The host's tsconfig `paths` LAST, so anything the host's own vite config or an adapter
+      // declared still wins — this is a floor, not an override. See `hostAliasEntries`.
+      alias: [...noInstallAliases(paths), ...(host.alias ?? []), ...hostAliasEntries(), ...reactFallbackAliases(paths)],
       // e.g. `tsconfigPaths: true` — often the ONLY thing mapping a Vite app's `@/…` imports.
       ...(host.resolveExtra ?? {}),
     },

@@ -46,7 +46,6 @@ const CORPUS = JSON.stringify({
 
 await post('/api/publish?repo=acme/secret&slug=all&title=S', '<h1>SECRET PAGE</h1>', { authorization: 'Bearer ADMIN' });
 await post('/api/publish?repo=acme/open&slug=all&title=O', '<h1>OPEN PAGE</h1>', { authorization: 'Bearer ADMIN' });
-await post('/api/group?name=all', JSON.stringify({ all: true }), { authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
 
 // THE WAY THE SERVICE ACTUALLY RUNS. The systemd unit passes the directory as MOTU_HOST_DIR, not
 // --dir, so `dir` reaches createLagoonHost as undefined and the policy loader was handed it raw —
@@ -88,20 +87,23 @@ t('a private lagoon is 404, not 403', (await get('/acme/secret/latest/all')).sta
 t('a private repo index is 404', (await get('/acme/secret')).status === 404);
 t('the root index does not name it', !(await (await get('/')).text()).includes('acme/secret'));
 t('/api/repos does not name it', !(await (await get('/api/repos')).text()).includes('secret'));
-t('/api/groups does not name it', !(await (await get('/api/groups')).text()).includes('secret'));
 t('/api/baselines refuses it', (await get('/api/baselines?repo=acme/secret')).status === 404);
 
-console.log('\nhost access — the gallery, which composes every project\n');
-t('the group page does not name it', !(await (await get('/g/all')).text()).includes('secret'));
-t('frame 0 is the readable member', (await (await get('/g/all/f/0')).text()).includes('OPEN PAGE'));
-t('there is no frame past the readable ones', (await get('/g/all/f/1')).status === 404);
+// THE RAIL COMPOSES EVERY PROJECT, which is the same risk the group gallery carried and the reason
+// these assertions outlived it. `/<repo>/<ref>/<slug>` now serves a shell whose rail lists every
+// lagoon the viewer may see — so an unfiltered rail would name a private repo on a public page, which
+// is exactly the leak the group's own filter existed to stop.
+console.log('\nhost access — the rail, which lists every project\n');
+t('a public lagoon shell does not name a private repo', !(await (await get('/acme/open/latest/all')).text()).includes('secret'));
+t('the frame serves the page itself', (await (await get('/acme/open/latest/all/__motu_frame')).text()).includes('OPEN PAGE'));
+t('a private lagoon frame is 404, not 403', (await get('/acme/secret/latest/all/__motu_frame')).status === 404);
 
 console.log('\nhost access — a reader who has the secret\n');
 const unlock = await get('/acme/secret/latest/all?k=READSECRET');
 t('?k= redirects rather than serving', unlock.status === 302);
 t('...and sets an HttpOnly cookie', /HttpOnly/i.test(unlock.headers.get('set-cookie') ?? ''));
 t('...and strips the secret from the url', !(unlock.headers.get('location') ?? '').includes('READSECRET'));
-t('the private lagoon opens', (await (await get('/acme/secret/latest/all', COOKIE)).text()).includes('SECRET PAGE'));
+t('the private lagoon opens', (await (await get('/acme/secret/latest/all/__motu_frame', COOKIE)).text()).includes('SECRET PAGE'));
 t('a wrong cookie does not', (await get('/acme/secret/latest/all', { cookie: 'motu_read=nope' })).status === 404);
 t('the admin token opens it too', (await get('/acme/secret/latest/all', { authorization: 'Bearer ADMIN' })).status === 200);
 t('the root index names it again', (await (await get('/', COOKIE)).text()).includes('acme/secret'));
@@ -135,10 +137,10 @@ t('...but its reader does', (await get('/api/coverage?repo=acme/secret&region=ac
 // the page route's 404 was chosen to hide.
 t('a repo that does not exist looks the same', (await get('/api/coverage?repo=no/such&region=actions')).status === 404);
 t('a region with no corpus looks the same', (await get('/api/coverage?repo=acme/open&region=ghost')).status === 404);
-t('the served page is stamped with its repo', (await (await get('/acme/open/latest/all')).text()).includes('name="motu-repo" content="acme/open"'));
+t('the served page is stamped with its repo', (await (await get('/acme/open/latest/all/__motu_frame')).text()).includes('name="motu-repo" content="acme/open"'));
 // The stamp must be in the OUTER head. Inside the body, the page's own React render replaces it and
 // the lens finds nothing — which is how this first shipped, correct in curl and useless in a browser.
-t('...in the head, before the body starts', (await (await get('/acme/open/latest/all')).text()).indexOf('motu-repo') < (await (await get('/acme/open/latest/all')).text()).indexOf('<body'));
+t('...in the head, before the body starts', (await (await get('/acme/open/latest/all/__motu_frame')).text()).indexOf('motu-repo') < (await (await get('/acme/open/latest/all/__motu_frame')).text()).indexOf('<body'));
 
 console.log('\nhost access — a server reading back, which cannot send a cookie\n');
 t('the read secret works as a bearer too', (await get('/api/coverage?repo=acme/secret&region=actions', { authorization: 'Bearer READSECRET' })).status === 200);
@@ -173,7 +175,7 @@ t('...and the set is empty for a stranger',
 console.log('\nhost access — a read token scoped to one repo\n');
 await post('/api/publish?repo=acme/other&slug=all&title=O2', '<h1>OTHER PAGE</h1>', { authorization: 'Bearer ADMIN' });
 const OTHER = { authorization: 'Bearer READ-OTHER' };
-t('it opens its own repo', (await (await get('/acme/other/latest/all', OTHER)).text()).includes('OTHER PAGE'));
+t('it opens its own repo', (await (await get('/acme/other/latest/all/__motu_frame', OTHER)).text()).includes('OTHER PAGE'));
 // THE WHOLE POINT. This token lives in an application's production environment; if it also opened the
 // neighbouring private repo it would undo the reason ingest tokens are scoped at all.
 t('it does NOT open another private repo', (await get('/acme/secret/latest/all', OTHER)).status === 404);

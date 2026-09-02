@@ -196,6 +196,17 @@ async function main() {
     process.exit(group ? 0 : 1);
   }
 
+  // `--help` ON A SUBCOMMAND. It used to be parsed as an ordinary flag, so `motu island create --help`
+  // reached the command with no positional, printed its usage line, and exited 2 — the code that means
+  // "a check could not run, retry, do NOT repair". Asking for help is neither a failure nor an
+  // environment problem, and this was the FIRST command two cold-start agents typed for each verb.
+  // Handled once, here, so every subcommand answers the same way instead of each remembering to.
+  if (argv.help || rest.includes('-h')) {
+    console.log(USAGE);
+    console.log(color.dim(`\n(\`motu ${group}${sub ? ' ' + sub : ''}\` — see the usage block above; each command also prints its own usage when required arguments are missing.)`));
+    process.exit(0);
+  }
+
   if (group === 'init') {
     // Top-level verb: sub is an optional target dir positional.
     return initCommand(parse([sub, ...rest].filter((x) => x !== undefined)));

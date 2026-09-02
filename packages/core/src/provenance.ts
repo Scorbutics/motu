@@ -109,6 +109,11 @@ export const closeIslandWindow = (): void => void (currentIsland = null);
 
 const calls: HostCall[] = [];
 
+/** Arguments as a label: shallow, like `HostCall.args` — enough to read, not a log dump. */
+function argLabel(args: readonly unknown[]): string {
+  return args.map((a) => (typeof a === 'object' && a !== null ? '…' : String(a))).join(', ');
+}
+
 /** Marks a function this module already wrapped, so whole-module tracing does not double-count it. */
 const TRACED = Symbol.for('motu.traced');
 
@@ -147,6 +152,7 @@ export function traced<F extends (...args: never[]) => unknown>(module: string, 
     // after it has closed, so reading the ambient island in the `.then` attributes every async call
     // to nobody.
     const island = currentIsland;
+    recordOutbound('host-module', fn, argLabel(args));
     const result = impl(...args);
     const keep = (value: unknown) => {
       record(module, fn, args, value, island);
@@ -190,6 +196,9 @@ export function traceModule<T extends object>(module: string, ns: T): T {
       const island = currentIsland;
       const result = impl(...args);
       if (!(result instanceof Promise)) return result; // not a request — a helper the island called
+      // AFTER the promise check, unlike `traced`: whole-module tracing wraps the stub's pure helpers
+      // too, and a formatter called once per row is not an outbound ask.
+      recordOutbound('host-module', key, argLabel(args));
       return result.then((value) => {
         record(module, key, args, value, island);
         return value;
@@ -219,3 +228,68 @@ export const hostCalls = (): readonly HostCall[] => calls;
 export const calledModules = (): string[] => [...new Set(calls.map((c) => c.module))];
 
 export const resetHostCalls = (): void => void calls.splice(0, calls.length);
+
+// --- ONE LEDGER FOR EVERY OUTBOUND ASK -----------------------------------------------------------
+//
+// "All island I/O goes through the contract" is a rule about ISLANDS' OWN FILES — `no-bare-fetch`
+// reads the component file, not its import graph — and an app has more doors than that one. An island
+// that imports a service which reads a table never touches `call()`, and motu does not merely tolerate
+// it: `Effect` has `{ table }`, `{ rpc }`, `{ fn }` and `{ route }` as first-class kinds, so
+// `contract.effects` is where an island DECLARES the I/O that leaves by another door.
+//
+// Three doors, then, and until now three separate ledgers with two readouts between them: `hostCalls`
+// above (a stub's traced exports), `__motuDataReach` in the wire fake, and `CallEvent` at the contract
+// seam — which no check printed at all. They are three answers to ONE question: what did this island
+// ask for? So they record here as well, tagged with the door, and one readout shows all three.
+//
+// This ledger OBSERVES. It does not replace the three seams and could not: the contract addresses
+// calls whose name the app owns, the wire addresses calls whose name a client library builds at call
+// time. Two addressing schemes is why there are two doors. One question is why there is one ledger.
+
+/** Which door an ask left by. */
+export type OutboundVia = 'host-module' | 'contract' | 'wire';
+
+/** One outbound ask, whichever seam it crossed. */
+export interface Outbound {
+  via: OutboundVia;
+  /**
+   * WHAT was asked for, spelled the way its DECLARATION spells it — `fetchClubFeed` for a traced
+   * module, `shots.list` for a contract call, `table:shots(select)` for a wire reach. Comparable to
+   * the declaration without a second translation step.
+   */
+  name: string;
+  /**
+   * The arguments, shallow, as a display string — kept SEPARATE from the name because the two readers
+   * want different things. A check counts distinct asks and wants them composed; the lens puts the
+   * name and the arguments in different columns, and splitting a baked-in string to get there is how
+   * a wire reach like `table:shots(select)` ends up with its operation read as an argument list.
+   *
+   * Empty for a wire reach, whose declared form has no argument half.
+   */
+  args: string;
+  /** `island:<tag>` / `source:<id>` / `unattributed` — `reachOwner()` at the moment of the ask. */
+  owner: string;
+  at: number;
+}
+
+const outbound: Outbound[] = [];
+
+/**
+ * Record one ask. Called at REQUEST time by each seam, never at resolution — the owner window is open
+ * when the request starts and long closed when it answers, which is the same reason `traced` reads
+ * `currentIsland` before it calls `impl`.
+ */
+export function recordOutbound(via: OutboundVia, name: string, args = ''): void {
+  if (!DEBUG) return;
+  outbound.push({ via, name, args, owner: reachOwner() ?? 'unattributed', at: Date.now() });
+}
+
+/** One ask as a reader shows it: `fetchClubFeed(11)`, `table:shots(select)` — never `x()` for a reach. */
+export function outboundLabel(o: Pick<Outbound, 'name' | 'args'>): string {
+  return o.args ? `${o.name}(${o.args})` : o.name;
+}
+
+/** Every outbound ask this run observed, in order — all three doors. */
+export const outboundCalls = (): readonly Outbound[] => outbound;
+
+export const resetOutbound = (): void => void outbound.splice(0, outbound.length);

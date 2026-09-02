@@ -785,6 +785,12 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     const provenance = await page
       .evaluate(() => (typeof window.__motuLagoon?.hostCalls === 'function' ? window.__motuLagoon.hostCalls() : []))
       .catch(() => []);
+    // EVERY DOOR, not just the traced one. A region whose islands talk through the contract, or whose
+    // services read through the wire, recorded nothing in `hostCalls` and read as a region that
+    // fetched nothing — accurate about that one ledger and wrong about the question.
+    const outbound = await page
+      .evaluate(() => (typeof window.__motuLagoon?.outbound === 'function' ? window.__motuLagoon.outbound() : []))
+      .catch(() => []);
     const channels = await page.evaluate(() =>
       window.__motuLagoon && typeof window.__motuLagoon.channels === 'function' ? window.__motuLagoon.channels() : null,
     );
@@ -794,7 +800,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     const held = await page
       .evaluate(() => (typeof window.__motuLagoon?.held === 'function' ? window.__motuLagoon.held() : []))
       .catch(() => []);
-    return { flows: out, suspects, diagnostics, channels, provenance, held, renderOutputs };
+    return { flows: out, suspects, diagnostics, channels, provenance, outbound, held, renderOutputs };
   });
 }
 

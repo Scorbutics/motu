@@ -373,9 +373,9 @@ function injectReloadClient(page) {
 (function () {
   // Reconnects on its own: the server restarts (or the phone sleeps) far more often than you reload.
   function listen() {
-    // Relative to WHERE THIS PAGE IS, not to the origin root: in a composed gallery the frame lives at
-    // /g/<group>/f/<i>, and an absolute '/__motu_reload' would ask the host for a stream it does not
-    // have instead of the dev server for the one it does.
+    // Relative to WHERE THIS PAGE IS, not to the origin root: framed in a host's shell the page lives
+    // at /<repo>/<ref>/<slug>/__motu_frame, and an absolute '/__motu_reload' would ask the host for a
+    // stream it does not have instead of the dev server for the one it does.
     //
     // NO REGEX HERE, deliberately. This whole client lives inside a template literal, where a
     // backslash starts an escape sequence JS resolves before the string is ever written out — so a
@@ -572,8 +572,9 @@ export function lagoonServeCommand(argv) {
   // One artifact, no asset requests to route: every path serves the page, so deep links work too.
   const server = createServer((req, res) => {
     if (req.url === '/favicon.ico') return void res.writeHead(204).end(); // keeps the console clean
-    // ENDS WITH, not equals. Inside a composed frame the page is served at /g/<group>/f/<i>, and the
-    // injected client asks for `<that path>/__motu_reload` so the host can route the stream back here.
+    // ENDS WITH, not equals. Inside a host's shell the page is served at
+    // /<repo>/<ref>/<slug>/__motu_frame, and the injected client asks for `<that path>/__motu_reload`
+    // so the host can route the stream back here.
     // Standing alone at :8817 the path is exactly '/__motu_reload', which still ends with it.
     if (watching && String(req.url).split('?')[0].endsWith('/__motu_reload')) {
       res.writeHead(200, {
@@ -753,7 +754,9 @@ export function lagoonServeCommand(argv) {
       }
       if (res?.ok && !announced) {
         announced = true;
-        console.log(color.dim(`  live in the gallery: ${base}/g/<group>  (${repo}:${slug})`));
+        // ITS OWN ADDRESS, which is the only one there is now. This printed `${base}/g/<group>` — a
+        // placeholder the reader had to resolve to a group name, for a route that no longer exists.
+        console.log(color.dim(`  live at: ${base}/${repo}/latest/${slug}`));
         // THE ADDRESS IS PRINTED, always. It is the one value here nobody can check from the outside:
         // if the host cannot reach it, every viewer silently sees the last published build instead,
         // and this line is the only place the actual announcement is visible.

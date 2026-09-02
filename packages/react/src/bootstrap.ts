@@ -14,6 +14,7 @@ import {
   type HostBridge,
 } from '@motu/core';
 import { defineReactElement, type DefineOptions } from './defineReactElement';
+import { lagoonHarness } from './lagoon-harness';
 
 /** A React-backed registry row: a tag bound to a React component + its options. */
 export interface ReactElementSpec<P extends object = any> {
@@ -182,6 +183,16 @@ export interface DefineLagoonOptions {
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store (same as the real composition roots). */
   channels?: Channel[];
+  /**
+   * Which view to render — the region as the app arranges it, or one framed cell per declared slot.
+   *
+   * The element has always understood `view="mountpoints"`; nothing set it. So `?view=mountpoints` —
+   * which is how every flow check opens the page — reached the React mount and was dropped here, the
+   * region rendered its own layout, no `[data-motu-slot]` cell existed, and the lane's own liveness
+   * probe reported "the region rendered nothing". Second half of the same gap as the missing emit
+   * seam: region flows were React-only, in two independent places.
+   */
+  view?: 'region' | 'mountpoints';
 }
 
 /** The prop names an island declares as input, from either the grouped `contract.input` or `props`. */
@@ -254,7 +265,25 @@ export function defineLagoon(target: LagoonTarget, opts: DefineLagoonOptions): H
     archipelagos: [{ config, options: { host: opts.host, seed: opts.seed, channels: opts.channels } }],
   });
 
+  // THE SAME HARNESS THE REACT MOUNT INSTALLS, minus teardown.
+  //
+  // Region FLOWS were React-only, and not for any reason anybody chose: `emit` lived inside
+  // `mountReactLagoon`, so every flow step on an ocean host failed with "no emit seam on this mount
+  // path" — including the one region in this repository whose islands fetch through the CONTRACT.
+  // Nothing `emit` needs is React's; the custom element registers its mounted islands in the same
+  // core registry (`mountIsland`) and applies outputs through the same `applyOutput`.
+  //
+  // NO `remount` ON PURPOSE. This path's teardown is re-inserting the <motu-island> marker
+  // (disconnectedCallback -> connectedCallback), which the harness already does by hand — and it only
+  // does it while `__motuLagoon.remount` is absent. Installing a React-shaped one here would take a
+  // path that works and replace it with one that does not exist.
+  if (typeof window !== 'undefined') {
+    window.__motuLagoon = lagoonHarness(config, { seed: opts.seed, host: opts.host });
+  }
+
   const el = document.createElement('motu-archipelago');
   el.setAttribute('name', config.id);
+  // BEFORE insertion, deliberately: the element reads this once, when it renders on connect.
+  if (opts.view === 'mountpoints') el.setAttribute('view', 'mountpoints');
   return el;
 }

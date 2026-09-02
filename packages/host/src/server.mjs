@@ -8,13 +8,10 @@
 //
 // ROUTES
 //   POST /api/publish?repo=&slug=&title=&sha=&branch=   body: the fragment (text/html, gzip ok)
-//   POST /api/group?name=                               body: JSON [{repo, slug, ref?}, …]
-//   GET  /                                              repositories + composed groups
+//   GET  /                                              every repository
 //   GET  /<repo>/                                       one repo: latest per slug, plus history
-//   GET  /<repo>/<ref>/<slug>                           the page (`latest`, a branch, or a commit)
-//   GET  /g/<group>                                     assemble now → 302 to the snapshot it made
-//   GET  /m/<manifest>/                                 the composed lagoon (immutable)
-//   GET  /m/<manifest>/f/<i>                            one member's document (the frame src)
+//   GET  /<repo>/<ref>/<slug>                           the lagoon: a shell, a rail, and the page framed
+//   GET  /<repo>/<ref>/<slug>/__motu_frame              the page's own bytes (the frame src)
 //
 // WRITES ARE AUTHENTICATED, READS ARE NOT. The lagoon has no backend and no session, which is what
 // makes it safe to host at all — but its fixtures were recorded from somewhere, so a URL is unlisted
@@ -25,7 +22,7 @@ import { gunzipSync, brotliDecompressSync } from 'node:zlib';
 import { timingSafeEqual } from 'node:crypto';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
 import { wrapFragment, withRepoMeta } from './document.mjs';
-import { composedPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
+import { lagoonPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
 import { loadAccess, isPublic, canRead, canIngest, cookieValue, readSecretFrom, READ_COOKIE } from './access.mjs';
 
 /**
@@ -377,13 +374,6 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // them is nonsense) but a reader wants the one that describes the region as it is now.
       return json(res, 200, { repo, region, corpus: corpora[0], declarations: corpora.length });
     }
-    if (path === '/api/groups')
-      return json(res, 200, {
-        groups: store
-          .listGroups()
-          .map((g) => ({ ...g, members: (g.members ?? []).filter((m) => readable(m.repo)) }))
-          .filter((g) => g.members.length),
-      });
     // GUARDED BY METHOD, unlike its neighbours, because this path also takes a POST. Without the guard
     // the read branch answered the registration too — a cheerful 200 with an empty list, so the CLI
     // reported itself live and the host had never heard of it.
@@ -459,7 +449,6 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       const auth = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!tokenMatches(auth, token)) return json(res, 401, { error: 'bad or missing token' });
       if (path === '/api/publish') return void (await publish(req, res, url));
-      if (path === '/api/group') return void (await group(req, res, url));
       if (path === '/api/baseline') return void (await baseline(req, res, url));
       if (path === '/api/baseline/accept') return void (await acceptBaseline(req, res, url));
       if (path === '/api/live/draft') {
@@ -563,16 +552,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // FILTERED, or the gate leaks the very thing it hides: a private repo the visitor cannot open
       // would still be listed here by name, with its lagoon count.
       const repos = store.listRepos().filter((r) => readable(r.repo));
-      // A GROUP'S SUMMARY NAMES ITS MEMBERS — "2 lagoons · acme/secret + acme/open" — so filtering the
-      // repo list alone still printed the private repo on the front page. The gallery itself was
-      // already filtered; this is the line ABOUT it, which is the easier one to forget. A group left
-      // with nothing readable is dropped rather than shown empty: "a gallery you may not see" is
-      // itself the fact being withheld.
-      const groups = store
-        .listGroups()
-        .map((g) => ({ ...g, members: (g.members ?? []).filter((m) => readable(m.repo)) }))
-        .filter((g) => g.members.length);
-      return html(res, 200, rootIndexPage({ repos, groups, stats: store.stats() }), NO_STORE);
+      return html(res, 200, rootIndexPage({ repos, stats: store.stats() }), NO_STORE);
     }
 
     const segments = path.split('/').filter(Boolean).map(decodeURIComponent);
@@ -584,109 +564,22 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       return send(res, 200, 'image/png', bytes, IMMUTABLE);
     }
 
-    // --- composed views ---------------------------------------------------------------------
-    //
-    // TWO AXES, and they mean different things. `/g/<name>` is TODAY: resolved per request, so a member
-    // someone is running `motu lagoon serve --watch` on is served LIVE from that dev server, hot reload
-    // and all, while the rest come from their last published build. `/m/<id>` is what a day LOOKED
-    // like: stored bytes, pinned, immutable, and deliberately never live — making it live would break
-    // the one guarantee its URL exists to make.
-    //
-    // The group used to 302 to the manifest, which made those two the same URL and left no place for a
-    // live frame to live.
-    if (segments[0] === 'g') {
-      const name = normalizeSegment(segments[1]);
-      if (!name) return html(res, 400, errorPage(400, 'bad group name'), NO_STORE);
-      const group = store.getGroup(name);
-      if (!group) return html(res, 404, errorPage(404, `no group "${name}"`), NO_STORE);
-      // A GALLERY MUST NOT BE A WAY ROUND THE GATE. A group is a list of members by repo, and serving
-      // its frames without this check would hand out exactly the pages the per-repo route refuses —
-      // an `all` group composes EVERY published project, so a private one joins a
-      // public gallery by default rather than by anyone choosing it.
-      //
-      // Filtered rather than refused: a gallery of five projects, one of them private, is still a
-      // gallery of the four you may see. Frame indices come from this same filtered list, so /f/2
-      // means the third READABLE member and cannot be walked past the end of it.
-      const members = store.resolveGroup(name, live.endpointFor).filter((m) => readable(m.repo));
-      if (!members.length)
-        return html(res, 404, errorPage(404, `group "${name}" resolves to nothing yet — no member has published`), NO_STORE);
-
-      // A frame, and the reload stream that belongs to it.
-      if (segments[2] === 'f') {
-        const i = Number.parseInt(segments[3] ?? '', 10);
-        const member = Number.isInteger(i) ? members[i] : null;
-        if (!member) return html(res, 404, errorPage(404, 'no such frame'), NO_STORE);
-        if (member.live) {
-          // THE WHOLE REMAINING PATH, and the query with it. This forwarded `segments[4]` alone — one
-          // segment — so anything nested arrived truncated. It costs nothing today, because the
-          // process behind a live frame answers every path with the same self-contained artifact
-          // (`lagoon serve --watch`), and the one path it distinguishes it matches with `endsWith`.
-          // It is here so that stays true of a frame served by something that does route on a path.
-          const rest = segments.slice(4).join('/');
-          return void (await proxyLive(member.live, `/${rest}${url.search}`, req, res, member));
-        }
-        if (!member.hash) return html(res, 404, errorPage(404, 'this member has never published'), NO_STORE);
-        const bytes = store.readHash(member.hash);
-        if (!bytes) return html(res, 410, errorPage(410, 'this frame’s object is gone'), NO_STORE);
-        // NOT immutable here: the group means today, and today's `latest` moves.
-        return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo), NO_STORE);
-      }
-
-      // The trailing slash is LOAD-BEARING — the shell's frame src is relative (`f/<i>`).
-      if (segments.length === 2 && !path.endsWith('/'))
-        return void res.writeHead(302, { location: `/g/${name}/`, 'cache-control': 'no-store' }).end();
-      if (segments.length > 2) return html(res, 404, errorPage(404, 'no such group view'), NO_STORE);
-
-      // The pin: what this view would be if it were frozen now. Live members pin their last published
-      // build, because a dev server has nothing to pin — and the footer says so.
-      const snap = store.snapshot(name);
-      return html(
-        res,
-        200,
-        composedPage({ id: snap?.id ?? null, group: name, members, live: true }),
-        NO_STORE,
-      );
-    }
-
-    if (segments[0] === 'm') {
-      const id = normalizeSegment(segments[1]);
-      const found = id && store.manifest(id);
-      if (!found) return html(res, 404, errorPage(404, 'unknown manifest'), NO_STORE);
-      // A pinned manifest is a snapshot of a group, so it carries the same risk and takes the same
-      // filter. Its immutability is about the BYTES, never about who may see them.
-      found.members = (found.members ?? []).filter((m) => readable(m.repo));
-      if (!found.members.length) return html(res, 404, errorPage(404, 'unknown manifest'), NO_STORE);
-      if (segments[2] === 'f') {
-        const i = Number.parseInt(segments[3] ?? '', 10);
-        const member = Number.isInteger(i) ? found.members[i] : null;
-        if (!member) return html(res, 404, errorPage(404, 'no such frame'), NO_STORE);
-        const bytes = store.readHash(member.hash);
-        if (!bytes) return html(res, 410, errorPage(410, 'this frame’s object is gone'), NO_STORE);
-        return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo), IMMUTABLE);
-      }
-      if (segments.length === 2) {
-        // The trailing slash is LOAD-BEARING: the shell's frame src is relative (`f/<i>`), so at
-        // /m/<id> it would resolve to /m/f/<i> and every frame would 404. `filter(Boolean)` cannot
-        // see the difference, so the raw path is what decides — and testing the segment count here
-        // instead is how this redirected to itself.
-        if (!path.endsWith('/')) return void res.writeHead(302, { location: `/m/${id}/`, 'cache-control': 'no-store' }).end();
-        // NOT immutable, even though the manifest is. The frames are stored bytes and can be cached
-        // for a year; this SHELL is rendered by the host's own code, so caching it for a year means a
-        // host upgrade never reaches anyone holding the link — which is how a fixed layout bug kept
-        // rendering broken in a browser that had the old page.
-        return html(res, 200, composedPage({ id, group: found.group, members: found.members }), NO_STORE);
-      }
-      return html(res, 404, errorPage(404, `nothing at ${path}`), NO_STORE);
-    }
-
     // --- per-repo ---------------------------------------------------------------------------
     // Parsed FROM THE RIGHT: a repo id may carry an owner segment (`acme/web`), so the last two
     // segments are ref and slug and everything before them is the repo.
     if (segments.length >= 3) {
       // The reload stream hangs off the page's own path, so strip it before parsing repo/ref/slug —
       // otherwise `/<repo>/latest/all/__motu_reload` parses as a repo called `<repo>/latest`.
+      //
+      // `__motu_frame` is stripped the same way and for the same reason. THE PAGE IS NOW A SHELL: the
+      // canonical URL serves a rail plus this lagoon framed, so the bytes need an address of their own
+      // and this is it. The name is not new — the shell's own script already derived a page href by
+      // splitting a frame address on `/__motu_frame` (`views.mjs`), which is how the half-built
+      // per-lagoon rail expected to address a member long before a route answered there.
       const isReload = segments[segments.length - 1] === '__motu_reload';
-      const parts = isReload ? segments.slice(0, -1) : segments;
+      const withoutReload = isReload ? segments.slice(0, -1) : segments;
+      const isFrame = withoutReload[withoutReload.length - 1] === '__motu_frame';
+      const parts = isFrame ? withoutReload.slice(0, -1) : withoutReload;
       const slug = normalizeSegment(parts[parts.length - 1]);
       const ref = normalizeSegment(parts[parts.length - 2]);
       const repo = normalizeRepo(parts.slice(0, -2).join('/'));
@@ -749,6 +642,41 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
 
         const rec = store.resolveRef(repo, ref, slug);
         if (!rec) return html(res, 404, errorPage(404, `nothing at ${repo}/${ref}/${slug}`), NO_STORE);
+
+        // THE SHELL, unless the bytes were asked for by name.
+        //
+        // `b1719dd` said the rail "stops belonging to a group and belongs to every lagoon:
+        // `/<repo>/<ref>/<slug>` serves the shell" — and then only the group route ever rendered one,
+        // so the canonical URL a person bookmarks stayed a bare artifact with no rail, no dock and no
+        // lens. That is what made a group the only way to LOOK at more than one lagoon, which is the
+        // reason groups outlived the decision to remove them.
+        //
+        // The rail lists everything this viewer may see, with the one they opened selected — the
+        // honest list rather than a curated one, which is what needs no group to maintain.
+        if (!isFrame) {
+          const here = `/${repo}/${ref}/${slug}`;
+          const members = store
+            .resolveAll(live.endpointFor)
+            .filter((m) => readable(m.repo))
+            .map((m) => ({ ...m, frameHref: `/${m.repo}/latest/${m.slug}/__motu_frame` }));
+          // THIS lagoon first in its own rail, and at the exact ref that was opened — an immutable
+          // build is a different page from `latest`, and framing `latest` here would quietly show
+          // someone a page other than the one their URL names.
+          const self = {
+            repo,
+            slug,
+            hash: rec.hash,
+            title: rec.title ?? slug,
+            sha: rec.sha ?? null,
+            live: liveUrl ?? null,
+            brand: members.find((m) => m.repo === repo)?.brand ?? null,
+            frameHref: `${here}/__motu_frame`,
+          };
+          const rest = members.filter((m) => !(m.repo === repo && m.slug === slug));
+          const all = [self, ...rest];
+          return html(res, 200, lagoonPage({ members: all, focus: 0, live: true, docTitle: self.title }), NO_STORE);
+        }
+
         const bytes = store.read(repo, rec.id, rec.hash);
         if (!bytes) return html(res, 410, errorPage(410, 'the object behind this URL has been swept'), NO_STORE);
         return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: rec.title }), repo), rec.mutable ? NO_STORE : IMMUTABLE);
@@ -900,44 +828,6 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (r) accepted.push(`${t.island}/${t.shot}`);
     }
     return json(res, 200, { ok: true, repo, accepted, count: accepted.length });
-  }
-
-  async function group(req, res, url) {
-    const name = normalizeSegment(url.searchParams.get('name'));
-    if (!name) return json(res, 400, { error: 'name must be [A-Za-z0-9._-]' });
-    let members;
-    try {
-      members = JSON.parse((await readBody(req, 256 * 1024)).toString('utf8'));
-    } catch (e) {
-      return json(res, 400, { error: `body must be JSON: ${e.message}` });
-    }
-    // Two body shapes. The array is the original and still works; the object can also say `all: true`,
-    // which means EVERY repository resolved at assembly time rather than a list frozen at definition.
-    const spec = Array.isArray(members) ? { members } : members && typeof members === 'object' ? members : null;
-    if (!spec) return json(res, 400, { error: 'body must be an array of {repo, slug, ref?} or {all?, members?, exclude?}' });
-    const all = !!spec.all;
-    if (!all && (!Array.isArray(spec.members) || !spec.members.length))
-      return json(res, 400, { error: 'body must be a non-empty array of {repo, slug, ref?}, or set all:true' });
-
-    const cleanList = (list, needSlug) => {
-      const out = [];
-      for (const m of list ?? []) {
-        const repo = normalizeRepo(m?.repo);
-        const slug = m?.slug ? normalizeSegment(m.slug) : null;
-        const ref = m?.ref ? normalizeSegment(m.ref) : 'latest';
-        if (!repo || (needSlug && !slug) || !ref) return null;
-        out.push(slug ? { repo, slug, ref } : { repo });
-      }
-      return out;
-    };
-    const clean = cleanList(spec.members, true);
-    const exclude = cleanList(spec.exclude, false);
-    if (!clean || !exclude) return json(res, 400, { error: 'bad member or exclusion in body' });
-
-    store.putGroup(name, { members: clean, all, exclude });
-    const snap = store.snapshot(name);
-    const effective = store.listGroups().find((g) => g.name === name)?.members ?? clean;
-    return json(res, 200, { ok: true, name, all, members: effective, url: `/g/${name}`, manifest: snap?.id ?? null, missing: snap?.missing ?? [] });
   }
 
   const server = createServer((req, res) => {

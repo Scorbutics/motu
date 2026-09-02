@@ -19,6 +19,7 @@ import {
   launderingSuspects,
   getChannels,
   hostCalls,
+  outboundCalls,
   regionIdOfStore,
   archipelagoConfigs,
 } from '@motu/core';
@@ -254,23 +255,44 @@ export function currentSeams() {
     });
 
   // ── what it asked for ────────────────────────────────────────────────────────────────────────
-  // BOTH ROUTES, one question. A contract call goes through the transport the lagoon swaps for
-  // fixtures; a host call is an island importing a module directly and the lagoon standing it down.
-  // Both are "this screen needs data it does not have", and separating them hid the second from
-  // anyone looking for the first.
-  const calls = lens.calls
-    .filter((c) => c.island != null && tags.has(c.island))
-    .slice(-16)
-    .map((c) => ({ label: `${c.service}.${c.method}`, island: c.island ?? '', detail: c.argsKey || '' }));
-  const traced = hostCalls()
-    .filter((c) => c.island && tags.has(c.island))
-    .slice(-16)
-    .map((c) => ({
-      label: `${c.module}.${c.fn}`,
-      island: c.island ?? '',
-      // Shallow args, which is the whole point of the trace: enough to see fetchClubFeed(11), not a log dump.
-      detail: c.args.map((a) => preview(a)).join(', '),
-    }));
+  // ALL THREE DOORS, ONE BLOCK, AND NOBODY DROPPED.
+  //
+  // This read two lists and filtered both on `c.island != null` — which is not a filter, it is a
+  // deletion. A declared SOURCE reads inside a channel, at region level, under `runWithSource`, so its
+  // ambient island is null by construction and every one of its calls was discarded. On a region fed
+  // by a source that produced the worst screen in the lens: FEEDS said the page's week feed had fired
+  // ×44 a second ago, and ASKED FOR said 0 with "everything on screen came from the seed" — an empty
+  // list with a confident wrong explanation, in the surface built to say where data came from.
+  //
+  // The WIRE was not read at all, so a project mocking beneath its own client (`createPostgrestFetch`)
+  // saw none of its reads here however many it made.
+  //
+  // One ledger fixes both: `outboundCalls()` carries the door AND the owner, so a source's reads are
+  // ATTRIBUTED rather than dropped, and a wire reach sits beside the contract call it is an
+  // alternative to. Ordered by door so the block reads as the three seams it is.
+  const doorOrder: Record<string, number> = { contract: 0, 'host-module': 1, wire: 2 };
+  const asked = outboundCalls()
+    .filter((o) => {
+      // An ISLAND's ask belongs to this region only if that island is mounted in it.
+      if (o.owner.startsWith('island:')) return tags.has(o.owner.slice('island:'.length));
+      // A SOURCE's and an unowned ask are region-level: the lens shows one region at a time, and
+      // hiding an ask because nobody claimed it is the failure above in a smaller costume.
+      return true;
+    })
+    .slice(-24)
+    .map((o) => ({
+      via: o.via,
+      label: o.name,
+      detail: o.args,
+      owner: o.owner,
+      // UNATTRIBUTED IS A FINDING, not a row like the others: something asked the outside for data
+      // while no island's and no source's window was open, so nothing here can say what needs it.
+      tone: o.owner === 'unattributed' ? 'warn' : 'ok',
+    }))
+    .sort((a, b) => (doorOrder[a.via] ?? 9) - (doorOrder[b.via] ?? 9));
+
+  // Which doors were SILENT, so the empty state can say what it looked at instead of guessing why.
+  const doorsUsed = [...new Set(asked.map((a) => a.via))];
 
   // ── what it pushed back ──────────────────────────────────────────────────────────────────────
   const slots = new Set(getMountedIslands().map((i) => i.slot));
@@ -279,7 +301,11 @@ export function currentSeams() {
     .slice(-8)
     .map((i) => ({ label: i.name ?? String(i.kind ?? 'intent'), from: i.source ?? '' }));
 
-  return { channels, calls, traced, intents };
+  // `calls`/`traced` stay for a dock built before `asked` existed — an older chrome bundle against a
+  // newer overlay should degrade to the two-door view, not throw reading `undefined`.
+  const calls = asked.filter((a) => a.via === 'contract').map((a) => ({ label: a.label, island: a.owner, detail: a.detail }));
+  const traced = asked.filter((a) => a.via === 'host-module').map((a) => ({ label: a.label, island: a.owner, detail: a.detail }));
+  return { channels, asked, doorsUsed, calls, traced, intents };
 }
 
 /**

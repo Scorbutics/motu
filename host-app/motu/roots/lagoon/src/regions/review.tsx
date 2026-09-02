@@ -4,10 +4,9 @@
 // carry a `ReviewRegionFrame` — a second copy of the page's JSX — and then a component the page also
 // imported, which was better and still two calls. Declaring the root made it one, and the frame went
 // away with the project around it.
-import { overridesFor } from '@motu/react';
+import { overridesFor, wireFrom } from '@motu/react';
 import type { LagoonOverrides } from '@motu/react';
 import { channelFrom } from '@motu/core';
-import { createPostgrestFetch, installFakeFetch } from '@motu/runtime/postgrest-fetch';
 import { listShots, acceptShots } from '@/src/review/host';
 import { reviewArchipelago } from '../../../../src/archipelagos/review/review.archipelago.js';
 import { REPOS, SHOTS_BY_REPO } from '../../../../src/shared/review-evidence.js';
@@ -27,8 +26,14 @@ import { REPOS, SHOTS_BY_REPO } from '../../../../src/shared/review-evidence.js'
  * It is also what makes `data-reach` a check rather than a readout in this repository: the routes
  * below are recorded as the region runs, and compared against the `reaches` that `shotsSource`
  * declares. Without an in-tree consumer that comparison could only be proved by unit tests.
+ *
+ * DECLARED, not installed here. `wireFrom({ to })` binds the fake to the region the way
+ * `channelFrom({ to })` binds a channel, and the lagoon installs it for every view of that region —
+ * so the route list is written once instead of twice, and a second region with a wire of its own is
+ * no longer silently ignored.
  */
-const wire = createPostgrestFetch({
+const wire = wireFrom({
+  to: reviewArchipelago,
   appRoutes: ['/api/repos', '/api/baselines', '/api/baseline/accept'],
   fixtures: [
     { service: '/api/repos', method: 'GET', response: { repos: REPOS } },
@@ -46,7 +51,6 @@ const wire = createPostgrestFetch({
     { service: '/api/baseline/accept', method: 'POST', response: { accepted: [], count: 0 } },
   ],
 });
-installFakeFetch(wire, { appRoutes: ['/api/repos', '/api/baselines', '/api/baseline/accept'] });
 
 /** The application's own host client, pointed at the fake. `base: ''` keeps the paths relative. */
 const shotsWirePort = {
@@ -81,6 +85,7 @@ export const reviewSeed: NonNullable<LagoonOverrides['seed']>[string] = {
  */
 export const reviewRegion = overridesFor(reviewArchipelago, {
   seed: reviewSeed,
+  wire,
   channels: [
     channelFrom({
       to: reviewArchipelago,

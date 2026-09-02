@@ -32,7 +32,7 @@ const STUBBED = ['next/link', 'next/image', 'next/navigation'];
  *   coupling — structured `contract.coupling` from element.ts
  * @returns {{ level: 'error'|'warn'|'ok', check: string, msg: string }[]}
  */
-export function checkCoupling({ source, coupling } = {}) {
+export function checkCoupling({ source, coupling, graph } = {}) {
   const findings = [];
   if (typeof source !== 'string') return findings;
 
@@ -56,7 +56,49 @@ export function checkCoupling({ source, coupling } = {}) {
       });
     }
   } else {
-    findings.push({ level: 'ok', check: 'rsc-boundary', msg: 'no server-only imports' });
+    // THE SAME QUESTION, ASKED OF THE WHOLE BUNDLE. The island's own file was never where this
+    // boundary lived: a Next app puts `'use server'` in an actions module and `server-only` in the
+    // lib beneath it, so an island four ordinary hops away from either still cannot be bundled for a
+    // Vite lagoon. Reported with the CHAIN, because "this island cannot mount" is useless without
+    // the hop that made it true — the failure it replaces was an unattributable rollup error.
+    const reached = [];
+    for (const node of graph ?? []) {
+      if (node.truncated) {
+        findings.push({
+          level: 'warn',
+          check: 'rsc-boundary',
+          msg: "the island's import graph was larger than this check walks, so the part beyond the cap is unexamined",
+        });
+        continue;
+      }
+      const hop = String(node.source ?? '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+        .replace(/^\s*import\s+type\s[\s\S]*?from\s*['"][^'"]+['"];?/gm, '');
+      const bad = [...hop.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)]
+        .map((m) => m[1])
+        .filter((s) => SERVER_ONLY.some((m) => s === m || s.startsWith(m + '/')));
+      const action = /^\s*['"]use server['"]/m.test(hop);
+      if (bad.length || action) reached.push({ file: node.file, why: bad.length ? `imports server-only '${bad[0]}'` : "is a 'use server' module" });
+    }
+    if (reached.length) {
+      for (const r of reached.slice(0, 3)) {
+        findings.push({
+          level: 'error',
+          check: 'rsc-boundary',
+          msg: `reaches ${r.file}, which ${r.why} — the island itself is clean, but everything it imports is in the same bundle, and the lagoon has no Next runtime to strip it`,
+        });
+      }
+      if (reached.length > 3) {
+        findings.push({ level: 'error', check: 'rsc-boundary', msg: `…and ${reached.length - 3} more module(s) in this island's import graph` });
+      }
+    } else {
+      findings.push({
+        level: 'ok',
+        check: 'rsc-boundary',
+        msg: `no server-only imports${graph?.length ? ` (island + ${graph.length} reachable module(s))` : ''}`,
+      });
+    }
   }
 
   // 2. 'use client'. An island always REACHES the browser — it mounts inside a custom element, which

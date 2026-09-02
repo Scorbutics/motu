@@ -166,6 +166,26 @@ same `mount` as the host** (`"mount": "react"` in `lagoon.config.json`, scaffold
 at `packages/cli/src/commands/init.mjs:279`) or `motu island verify` green-lights a mount path the
 project never ships.
 
+**Region FLOWS work on both mounts, and for a long time they only worked on one.** Nothing about a
+flow is React's — `emit` needs the archipelago's config, its store and the mounted-island registry,
+and the custom element fills all three exactly as the React tree does — but the seam that exposes it
+(`window.__motuLagoon`) was written inside `mountReactLagoon`, so every flow step on an `element` host
+failed with *"no emit seam on this mount path"*. It is now `packages/react/src/lagoon-harness.ts`,
+shared by both; only `remount` stays per-mount, because React needs its root unmounted while the
+element path re-inserts the `<motu-island>` marker.
+
+The same gap had a second half. The checks that drive a region open `?view=mountpoints` — one framed
+cell per declared slot, so a slot the page's own arrangement would hide still mounts — and the element
+has always understood `view="mountpoints"`, but nothing set it: `defineLagoon` dropped the option and
+`bootstrapLagoon` never read the param. The region rendered its own layout, no `[data-motu-slot]` cell
+existed, and every step failed with *"the region rendered nothing after this step"* — a true sentence
+about a page nobody had asked for the right view. `bootstrapLagoon` now defaults `view` from the URL
+when the entry did not say (at boot, not per render, so the harness can still re-aim the page), which
+fixes hand-written entries predating the scaffold rather than one project's.
+
+Worth knowing which failure you are looking at: the first says the seam is missing, the second says the
+region is empty, and on an element host they were the same bug wearing two messages.
+
 Without children, `<Archipelago>` renders every declared slot in config order; with children you place
 `<Island slot="…">` yourself, anywhere in the page's own markup
 (`archipelago.tsx:57-62`). Element registration is global and one-shot per tag, so it is guarded by

@@ -244,7 +244,20 @@ aside .motu-home .motu-mark { width: 22px; height: 22px; border-radius: 6px; }
 // `docTitle` defaults to '' rather than null so its inferred type is a STRING. These files are plain
 // .mjs read through allowJs, and a `= null` default infers as `null | undefined` — which makes every
 // caller passing a real title a type error, with the error pointing at the caller.
-export function composedPage({ id, group, members, live = false, focus = 0, docTitle = '' }) {
+/**
+ * ONE LAGOON, WITH A RAIL — the shell served at `/<repo>/<ref>/<slug>`.
+ *
+ * This was `composedPage({ group, id, … })`, and a group was the only thing that had one. `b1719dd`
+ * had already decided that was backwards — "a group was never a thing to browse; it is a way of
+ * LOOKING at lagoons" — and had already built the half that mattered here (`frameHref`, an explicit
+ * per-lagoon address, so no index has to agree with anything). What it did not do is give the
+ * canonical lagoon URL this shell, so the group route stayed the only way to get a rail, a dock and a
+ * lens, and groups outlived their own removal.
+ *
+ * `members[focus]` is the lagoon this URL names; the rest is everything else the viewer may see.
+ * There is no group id and no manifest, because there is nothing curated left to pin.
+ */
+export function lagoonPage({ members, live = false, focus = 0, docTitle = '' }) {
   const byRepo = new Map();
   members.forEach((m, i) => {
     if (!byRepo.has(m.repo)) byRepo.set(m.repo, []);
@@ -289,7 +302,7 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHtml(docTitle || `${group} — composed lagoon`)}</title>
+<title>${escapeHtml(docTitle || members[focus]?.title || members[focus]?.slug || 'lagoon')}</title>
 <style>${motuChromeCss()}${SHELL_CSS}</style>
 </head>
 <body>
@@ -297,15 +310,19 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
   <header class="topbar">
     <a class="motu-home" href="/" aria-label="All repositories">${motuMark()}</a>
     <div class="who">
-      <strong id="tb-title">${escapeHtml(members[0]?.title || members[0]?.slug || group)}</strong>
-      <span id="tb-sub">${escapeHtml(group)} · ${members.length} lagoon${members.length === 1 ? '' : 's'}</span>
+      <strong id="tb-title">${escapeHtml(members[focus]?.title || members[focus]?.slug || 'lagoon')}</strong>
+      <span id="tb-sub">${escapeHtml(members[focus]?.repo ?? '')} · ${members.length} lagoon${members.length === 1 ? '' : 's'}</span>
     </div>
     <button type="button" class="motu-btn" data-weight="water" id="tb-switch" aria-haspopup="dialog" aria-expanded="false" aria-controls="switcher">Switch</button>
   </header>
   <div class="scrim" id="scrim" hidden></div>
   <aside id="switcher" aria-label="Choose a lagoon">
     ${motuBay({
-      title: group,
+      // THE RAIL IS NOT A NAMED THING any more, so the bay names what it lists. It used to carry the
+      // group's name, which was the one piece of vocabulary a group contributed to this screen — and
+      // the client swaps it for the selected lagoon anyway whenever the rail is a switcher between
+      // whole lagoons (`FOLLOWS_MEMBER`), which is now always.
+      title: 'Lagoons',
       subtitle: `${members.length} lagoon${members.length === 1 ? '' : 's'}`,
       compact: true,
       // THE SAME WATER THE INDEX OPENS WITH, at rail size. A person reaches this view FROM that page,
@@ -329,17 +346,20 @@ export function composedPage({ id, group, members, live = false, focus = 0, docT
       <span aria-hidden="true">◎</span> Baseline review
     </a>
     <footer>
-      <span class="motu-cap">${
-        live
-          ? `today${id ? ` · <a style="color:inherit" href="/m/${escapeHtml(id)}/">pin this view</a>` : ''}`
-          : `manifest ${escapeHtml(id ?? '')}`
-      }</span>
+      <!-- WHICH AXIS THIS URL IS ON. The latest alias moves and says so; an immutable build is what a
+           day looked like and keeps saying it. There used to be a "pin this view" link here, which
+           minted a group MANIFEST - an immutable snapshot of a curated set. Every lagoon already has
+           an immutable address of its own (the commit-keyed URL publish prints beside latest), so
+           pinning a composition was only ever needed because a composition had no other way to be
+           addressed. NO BACKTICKS IN HERE: this is inside a template literal, and the first one ends
+           the string - which is what the no-backticks test next door exists to catch. -->
+      <span class="motu-cap">${live ? 'today' : 'this build, forever'}</span>
       <!-- WHO IS READING THIS, and the way out — filled in by the script below.
            EMPTY IN THE HTML, deliberately. This page is rendered by the node host, which has no
            session at all: it serves the same bytes to everyone, and guessing would mean rendering
            somebody's handle for the next visitor. It asks the APP (/auth/whoami, same origin
            through the proxy) once the page is up, and until it answers this is nothing rather than a
-           wrong state. When phase 4 moves /g/ into the app the answer arrives server-side and the
+           wrong state. When this shell moves into the app the answer arrives server-side and the
            fetch goes away. -->
       <div class="motu-account" id="account" hidden></div>
     </footer>
@@ -739,15 +759,7 @@ ${PRIMARY_DETECT_JS}
 
 // --- the indexes --------------------------------------------------------------------------------
 
-export function rootIndexPage({ repos, groups, stats }) {
-  const groupRows = groups.map((g) =>
-    motuRow({
-      href: `/g/${g.name}`,
-      label: g.name,
-      sub: `${g.members.length} lagoon${g.members.length === 1 ? '' : 's'} · ${g.members.map((m) => escapeHtml(m.repo)).join(' + ')}`,
-    }),
-  );
-
+export function rootIndexPage({ repos, stats }) {
   const repoRows = repos.map((r) =>
     motuRow({
       href: `/${r.repo}/`,
@@ -764,7 +776,10 @@ export function rootIndexPage({ repos, groups, stats }) {
       meta: `${stats.blobs} object${stats.blobs === 1 ? '' : 's'} · ${size(stats.bytes)} · cap ${stats.maxRecords}/repo`,
     }),
     body:
-      (groups.length ? motuPanel({ caption: 'Composed', rows: groupRows }) : '') +
+      // ONE KIND OF THING. A "Composed" panel of groups listed above this and, on a host where every
+      // group holds very nearly every repository, said the same thing twice while pushing the actual
+      // list down the page — which is what `b1719dd` removed from the motu-built index region and
+      // never removed from here, so the two indexes disagreed for months.
       motuPanel({
         caption: 'Repositories',
         rows: repoRows,

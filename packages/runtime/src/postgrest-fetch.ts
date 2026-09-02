@@ -1,5 +1,5 @@
 import { MotuError } from './index';
-import { reachOwner } from '@motu/core';
+import { reachOwner, recordOutbound } from '@motu/core';
 import { MockTransport, type Fixture } from './mock';
 
 /**
@@ -195,6 +195,9 @@ function recordReach(kind: 'table' | 'rpc' | 'function' | 'route', name: string,
   // resolves long after it has closed, so asking afterwards attributes everything to nobody.
   const owner = ownerNow();
   const declaredForm = reachEntry(kind, name, method);
+  // The unified ledger gets the SAME string `data-reach` compares against declarations, so one readout
+  // can show a wire reach beside a contract call without translating between two vocabularies.
+  recordOutbound('wire', declaredForm);
   const mine = (reach.by[owner] ??= []);
   if (!mine.includes(declaredForm)) mine.push(declaredForm);
   if (kind === 'rpc' || kind === 'function' || kind === 'route') {
@@ -411,7 +414,7 @@ export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeo
   const tables = options.tables ?? {};
   const transport = new MockTransport(options.fixtures ?? []);
 
-  return async function motuFakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const motuFakeFetch = async function motuFakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const req = normalize(input, init);
     recordSeen();
 
@@ -432,6 +435,32 @@ export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeo
     recordUnscoped({ method: req.method, path: req.path, target: 'unparsed', reason: 'path matches no known PostgREST/auth route' });
     return postgrestError(404, `motu: fake fetch does not recognize path ${req.path}`);
   };
+
+  // STAMPED WITH WHAT IT CLAIMS, so `installFakeFetch(fake)` does not have to be told again.
+  //
+  // The two took `appRoutes` separately and a caller wrote it twice — and a divergence was silent in
+  // both directions: a route the installer claimed but the fake did not fell into the `baseUrl` guard
+  // and 404'd as unscoped; a route the fake claimed but the installer did not never reached it at all,
+  // went to the dev server, and landed in `readUnansweredRequests()`. The fake is the one that KNOWS,
+  // so it is the one that says.
+  (motuFakeFetch as unknown as Record<symbol, WireClaims>)[WIRE_CLAIMS] = {
+    appRoutes: options.appRoutes,
+    baseUrl: options.baseUrl,
+  };
+  return motuFakeFetch;
+}
+
+/** What a fake answers for: the same-origin route prefixes, and the backend origin. */
+export interface WireClaims {
+  appRoutes?: string[];
+  baseUrl?: string;
+}
+
+const WIRE_CLAIMS = Symbol.for('motu.wire.claims');
+
+/** What `createPostgrestFetch` stamped on a fake — its own claim, not a second copy of it. */
+export function fakeFetchClaims(fake: typeof fetch): WireClaims | undefined {
+  return (fake as unknown as Record<symbol, WireClaims | undefined>)[WIRE_CLAIMS];
 }
 
 async function handleAuth(req: ParsedRequest, auth: PostgrestFetchOptions['auth']): Promise<Response> {
@@ -590,16 +619,66 @@ function fromTransportError(err: unknown, ctx: Omit<UnscopedRequest, 'reason'>):
  * that cannot load its own bundle would be a far worse failure than an unanswered route, so the
  * narrow rule is the safe one.
  *
- * Idempotent: installing twice leaves one patch, so a hot reload does not build a chain of them.
+ * ONE PATCH, MANY FAKES. This used to guard on a global boolean, so the FIRST caller won and every
+ * later one was a silent no-op — fine while a project had one region with a wire, and wrong the moment
+ * it had two: the second region's routes went to the dev server, 404'd, its islands rendered empty and
+ * nothing said why. Fakes now REGISTER, and the single patch asks each in turn what it claims.
+ *
+ * Idempotent per fake: installing the same one twice leaves one entry, so a hot reload does not build
+ * a chain of patches or a chain of registrations.
  */
-export function installFakeFetch(fake: typeof fetch, options: { appRoutes?: string[]; baseUrl?: string } = {}): void {
+export function installFakeFetch(fake: typeof fetch, options?: WireClaims): void {
+  // The fake's OWN stamp is the default, so the routes are declared once, where they are implemented.
+  // An explicit `options` still wins — a caller wrapping someone else's fake has nowhere else to say.
+  const claims = options ?? fakeFetchClaims(fake) ?? {};
+  const registry = fakeRegistry();
+  if (registry.some((entry) => entry.fake === fake)) return;
+  registry.push({ fake, claims });
+  armFakeFetch();
+}
+
+interface InstalledFake {
+  fake: typeof fetch;
+  claims: WireClaims;
+}
+
+function fakeRegistry(): InstalledFake[] {
+  const g = globalThis as unknown as { __motuFakeFetches?: InstalledFake[] };
+  return (g.__motuFakeFetches ??= []);
+}
+
+/** Every fake currently installed, in registration order — what a check reads to say who claimed what. */
+export function installedFakeFetches(): readonly WireClaims[] {
+  return fakeRegistry().map((entry) => entry.claims);
+}
+
+/** Forget every installed fake and leave the patch in place. For a test, or a lagoon remount. */
+export function resetFakeFetches(): void {
+  fakeRegistry().length = 0;
+}
+
+function claimedBy(url: URL): typeof fetch | undefined {
+  for (const { fake, claims } of fakeRegistry()) {
+    if (claims.baseUrl && url.href.startsWith(claims.baseUrl)) return fake;
+    if ((claims.appRoutes ?? []).some((prefix) => url.pathname.startsWith(prefix))) return fake;
+  }
+  return undefined;
+}
+
+/**
+ * Patch `globalThis.fetch` NOW, with whatever is registered — and whatever registers later.
+ *
+ * Worth being separate from `installFakeFetch` for one reason: a client that captures `globalThis.fetch`
+ * at IMPORT time (`createClient(url, key, { global: { fetch } })` evaluated at module scope) keeps
+ * whatever `fetch` was when its module ran. If the fakes are declared rather than installed by a
+ * top-level side effect, that capture can happen first and the client talks past every fake, silently.
+ * Calling this at the top of the lagoon entry — before any application module is imported — closes it:
+ * the patch is in place from the start and the registry fills in behind it.
+ */
+export function armFakeFetch(): void {
   const g = globalThis as unknown as Record<string, unknown>;
-  if (g.__motuFakeFetchInstalled) return;
+  if (g.__motuFakeFetchArmed) return;
   const original = globalThis.fetch.bind(globalThis);
-  const claims = (url: URL): boolean => {
-    if (options.baseUrl && url.href.startsWith(options.baseUrl)) return true;
-    return (options.appRoutes ?? []).some((p) => url.pathname.startsWith(p));
-  };
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     let url: URL;
     try {
@@ -608,12 +687,13 @@ export function installFakeFetch(fake: typeof fetch, options: { appRoutes?: stri
     } catch {
       return original(input as RequestInfo, init);
     }
-    if (claims(url)) return fake(input, init);
-    // DELEGATED, AND THEN WATCHED. Everything the fake does not claim goes to the real fetch, which in
-    // a lagoon is the dev server — and that is right for the dev server's own traffic. It is also
-    // where an unstubbed APP route goes: it 404s, the caller catches it, an empty state renders, and
-    // nothing says so. `network-sealed` cannot see it either, because it only counts requests that
-    // left for a non-loopback host.
+    const fake = claimedBy(url);
+    if (fake) return fake(input, init);
+    // DELEGATED, AND THEN WATCHED. Everything no fake claims goes to the real fetch, which in a lagoon
+    // is the dev server — and that is right for the dev server's own traffic. It is also where an
+    // unstubbed APP route goes: it 404s, the caller catches it, an empty state renders, and nothing
+    // says so. `network-sealed` cannot see it either, because it only counts requests that left for a
+    // non-loopback host.
     //
     // The signal is not "a same-origin 404" — favicons and source maps 404 all day. It is a request
     // the app made, that NO STUB CLAIMED, whose real answer was an error. Recorded, not blocked: the
@@ -636,5 +716,5 @@ export function installFakeFetch(fake: typeof fetch, options: { appRoutes?: stri
     }
     return res;
   };
-  g.__motuFakeFetchInstalled = true;
+  g.__motuFakeFetchArmed = true;
 }

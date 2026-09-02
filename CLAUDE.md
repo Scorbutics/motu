@@ -96,8 +96,8 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    component — never a second JSX copy of the arrangement, which drifts for the same reason a second
    copy of the region's vocabulary does. `seed` is data. Anything that REACTS has one of TWO homes,
    and neither is the frame. A `channel` installs the application's own SOURCE over a port, which is
-   what answers an island's intent. The WIRE FAKE — `createPostgrestFetch` + `installFakeFetch`, at
-   the region module's top level — answers HTTP BENEATH the app's real service, so the service itself
+   what answers an island's intent. The WIRE — `wireFrom({ to, appRoutes, tables, fixtures })`, a
+   `wire` field beside `channels` — answers HTTP BENEATH the app's real service, so the service itself
    runs instead of being replaced. Reach for the wire when the app's own client code is what you want
    exercised, and for a channel when the region needs a key fed; a region commonly has both. Both are
    installed for every view, which is the property that matters: the checks that drive the region see
@@ -124,10 +124,18 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
    false` — because being handed the default state while believing it is the one you named is the
    failure worth engineering against. Read `window.__motuLagoonState` before believing a screenshot.
- - The lens (Ctrl/Cmd-Shift-G in the lagoon) opens on the REGION SHEET: one row per key — who owns it,
-   who reads it, what it holds, whether it has moved, and a flag where a declared write has never fired
-   or the host answered an island. Read it before reading the archipelago; it is the same declaration,
-   proved by the region that is running.
+ - The lens is the DOCK's Seams tab — **Ctrl/Cmd-K**, then `Seams` — and it opens on the REGION SHEET:
+   one row per key, who owns it, who reads it, what it holds, whether it has moved, and a flag where a
+   declared write has never fired or the host answered an island. Read it before reading the
+   archipelago; it is the same declaration, proved by the region that is running. Below the sheet,
+   FEEDS is the channels and ASKED FOR is every outbound ask through all three doors — contract,
+   traced host module, wire — each row naming the door and the owner (`island:<tag>` / `source:<id>`).
+   WHERE IT EXISTS MATTERS: the dock is drawn by whoever HOSTS the lagoon — `motu lagoon serve` /
+   `lagoon dev`, or the motu host, which wraps every published lagoon in a shell — so the GALLERY and
+   any hosted lagoon URL have it, while the focused standalone entry (`lagoon.html`, what
+   `motu island verify` drives) does not, and neither does `/__motu_frame`, the artifact by itself.
+   Ctrl/Cmd-Shift-G is the OLD standalone debug overlay (`mountDebugOverlay`), which the gallery does
+   not mount; pressing it there does nothing.
  - `docs/05-archipelagos-and-regions.md` in the motu repo is the reference for how a region declares
    ownership, and `docs/07-checks-and-verification.md` for the checks that enforce it; read them
    before changing how a region declares anything.
@@ -140,30 +148,6 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    server is what the host replaces.
    Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted — the publish output
    warns about them, and the warning is a finding.
-
-## motu's own surfaces go through motu, and that is not optional
-
-Every screen motu itself ships — the review console, the lagoon host's pages, anything with a UI that
-lives in this repository — is islands and archipelagos, declared, with evidence, checked by
-`motu check`. A UI framework that hand-writes its own screens is testing a claim it never makes.
-
-This is a rule rather than a preference because of what it covers that nothing else does. A host
-adapter's only real consumer is usually somebody else's repository — `@motu/adapter-next` is proved by
-acme, which is not in this repo's CI — so a framework change that breaks it is invisible here until
-someone happens to build that project. An in-tree consumer is the one that cannot drift unnoticed,
-which is the argument `pnpm-workspace.yaml` already makes out loud for the review console. Note that
-the review console is Vite: an adapter is only exercised by a consumer on THAT host.
-
-Declare it with `removable: false` and mean the narrow thing. `removal-check` asks "delete motu, does
-the host still compile?", which is the right question for an app that ADOPTED motu and a meaningless
-one for motu's own surfaces, where motu is load-bearing by choice. It reports a SKIP, never a pass,
-because opting out proves nothing. It is not a hatch for an adopting app that finds removal
-inconvenient — for those the answer stays FAIL.
-
-The screens worth choosing first are the awkward ones. A sign-in region is a form, a pending state, a
-failure arriving from a server, and a success whose consequence is a NAVIGATION rather than a rendered
-key — every place a region model gets strained. When motu is awkward there, that is a finding about
-motu, and using it on our own screens is what makes us the ones who feel it.
 
 ## A UI that lives in the database, not the repository
 
@@ -394,24 +378,6 @@ components in app files that wrap them in `<R.Island>`. The lagoon installs the 
 
 Worth being exact about, because it decides how much a green region actually claims.
 
-MOTU DOES NOT PRESCRIBE THE SOURCE PATTERN, and it does not need to. The lagoon renders a region
-WITHOUT the page, so orchestration left in page effects cannot be previewed: the host keys arrive
-empty, `lagoon-render` says the region renders nothing, and the only way out is hand-writing a channel
-that re-implements what the page does — a second copy, which drifts. Extraction is what makes that go
-away. The pressure is emergent from a constraint motu imposes for its own reasons; no field blesses
-the pattern and none should. What `sources` declares is narrower and is ordinary key ownership: WHICH
-MODULE feeds a host-fed key, so `channelFrom` can install the application's own object rather than a
-copy of it. Same principle as faking the wire instead of the service — run the app's code, replace
-only what is beneath it.
-
-So whether a given fetch deserves a source object is an APPLICATION decision, not a motu rule. What
-earns one is orchestration ACROSS calls — a generation guard discarding a stale in-flight response, a
-debounce, reset-on-new-search, the slower of two submits not overwriting the faster. What does not is
-"this component fetches something". Note that mocking at the wire (`@motu/runtime/postgrest-fetch`)
-already removed the other half of the old justification: a port existed partly so the lagoon could
-substitute data, and the fake fetch now does that beneath the real service. Only the orchestration
-half is left.
-
 When a flow runs, the source is the APPLICATION'S OWN OBJECT. Its timeout, its precedence rules, its
 generation guard, its error mapping, its intent dispatch — all of that executes. What is swapped is
 the PORT: production hands it Supabase and the services, the lagoon hands it fixtures. So a region
@@ -433,16 +399,10 @@ drives it directly, and you want both for the same reason you want `expectRender
 
 THERE IS NO CHECK FOR THIS, deliberately. A `sources-tested` warning used to fire when no test file
 imported a declared source, and it was removed: whether the application's own code has unit tests is
-not motu's judgement to make. Nothing else in the framework opines on a host's test suite, and the
-check did not even produce the behaviour it appeared to — it could only fire once a source already
-existed, so it encouraged TESTING an extraction, never the extraction itself. The thing that actually
-does the work is the paragraph at the top of this section, and it costs no machinery.
-
-Two properties this leaves reachable without a source at all, both newer than that check: an
-INTERACTION scenario (`Scenario.interactions`) drives a real click through the component's own
-handler, which reaches a catch block or a retry that no seed can describe; and `data-reach` reports
-which tables and RPCs an island actually touched. Between them, "restructure the component so it can
-be tested" is much more rarely the answer than it was when sources were introduced.
+not motu's judgement to make. Nothing else in the framework opines on a host's test suite, and it
+could only fire once a source already existed — so it encouraged TESTING an extraction, never the
+extraction itself. What produces the pattern is structural: the lagoon renders a region WITHOUT the
+page, so orchestration left in page effects cannot be previewed at all.
 
 And the adapter itself — the few lines that turn the backend's shape into the port's — belongs to
 whatever proves this app against a real backend. Where the call goes through one of the app's own
@@ -456,6 +416,47 @@ Know the one gap that leaves. A client that talks to the database or the auth se
 declaration and neither tool pins its shape. That adapter is the last unproven inch of this design.
 It is a few lines by construction, which is the mitigation; routing the read through an operation is
 the fix when it stops being a few lines.
+
+## Adoption is staged, and stage 1 does not touch the page
+
+A region's arrangement lives in the archipelago's `root` — the application's own layout component,
+with `slots` mapping its props to the region's islands, rendered by the page AND by the lagoon from
+the same map — or in a hand-written lagoon frame, which is a second description of the page. Both are
+supported, and which one you are in is a STAGE, not a verdict.
+
+Adopt as a THIN OVERLAY first: islands, `<X.Island>` inside the page's existing JSX, a frame that
+holds only the application's own components. `region-root` reports that shape as `ok` and names `root`
+without failing on it, because moving a page is a real refactor of the host's own code and no project
+can do ten of them before its first green run. Then migrate ONE region at a time, when you already
+have a reason to open its page. Then, when the last one is done, set `"regionRoot": "required"` in
+`motu.config.json` — the switch that makes the arc finish rather than stall half-done.
+
+A MIGRATION SWEEP ACROSS EVERY REGION IS THE WRONG SHAPE, and the reason is not diff size. Two things
+change in a move to `root` that no check sees:
+
+ - EXCLUSIVITY GETS DEMOTED. A ternary whose branches cannot both render becomes two independent
+   props, and nothing enforces that at most one is non-null — acme's actions page traded
+   `weeksLoaded ? <WeekNavigator/> : <Skeleton/>` for a `weekNav` prop and a `weekNavPlaceholder` prop
+   rendered adjacently, with a comment standing where the guarantee used to be. When `slots` cannot
+   express an either/or, keep the ternary in the page and pass ONE node.
+ - THE SERVER/CLIENT BOUNDARY MOVES. The root renders inside `<X.Region>`, a client component. A
+   layout the page rendered on the server crosses into the client bundle when it becomes the root, and
+   the nesting inverts: acme's `/forgot-password` went from `page → AuthLayout → Screen` to
+   `page → Screen → Region → AuthLayout`. Same pixels, different tree, different bundle. Read what the
+   extracted layout imports before moving it.
+
+What the migration BUYS is one thing, and it is worth being exact about it: the lagoon previews the
+page instead of a drawing of it. Islands, contracts, ownership, coverage and `removal-check` work the
+same in either shape — `removal-check` rewrites `<X.Root>` back to the layout component and unwraps
+`<X.Island>`, so both shapes survive deleting motu. What it COSTS is that the extraction is not
+reversible by the tool: removal leaves the extracted layout files behind, where stage 1 returns the
+page to exactly the JSX it had. So the trade is lagoon fidelity against a page you can still hand back
+unchanged, and a region earns the move when someone is already editing it.
+
+A frame that genuinely must draw its own markup says why once — `inventedArrangement('why', <…/>)`
+downgrades the error to a warning, and warnings do not fail `motu check`. It is a HOLD, not an answer.
+`motu archipelago adopt-root <id>` does the derivable half of a migration and refuses rather than
+guessing when the frame nests two host components.
 
 ## Three tiers, and which one you are in
 
@@ -538,15 +539,24 @@ The lagoon replaces a host module so completely that nothing shows a fetch happe
 network row, and the lens shows the KEYS that resulted, never the question that produced them. Looking
 at a region and seeing no HTTP at all is accurate and tells you nothing.
 
-Wrap a stub's exports in `traced(module, fn, impl)` and the region reports what the islands actually
-asked for:
+ONE LEDGER, THREE DOORS. An ask leaves by the CONTRACT (a `call()` the transport answers), by a
+TRACED HOST MODULE (a stub wrapping its exports in `traced(module, fn, impl)`), or by the WIRE (a fake
+`fetch` beneath the app's own client). All three record to `recordOutbound` in `@motu/core`, and both
+readers — `provenance` and the lens's ASKED FOR block — group by door and name who asked:
 
-    ✓ provenance  islands fetched: fetchClubCounters() ×4, fetchClubFeed(11) ×4  · 8 host call(s)
+    ✓ provenance  asked for: contract: shots.list() ×2 · wire: table:shots(select) — by island:shot-list, source:shots
 
 `contract.effects` says which host modules an island IMPORTS; this says which it CALLED, with what arguments,
 and how often. Two things become visible that nothing else catches: an island that renders content
 while calling NOTHING (its data came from somewhere it never declared), and a module it imports but
 never reaches (a stale `effects` entry, or a stub standing in for something unused).
+
+WHO ASKED IS PART OF THE ANSWER, and leaving it out cost a lens that lied. A declared SOURCE reads
+inside a channel, at region level, so its ambient island is null — and the lens filtered its
+ASKED FOR list on "has an island", which is not a filter but a deletion. On a region fed by a source
+it printed 0 asks and *"everything on screen came from the seed"* directly under a FEEDS row saying
+that source had fired ×44 a second earlier. An empty list is survivable; an empty list with a
+confident wrong explanation is what makes people stop reading the surface built to answer this.
 
 It is also the integration list. The calls recorded here are exactly what the real page has to answer,
 which is the closest thing motu has to confronting the lagoon with the page it targets.

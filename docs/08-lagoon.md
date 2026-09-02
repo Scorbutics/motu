@@ -115,15 +115,15 @@ A region module holds three kinds of thing, and only two of them are `RegionOver
 |---|---|---|---|
 | `seed` | data | a field | nothing — it is a value |
 | `channels` | the app's own SOURCE, over a port | a field | the source: its timeout, its generation guard, its error mapping |
-| the **wire fake** | a fake `fetch` under the app's real client | the module's **top level**, not a field | the source AND everything below it — the service, its URL building, its status handling, its error mapping |
+| `wire` | a fake `fetch` under the app's real client | a field, via `wireFrom({ to, … })` | the source AND everything below it — the service, its URL building, its status handling, its error mapping |
 
 ```tsx
 // roots/lagoon/src/regions/review.tsx — both, in one module
-const wire = createPostgrestFetch({ appRoutes: ['/api/baselines'], fixtures: [ … ] });
-installFakeFetch(wire, { appRoutes: ['/api/baselines'] });          // top level: patches globalThis.fetch
+const wire = wireFrom({ to: reviewArchipelago, appRoutes: ['/api/baselines'], fixtures: [ … ] });
 
 export const reviewRegion = overridesFor(reviewArchipelago, {
   seed: reviewSeed,
+  wire,
   channels: [channelFrom({ to: reviewArchipelago, id: 'shots', args: [shotsWirePort] })],
 });
 ```
@@ -133,10 +133,23 @@ swap runs the source and stops there, so the service beneath it never executes a
 because the swap is silent by construction. Reach for a **channel** when the region needs a key fed.
 A region commonly has both, as the one above does.
 
-The rule that has not changed is the one that matters: neither lives in the frame. The wire fake is at
-module scope precisely so it patches `globalThis.fetch` for **every** view, exactly as a channel is
-installed in every view — which is what lets the checks that drive the region see the same answers a
-human does. What fired stays legible either way: the lens shows a channel, and `data-reach` /
+The rule that has not changed is the one that matters: neither lives in the frame. Both are installed
+for **every** view — which is what lets the checks that drive the region see the same answers a human
+does.
+
+The wire used to be a bare `installFakeFetch(...)` at the module's top level rather than a field, and
+that cost three things, all of them now gone: `appRoutes` was written twice with nothing checking that
+the two agreed (`createPostgrestFetch` stamps its own claim, and the installer reads it); the fake was
+bound to no region, so nothing could compare the routes it answers against the `reaches` its sources
+declare; and the installer latched on a global boolean, so a SECOND region with a wire was a silent
+no-op — its routes went to the dev server, its islands rendered empty, and nothing said why. Fakes
+register now, and one patch asks each in turn.
+
+`installFakeFetch` is still exported and still works. One case genuinely needs it, or `armFakeFetch()`
+at the top of `lagoon.tsx`: a client that captures `globalThis.fetch` at IMPORT time
+(`createClient(url, key, { global: { fetch } })` evaluated at module scope) keeps whatever `fetch` was
+when its module ran, so a patch installed later is talked past. Hand such a client `wire.fetch`
+directly, or arm the patch before any application module is imported. What fired stays legible either way: the lens shows a channel, and `data-reach` /
 `provenance` show what went over the wire. Transports, fixtures and the fake's supported surface are
 [11 — Contract and backend](11-contract-and-backend.md).
 
@@ -172,6 +185,7 @@ regions (`:138-148`).
 |---|---|---|
 | `seed` | initial store contents, so bound islands render meaningfully (`:19`) | both views |
 | `channels` | inbound seams — host signals mirrored into the store, as the real composition roots do (`:21`) | **every** view |
+| `wire` | the fake `fetch` beneath the app's own client, built by `wireFrom({ to, … })` | **every** view |
 | `layout` | the region's ARRANGEMENT: the application's own layout component, called with islands in its slots (`:22-26`) | region view only |
 | `providers` | the environment the islands cannot render without (`:27-31`) | **every** view, per island |
 | `props` | per slot, the props the PAGE passes on the island element itself, for what is not region state (`:32-33`) | both views |
@@ -453,6 +467,22 @@ directory basename — the only name stable across machines and clones
 | `/<repo>/latest/<slug>` | the bookmark — follows every publish | `no-store` |
 | `/<repo>/<branch>/<slug>` | the PR link | `no-store` |
 | `/<repo>/<commit>/<slug>` | this build, immutable | one year |
+| `/<repo>/<ref>/<slug>/__motu_frame` | the page's own bytes, for the shell to frame | as its ref |
+
+**Every one of those serves a SHELL, and `__motu_frame` serves the artifact.** The shell is the rail,
+the topbar and the dock — so the lens is on the URL a person bookmarks. It lists every lagoon this
+viewer may see, with the one they opened selected, and each entry points at its own address rather
+than an index into a list, so nothing has to agree with anything.
+
+That replaced GROUPS. A group was a curated member list under `/g/<name>`, plus an immutable manifest
+under `/m/<id>` to pin one — and it existed because the canonical lagoon URL served bare bytes, so
+composing a group was the only way to get a rail, a dock or a lens at all. `b1719dd` had already
+written down that "a group was never a thing to browse; it is a way of LOOKING at lagoons" and built
+the half that mattered (an explicit per-lagoon `frameHref`), but never gave the canonical URL its
+shell — so groups outlived the decision to remove them by months, listed on the host's own root index
+while the motu-built index region had already dropped them. `/g/`, `/m/`, `/api/group`, `/api/groups`
+and the manifest store are gone; every lagoon has the rail now, and an immutable address of its own
+was always the honest way to pin one.
 
 Templates at `packages/host/src/server.mjs:655-659`; cache headers at `:147-148`, decided by
 `rec.mutable` which `resolveRef` sets true only for alias hits (`packages/host/src/store.mjs:188-202`).
@@ -471,8 +501,8 @@ Two caps per repository, whichever binds first: `--max-records` (default **1000*
 exists because records are not a proxy for size — a typical lagoon is ~430 kB, but Twenty's record page
 inlines its whole front-end and publishes at 19.2 MB.
 
-Eviction never touches a record a mutable alias points at, or one a composed manifest names
-(`packages/host/src/store.mjs:230-235`), and orders by **last access** rather than publish date: a
+Eviction never touches a record a mutable alias points at (`packages/host/src/store.mjs:230-235`), and
+orders by **last access** rather than publish date: a
 six-week-old lagoon somebody bookmarked outranks ten builds from this morning (`:238`, `:210-215`).
 Blobs are collected only once nothing references them, and two records sharing content are charged
 once (`:258-260`, `:264-290`). A swept object answers **410**, not a blank page
@@ -598,9 +628,19 @@ sampled and hoped for (`packages/cli/src/playwright-lagoon.mjs:882-884`, `:1035-
 
 ## The lens
 
-**Ctrl/Cmd-Shift-G** — matched against `KeyboardEvent.code`, default `KeyG`, overridable with
-`shortcutCode` (`packages/debug-overlay/src/overlay.ts:74-75`, `:168`, `:197`). It is read-only
-throughout: it observes the mount registry, the shared stores, the island definitions and the
+**Ctrl/Cmd-K, then the `Seams` tab.** The lens is a tab of the DOCK, and the dock is drawn by whoever
+HOSTS the lagoon (`@motu/chrome/dock`, mounted by `motu lagoon serve` / `lagoon dev`, and by the motu
+host in the shell it wraps every lagoon in). So it is on the gallery and on any hosted lagoon URL, and
+it is NOT on the focused standalone entry `motu island verify` drives, nor on `/__motu_frame`, which is
+the artifact by itself. Its own keycap says which chord: `⌘K` / `Ctrl K`
+(`packages/chrome/src/dock.mjs:1090`).
+
+**Ctrl/Cmd-Shift-G is the other one** — `mountDebugOverlay`, the standalone debug overlay, matched
+against `KeyboardEvent.code`, default `KeyG`, overridable with `shortcutCode`
+(`packages/debug-overlay/src/overlay.ts:74-75`, `:168`, `:197`). The gallery does not mount it, so the
+chord does nothing there; reaching for it on a page that has the dock is the usual way to conclude the
+lens is broken. Both surfaces read the same data (`currentSheet`, `currentSeams`) and both are
+read-only: it observes the mount registry, the shared stores, the island definitions and the
 transport call log, and never writes a store, fires a channel or forces a render
 (`packages/debug-overlay/src/overlay.ts:13-14`).
 

@@ -11,6 +11,7 @@
 // specific statement about that region.
 import { channelRegionId } from '@motu/core';
 import type { AnyArchipelagoConfig, DeclaredChannel, RegionOf, SlotsOf } from '@motu/core';
+import type { DeclaredWire } from './lagoon-wire';
 import type { ReactNode } from 'react';
 
 /** Everything the lagoon can be told about ONE region. */
@@ -19,6 +20,15 @@ export interface RegionOverrides {
   seed?: Record<string, unknown>;
   /** Inbound seams: host signals mirrored into the store, as the real composition roots do. */
   channels?: DeclaredChannel[];
+  /**
+   * The region's WIRE: a fake `fetch` answering HTTP BENEATH the application's own client, so the
+   * app's service, its URL building, its status handling and its error mapping all run for real.
+   *
+   * A field, like `channels`, and for the same reasons — see `wireFrom`. It used to be a bare
+   * `installFakeFetch(...)` at the region module's top level, which bound the fake to no region,
+   * duplicated its route list, and silently ignored every wire after the first.
+   */
+  wire?: DeclaredWire;
   /**
    * The region's ARRANGEMENT — the APPLICATION's own layout component, called with islands in its
    * slots. Rendered by the region view only.
@@ -57,7 +67,7 @@ export interface RegionOverrides {
 }
 
 /** The fields of a region override, so a reader cannot forget one the writer supplied. */
-const REGION_FIELDS = ['seed', 'channels', 'layout', 'providers', 'props', 'hostProps'] as const;
+const REGION_FIELDS = ['seed', 'channels', 'wire', 'layout', 'providers', 'props', 'hostProps'] as const;
 
 /** The kind-first maps, one per field of `RegionOverrides`. */
 type KindFirst = {
@@ -99,6 +109,12 @@ export function regionOverrides(maps: RegionOverrideMaps | undefined, id: string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- keyed write over a union of field types
     if (value !== undefined) (merged as any)[field] = value;
   }
+  // INSTALLED HERE, in the one reader both entries share, for the reason in this function's own doc
+  // comment: the gallery and the focused entry have twice shipped a bug where one honoured a field the
+  // other dropped, and a wire that is installed in only one of them is the same bug with a worse
+  // symptom — the checks drive the focused entry, so the lane a human looks at would be the only one
+  // answering HTTP. Idempotent per fake, so being called on every resolve costs nothing.
+  merged.wire?.install();
   return merged;
 }
 
@@ -153,6 +169,8 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
           Record<string, unknown>);
     /** Inbound seams. Each must have been built against THIS archipelago. */
     channels?: readonly DeclaredChannel<A['id']>[];
+    /** The wire fake beneath the app's own client. Must have been built against THIS archipelago. */
+    wire?: DeclaredWire<A['id']>;
   },
 ): BoundRegionOverrides {
   for (const channel of spec.channels ?? []) {
@@ -166,8 +184,18 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
       );
     }
   }
+  // Same refusal as a channel's, and it matters more here: a wire filed under the wrong region patches
+  // `globalThis.fetch` for a page whose islands ask none of the questions it answers, so the region it
+  // WAS written for goes unanswered while the one it landed in looks stubbed.
+  if (spec.wire && spec.wire.regionId !== to.id) {
+    throw new Error(
+      `motu: a wire built for region "${spec.wire.regionId}" is declared in the overrides for "${to.id}". ` +
+        `File it under "${spec.wire.regionId}", or point its \`wireFrom({ to })\` at this archipelago.`,
+    );
+  }
   return {
     regionId: to.id,
+    wire: spec.wire,
     seed: spec.seed as RegionOverrides['seed'],
     layout: spec.layout as RegionOverrides['layout'],
     providers: spec.providers as RegionOverrides['providers'],

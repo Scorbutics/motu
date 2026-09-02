@@ -1,7 +1,7 @@
 // Stripped in production: the debug overlay's instrumentation is gated on this build-time constant,
 // so the whole block below dead-code-eliminates when it is false (and is safely `undefined` under
 // bare Node/tsc, where the typeof guard evaluates to false rather than throwing).
-import { runWithIsland as coreRunWithIsland, ambientIsland } from '@motu/core';
+import { runWithIsland as coreRunWithIsland, ambientIsland, recordOutbound } from '@motu/core';
 
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
@@ -106,6 +106,10 @@ export function call<T>(service: string, method: string, args: unknown[]): Promi
   const id = ++callSeq;
   const island = currentIsland();
   const t0 = performance.now();
+  // THE THIRD DOOR, in the same ledger as the other two. A contract call was observable only through
+  // `observeCalls` — the debug overlay — so no check ever printed it, and a region whose islands talk
+  // exclusively through the contract read as one that fetched nothing.
+  recordOutbound('contract', `${service}.${method}`, args.map((a) => (typeof a === 'object' && a !== null ? '…' : String(a))).join(', '));
   emitCall({ id, service, method, args, island, phase: 'start' });
   return current.call<T>(service, method, args).then(
     (result) => {

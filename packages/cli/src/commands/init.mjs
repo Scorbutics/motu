@@ -124,6 +124,37 @@ function relPosix(from, to) {
   return r === '' ? '.' : r.startsWith('.') ? r : './' + r;
 }
 
+/**
+ * Say when the app's OWN package.json was kept and the `@motu/*` block therefore never landed.
+ *
+ * `writeNew` is non-destructive per file, which is right — but it made the one file EVERY real
+ * adoption already has, `package.json`, silently skip the dependency block with it. The scaffold is
+ * written for a greenfield project; an existing app is the normal case, and there the block is not
+ * "kept", it is ABSENT. Measured on a cold adoption of a Next monorepo: no `@motu/adapter-next`
+ * anywhere, `nextHostBridge` unresolvable, and `init` printed a green success line.
+ *
+ * A notice rather than a merge: editing an application's package.json is the host's call, and a
+ * printed block a human can paste is honest about which side owns the file.
+ */
+function keptPackageJsonNotice(appRoot, skipped, motuDependencies) {
+  if (!motuDependencies) return;
+  const pkgPath = resolve(appRoot, 'package.json');
+  if (!skipped.includes(pkgPath)) return;
+  let already = false;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    already = Object.keys(pkg.dependencies ?? {}).some((d) => d.startsWith('@motu/'));
+  } catch {}
+  if (already) return;
+  console.log(color.yellow('  ! package.json was kept, so the @motu/* dependencies were NOT added.'));
+  console.log(color.dim('    The lagoon and tsconfig resolve @motu/* without them, and the CLI links'));
+  console.log(color.dim("    node_modules/@motu/* on every run — so this is not fatal. It matters when the"));
+  console.log(color.dim('    HOST bundler resolves them (a host adapter import). Add to its "dependencies":'));
+  console.log('');
+  for (const line of motuDependencies.split('\n').slice(1, -2)) console.log(color.dim('    ' + line.trim()));
+  console.log('');
+}
+
 function writeNew(path, contents, created, skipped) {
   if (existsSync(path)) {
     skipped.push(path);
@@ -345,6 +376,7 @@ export async function initCommand(argv) {
   for (const p of skipped) console.log('  ' + color.dim(relPosix(root, p).replace(/^\.\//, '')) + color.yellow(' (kept)'));
   for (const p of rules) console.log('  ' + color.dim(p) + color.dim(' (motu rules block)'));
   console.log('');
+  keptPackageJsonNotice(appRoot, skipped, motuDependencies);
   if (!LEGACY_FIT_HOSTS.has(host)) {
     console.log(color.dim('  legacy fit is off for this host — islands mount directly, there is no legacy skin to fit.'));
   }

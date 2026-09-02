@@ -313,6 +313,23 @@ markSandbox();
   // milliseconds. This lets the harness say "now show me x-week-nav, with a failing backend", and the
   // page re-renders in place. It is the same seam the lagoon's own switcher uses; the checks are just
   // another visitor.
+  // THE VIEW COMES FROM THE URL WHEN THE ENTRY DID NOT SAY, exactly as the target already does.
+  //
+  // `?view=mountpoints` is how every check that drives a REGION opens the page — one framed cell per
+  // declared slot, so a slot the app's own arrangement would hide still mounts. The scaffolded entry
+  // reads the param and passes it; a hand-written one predating that did not, and there was nothing to
+  // notice: the region rendered its own layout, no `[data-motu-slot]` cell existed, and every flow step
+  // failed with "the region rendered nothing after this step" — which is a true sentence about a page
+  // that was never asked for the right view. Defaulted at BOOT and not inside `render`, because the
+  // harness re-aims the same page and must be able to state what IT wants (see `render`).
+  opts = {
+    ...opts,
+    view:
+      opts.view ??
+      (typeof location !== 'undefined' && new URLSearchParams(location.search).get('view') === 'mountpoints'
+        ? 'mountpoints'
+        : undefined),
+  };
   installHarness(opts, host);
   // WHAT THIS PAGE CAN BE OPENED IN, published before it is opened in anything — the list is most
   // needed by whoever just got a name wrong, which is exactly when the mount may not have happened.
@@ -467,6 +484,9 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
     host,
     seed: seed ?? { criteria: {} },
     channels,
+    // The checks that drive a region open `?view=mountpoints`; the React branch above has always
+    // honoured it and this one dropped it.
+    view: opts.view,
   });
 
   document.getElementById(opts.mountId ?? 'lagoon')?.appendChild(el);

@@ -579,6 +579,21 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .seam-row[data-tone="warn"] .seam-row__dot { background: var(--motu-caution, #b45309); }
 #tide .seam-row[data-tone="ok"] .seam-row__dot { background: var(--tide-accent); }
 #tide .seam-row__l { font-weight: 700; color: var(--ink); }
+/* WHICH DOOR an ask left by, as a chip in front of the name — the three seams read as one list only
+   if each row says which one it belongs to. Muted on purpose: the name is what is being read. */
+#tide .seam-door {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  background: #fff;
+}
 #tide .seam-row__d, #tide .seam-row__r { color: var(--ink-muted); }
 
 #tide .seam-tally { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
@@ -1520,18 +1535,34 @@ function motuMountDock(opts) {
           ]);
         }), 'No channels installed.');
 
-        var asked = seamData.calls.concat(seamData.traced);
+        // ALL THREE DOORS IN ONE BLOCK. `asked` is the merged ledger — a contract call, a traced host
+        // module, a wire reach — each row carrying which door it left by and WHO asked. `calls`/`traced`
+        // is the two-door fallback for an overlay built before the ledger existed.
+        var asked = seamData.asked ||
+          (seamData.calls || []).concat(seamData.traced || []).map(function (c) {
+            return { via: 'host-module', label: c.label, detail: c.detail, owner: c.island, tone: 'ok' };
+          });
         listSection('Asked for', asked.length, asked.map(function (c) {
-          return el('div', { class: 'seam-row', 'data-tone': 'ok', title: c.label + '(' + c.detail + ')' }, [
+          return el('div', {
+            class: 'seam-row',
+            'data-tone': c.tone || 'ok',
+            title: c.via + ' \u00b7 ' + c.label + (c.detail ? '(' + c.detail + ')' : '') + '\n' + c.owner,
+          }, [
             el('i', { class: 'seam-row__dot' }),
-            el('span', { class: 'seam-row__l' }, [c.label]),
-            el('span', { class: 'seam-row__d' }, [c.detail]),
-            el('span', { class: 'seam-row__r' }, [c.island]),
+            // WHICH DOOR, on the row. The three are answered by different things — a contract call by
+            // the transport, a wire reach by fixtures, a host call by a stub — so "what was asked for"
+            // is only half an answer without "and who would have to answer it".
+            el('span', { class: 'seam-row__l' }, [el('span', { class: 'seam-door' }, [c.via]), c.label]),
+            el('span', { class: 'seam-row__d' }, [c.detail || '']),
+            el('span', { class: 'seam-row__r' }, [c.owner]),
           ]);
         }),
-        // WHY it is empty matters. A region whose islands reach host modules directly never touches
-        // the transport, so this is empty by construction rather than because nothing happened.
-        'Nothing was asked for \u2014 everything on screen came from the seed.');
+        // WHY it is empty matters, and this sentence used to guess. It said everything came from the
+        // seed on a region whose source had fired forty-four times a second earlier — the calls were
+        // there, the panel had filtered out everything a source asked for. It now names the doors it
+        // actually looked at rather than explaining an emptiness it did not verify.
+        'Nothing was asked for through the contract, a traced host module or the wire. If the region '
+          + 'shows data anyway, it came from the seed or from a feed above.');
 
         listSection('Pushed back', seamData.intents.length, seamData.intents.map(function (i) {
           return el('div', { class: 'seam-row', 'data-tone': 'ok', title: i.label }, [

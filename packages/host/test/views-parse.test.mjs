@@ -14,9 +14,7 @@ const NOW = '2026-01-01T00:00:00.000Z';
 test('every page this host renders builds a document', async () => {
   const views = await import('../src/views.mjs');
 
-  const composed = views.composedPage({
-    id: 'm1',
-    group: 'product',
+  const composed = views.lagoonPage({
     members: [{ repo: 'owner/name', slug: 'all', sha: 'abc1234def', title: 'A lagoon', live: true }],
   });
   assert.ok(composed.startsWith('<!doctype html>'));

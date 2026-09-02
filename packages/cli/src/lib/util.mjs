@@ -460,11 +460,21 @@ export function ensureNoInstallLinks(root, motuRoot) {
   // that aliases `@motu/*` to source instead — the arrangement Next and Angular both want — resolves
   // from its own tree and gets an unresolved import from inside a package it never named.
   const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay', 'chrome', 'coverage'];
+  // The HOST ADAPTERS live one directory down (`packages/adapters/next` -> `@motu/adapter-next`) and
+  // were left out of this list, which made them the one part of the framework the no-install posture
+  // did not cover. Measured on a cold adoption of a real Next monorepo: `@motu/adapter-next` was
+  // neither linked here nor written into the app's package.json (see below), so `nextHostBridge` —
+  // the single Next-specific export a Next host is documented to need — resolved nowhere, and the
+  // agent worked around it by abandoning `useHost` entirely. Nothing reported a problem.
+  const wantedAdapters = ['angularjs', 'next'];
   let made = 0;
-  for (const name of wanted) {
+  for (const name of [...wanted, ...wantedAdapters.map((a) => `adapters/${a}`)]) {
     const target = resolve(motuRoot, 'packages', name);
     if (!existsSync(target)) continue;
-    const link = resolve(dir, name);
+    // `adapters/next` is published as `@motu/adapter-next`: link it under the name it is IMPORTED by,
+    // never its directory name, or the specifier resolves to nothing and the link looks fine on disk.
+    const linkName = name.startsWith('adapters/') ? `adapter-${name.slice('adapters/'.length)}` : name;
+    const link = resolve(dir, linkName);
     try {
       if (existsSync(link)) continue;
       mkdirSync(dir, { recursive: true });

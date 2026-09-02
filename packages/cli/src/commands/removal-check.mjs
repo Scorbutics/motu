@@ -218,8 +218,14 @@ const INFRA = /^react$|^react-dom|^next\//;
  *   2. It is TRANSITIVE. The dev page's only import is the composition root — no motu specifier at
  *      all — so deleting the root strands it. A file whose imports are all motu-only is motu-only.
  */
-function motuOnlySet(graph, hostRoot, motuDir) {
-  const insideMotu = new RegExp(`(^|/)${motuDir}/`);
+function motuOnlySet(graph, hostRoot, motuDirs) {
+  // One or several directories motu owns outright (see the caller: a single `motu/` tree when it has
+  // one, otherwise the declared islands/archipelagos/ui/shared/lagoon dirs).
+  const dirs = (Array.isArray(motuDirs) ? motuDirs : [motuDirs]).filter(Boolean);
+  const escape = (d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const insideMotu = dirs.length
+    ? new RegExp(`(^|/)(${dirs.map(escape).join('|')})/`)
+    : /^(?!)/; // nothing declared: match nothing rather than guess a path that does not exist
   const isMotuSpec = (spec) => !MOTU_TYPES_ONLY.test(spec) && (MOTU_SPECIFIER.test(spec) || insideMotu.test(spec));
   // Resolution over the TEXT graph: the same candidates the surgery will load, without paying a TS
   // parse for every file in the app to find out which ones matter.
@@ -289,8 +295,26 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   // project, always. That is the real reason removal-check kept reporting "scanned 0 files"; the
   // roots guess above it was fixed twice for a symptom this was causing.
   const graph = importGraph(hostRoot, cfg.motuRoot, cfg);
-  const motuDir = relative(hostRoot, cfg.root) || 'motu';
-  const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(graph, hostRoot, motuDir);
+  // WHEN MOTU HAS NO SUBDIRECTORY OF ITS OWN, do not invent one.
+  //
+  // `relative(hostRoot, cfg.root) || 'motu'` guessed a directory named `motu/` whenever motu was
+  // initialised INTO the host app root — which is exactly what `motu init . --host next` produces and
+  // therefore the common Next layout. No such directory exists there, so `insideMotu` matched nothing
+  // and every motu-generated file under `src/` read as application code. The visible symptom was a
+  // composition root reported as "imports the application" while the very imports it named were
+  // listed as motu-deletable two lines above in the same report.
+  //
+  // The declared directories are the answer and were available all along: `islands`, `archipelagos`,
+  // `ui`, `shared` and the lagoon root are motu's by definition, whether or not they sit under a
+  // shared parent.
+  const motuDir = relative(hostRoot, cfg.root);
+  const motuDirs = motuDir
+    ? [motuDir]
+    : [cfg.islands, cfg.archipelagos, cfg.ui, cfg.shared, cfg.lagoon]
+        .filter(Boolean)
+        .map((d) => relative(hostRoot, resolve(cfg.root, d)))
+        .filter((d) => d && !d.startsWith('..'));
+  const { set: motuOnly, isMotuSpec, resolveSpec } = motuOnlySet(graph, hostRoot, motuDirs);
 
   // WHY A COMPOSITION ROOT DID NOT QUALIFY, computed before anything is rewritten.
   //

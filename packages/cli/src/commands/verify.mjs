@@ -8,7 +8,7 @@
 //   runtime (lagoon):                 boots the focused lagoon and asserts the island renders a
 //           non-empty shadow DOM in both native and legacy fit. Default: a REAL browser (Playwright/
 //           Chromium) so layout/CSS/paint are exercised; `--fast` uses an in-process happy-dom mount.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, dirname, resolve } from 'node:path';
@@ -153,12 +153,12 @@ function staticChecks(report, componentPath, pascal) {
     if (id.getText() === 'fetch') {
       const call = id.getParentIfKind(SyntaxKind.CallExpression);
       if (call && call.getExpression() === id) {
-        report.error('no-bare-fetch', 'bare fetch() — all I/O must go through @motu/contract', line(id));
+        report.error('no-bare-fetch', 'bare fetch() in the island — I/O goes through the contract, or through a host module the island declares in `contract.effects`', line(id));
         sawFetch = true;
       }
     }
     if (id.getText() === 'XMLHttpRequest') {
-      report.error('no-bare-fetch', 'XMLHttpRequest — all I/O must go through @motu/contract', line(id));
+      report.error('no-bare-fetch', 'XMLHttpRequest in the island — I/O goes through the contract, or through a host module the island declares in `contract.effects`', line(id));
       sawFetch = true;
     }
   }
@@ -1145,17 +1145,37 @@ function reportDifferentiation(report, r) {
  * the first line of vite's output that names a problem — when that line exists, something in the
  * project is broken and this is a finding, whatever the headline says.
  */
+/*
+ * RESOURCE EXHAUSTION BELONGS HERE, and its absence was measured rather than guessed. On a machine
+ * running several agents at once, Vite's dev server died with
+ * `ENOSPC: System limit for number of file watchers reached` — the box was out of inotify watches,
+ * nothing to do with the island — and `island verify --runtime` reported it as exit 1, FAIL. That is
+ * precisely the outcome the three-code design exists to prevent: an unattended agent reads `✗` and
+ * repairs a bug that does not exist. Two arms of one bench run hit it.
+ *
+ * ENOSPC is listed with its siblings (EMFILE/ENFILE — descriptors, ENOMEM — memory) because they are
+ * the same class: the machine ran out of something, and no edit to the project changes that.
+ */
 const ENVIRONMENTAL =
-  /did not open port .* in time|Executable doesn't exist|playwright install|EADDRINUSE|ECONNREFUSED|ETIMEDOUT|Target page, context or browser has been closed|browserType\.launch/i;
+  /did not open port .* in time|Executable doesn't exist|playwright install|EADDRINUSE|ECONNREFUSED|ETIMEDOUT|Target page, context or browser has been closed|browserType\.launch|ENOSPC|System limit for number of file watchers|EMFILE|ENFILE|ENOMEM|JavaScript heap out of memory/i;
 
 function environmentalCause(err) {
   const full = String(err?.message || err);
   if (!ENVIRONMENTAL.test(full)) return null;
   // An application cause anywhere in the output disqualifies it: the port never opened BECAUSE the
   // project does not build, and that is a finding.
+  // …but the environmental line itself is not an application cause, and it usually LOOKS like one:
+  // node prints `Error: ENOSPC: System limit for number of file watchers reached`, which matches the
+  // `^Error` disqualifier and sent the whole classification back to FAIL. Skip any line that is
+  // itself a known environmental signature before deciding the project is at fault.
   const appCause = full
     .split('\n')
-    .find((l) => /^(Error|\s*failed to|.*ERR_[A-Z_]+|.*Cannot find)/.test(l) && !l.includes('did not open port'));
+    .find(
+      (l) =>
+        /^(Error|\s*failed to|.*ERR_[A-Z_]+|.*Cannot find)/.test(l) &&
+        !l.includes('did not open port') &&
+        !ENVIRONMENTAL.test(l),
+    );
   return appCause ? null : full.split('\n')[0];
 }
 
@@ -1256,6 +1276,50 @@ function extractCoupling(elementPath) {
  * element.ts) and hand its verify contribution the STRUCTURED coupling we extract by AST — the CLI owns
  * the parsing (it has ts-morph), the adapter owns the semantics.
  */
+/**
+ * Every APPLICATION file an island's component can reach, breadth-first from the component.
+ *
+ * A host boundary is a property of the BUNDLE, not of one file, and judging it from the island's own
+ * source alone is how `rsc-boundary` came to print `✓` over a component that could not be built. The
+ * real case, measured on a cold adoption: `LoginForm` -> `SSOOptions` -> `SamlButton` -> a
+ * `'use server'` action -> the SAML lib -> `import 'server-only'`. Five hops, all of them ordinary
+ * application code, and the only symptom was an opaque rollup error at bundle time.
+ *
+ * Bounded on purpose — package specifiers are not followed (they are not the host's own split, and
+ * following them means walking node_modules), and the file count is capped so a check that runs on
+ * every island stays cheap. The cap being HIT is itself reported, because a check that quietly
+ * examined less than the whole graph is the failure this function exists to fix.
+ */
+function reachableAppSources(entry, limit = 400) {
+  const seen = new Set();
+  const out = [];
+  const queue = [entry];
+  let truncated = false;
+  while (queue.length) {
+    const file = queue.shift();
+    const found = ['', '.tsx', '.ts', '/index.tsx', '/index.ts'].map((e) => file + e).find((c) => existsSync(c) && statSync(c).isFile());
+    if (!found || seen.has(found)) continue;
+    seen.add(found);
+    if (out.length >= limit) {
+      truncated = true;
+      break;
+    }
+    let src;
+    try {
+      src = readFileSync(found, 'utf8');
+    } catch {
+      continue;
+    }
+    if (found !== entry) out.push({ file: paths.rel(found), source: src });
+    for (const m of blankComments(src).matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
+      const next = resolveAppImport(found, m[1]);
+      if (next) queue.push(next);
+    }
+  }
+  if (truncated) out.push({ file: '(truncated)', source: '', truncated: true });
+  return out;
+}
+
 async function adapterChecks(report, kebab, componentPath) {
   const elementPath = paths.elementFile(kebab);
   if (!existsSync(elementPath)) return;
@@ -1271,9 +1335,10 @@ async function adapterChecks(report, kebab, componentPath) {
   // Hand over the component source too: some host boundaries (Next's server/client split) live in the
   // component, not in the mount point. The CLI reads; the adapter judges.
   const source = componentPath && existsSync(componentPath) ? readFileSync(componentPath, 'utf8') : undefined;
+  const graph = componentPath ? reachableAppSources(componentPath) : [];
   try {
     const mod = await import(specifier);
-    for (const f of mod.checkCoupling({ coupling, source, elementSource: text })) report[f.level](f.check, f.msg);
+    for (const f of mod.checkCoupling({ coupling, source, elementSource: text, graph })) report[f.level](f.check, f.msg);
   } catch (err) {
     // INCONCLUSIVE, NOT A WARNING. A warning does not affect the exit code, so an adapter that failed
     // to load meant its checks silently did not run and the island still reported PASS — the exact
@@ -1651,33 +1716,75 @@ async function responsiveCheck(report, tag, kebab, port) {
 
 
 /**
- * WHERE THE REGION'S INPUT CAME FROM.
+ * WHERE THE REGION'S INPUT CAME FROM — through every door, in one list.
  *
- * The lagoon replaces host modules so completely that nothing shows a fetch happened — no request, no
+ * The lagoon replaces host modules so completely that nothing shows a fetch happened: no request, no
  * network row, and the lens shows only the keys that resulted. Looking at a region and seeing no HTTP
  * at all is accurate and tells you nothing about whether an island asked for anything.
  *
- * A stub opts in by wrapping its exports in `traced`, and then this says what was called. Two things
- * become visible that nothing else here can see: an island that renders content while calling NOTHING
- * (its data came from somewhere it did not declare), and a module the island imports but never reaches
- * (the `effects` declaration is stale, or the stub stands in for something unused).
+ * An island's I/O leaves by one of THREE doors, and "all island I/O goes through the contract" is a
+ * rule about an island's own file (`no-bare-fetch` reads the component, not its import graph) rather
+ * than about the app: a service the island imports may read a table, and `contract.effects` has
+ * `{ table }`/`{ rpc }`/`{ route }` kinds precisely so that can be DECLARED. Each door used to be
+ * observed on its own — a traced stub here, `__motuDataReach` at the wire, and the contract's own
+ * `CallEvent`, which no check ever printed. One question, so one readout:
+ *
+ *   ✓ provenance  contract: shots.list() ×2 · host-module: fetchClubFeed(11) ×4 · wire: table:shots(select)
+ *
+ * Two things stay visible that nothing else here can see, and now for all three doors: an island that
+ * renders content while asking for NOTHING (its data came from somewhere it did not declare), and a
+ * dependency it declares but never reaches.
  */
-function provenanceCheck(report, id, region, calls) {
-  if (!calls.length) {
+function provenanceCheck(report, id, region, calls, outbound = []) {
+  // The unified ledger when the page carries one; the traced-calls list is the fallback for a lagoon
+  // built before it existed, so an older bundle still reports what it always did.
+  // `args ? name(args) : name` — a wire reach's declared form (`table:shots(select)`) has no argument
+  // half, and appending `()` to it would print an operation as an empty call.
+  const label = (o) => (o.args ? `${o.name}(${o.args})` : o.name);
+  const asks = outbound.length
+    ? outbound.map((o) => ({ via: o.via, label: label(o), owner: o.owner }))
+    : calls.map((c) => ({ via: 'host-module', label: `${c.fn}(${(c.args ?? []).join(', ')})`, owner: `island:${c.island ?? '?'}` }));
+  if (!asks.length) {
     report.skip(
       'provenance',
-      'no traced host calls — wrap a stub export in `traced(module, fn, impl)` to see what the islands ' +
-        'actually fetched; without it the lagoon shows the result and never the question',
+      'no outbound calls observed — the islands asked for nothing through the contract, a traced host ' +
+        'module or the wire. If that is wrong, wrap a stub export in `traced(module, fn, impl)`; ' +
+        'without it the lagoon shows the result and never the question',
     );
     return;
   }
-  const byFn = new Map();
-  for (const c of calls) {
-    const key = `${c.fn}(${(c.args ?? []).join(', ')})`;
-    byFn.set(key, (byFn.get(key) ?? 0) + 1);
+  // GROUPED BY DOOR, THE SAME GROUPING THE LENS SHOWS. Which one an ask left by is the thing a reader
+  // is deciding about — a contract call is answered by the transport, a wire reach by fixtures, a
+  // host-module call by a stub — and the two surfaces disagreeing about how the seams are grouped is
+  // how one of them ends up trusted and the other ignored.
+  const order = ['contract', 'host-module', 'wire'];
+  const groups = new Map();
+  for (const a of asks) {
+    const counts = groups.get(a.via) ?? new Map();
+    counts.set(a.label, (counts.get(a.label) ?? 0) + 1);
+    groups.set(a.via, counts);
   }
-  const shown = [...byFn].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k));
-  report.ok('provenance', `islands fetched: ${shown.join(', ')}`, { n: calls.length, of: 'host call(s)' });
+  const parts = [...groups]
+    .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+    .map(([via, counts]) => {
+      const shown = [...counts].map(([k, n]) => (n > 1 ? `${k} \u00d7${n}` : k));
+      return `${via}: ${shown.join(', ')}`;
+    });
+  // WHO ASKED, named — because "nobody asked for anything" was printed for months over a region whose
+  // SOURCE was asking constantly, and an owner list is what makes that impossible to print again.
+  const owners = [...new Set(asks.map((a) => a.owner))].sort();
+  const unowned = asks.filter((a) => a.owner === 'unattributed').length;
+  const by = owners.length ? ` \u2014 by ${owners.join(', ')}` : '';
+  // ASKED FOR, not "islands fetched": a source asks too, at region level, and calling every ask an
+  // island's is the same blind spot that dropped them from the lens.
+  report.ok('provenance', `asked for: ${parts.join(' \u00b7 ')}${by}`, { n: asks.length, of: 'outbound call(s)' });
+  if (unowned) {
+    report.warn(
+      'provenance',
+      `${unowned} ask(s) attributed to nobody — the request left while no island's and no source's ` +
+        `window was open, so nothing can say which declaration should account for it`,
+    );
+  }
 }
 
 /**
@@ -2055,7 +2162,7 @@ async function regionFlowCheck(report, id, port, region) {
     reportMutants(report, run.flows ?? [], mutation);
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
-    provenanceCheck(report, id, region, run.provenance ?? []);
+    provenanceCheck(report, id, region, run.provenance ?? [], run.outbound ?? []);
     sourcesLiveCheck(report, id, run.channels, region, run.held ?? []);
     emittedLiveCheck(report, id, run.renderOutputs);
   } catch (err) {
@@ -2242,15 +2349,53 @@ function frameModuleFor(id) {
     // it — matched nothing, no frame was found, and `region-root` reported a frame-composed region
     // as having no frame at all. That is an ERROR telling a correct stage-1 project to declare a
     // `root` it does not need, produced by the formatting of a file nobody thought was load-bearing.
+    /**
+     * The region's entry is an OBJECT (`{ seed, layout, providers }`), not a bare identifier.
+     *
+     * This is the shape the scaffolded `lagoon.tsx` recommends in its own commented-out example and
+     * the one CLAUDE.md documents — and it used to leave `module: null`, which `frameIsPageCheck`
+     * reads as "no frame" and reports as `no root`. Two independent cold-start agents, on two
+     * different applications, lost their longest debugging stretch of the run to that message, and
+     * both found the cause only by reading this file. The error named the archipelago; the problem
+     * was a regex that could not see past a `{`.
+     *
+     * So look INSIDE the entry for `layout`, and distinguish the two ways it can be written: a
+     * component identifier (resolvable to a module, so the frame checks below can run) or an inline
+     * arrow (nothing to open — declared, but not inspectable).
+     */
+    const layoutInEntry = (text, at) => {
+      const open = text.indexOf('{', at);
+      if (open < 0) return null;
+      let depth = 0;
+      let end = open;
+      for (; end < text.length; end++) {
+        if (text[end] === '{') depth++;
+        else if (text[end] === '}' && --depth === 0) break;
+      }
+      const entry = text.slice(open, end + 1);
+      const ident = entry.match(/\blayout\s*:\s*([A-Za-z_$][\w$]*)\s*[,}]/);
+      if (ident) return { module: moduleOf(ident[1]), declared: true };
+      if (/\blayout\s*:/.test(entry)) return { module: null, declared: true, inline: true };
+      return { module: null, declared: true };
+    };
+
     const kindFirst = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\s*\};/);
     const inKindFirst = kindFirst && kindFirst[1].match(named);
-    if (inKindFirst) return { module: inKindFirst[2] ? moduleOf(inKindFirst[2]) : null, declared: true };
+    if (inKindFirst) {
+      if (inKindFirst[2]) return { module: moduleOf(inKindFirst[2]), declared: true };
+      // Kind-first holds the layout VALUE directly, so anything that is not an identifier here — an
+      // arrow, a JSX expression — is an inline layout, not a missing one.
+      return { module: null, declared: true, inline: true };
+    }
 
     const asRecord = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\s*\};/);
     if (asRecord) {
       const entry = asRecord[1].match(named);
       if (!entry) continue;
-      return { module: entry[2] ? moduleOf(entry[2]) : null, declared: true };
+      if (entry[2]) return { module: moduleOf(entry[2]), declared: true };
+      const inside = layoutInEntry(asRecord[1], entry.index);
+      if (inside) return inside;
+      return { module: null, declared: true };
     }
 
     const asArray = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\s*\];/);
@@ -2473,7 +2618,21 @@ function frameIsPageCheck(report, id, region) {
     return;
   }
 
-  const { module } = frameModuleFor(id);
+  const { module, inline } = frameModuleFor(id);
+  // AN INLINE `layout` IS AN ARRANGEMENT, NOT A MISSING ONE. It renders — both cold-start agents
+  // confirmed the region painted correctly from one — so the only thing lost is this file's ability
+  // to OPEN the frame and run the checks below (what it draws itself, which slots it places). Say
+  // that, and say the one-line fix, instead of demanding a `root` the region may not need yet.
+  if (!module && inline) {
+    report.warn(
+      'region-root',
+      `\`layout\` for this region is written inline in the lagoon overrides, so the frame checks ` +
+        `cannot read it — what it draws itself and which slots it places are unchecked. Move it to a ` +
+        `named export beside the region (\`export const ${id.replace(/[^\w$]/g, '')}Frame = (island) => …\`) ` +
+        `and reference it by name. The region still composes; this is the frame, not the archipelago`,
+    );
+    return;
+  }
   if (!module) {
     // A REGION WITH NO ISLANDS HAS NOTHING TO COMPOSE YET. `archipelago create` scaffolds exactly
     // that, so demanding a root here would open a new project's first `motu check` on an error about
@@ -2764,7 +2923,12 @@ function archipelagoConfigChecks(report, id) {
         'ownership',
         `"${key}" is written by ${elements.length} different islands (${writers.map((w) => `${w.slot} → ${w.element}`).join(', ')}) — ` +
           `a key has ONE producer. If both really write it, the producer is something they SHARE (their ` +
-          `container, the page) and that is what should declare it; if not, one of them is reading, not writing`,
+          `container, the page) and that is what should declare it; if not, one of them is reading, not writing.\n` +
+          `    OPEN/CLOSE is the common shape here — one island opens a dialog and the dialog closes ` +
+          `itself. That is not two producers: the OWNER is whichever island the other sits inside, via ` +
+          `nested \`slots\`, and it keeps the key. Where the dialog cannot be nested, the host may put ` +
+          `the key back with \`seed(...)\` — that is sanctioned for a produced key (it re-establishes a ` +
+          `starting value), unlike \`provide()\`, which the region type refuses for exactly this key`,
       );
     }
 
@@ -3389,7 +3553,17 @@ export async function runArchipelagoVerify(argv, id) {
     // One call, both questions: do the flows hold, and could they have failed.
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);
     if (!hasLayout) {
-      report.warn('lagoon-render', 'no layout — islands are placed individually across the host, not as a region; region render skipped');
+      // NAME WHERE THE ARRANGEMENT WAS LOOKED FOR. The old wording ("islands are placed individually
+      // across the host") describes the PAGE, and was read as a claim about the lagoon frame — so an
+      // author who had just written a `layout` saw motu deny it and had no idea which of the three
+      // places it looks at came up empty.
+      report.warn(
+        'lagoon-render',
+        'no arrangement for this region, so the composed render was skipped. Looked for: `root:` or ' +
+          `\`layout:\` on ${paths.rel(paths.archipelagoFile(id))}, and a \`layout\` for '${id}' in the ` +
+          'lagoon overrides (`regions` or the kind-first `layout` map). Without one the islands are ' +
+          'only ever placed individually by the host, and the arrangement is not checked anywhere',
+      );
     } else {
       const port = 5300 + Math.floor(Math.random() * 400);
       try {

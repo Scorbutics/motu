@@ -34,19 +34,53 @@ export interface Transport {
 
 `packages/runtime/src/index.ts:13-15`.
 
-**The rule: all island I/O goes through the contract.** The failure it prevents is an island that
+**The rule: an island's own file does no I/O of its own.** The failure it prevents is an island that
 cannot be mounted anywhere but production. `motu island verify` enforces it as three separate check
 ids:
 
 | check id | what it rejects | source |
 |---|---|---|
-| `no-bare-fetch` | `fetch(...)` and `XMLHttpRequest` in an island's component graph | `packages/cli/src/commands/verify.mjs:151-162` |
+| `no-bare-fetch` | `fetch(...)` and `XMLHttpRequest` in the island's component FILE | `packages/cli/src/commands/verify.mjs:151-162` |
 | `contract-only-io` | importing `axios`/`ky`/`superagent`/`node-fetch`/`got`, or importing `configure` / `HttpTransport` / `MockTransport` from `@motu/runtime` | `packages/cli/src/commands/verify.mjs:190-206` |
 | `contract-only-io` (second half) | calling a `service.method` that does not exist in the generated contract | `packages/cli/src/commands/verify.mjs:222-240`, resolved against `paths.contract` by `contractPairs()` at `verify.mjs:517-523` |
 
 Note what `contract-only-io` bans: an island may not import `configure` or a transport class *at
 all*. The transport is not the island's business, and the check makes that structural rather than
 cultural.
+
+**Read the rule as narrowly as the checks state it.** It used to say "all island I/O goes through the
+contract", and that claimed more than motu enforces or wants. `no-bare-fetch` reads ONE FILE —
+`sourceFileAt(componentPath)` at `verify.mjs:145`, the island's component, not its import graph — so an
+island that imports `@/lib/services/shots` and calls it passes clean, and that service's PostgREST read
+never goes near `call()`. That is not a hole the checks failed to close. `Effect`
+(`packages/types/src/index.ts:62-65`) has `{ table }`, `{ rpc }`, `{ fn }` and `{ route }` as
+first-class kinds, so `contract.effects` is the field where an island DECLARES the I/O that leaves by
+another door — two paths, both declared, in one list.
+
+Why they are two and not one:
+
+> **The contract is the choke point for calls whose name the APP owns. The wire is the choke point for
+> calls whose name a CLIENT LIBRARY builds.**
+
+A contract call resolves `service.method` against `contracts.generated.ts` — the `java/` lineage, a
+server manifest codegen'd into named operations. PostgREST has no such name: the operation is a URL
+supabase-js assembles at call time from `.from('shots').select().eq(…)`. Routing that through `call()`
+would mean codegen'ing a contract entry per table × operation — rewriting the client as a transport —
+or not running the app's own client code at all, which is the thing the wire fake exists to stop doing.
+One design meeting two backend shapes, not two designs for one problem; the implementation has already
+folded as far as the addressing permits, since `createPostgrestFetch` IS a `MockTransport`
+(`postgrest-fetch.ts:412`) sharing `Fixture` with it.
+
+What did fold is the OBSERVATION. Three doors were three ledgers with two readouts between them —
+`hostCalls` (traced stub exports), `__motuDataReach` (the wire), and `CallEvent` (the contract, which
+no check ever printed). They answer one question, so each now also records to one ledger in
+`@motu/core` tagged with the door it left by (`recordOutbound`, `outboundCalls`), and `provenance`
+prints all three:
+
+    ✓ provenance  islands fetched: contract: shots.list() ×2 · wire: table:shots(select)  · 3 outbound call(s)
+
+`data-reach` still reads its own registry and compares against declarations — the readout merged, the
+declaration comparison did not.
 
 Because there is exactly one choke point, it is also the natural place to observe and to record. Both
 are `DEBUG`-gated and dead-code-eliminated in production
@@ -348,8 +382,11 @@ const fetch = createPostgrestFetch({
   appRoutes: ['/api/admin'],
 });
 createClient(url, key, { global: { fetch } });   // or createBrowserClient — same option
-installFakeFetch(fetch, { appRoutes: ['/api/admin'], baseUrl });
+installFakeFetch(fetch);                         // reads the fake's own appRoutes/baseUrl claim
 ```
+
+In a lagoon this is a `wire` field rather than these two calls — `wireFrom({ to, … })` binds the fake
+to its region and the lagoon installs it for every view. See [08 — The lagoon](08-lagoon.md).
 
 Every repository and service function then runs FOR REAL — in the lagoon, in a runtime check, under
 Playwright — answered by synthetic DATA instead of synthetic LOGIC. `tables[].rows` may be a function
@@ -366,8 +403,12 @@ outside that set is an **UNSCOPED REQUEST**, recorded and reported, never a sile
 not have it guess.
 
 `installFakeFetch` patches `globalThis.fetch` for what the database client never sees — a service
-calling `fetch('/api/…')` itself. It **delegates by default**, claiming only `baseUrl` and declared
-`appRoutes` and passing everything else to the original: intercepting every same-origin request would
+calling `fetch('/api/…')` itself. It takes the route claim off the fake (`createPostgrestFetch` stamps
+it), so the list is written once where it is implemented rather than twice with nothing checking that
+the copies agree. Fakes REGISTER rather than latch: a second one no longer finds the seam taken and
+silently does nothing, which is what a project's second region with a wire used to get. It
+**delegates by default**, claiming only `baseUrl` and declared `appRoutes` and passing everything else
+to the original: intercepting every same-origin request would
 swallow the dev server's own modules, HMR and source maps, "and a lagoon that cannot load its own
 bundle would be a far worse failure than an unanswered route" (`postgrest-fetch.ts:509-546`). It is
 idempotent, so a hot reload does not build a chain of patches.

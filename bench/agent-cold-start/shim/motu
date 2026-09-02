@@ -1,0 +1,27 @@
+#!/bin/sh
+# motu — BENCH SHIM. Logs one JSONL record per invocation, then execs the real CLI.
+#
+# Installed over ~/.local/bin/motu by install-shim.sh for the duration of a bench run, so that
+# EVERY motu invocation is captured no matter which agent, shell or working directory made it.
+# Self-reported command logs are not trustworthy for the numbers that matter here (failed-invocation
+# ratio, verbatim retries): an agent that retries the same argv twice rarely reports doing so.
+REAL="${MOTU_BENCH_REAL:-/home/scorbutics/dev/motu/packages/cli/src/cli.mjs}"
+TRACE="${MOTU_BENCH_TRACE:-/home/scorbutics/dev/motu-bench/runs/trace.jsonl}"
+
+start=$(date +%s.%N)
+node "$REAL" "$@"
+code=$?
+end=$(date +%s.%N)
+
+ARGV="$*" CWD="$PWD" CODE="$code" START="$start" END="$end" TRACE="$TRACE" node -e '
+  const fs = require("fs");
+  const rec = {
+    t: new Date().toISOString(),
+    cwd: process.env.CWD,
+    argv: process.env.ARGV,
+    exit: Number(process.env.CODE),
+    ms: Math.round((Number(process.env.END) - Number(process.env.START)) * 1000),
+  };
+  try { fs.appendFileSync(process.env.TRACE, JSON.stringify(rec) + "\n"); } catch {}
+' 2>/dev/null
+exit $code

@@ -98,8 +98,8 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    component — never a second JSX copy of the arrangement, which drifts for the same reason a second
    copy of the region's vocabulary does. `seed` is data. Anything that REACTS has one of TWO homes,
    and neither is the frame. A `channel` installs the application's own SOURCE over a port, which is
-   what answers an island's intent. The WIRE FAKE — `createPostgrestFetch` + `installFakeFetch`, at
-   the region module's top level — answers HTTP BENEATH the app's real service, so the service itself
+   what answers an island's intent. The WIRE — `wireFrom({ to, appRoutes, tables, fixtures })`, a
+   `wire` field beside `channels` — answers HTTP BENEATH the app's real service, so the service itself
    runs instead of being replaced. Reach for the wire when the app's own client code is what you want
    exercised, and for a channel when the region needs a key fed; a region commonly has both. Both are
    installed for every view, which is the property that matters: the checks that drive the region see
@@ -126,10 +126,18 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
    false` — because being handed the default state while believing it is the one you named is the
    failure worth engineering against. Read `window.__motuLagoonState` before believing a screenshot.
- - The lens (Ctrl/Cmd-Shift-G in the lagoon) opens on the REGION SHEET: one row per key — who owns it,
-   who reads it, what it holds, whether it has moved, and a flag where a declared write has never fired
-   or the host answered an island. Read it before reading the archipelago; it is the same declaration,
-   proved by the region that is running.
+ - The lens is the DOCK's Seams tab — **Ctrl/Cmd-K**, then `Seams` — and it opens on the REGION SHEET:
+   one row per key, who owns it, who reads it, what it holds, whether it has moved, and a flag where a
+   declared write has never fired or the host answered an island. Read it before reading the
+   archipelago; it is the same declaration, proved by the region that is running. Below the sheet,
+   FEEDS is the channels and ASKED FOR is every outbound ask through all three doors — contract,
+   traced host module, wire — each row naming the door and the owner (`island:<tag>` / `source:<id>`).
+   WHERE IT EXISTS MATTERS: the dock is drawn by whoever HOSTS the lagoon — `motu lagoon serve` /
+   `lagoon dev`, or the motu host, which wraps every published lagoon in a shell — so the GALLERY and
+   any hosted lagoon URL have it, while the focused standalone entry (`lagoon.html`, what
+   `motu island verify` drives) does not, and neither does `/__motu_frame`, the artifact by itself.
+   Ctrl/Cmd-Shift-G is the OLD standalone debug overlay (`mountDebugOverlay`), which the gallery does
+   not mount; pressing it there does nothing.
  - `docs/plan-key-ownership.md` in the motu repo is the design record for ownership, eject and the
    verify checks; read it before changing how a region declares anything.
  - SHOW YOUR WORK on the shared lagoon host, don't stand up another server. `motu lagoon publish
@@ -491,15 +499,24 @@ The lagoon replaces a host module so completely that nothing shows a fetch happe
 network row, and the lens shows the KEYS that resulted, never the question that produced them. Looking
 at a region and seeing no HTTP at all is accurate and tells you nothing.
 
-Wrap a stub's exports in `traced(module, fn, impl)` and the region reports what the islands actually
-asked for:
+ONE LEDGER, THREE DOORS. An ask leaves by the CONTRACT (a `call()` the transport answers), by a
+TRACED HOST MODULE (a stub wrapping its exports in `traced(module, fn, impl)`), or by the WIRE (a fake
+`fetch` beneath the app's own client). All three record to `recordOutbound` in `@motu/core`, and both
+readers — `provenance` and the lens's ASKED FOR block — group by door and name who asked:
 
-    ✓ provenance  islands fetched: fetchClubCounters() ×4, fetchClubFeed(11) ×4  · 8 host call(s)
+    ✓ provenance  asked for: contract: shots.list() ×2 · wire: table:shots(select) — by island:shot-list, source:shots
 
 `contract.effects` says which host modules an island IMPORTS; this says which it CALLED, with what arguments,
 and how often. Two things become visible that nothing else catches: an island that renders content
 while calling NOTHING (its data came from somewhere it never declared), and a module it imports but
 never reaches (a stale `effects` entry, or a stub standing in for something unused).
+
+WHO ASKED IS PART OF THE ANSWER, and leaving it out cost a lens that lied. A declared SOURCE reads
+inside a channel, at region level, so its ambient island is null — and the lens filtered its
+ASKED FOR list on "has an island", which is not a filter but a deletion. On a region fed by a source
+it printed 0 asks and *"everything on screen came from the seed"* directly under a FEEDS row saying
+that source had fired ×44 a second earlier. An empty list is survivable; an empty list with a
+confident wrong explanation is what makes people stop reading the surface built to answer this.
 
 It is also the integration list. The calls recorded here are exactly what the real page has to answer,
 which is the closest thing motu has to confronting the lagoon with the page it targets.

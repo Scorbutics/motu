@@ -16,6 +16,8 @@ export type { ArchipelagoProviderProps, IslandProps } from './react-island';
 export { startLagoon } from './lagoon-gallery';
 export { regionOverrides, overridesFor, inventedArrangement } from './lagoon-overrides';
 export type { RegionOverrides, RegionOverrideMaps, BoundRegionOverrides } from './lagoon-overrides';
+export { wireFrom } from './lagoon-wire';
+export type { DeclaredWire } from './lagoon-wire';
 export type {
   LagoonConfig,
   LagoonOverrides,

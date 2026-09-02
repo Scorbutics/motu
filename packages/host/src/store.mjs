@@ -50,7 +50,7 @@ const INDEX_VERSION = 1;
  * writer; a few MB of JSON at a thousand records per repo is nothing.
  */
 function emptyIndex() {
-  return { version: INDEX_VERSION, blobs: {}, repos: {}, groups: {}, manifests: {}, baselines: {} };
+  return { version: INDEX_VERSION, blobs: {}, repos: {}, baselines: {} };
 }
 
 /** A path segment that is safe to join: no separators, no dots-only, no surprises. */
@@ -118,13 +118,6 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   function repoEntry(repo) {
     if (!index.repos[repo]) index.repos[repo] = { history: [], aliases: {}, nextId: 1 };
     return index.repos[repo];
-  }
-
-  /** Every hash a manifest member points at — pinned across every repo, forever. */
-  function manifestPinned() {
-    const pinned = new Set();
-    for (const m of Object.values(index.manifests)) for (const member of m.members) pinned.add(member.hash);
-    return pinned;
   }
 
   /** Record ids this repo's mutable aliases resolve to — `latest`, branch heads, anything named. */
@@ -224,17 +217,18 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   /**
    * Trim one repo to the cap, then collect blobs nothing points at any more.
    *
-   * Pinned = targeted by a mutable alias, or a member of a stored manifest. Everything else is
-   * history, and history is what the cap is allowed to forget.
+   * Pinned = targeted by a mutable alias. Everything else is history, and history is what the cap is
+   * allowed to forget. (It used to also pin every member of a stored group MANIFEST — a composed view
+   * could be pinned forever, so its members had to survive the cap. Groups are gone and so is that
+   * class of pin; nothing else could hold a record alive past its repo's own aliases.)
    */
   function sweepRepo(repo) {
     const entry = index.repos[repo];
     if (!entry) return { removed: 0 };
     const pinnedIds = aliasPinned(entry);
-    const pinnedHashes = manifestPinned();
 
     const evictable = entry.history
-      .filter((r) => !pinnedIds.has(r.id) && !pinnedHashes.has(r.hash))
+      .filter((r) => !pinnedIds.has(r.id))
       .sort((a, b) => (a.lastAccess < b.lastAccess ? -1 : a.lastAccess > b.lastAccess ? 1 : a.id - b.id));
 
     // Distinct blobs, not the sum of records: two records sharing content occupy one blob, and
@@ -266,9 +260,9 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     return { removed: drop.size, blobs: gcBlobs() };
   }
 
-  /** Delete blobs no surviving record and no manifest references. Runs after any history change. */
+  /** Delete blobs no surviving record references. Runs after any history change. */
   function gcBlobs() {
-    const live = manifestPinned();
+    const live = new Set();
     for (const entry of Object.values(index.repos)) for (const r of entry.history) live.add(r.hash);
     // A baseline is only meaningful while its bytes exist. ACCEPTED is pinned forever; the recent
     // history is pinned so "what did it look like before" survives long enough to be looked at.
@@ -374,117 +368,51 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     return out.sort((a, b) => a.island.localeCompare(b.island) || a.shot.localeCompare(b.shot));
   }
 
-  // --- composition ------------------------------------------------------------------------------
+  // --- the rail ---------------------------------------------------------------------------------
+  //
+  // WHAT EVERY LAGOON'S RAIL LISTS, resolved for now.
+  //
+  // This was `resolveGroup(name)` and a group was a curated set — a name, a member list, an `all`
+  // switch, an exclusion list, plus an immutable manifest so a composed URL could be pinned. All of it
+  // is gone, and the reason is the one `b1719dd` already wrote down and then only half-acted on: a
+  // group was never a thing to BROWSE, it was a way of LOOKING at lagoons. Once the rail belongs to
+  // every lagoon, the curated set has nothing left to curate — the honest list is everything this
+  // viewer may see, with the one they opened selected, and that needs no definition to maintain, no
+  // `/g/<name>` to bookmark and no manifest to pin.
+  //
+  // A repo with no `all` switcher entry contributes its first slug instead, so a project that only
+  // ever publishes one focused archipelago is still reachable from everyone else's rail.
 
   /**
-   * Define a group.
+   * Every lagoon this host can serve right now, in repo order.
    *
-   * Either an explicit list of `{repo, slug}`, or `all: true` — meaning EVERY repository, resolved
-   * when the group is assembled rather than when it was defined.
+   * Each carries its latest published hash if it has one, and a `live` endpoint if something is
+   * currently serving it with `motu lagoon serve --watch`. Live-but-never-published is still a member:
+   * that is the whole point of the live axis, and looking needs no build.
    *
-   * `--all` always claimed the second thing ("the host already knows which repositories have
-   * published, so the gallery does not need to be maintained by hand") and did the first: it read
-   * `/api/repos` once and froze the answer. A group called `everything` then held three repositories
-   * out of four, and the only way to notice was to count them.
+   * FILTERING IS THE CALLER'S, because only the server knows who is asking.
    */
-  function putGroup(name, spec) {
-    const { members = [], all = false, exclude = [] } = Array.isArray(spec) ? { members: spec } : (spec ?? {});
-    index.groups[name] = { members, all, exclude, updatedAt: nowIso() };
-    save();
-    return index.groups[name];
-  }
-
-  function getGroup(name) {
-    return index.groups[name] ?? null;
-  }
-
-  /**
-   * A group's members AS OF NOW: the `all` expansion first (in repo order), then anything named
-   * explicitly that it did not already cover, minus the exclusions.
-   *
-   * A repo with no `all` switcher entry contributes its first slug instead, so a project that only
-   * ever publishes one focused archipelago is not silently left out of a composed view.
-   */
-  function membersOf(group) {
+  function resolveAll(endpointFor) {
     const out = [];
-    if (group.all) {
-      for (const r of listRepos()) {
-        const slug = r.slugs.includes('all') ? 'all' : r.slugs[0];
-        if (slug) out.push({ repo: r.repo, slug, ref: 'latest' });
-      }
-    }
-    for (const m of group.members ?? []) {
-      if (!out.some((x) => x.repo === m.repo && x.slug === m.slug)) out.push({ ref: 'latest', ...m });
-    }
-    // A bare exclusion (no slug) drops every slug of that repo — the same rule `--remove` uses.
-    return out.filter((m) => !(group.exclude ?? []).some((e) => e.repo === m.repo && (!e.slug || e.slug === m.slug)));
-  }
-
-  /**
-   * A group's members AS THEY WOULD BE SERVED RIGHT NOW.
-   *
-   * The same expansion `snapshot` uses, but resolved for the mutable axis: each member carries its
-   * latest published hash if it has one, and a `live` endpoint if something is currently serving it
-   * with `motu lagoon serve --watch`. A member that is live but has never published is still a member
-   * — that is the whole point of the live axis, and pinning is what needs a published build, not
-   * looking.
-   */
-  function resolveGroup(name, endpointFor) {
-    const group = getGroup(name);
-    if (!group) return [];
-    const out = [];
-    for (const m of membersOf(group)) {
-      const rec = resolveRef(m.repo, m.ref || 'latest', m.slug);
-      const liveUrl = endpointFor ? endpointFor(m.repo, m.slug) : null;
+    for (const r of listRepos()) {
+      const slug = r.slugs.includes('all') ? 'all' : r.slugs[0];
+      if (!slug) continue;
+      const rec = resolveRef(r.repo, 'latest', slug);
+      const liveUrl = endpointFor ? endpointFor(r.repo, slug) : null;
       if (!rec && !liveUrl) continue;
       out.push({
-        repo: m.repo,
-        slug: m.slug,
+        repo: r.repo,
+        slug,
         hash: rec?.hash ?? null,
-        title: rec?.title ?? m.slug,
+        title: rec?.title ?? slug,
         sha: rec?.sha ?? null,
         live: liveUrl,
-        // Same declared colour the rail carries, so a group view and a direct lagoon view of the same
-        // project cannot disagree about what colour that project is.
-        brand: index.repos[m.repo]?.brand ?? null,
+        // The same declared colour a direct lagoon view carries, so the rail and the page it frames
+        // cannot disagree about what colour a project is.
+        brand: index.repos[r.repo]?.brand ?? null,
       });
     }
     return out;
-  }
-
-  /**
-   * Assemble a group into an IMMUTABLE manifest: resolve every member's `latest` NOW, and store the
-   * resolved hashes.
-   *
-   * This is what makes server-side assembly reproducible. The group URL always reflects today; the
-   * manifest it resolves to keeps rendering what today looked like. The manifest is itself content-
-   * addressed, so viewing an unchanged group twice yields the same id and adds nothing to the store.
-   * Members are PINNED by the manifest, which is why a snapshot can never be hollowed out by the cap.
-   */
-  function snapshot(name) {
-    const group = getGroup(name);
-    if (!group) return null;
-    const members = [];
-    const missing = [];
-    for (const m of membersOf(group)) {
-      const rec = resolveRef(m.repo, m.ref || 'latest', m.slug);
-      if (!rec) {
-        missing.push(m);
-        continue;
-      }
-      members.push({ repo: m.repo, slug: m.slug, hash: rec.hash, title: rec.title, sha: rec.sha });
-    }
-    if (!members.length) return { id: null, members, missing };
-    const id = hashBytes(Buffer.from(JSON.stringify(members))).slice(0, 32);
-    if (!index.manifests[id]) {
-      index.manifests[id] = { group: name, members, createdAt: nowIso() };
-      save();
-    }
-    return { id, members, missing };
-  }
-
-  function manifest(id) {
-    return index.manifests[id] ?? null;
   }
 
   function listRepos() {
@@ -506,12 +434,6 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     };
   }
 
-  function listGroups() {
-    // The EFFECTIVE members, so a caller counting them counts what the group actually composes. An
-    // `all` group reporting its stored (empty) list is how a gallery of four reads as a gallery of none.
-    return Object.entries(index.groups).map(([name, g]) => ({ name, all: !!g.all, members: membersOf(g) }));
-  }
-
   function stats() {
     const bytes = Object.values(index.blobs).reduce((n, b) => n + b.bytes, 0);
     return {
@@ -520,7 +442,6 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
       maxBytes,
       repos: Object.keys(index.repos).length,
       blobs: Object.keys(index.blobs).length,
-      manifests: Object.keys(index.manifests).length,
       bytes,
     };
   }
@@ -689,14 +610,9 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     putShot,
     acceptShot,
     listShots,
-    putGroup,
-    getGroup,
-    snapshot,
-    manifest,
     listRepos,
     listRepo,
-    listGroups,
-    resolveGroup,
+    resolveAll,
     stats,
     sweepRepo,
     save,

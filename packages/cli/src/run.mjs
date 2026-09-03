@@ -23,6 +23,7 @@ import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mj
 import { archipelagoSyncCommand } from './commands/archipelago-sync.mjs';
 import { removalCheckCommand } from './commands/removal-check.mjs';
 import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand, lagoonStatesCommand } from './commands/lagoon.mjs';
+import { loadMotuConfig, assertProject } from './lib/config.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
 import { color, ensureNoInstallLinks, REPO_ROOT, MOTU_CHECKOUT } from './lib/util.mjs';
@@ -220,6 +221,13 @@ async function main() {
     // Top-level verb: sub is an optional target dir positional.
     return initCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
   }
+
+  // AM I EVEN IN A PROJECT? Asked once, here, after the verbs that legitimately run outside one:
+  // `init` creates the config, `skills install` copies agent skills into a repo motu has not touched,
+  // and `link` repairs a package.json the package manager stripped. Every other verb reads a layout,
+  // and reading the WRONG layout is silent — an empty islands glob is not an error, it is a check
+  // that examined nothing and passed. See `assertProject`.
+  if (!['skills', 'link'].includes(group)) assertProject(loadMotuConfig(), { color });
 
   // `motu link` — record @motu/* in package.json so the package manager stops deleting them.
   // `--check` asserts instead of writing, which is the CI half of the same question.

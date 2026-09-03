@@ -7,7 +7,7 @@
 // Config is discovered by walking UP from the cwd for the first `motu.config.json` (or a `motu` key
 // in a package.json); that file's directory is the PROJECT ROOT. All paths default to the reference
 // layout, so a project matching it needs no config at all.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
 
@@ -173,6 +173,62 @@ function findConfig(startDir) {
 let cached;
 
 /** Resolve the motu project config (cached). All returned paths are absolute. */
+/**
+ * Is there a motu project here at all?
+ *
+ * NO CONFIG IS A SUPPORTED STATE — a project laid out like the reference needs none, which is why
+ * discovery falls back to DEFAULTS rather than failing. What is NOT supported, and what this catches,
+ * is no config AND none of the directories those defaults name: that is not a project, it is a wrong
+ * working directory, and building it produces the worst possible outcome — every path key silently
+ * wrong, every directory walk empty, and a lagoon published with zero islands in it.
+ *
+ * It surfaced the first time a HUMAN ran the CLI. An agent meeting the old failure (a rollup
+ * `UNRESOLVED_IMPORT` on `../../../../roots/lagoon/lagoon.config.json`) greps for the config, finds it
+ * one directory down, and retries from there — so the message was never wrong enough to block its only
+ * reader, and stayed unreadable for the reader who could not search.
+ *
+ * EXIT 2, NOT 1, and the distinction matters more for an agent than for a person: 1 says "something
+ * contradicted a declaration -> repair it", and the repair an agent reaches for here is writing a
+ * motu.config.json — scaffolding a second project beside the real one. 2 says "this could not run ->
+ * retry, do NOT repair", which is exactly right: the same command, one directory along.
+ */
+export function assertProject(paths, { color } = {}) {
+  const dim = color?.dim ?? ((x) => x);
+  const red = color?.red ?? ((x) => x);
+  // A project that declared itself is not this bug. If its paths are wrong, that is a different
+  // error and it deserves its own message rather than being swallowed by this one.
+  if (paths.configPath) return;
+  // The reference layout, config-free, is legitimate — one of these existing means we are home.
+  const roots = [paths.lagoonDir, paths.islandsDir, paths.archipelagosDir];
+  if (roots.some((d) => d && existsSync(d))) return;
+
+  // The answer is almost always one level down, and looking is cheap. Printing WHERE turns the whole
+  // failure into one line the reader can act on.
+  let nearby = [];
+  try {
+    nearby = readdirSync(paths.root, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+      .filter((e) => existsSync(resolve(paths.root, e.name, 'motu.config.json')))
+      .map((e) => e.name);
+  } catch {
+    /* unreadable directory: the message below is still the useful half */
+  }
+
+  console.error(red('✗ no motu project here'));
+  console.error(dim(`  searched upward from ${paths.root} and found no motu.config.json,`));
+  console.error(dim('  so every path fell back to the reference layout — and none of it exists:'));
+  for (const d of roots) if (d) console.error(dim(`      ${d}`));
+  if (nearby.length) {
+    console.error('');
+    console.error('  There is one directly below you. Run the command from there:');
+    for (const n of nearby) console.error(`      cd ${n}`);
+  } else {
+    console.error('');
+    console.error(dim('  Run it from the directory holding motu.config.json, or `motu init` to create one.'));
+  }
+  process.exit(2);
+}
+
 export function loadMotuConfig() {
   if (cached) return cached;
   const found = findConfig(process.env.MOTU_PROJECT_ROOT ? resolve(process.env.MOTU_PROJECT_ROOT) : process.cwd());

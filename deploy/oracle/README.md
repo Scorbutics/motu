@@ -30,13 +30,23 @@ Compute → Instances → **Create instance**.
 
 | Field | Value |
 | --- | --- |
-| Image | Canonical **Ubuntu 24.04** |
+| Image | Canonical **Ubuntu 24.04** — see the warning below |
 | Shape | **VM.Standard.A1.Flex** (Ampere, ARM) |
 | OCPUs / memory | 2 OCPU / 12 GB — half the free allowance, leaving room for a second box |
 | Boot volume | 50 GB (of the 200 GB free total) |
 | SSH keys | paste your `~/.ssh/id_ed25519.pub` |
 
 ARM is a non-issue here: nothing on this box compiles native code or runs Chromium.
+
+**Change the image explicitly, and check it again after changing the shape.** The
+wizard defaults to **Oracle Linux**, and the image and shape pickers re-render
+together — so switching shape (which you will, when A1 has no capacity) can silently
+put the image back. The symptom arrives two steps later and does not mention images:
+`ssh ubuntu@…` gives `Permission denied (publickey)` because Oracle Linux's user is
+`opc`, and once you are in, `git` and `apt` are both missing. `provision.sh` is
+apt-based and does not run on Oracle Linux; recreating the instance with Ubuntu is
+much cheaper than porting it, and the VCN, subnet, route table and security list
+rules all survive the rebuild.
 
 **"Out of host capacity" is the normal outcome, not an error on your side.** A1 is
 oversubscribed in most regions. Options, in order of effort: try a different

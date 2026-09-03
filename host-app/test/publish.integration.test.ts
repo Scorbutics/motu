@@ -69,13 +69,20 @@ test('a gzipped fragment published THROUGH the proxy lands byte-identical', asyn
 
   // Read it back THROUGH the proxy. The host wraps the stored fragment in a doctype at serve time,
   // so the assertion is that the fragment is in there whole, not that the page equals the upload.
-  const read = await through(new Request(`${origin}/acme/app/latest/cart`, { headers: { cookie: '' } }));
+  //
+  // AT `__motu_frame`, NOT AT THE PAGE. The canonical URL now serves the SHELL — a rail plus this
+  // lagoon framed — and the bytes live at the frame's own address; that is the whole reason the
+  // address exists. This assertion still named the page, so it had been failing since the shell
+  // landed, asserting behaviour the app deliberately no longer has.
+  const read = await through(
+    new Request(`${origin}/acme/app/latest/cart/__motu_frame`, { headers: { cookie: '' } }),
+  );
   assert.equal(read.status, 200);
   const html = await read.text();
   assert.ok(html.includes(FRAGMENT), 'the stored fragment came back exactly as it was sent');
 
   // And identical to what the host answers with no proxy in the way.
-  const direct = await fetch(`${origin}/acme/app/latest/cart`);
+  const direct = await fetch(`${origin}/acme/app/latest/cart/__motu_frame`);
   assert.equal(html, await direct.text());
 });
 

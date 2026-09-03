@@ -93,8 +93,18 @@ before(async () => {
 
 after(async () => {
   // The org cascades to the project, which cascades to the states. One delete, nothing left behind.
-  if (orgId) await db().query('delete from orgs where id = $1', [orgId]).catch(() => {})
-  await db().end().catch(() => {})
+  //
+  // TEARDOWN MUST NOT FAIL WHERE SETUP NEVER HAPPENED. `db()` THROWS synchronously when DATABASE_URL
+  // is absent, so `.catch()` never sees it: on a machine with no database every test here skipped
+  // correctly and the file still failed, from the cleanup of fixtures that were never created. That
+  // made a missing database look like a broken test — the exact confusion motu's own exit codes exist
+  // to prevent — and it is why this suite could not be put in CI.
+  try {
+    if (orgId) await db().query('delete from orgs where id = $1', [orgId]).catch(() => {})
+    await db().end().catch(() => {})
+  } catch {
+    // No database to disconnect from.
+  }
 })
 
 const NO_DB =

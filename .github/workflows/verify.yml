@@ -99,6 +99,35 @@ jobs:
         run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check
         working-directory: host-app/motu
 
+      # DOES THE HOST APP ITSELF STILL COMPILE, which nothing here asked until it had been false for
+      # weeks.
+      #
+      # `pnpm typecheck` is `tsc -b` over the root's project references, and `host-app` is not one of
+      # them — so the app that SERVES every published lagoon was the one thing this workflow never
+      # typechecked. `composedPage` was renamed `lagoonPage` in `@motu/host`, two call sites here did
+      # not follow, and `next build` failed from that day on while CI stayed green. The deployed
+      # process kept serving happily from an older build, so nothing anywhere said the deploy was
+      # broken — and a routing bug shipped in the same window could not be fixed, because no fix could
+      # be built.
+      #
+      # Verified deliberately before writing this step: reintroducing the stale import makes this
+      # command fail with `TS2305: Module '@motu/host/src/views.mjs' has no exported member
+      # 'composedPage'`. A typecheck is enough; it does not need a full build to catch it.
+      - name: host-app — does it still compile
+        run: ./node_modules/.bin/tsc --noEmit -p tsconfig.json
+        working-directory: host-app
+
+      # AND ITS OWN TESTS, for the same reason: they exist and nothing ran them.
+      #
+      # GATING, not `continue-on-error`. Two of them were failing when this step was written, and
+      # neither was a broken test: one needs a database and threw from its TEARDOWN before its own
+      # skip could speak, the other asserted that the canonical URL serves the artifact — which stopped
+      # being true when the shell landed. Both are fixed, so this can fail meaningfully. A step that
+      # cannot fail is not a step.
+      - name: host-app — unit tests
+        run: node --test "test/**/*.test.ts"
+        working-directory: host-app
+
   # ---------------------------------------------------------------------------------------------
   # RUNTIME — one real browser per project. Islands mount, scenarios differ, declared writes land,
   # flows end as promised, and every step could have failed.

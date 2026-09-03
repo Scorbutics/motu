@@ -200,6 +200,14 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
     channels?: readonly DeclaredChannel<A['id']>[];
     /** The wire fake beneath the app's own client. Must have been built against THIS archipelago. */
     wire?: DeclaredWire<A['id']>;
+    /**
+     * EXPERIMENTAL — the application's own page module. See `RegionOverrides.page`.
+     *
+     * Listed here because this function enumerates what it forwards: a field the type allows and this
+     * body forgets is dropped in silence, and the check downstream then reports "no page declared"
+     * for a region whose overrides declare one.
+     */
+    page?: () => ReactNode;
   },
 ): BoundRegionOverrides {
   for (const channel of spec.channels ?? []) {
@@ -231,6 +239,7 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
     props: spec.props as RegionOverrides['props'],
     hostProps: spec.hostProps as RegionOverrides['hostProps'],
     channels: spec.channels ? [...spec.channels] : undefined,
+    page: spec.page as RegionOverrides['page'],
   };
 }
 

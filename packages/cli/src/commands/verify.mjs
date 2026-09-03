@@ -10,6 +10,7 @@
 //           Chromium) so layout/CSS/paint are exercised; `--fast` uses an in-process happy-dom mount.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
+import { conditionalSlots } from '../lib/lagoon-declares.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, dirname, resolve } from 'node:path';
@@ -3659,19 +3660,41 @@ export async function runArchipelagoVerify(argv, id) {
               ? []
               : (declaredRegion2?.islands ?? []).filter((i) => !i.planned).map((i) => i.slot);
           const reached = new Set(pr.slots.filter((x) => x.len > 0).map((x) => x.slot));
-          const missing = declared2.filter((slot) => !reached.has(slot));
-          if (missing.length) {
-            // THE GAP NOTHING ELSE SEES. The region view places every slot unconditionally, and
-            // `integrate check` can only read that the page NAMES the slot. This is the page running.
+          // DEDUPED, because a slot name appears both in the root's mapping and in the island entry,
+          // so the raw list said "1/4" and named `login-form` twice for a region with two slots.
+          const slots2 = [...new Set(declared2)];
+          // AND A CONDITIONAL SLOT IS NOT A MISS. The region declares its own either/or with
+          // `when`/`unless`; a slot the page did not take because the region says it is an alternative
+          // is the page behaving, not a finding.
+          const conditional = conditionalSlots(paths.archipelagoFile(id));
+          const missing = slots2.filter((slot) => !reached.has(slot) && !conditional.has(slot));
+          if (!reached.size) {
+            // NOTHING AT ALL. The page mounted and reached no declared slot, so whatever it drew, it
+            // was not this region. That is a failure however the page is written.
             report.error(
               'page-render',
-              `the page renders, but never reaches: ${missing.join(', ')} — the slot is placed in the ` +
-                `source and the branch containing it did not run (a conditional, a permission gate, an ` +
-                `empty-state early return). Open ?region=${id}&view=page to see what the page did instead`,
+              `the page renders and reaches NONE of its ${slots2.length} declared slot(s) — it mounted ` +
+                `without throwing and drew none of the region. Open ?region=${id}&view=page to see what ` +
+                `it did instead`,
+            );
+          } else if (missing.length) {
+            // A WARNING, LIKE `lagoon-render`'s, AND FOR THE SAME REASON. A slot the page did not reach
+            // is sometimes exactly right: two slots can be ALTERNATIVES — peps' login passes the error
+            // banner or the form and never both — and no check can tell a deliberate either/or from an
+            // accidentally unreachable branch. What is not right is not knowing, so it is named.
+            //
+            // It was an error for one run, which made a correctly-written exclusive region red. An
+            // error nobody can act on is how a check teaches people to ignore it.
+            report.warn(
+              'page-render',
+              `the page renders and reaches ${reached.size}/${slots2.length} declared slot(s); not ` +
+                `reached: ${missing.join(', ')} — either an alternative the page deliberately did not ` +
+                `take (an error banner instead of a form), or a branch that never runs. Open ` +
+                `?region=${id}&view=page and confirm which`,
             );
           } else {
-            report.ok('page-render', `the application's own page renders and reaches all ${declared2.length} slot(s)`, {
-              n: declared2.length,
+            report.ok('page-render', `the application's own page renders and reaches all ${slots2.length} slot(s)`, {
+              n: slots2.length,
               of: 'slot(s) reached by the page',
             });
           }

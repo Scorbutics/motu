@@ -64,3 +64,33 @@ export function regionDeclaresPage(id) {
   }
   return false;
 }
+
+/**
+ * The slots a region declares CONDITIONAL — `when` or `unless` on the root's slot mapping.
+ *
+ * Two slots can be alternatives: peps' login declares `auth-error` `when: 'authError'` and
+ * `login-form` `unless: 'authError'`, and exactly one of them can ever render. A check that demands
+ * every declared slot be reached calls a correctly-written region broken, every time, and an error
+ * nobody can act on is how a check teaches people to ignore it.
+ *
+ * PARSED STRUCTURALLY — an object literal carrying BOTH a `slot` and a `when`/`unless` — rather than
+ * matched positionally, because these mappings are written in several shapes and a pattern that
+ * assumes one of them fails silently on the others.
+ */
+export function conditionalSlots(file) {
+  const out = new Set();
+  if (!existsSync(file)) return out;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    const sf = project.createSourceFile('archipelago.ts', readFileSync(file, 'utf8'));
+    for (const obj of sf.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+      const prop = (name) => obj.getProperty(name)?.asKind(SyntaxKind.PropertyAssignment);
+      const slot = prop('slot')?.getInitializer()?.asKind(SyntaxKind.StringLiteral)?.getLiteralValue();
+      if (slot && (prop('when') || prop('unless'))) out.add(slot);
+    }
+  } catch {
+    // Unparseable: report nothing as conditional rather than guess. The check then warns where it
+    // would have stayed quiet, which is the safe direction for a warning.
+  }
+  return out;
+}

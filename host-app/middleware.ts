@@ -11,9 +11,26 @@
 // question, in front of the one place that is supposed to own it.
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { parseMemberAssetPath } from '@/src/host/records'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
+
+  // A LIVE LAGOON'S MODULES ARE NOT NAVIGATIONS, and refreshing a session for each of them is the
+  // failure this file's own matcher already names: "a middleware pass per asset is a GoTrue
+  // round-trip per asset". Static assets were excluded for that reason; a Vite dev server's `@fs`
+  // modules are the same thing under a different prefix, and there are a hundred-odd of them in one
+  // burst.
+  //
+  // Measured: the burst starved the auth calls, some requests resolved to no viewer, the route denied
+  // them, and the browser was handed HTML where it asked for JavaScript — a RANDOM SUBSET of modules
+  // failing per reload, which is what a queue looks like from the outside.
+  //
+  // Skipping the refresh is safe because these requests never navigate: the page that pulled them has
+  // just been through this middleware with the same cookies, and the route still authorizes them (see
+  // the decision cache in `[...path]/route.ts`). What is dropped is the ROTATION of the session, and
+  // a module fetch is not where a session should be rotated.
+  if (parseMemberAssetPath(request.nextUrl.pathname)) return response
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

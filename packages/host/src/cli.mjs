@@ -228,6 +228,13 @@ server.listen(port, bind, () => {
   if (ip) console.log(`  http://${ip}:${port}   ${color.dim('(LAN)')}`);
   console.log(color.dim(`  store ${s.root} · cap ${maxRecords} records or ${(maxBytes / 1073741824).toFixed(0)} GB per repo`));
   if (!token) console.log(color.yellow('  no token — uploads are refused. Pass --token or set MOTU_HOST_TOKEN.'));
+  // SAID EVERY START, because this one is easy to leave on. It only ever answers an unproxied
+  // loopback request, so it cannot be reached through a tunnel — but an operator who forgot it is set
+  // should be reminded by the thing they look at when they start the host.
+  if (process.env.MOTU_HOST_OPEN_LOCAL === '1')
+    console.log(
+      color.yellow('  MOTU_HOST_OPEN_LOCAL=1 — private repos are READABLE by unproxied requests from this machine.'),
+    );
   console.log('');
   console.log(color.dim('  Publish into it:  motu lagoon publish --remote http://localhost:' + port));
   console.log(color.dim('  Ctrl-C to stop.'));

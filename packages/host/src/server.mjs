@@ -77,6 +77,38 @@ export function mergeLive(repos, liveMembers) {
   return [...byRepo.values()].sort((a, b) => a.repo.localeCompare(b.repo));
 }
 
+/**
+ * AN OPEN GALLERY FOR A LOCAL AGENT — off unless asked for, and never reachable from outside.
+ *
+ * An agent working on this machine has no browser session and no cookie, so every private repo 404s
+ * at it. That is correct for the internet and useless for the thing the host exists to support: an
+ * agent that cannot open the gallery cannot check its own work, and cannot tell "this is private"
+ * from "I broke it" — which is exactly the confusion that produced the report this was written for.
+ *
+ * THREE CONDITIONS, ALL REQUIRED, and the third is the one that makes this safe rather than a hole:
+ *
+ *   1. `MOTU_HOST_OPEN_LOCAL=1` — the operator asks for it. Absent, nothing here changes.
+ *   2. the peer address is loopback.
+ *   3. the request carries NO forwarding header.
+ *
+ * (3) exists because (2) is not sufficient on this host, and believing it was would publish every
+ * private lagoon. A Funnel terminates at tailscaled and proxies to 127.0.0.1, and the host-app in
+ * front of this one proxies to 127.0.0.1 as well — so a request from the public internet arrives here
+ * from LOOPBACK. What distinguishes it is that a proxy announces itself: `x-forwarded-for`,
+ * `forwarded`, `x-real-ip`. Any of them present and this refuses, whatever the socket says.
+ *
+ * It grants READ only. Writes still need the token — an open gallery is for looking.
+ */
+const OPEN_LOCAL = process.env.MOTU_HOST_OPEN_LOCAL === '1';
+const FORWARD_HEADERS = ['x-forwarded-for', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto'];
+
+function localOpen(req) {
+  if (!OPEN_LOCAL) return false;
+  if (FORWARD_HEADERS.some((h) => req.headers[h] !== undefined)) return false;
+  const addr = req.socket?.remoteAddress ?? '';
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+}
+
 function liveRegistry(ttlMs = 90_000) {
   const entries = new Map(); // "repo/slug" -> { url, at }
   const key = (repo, slug) => `${repo}/${slug}`;
@@ -341,7 +373,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     const adminOk = Boolean(token) && tokenMatches(bearer, token);
     const readSecret = readSecretFrom({ cookieHeader: req.headers.cookie, bearer });
     /** A reader's verdict for one repo, and the 404 that hides a private one's existence. */
-    const readable = (repo) => canRead(access, repo, { adminOk, readSecret });
+    const readable = (repo) => localOpen(req) || canRead(access, repo, { adminOk, readSecret });
 
     // UNLOCKING A PRIVATE LINK. A browser following a URL cannot set a header, so the secret arrives
     // once as `?k=`, becomes an HttpOnly cookie, and is redirected away — so it stops appearing in the

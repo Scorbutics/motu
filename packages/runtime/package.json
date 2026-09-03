@@ -1,6 +1,8 @@
 {
   "name": "@motu/runtime",
   "version": "0.1.0",
+  "description": "Transport for motu regions: HTTP, direct and mock backends behind one declared contract, so a region renders with no server.",
+  "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "mock-server", "transport", "fetch", "postgrest", "testing"],
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

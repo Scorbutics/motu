@@ -1,6 +1,8 @@
 {
   "name": "@motu/react",
   "version": "0.1.0",
+  "description": "React bindings for motu: define an island from a React component, compose a page region from declared slots, and render every declared state in the lagoon preview.",
+  "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "react-components", "ui-preview", "component-architecture"],
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

@@ -177,6 +177,8 @@ export interface TideLine {
    * list (it is not a region) and would otherwise leave the bar reading as though nothing were open.
    */
   setActive(stationId: string, view: TideView, label?: string): void;
+  /** Which views the current region can offer — `page` only where the region declares one. */
+  setViews(available: readonly TideView[]): void;
   /**
    * The flows of whichever region is mounted, and which one is showing.
    *
@@ -727,8 +729,12 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   for (const [view, label] of [
     ['region', 'Region'],
     ['mountpoints', 'Mountpoints'],
+    ['page', 'Page'],
   ] as const) {
     const btn = el('button', { type: 'button', 'data-view': view }, label);
+    // HIDDEN UNTIL A CALLER SAYS OTHERWISE. This entry predates `setViews`, so a default-visible Page
+    // pill would appear on every region including the ones with no page to render.
+    if (view === 'page') btn.hidden = true;
     btn.addEventListener('click', (e) => {
       splash(e.clientX, e.clientY, accent());
       opts.onView(view);
@@ -1250,6 +1256,9 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
       { label: 'Region', kind: 'view', run: () => opts.onView('region') },
       { label: 'Mountpoints', kind: 'view', run: () => opts.onView('mountpoints') },
     );
+    // Same rule as the segmented control: offered only where this region has a page to render.
+    const pageBtn = viewGroup.grp.querySelector<HTMLElement>('button[data-view="page"]');
+    if (pageBtn && !pageBtn.hidden) out.push({ label: 'Page', kind: 'view', run: () => opts.onView('page') });
     for (const chip of slot.querySelectorAll<HTMLButtonElement>('button')) {
       const text = (chip.textContent || '').trim();
       if (!text) continue;
@@ -1377,6 +1386,21 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   }
 
   let lastStation = '';
+  /**
+   * Which views the CURRENT region can offer.
+   *
+   * `page` exists only where a region declares one — it renders the application's own page module,
+   * and most regions have no such override. A control that is dead on most stations teaches people
+   * the wrong thing about the two views that always work, so it is hidden rather than disabled: a
+   * greyed button still reads as "this should work and doesn't".
+   */
+  function setViews(available: readonly TideView[]): void {
+    for (const btn of viewGroup.grp.querySelectorAll<HTMLElement>('button[data-view]')) {
+      const view = btn.dataset.view as TideView;
+      btn.hidden = !available.includes(view);
+    }
+  }
+
   function setActive(stationId: string, view: TideView, label?: string): void {
     stationLabel = label ?? rows.find((r) => r.station.id === stationId)?.station.label ?? '';
     renderLabel();
@@ -1420,5 +1444,5 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     window.setTimeout(() => close(0), 3200);
   }
 
-  return { setActive, setFlows, setFlowOutcome, setScenarios };
+  return { setActive, setViews, setFlows, setFlowOutcome, setScenarios };
 }

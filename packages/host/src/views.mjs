@@ -405,7 +405,17 @@ ${PRIMARY_DETECT_JS}
     // has been setting itself to an empty string since it was written; nobody saw it because that
     // title only exists below 760px, where it read as "the header has no title on a phone".
     var nameEl = chosen ? chosen.querySelector('.name') : null;
-    var name = nameEl ? nameEl.textContent.trim() : '';
+    // TEXT NODES ONLY, because the LIVE chip is an <em> INSIDE this span -- so reading the whole
+    // element's text gives "peps ta boitelive" and puts THAT in the masthead, which is what shipped
+    // the moment the rail learned to draw the badge. The chip marks the row; it is not the name.
+    // (No backticks in this comment: it lives inside a template literal.)
+    var name = '';
+    if (nameEl) {
+      for (var n = 0; n < nameEl.childNodes.length; n++) {
+        if (nameEl.childNodes[n].nodeType === 3) name += nameEl.childNodes[n].textContent;
+      }
+      name = name.trim();
+    }
     var label = document.getElementById('tb-title');
     if (chosen && label) label.textContent = name;
     // THE BAY FOLLOWS THE RAIL TOO, and only where the rail is a switcher between whole lagoons.

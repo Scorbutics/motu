@@ -23,7 +23,7 @@ import { html } from './read-routes.ts'
 import type { Visible } from './read-routes.ts'
 import { upstreamOrigin, proxyToHost } from '../upstream.ts'
 // @motu/host is plain ESM node; tsc reads it through allowJs.
-import { composedPage, errorPage } from '@motu/host/src/views.mjs'
+import { lagoonPage, errorPage } from '@motu/host/src/views.mjs'
 import { wrapFragment, withRepoMeta } from '@motu/host/src/document.mjs'
 
 const NO_STORE = 'no-store'
@@ -88,64 +88,22 @@ export async function visibleMembers(all: Member[], visible: Visible): Promise<M
  */
 export async function groupView(
   segments: string[],
-  url: URL,
-  request: Request,
-  visible: Visible,
+  _url: URL,
+  _request: Request,
+  _visible: Visible,
 ): Promise<Response | null> {
-  if (segments[0] !== 'g') return null
-  const name = normalizeSegment(segments[1])
-  if (!name) return html(400, errorPage(400, 'bad group name'))
-
-  const s = store()
-  if (!s.getGroup(name)) return html(404, errorPage(404, `no group "${name}"`))
-
-  // A GALLERY MUST NOT BE A WAY ROUND THE GATE, and now it is not a way round the GRANT either.
-  // an `all` group composes every published project, so a private one joins a
-  // public gallery by default rather than by anyone choosing it — and the answer to that is the same
-  // question the front page asks, which is what this line finally is.
+  // GROUPS ARE GONE FROM THE STORE, so this view cannot answer and no longer pretends to.
   //
-  // Filtered rather than refused: a gallery of five projects, one of which you may not see, is still
-  // a gallery of the four you may.
-  const endpointFor = await liveEndpoints()
-  const all = (s.resolveGroup as (n: string, e: unknown) => Member[])(name, endpointFor)
-  const members = await visibleMembers(all, visible)
-
-  if (!members.length) {
-    return html(404, errorPage(404, `group "${name}" resolves to nothing yet — no member has published`))
-  }
-
-  if (segments[2] === 'f') {
-    const i = Number.parseInt(segments[3] ?? '', 10)
-    const member = Number.isInteger(i) ? members[i] : undefined
-    if (!member) return html(404, errorPage(404, 'no such frame'))
-    if (member.live) {
-      // THE WHOLE REMAINING PATH, and the query with it — server.mjs learned this the hard way, when
-      // forwarding one segment left anything nested arriving truncated. It costs nothing today,
-      // because the process behind a live frame answers every path with the same self-contained
-      // artifact, and it is here so that stays true of one that routes.
-      // The path only — `proxyToHost` carries the query across itself, and appending it here too
-      // produced `?a=1?a=1`.
-      const rest = segments.slice(4).join('/')
-      return proxyToHost(request, { origin: member.live, rewritePath: () => `/${rest}` })
-    }
-    if (!member.hash) return html(404, errorPage(404, 'this member has never published'))
-    const bytes = s.readHash(member.hash) as Buffer | null
-    if (!bytes) return html(410, errorPage(410, 'this frame’s object is gone'))
-    // NOT immutable: the group means TODAY, and today's `latest` moves.
-    return html(200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo) as string)
-  }
-
-  // The trailing slash is LOAD-BEARING — the shell's frame src is relative (`f/<i>`).
-  if (segments.length === 2 && !url.pathname.endsWith('/')) {
-    return new Response(null, {
-      status: 302,
-      headers: { location: `/g/${name}/`, 'cache-control': NO_STORE },
-    })
-  }
-  if (segments.length > 2) return html(404, errorPage(404, 'no such group view'))
-
-  // The pin: what this view would be if it were frozen now. Live members pin their last published
-  // build, because a dev server has nothing to pin — and the footer says so.
-  const snap = s.snapshot(name) as { id?: string } | null
-  return html(200, composedPage({ id: snap?.id ?? null, group: name, members, live: true }))
+  // `getGroup`, `resolveGroup`, `snapshot` and `listGroups` were removed with the feature — the rail
+  // belongs to every lagoon now, so a group stopped being the only way to look at more than one. The
+  // calls left behind here could only throw, and they also stopped the app TYPECHECKING: that is why
+  // the deployed build predates the `composedPage` -> `lagoonPage` rename and why nothing landed on
+  // it for weeks.
+  //
+  // ABSTAINING, NOT DELETED. `visibleMembers` above is the gate's own logic and is still covered by
+  // `test/group-visibility.test.ts`; removing a feature's last routes is a decision for whoever owns
+  // the product, not a repair made while fixing a proxy loop. `/g/<name>` falls through to ordinary
+  // routing, which 404s it.
+  if (segments[0] !== 'g') return null
+  return null
 }

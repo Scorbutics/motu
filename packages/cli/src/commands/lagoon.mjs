@@ -17,6 +17,8 @@
 // the page survives with no /assets/ behind it. Serving the artifact does.
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
+import { regionDeclaresPage } from '../lib/lagoon-declares.mjs';
+import { injectDock } from '../lib/dock-inject.mjs';
 import { clearLiveUrl, writeLiveUrl } from '../lib/live-url.mjs';
 import { createServer } from 'node:http';
 import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
@@ -344,40 +346,6 @@ ${page}</body>
  *
  * Injected, never bundled: that is the whole point. Change the dock and no lagoon needs rebuilding.
  */
-function injectDock(page) {
-  return `${page}
-<style>${motuDockCss()}</style>
-<script>
-${motuDockJs()}
-(function () {
-  var tries = 0;
-  var take = function () {
-    if (tries++ > 60) return;
-    if (!window.__motuLagoonControl) return setTimeout(take, 200);
-    // The artifact still ships its own while both exist. Hidden, not removed: it owns that element.
-    // THE TWO DOCKS SHARE AN ID, and here they share a document as well — so the rule that hides the
-    // artifact's would hide the replacement with it. In the host that never came up: the artifact is
-    // in a frame and the new dock is in the shell. Mark ours, and hush only what is not ours.
-    var mounted = document.createElement('div');
-    document.body.appendChild(mounted);
-    motuMountDock({ mount: mounted, lagoonWindow: function () { return window; } });
-    var ours = mounted.querySelector('#tide');
-    if (ours) ours.setAttribute('data-hosted', '');
-    var hush = document.createElement('style');
-    hush.textContent = '#tide:not([data-hosted]){display:none!important}' +
-      // THE FLOATING TOOLBAR TOO. It used to be adopted by the in-page dock; with that gone it falls
-      // back to floating over the application, and its chips are already in the rig out here.
-      '#motu-toolbar{display:none!important}';
-    document.head.appendChild(hush);
-    // The served page is the lagoon itself, so the dock stands on this document and this document
-    // keeps the strip — the same reserve the host's shell makes around a framed one.
-    document.documentElement.dataset.motuDock =
-      window.matchMedia('(max-width: 760px)').matches ? 'bottom' : 'right';
-  };
-  take();
-})();
-</script>`;
-}
 
 /**
  * A rebuild is only useful if the phone in your hand notices it, so `--watch` also injects a tiny
@@ -1302,6 +1270,11 @@ export async function lagoonStatesCommand(argv) {
       const address = addressFor(flows);
       return {
         target: `archipelago:${id}`,
+        // THE PAGE IS A STATE TOO, where the region declares one — the application's own page module,
+        // rendered with the region's providers and wire. Listed first because it is the only address
+        // here that shows the page a person actually visits, and read by PARSING the overrides module
+        // rather than matching it, so a shape nobody anticipated cannot silently hide the address.
+        page: regionDeclaresPage(id) ? `${base}/?${q({ region: id, view: 'page' })}` : null,
         states: flows.map((f, i) => {
           const name = f.name ?? `#${i + 1}`;
           return {
@@ -1319,7 +1292,7 @@ export async function lagoonStatesCommand(argv) {
         }),
       };
     })
-    .filter((r) => r.states.length);
+    .filter((r) => r.states.length || r.page);
 
   if (argv.json) {
     console.log(JSON.stringify({ islands, regions }, null, 2));
@@ -1330,8 +1303,12 @@ export async function lagoonStatesCommand(argv) {
     console.log(color.dim('  an island declares `scenarios` in <kebab>.evidence.ts; a region declares flows in <id>.evidence.ts'));
     return;
   }
-  for (const { target, states } of [...islands, ...regions]) {
+  for (const { target, states, page } of [...islands, ...regions]) {
     console.log(color.bold(target));
+    if (page) {
+      console.log(`  the application's own page${color.dim(' · what the page renders, not the region')}`);
+      console.log(color.dim(`    ${page}`));
+    }
     for (const s of states) {
       const steps = s.steps === undefined ? '' : color.dim(` · ${s.steps} step(s), &step=<n> stops earlier`);
       console.log(`  ${s.name}${steps}`);

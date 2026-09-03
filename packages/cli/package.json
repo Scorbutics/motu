@@ -1,6 +1,8 @@
 {
   "name": "@motu/cli",
   "version": "0.1.0",
+  "description": "The motu command line: scaffold islands, check that a page region still matches what it declares, and serve, snapshot or publish the lagoon preview.",
+  "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "cli", "ui-testing", "visual-regression", "component-preview", "storybook-alternative"],
   "license": "MIT",
   "type": "module",
   "bin": {

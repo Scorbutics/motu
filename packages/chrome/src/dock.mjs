@@ -1399,11 +1399,17 @@ function motuMountDock(opts) {
 
     // ── the rig ──────────────────────────────────────────────────────────────────────────────
     var pills = [];
-    ['region', 'mountpoints'].forEach(function (v) {
+    // ASK THE PAGE WHICH VIEWS IT HAS. Two were hard-coded here because two were all there were; a
+    // region may now also declare a `page` — the application's own page module — and most do not.
+    // Falling back to the pair keeps a lagoon published before this dock existed working unchanged.
+    var VIEW_LABELS = { region: 'Region', mountpoints: 'Mountpoints', page: 'Page' };
+    var available = (ctl.views && ctl.views()) || ['region', 'mountpoints'];
+    available.forEach(function (v) {
       var b = el('button', {
         class: 'motu-btn', 'data-shape': 'pill', type: 'button',
+        title: v === 'page' ? "the application's own page, not the region" : '',
         'aria-current': now.view === v ? 'true' : 'false',
-      }, [v === 'region' ? 'Region' : 'Mountpoints']);
+      }, [VIEW_LABELS[v] || v]);
       b.addEventListener('click', drive(function (c) { c.setView(v); }));
       pills.push(b);
     });
@@ -1820,6 +1826,10 @@ function motuMountDock(opts) {
     out.push({ label: 'As seeded', kind: 'state', run: drive(function (c) { c.runFlow(null); }) });
     out.push({ label: 'Region', kind: 'view', run: drive(function (c) { c.setView('region'); }) });
     out.push({ label: 'Mountpoints', kind: 'view', run: drive(function (c) { c.setView('mountpoints'); }) });
+    // Same rule as the pills: offered only where the current region declares a page.
+    if (((ctl.views && ctl.views()) || []).indexOf('page') !== -1) {
+      out.push({ label: 'Page', kind: 'view', run: drive(function (c) { c.setView('page'); }) });
+    }
     (ctl.chips ? ctl.chips() : []).forEach(function (c) {
       if (c.label) out.push({ label: c.label + ' \u2014 ' + (c.title || 'toggle'), kind: 'toggle', run: drive(function (live) { live.pressChip(c.index); }) });
     });

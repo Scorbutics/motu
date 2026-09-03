@@ -1689,3 +1689,65 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(3);
     });
 }
+
+/**
+ * DOES THE APPLICATION'S OWN PAGE RENDER, AND DOES IT REACH EVERY SLOT IT DECLARES?
+ *
+ * EXPERIMENTAL. This is the one question every other check here is structurally unable to ask.
+ * `integrate check` reads the host's SOURCE, so it can see `<X.Island slot="y">` and cannot see
+ * whether the branch containing it ever runs — a slot inside `{isOpen && …}`, a ternary or a `.map()`
+ * is reported as conditionally placed, and nothing proves the page REACHES it. The region view cannot
+ * close that either: it renders every declared slot unconditionally, by construction, because motu
+ * supplies the arrangement there. So a region could pass everything while the page that ships it
+ * crashes on load or never renders half of it.
+ *
+ * What it asks, and nothing more:
+ *
+ *   1. the page mounted without throwing            (a crash is marked, not a blank screen)
+ *   2. every declared slot is present in the DOM    (the page reached the branch that places it)
+ *   3. each of those slots rendered something       (the island mounted, not an empty wrapper)
+ *
+ * It does NOT assert content, drive interactions or replay flows — those are the region's flows, and
+ * duplicating them here would make the same claim twice against a slower page.
+ *
+ * SKIPS, LOUDLY, when the region declares no `page` override — `seen: 0` so the report renders it as
+ * a skip rather than a pass, because a check that looked at nothing has not passed.
+ */
+export async function pageRenderLagoon({ id, port = 5199 }) {
+  const diagnostics = [];
+  return onLagoonPage(
+    { target: `archipelago:${id}`, port, view: 'page', viewport: { width: 1200, height: 900 }, diagnostics },
+    async (page) => {
+      let result = { declared: false, crashed: null, slots: [] };
+      const deadline = Date.now() + paintTimeout;
+      while (Date.now() < deadline) {
+        try {
+          result = await page.evaluate(() => {
+            const absent = document.querySelector('[data-motu-page="absent"]');
+            const crashed = document.querySelector('[data-motu-page="crashed"]');
+            const slots = [...document.querySelectorAll('[data-motu-island]')].map((el) => ({
+              slot: el.getAttribute('data-motu-slot'),
+              tag: el.getAttribute('data-motu-island'),
+              len: (el.innerHTML || '').length,
+            }));
+            return {
+              declared: !absent,
+              crashed: crashed ? (crashed.textContent || '').slice(0, 1200) : null,
+              slots,
+            };
+          });
+          // Settled once the page either failed visibly or put something in every slot it reached.
+          if (!result.declared || result.crashed || (result.slots.length > 0 && result.slots.every((s) => s.len > 0)))
+            break;
+        } catch {
+          // HMR or a full reload tore the context down — re-poll on the fresh one.
+        }
+        await sleep(200);
+      }
+
+      const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
+      for (const r of rejections) if (!NOISE.test(r)) diagnostics.push(r);
+      return { ...result, diagnostics };
+    },
+  );
+}

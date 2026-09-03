@@ -1,6 +1,8 @@
 {
   "name": "@motu/coverage",
   "version": "0.1.0",
+  "description": "Coverage for motu regions: which declared states rendered and which backend operations a run actually reached.",
+  "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "coverage", "ui-testing", "instrumentation"],
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

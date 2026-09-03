@@ -12,6 +12,7 @@
 import { channelRegionId } from '@motu/core';
 import type { AnyArchipelagoConfig, DeclaredChannel, RegionOf, SlotsOf } from '@motu/core';
 import type { DeclaredWire } from './lagoon-wire';
+import type { PagePropsOf } from '@motu/core';
 import type { ReactNode } from 'react';
 
 /** Everything the lagoon can be told about ONE region. */
@@ -39,6 +40,35 @@ export interface RegionOverrides {
    * `layout`: getting the two confused is invisible in the region view and fatal in mountpoints.
    */
   providers?: (children: ReactNode, slot: string) => ReactNode;
+  /**
+   * THE APPLICATION'S OWN PAGE — the module the router renders, composed exactly as production
+   * composes it (its own `createRegion`, its own `<X.Region>`, its own `<X.Island slot=…>`).
+   *
+   * EXPERIMENTAL, and narrow on purpose. Every other view here renders the region: motu supplies the
+   * provider, the seed and the arrangement, so what is proved is that the ISLANDS work and that the
+   * declared couplings carry. What none of them can reach is the page itself — `integrate check`
+   * reads the host's SOURCE, so it sees `<X.Island slot="y">` and cannot see whether the branch
+   * containing it ever runs. A slot inside `{isOpen && …}` or a `.map()` is reported as conditionally
+   * placed, and nothing anywhere proves the page REACHES it. That gap has been the honest boundary of
+   * static integration checking; this is the smallest thing that closes it.
+   *
+   * The lagoon installs `providers` and the `wire` and then renders this, adding NO provider of its
+   * own — the page brings its own region. So a page that crashes on load crashes here, and a slot the
+   * page never reaches is a slot that never appears in the DOM.
+   *
+   * `channels` DO NOT FIRE IN THIS VIEW, and that is a limitation rather than a decision. A channel is
+   * installed by motu's own `ArchipelagoProvider`, which this view deliberately does not mount — the
+   * page supplies its own. A region fed by a channel therefore renders here with those keys unset, and
+   * `page-render` may report a slot as unreached when the truth is that nothing fed it. Fixable: the
+   * store is module state keyed by archipelago id, so the channels could be installed against it once
+   * the page's own region has mounted. Not done, because the one project this was built against
+   * declares no channels and a fix nobody can fail is not a fix.
+   *
+   * It is only renderable where the page module can be IMPORTED into a browser bundle. A React page
+   * on a Vite or a plain-React host qualifies; a Next server component does not, and says so rather
+   * than pretending.
+   */
+  page?: (props: never) => ReactNode;
   /** Per slot: the props the PAGE passes on the island element itself, for what is not region state. */
   props?: Record<string, Record<string, unknown>>;
   /**
@@ -67,7 +97,7 @@ export interface RegionOverrides {
 }
 
 /** The fields of a region override, so a reader cannot forget one the writer supplied. */
-const REGION_FIELDS = ['seed', 'channels', 'wire', 'layout', 'providers', 'props', 'hostProps'] as const;
+const REGION_FIELDS = ['seed', 'channels', 'wire', 'layout', 'providers', 'props', 'hostProps', 'page'] as const;
 
 /** The kind-first maps, one per field of `RegionOverrides`. */
 type KindFirst = {
@@ -171,6 +201,23 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
     channels?: readonly DeclaredChannel<A['id']>[];
     /** The wire fake beneath the app's own client. Must have been built against THIS archipelago. */
     wire?: DeclaredWire<A['id']>;
+    /**
+     * THE COMPONENT for a region that declares itself a page — see `ArchipelagoConfig.page`.
+     *
+     * Typed FROM the archipelago: it is called with the props that region declared, so a screen whose
+     * props have changed fails here rather than at the first render. Where the archipelago declares no
+     * page, this field is refused with a message rather than silently accepted — a lagoon cannot make
+     * a region into a page on its own, because "this region is a whole screen" is a claim about the
+     * application and belongs where the region is declared.
+     *
+     * Listed here because this function enumerates what it forwards: a field the type allows and this
+     * body forgets is dropped in silence, which cost an afternoon the first time.
+     */
+    page?: [PagePropsOf<A>] extends [never]
+      ? {
+          'motu: this archipelago does not declare a page': 'add `page: pageOf<typeof YourScreen>({ … })` to it first';
+        }
+      : (props: PagePropsOf<A>) => ReactNode;
   },
 ): BoundRegionOverrides {
   for (const channel of spec.channels ?? []) {
@@ -202,6 +249,7 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
     props: spec.props as RegionOverrides['props'],
     hostProps: spec.hostProps as RegionOverrides['hostProps'],
     channels: spec.channels ? [...spec.channels] : undefined,
+    page: spec.page as RegionOverrides['page'],
   };
 }
 

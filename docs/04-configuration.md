@@ -601,3 +601,31 @@ There is deliberately **no `transport` key**. The mode is a build-time input (`M
 `motu fixtures record`) and nothing a person can flip: a committed `"transport": "http"` would make
 every developer's lagoon render live data at addresses that promise declared states, which is the
 browser toggle again in configuration form. See [08 — Lagoon](08-lagoon.md).
+
+## `MOTU_HOST_OPEN_LOCAL` — an open gallery for a local agent
+
+Off unless set to `1`. When set, the host serves **private repos as readable** to requests that
+arrive from this machine, so an agent working here can open the gallery, look at a region and read its
+own work without a browser session or a cookie.
+
+It exists because the alternative is worse than a closed door: an agent with no session gets a 404 on
+every private lagoon and cannot tell *"this is private"* from *"I broke it"* — which is exactly the
+confusion it produces. A preview an agent cannot open is not a preview.
+
+**Three conditions, all required**, and the third is what makes it safe:
+
+1. `MOTU_HOST_OPEN_LOCAL=1`.
+2. the peer address is loopback.
+3. the request carries **no forwarding header** (`x-forwarded-for`, `forwarded`, `x-real-ip`,
+   `x-forwarded-host`, `x-forwarded-proto`).
+
+Condition 3 is not belt-and-braces. On a host behind a Tailscale Funnel, or behind the motu host-app,
+a request **from the public internet arrives from loopback** — the tunnel terminates locally and
+proxies to `127.0.0.1`. Trusting the socket address alone would publish every private lagoon on the
+host. What distinguishes a proxied request is that a proxy announces itself, so any forwarding header
+refuses, whatever the socket says.
+
+It grants **read** only; writes still need the token. And the host says so on every start, because a
+mode this permissive should not be something you forget is on:
+
+    MOTU_HOST_OPEN_LOCAL=1 — private repos are READABLE by unproxied requests from this machine.

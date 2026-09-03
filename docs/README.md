@@ -7,7 +7,10 @@ already exists.
 incrementally, keeping the state between components coherent, the boundaries explicit and the backend
 dependencies declared. Ownership of a region's state is declared per key and enforced by the build;
 the lagoon — where every declared state has an address you can open — is what that architecture makes
-possible, not the thing motu is. If you read only one page for the reasoning, read
+possible, not the thing motu is. The loop it is built for: an agent builds a region → the lagoon serves it live at a URL that outlives
+the agent → a human (or a fresh agent) looks and feeds back → integrate with the checks → ship. Every
+design choice here follows from wanting that cycle to be short and safe to run in parallel.
+If you read only one page for the reasoning, read
 [05 — Archipelagos and regions](05-archipelagos-and-regions.md); the lagoon in
 [08](08-lagoon.md) is downstream of it.
 

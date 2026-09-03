@@ -34,7 +34,7 @@ export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedEx
 export type { HostCall, Outbound, OutboundVia } from './provenance';
 export { checkCatalogue } from './catalogue';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue';
-export { channelFrom, rawChannel, channelRegionId, slotNameOf, slotShows, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago';
+export { pageOf, channelFrom, rawChannel, channelRegionId, slotNameOf, slotShows, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago';
 export type {
   HostBridge,
   IslandContext,
@@ -63,6 +63,8 @@ export type {
   ArchipelagoOptions,
   MountedIslandInfo,
   HostIntent,
+  PageDeclaration,
+  PagePropsOf,
 } from './archipelago';
 export { defineIslandElement } from './island-element';
 export { defineArchipelagoElement } from './archipelago-element';

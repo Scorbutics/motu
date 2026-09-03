@@ -1,6 +1,8 @@
 {
   "name": "@motu/core",
   "version": "0.1.0",
+  "description": "Runtime for motu islands and archipelagos: islands as custom elements, declared ownership of a page region's state, and the contract for what that region asks of a backend.",
+  "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "custom-elements", "web-components", "component-architecture"],
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

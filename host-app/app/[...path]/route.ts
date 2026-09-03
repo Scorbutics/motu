@@ -28,10 +28,12 @@ import { postgresShareLinkStore } from '@/src/auth/share-link-store';
 import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
+import { createHash } from 'node:crypto';
 import { groupView } from '@/src/host/group-routes';
+import { parseMemberAssetPath } from '@/src/host/records';
 import { railMembers, focusIndex } from '@/src/host/lagoon-rail';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
-import { composedPage } from '@motu/host/src/views.mjs';
+import { lagoonPage } from '@motu/host/src/views.mjs';
 import { store, access, normalizeRepo } from '@/src/host/store';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { visibilityFor } from '@/src/host/visibility';
@@ -166,13 +168,93 @@ async function unlock(request: Request, url: URL, record: { repo: string; ref: s
 }
 
 /** Whoever is asking, or null. Never throws: an unreadable session is nobody, not an error. */
-async function viewerOf() {
+/**
+ * THE DECISION FOR ONE MEMBER, REMEMBERED FOR A FEW SECONDS — because a lagoon is not one request.
+ *
+ * `viewerOf()` calls `supabase.auth.getUser()`, which is a GoTrue ROUND-TRIP. That is fine once per
+ * page. It is not fine once per MODULE: a Vite dev server's frame pulls a hundred-odd `@fs` modules
+ * in one burst, and authorizing each of them separately turns one page load into a hundred auth
+ * round-trips. Under that load some of them lose — `viewerOf` answers null, the decision flips to
+ * deny, and the browser is handed HTML where it asked for JavaScript:
+ *
+ *     Loading module … was blocked because of a disallowed MIME type ("text/html")
+ *
+ * The failures are a RANDOM SUBSET, which is what gives it away: `club.archipelago.ts` loads and
+ * `regions/club.tsx` does not, with timings from 700ms to 12.6s. Nothing about the paths differs —
+ * only how many were in flight.
+ *
+ * KEYED BY THE CREDENTIAL, not just the member: two viewers must never share an answer. The cookie
+ * header carries the session, so it is part of the key (hashed — this is a decision cache, not a
+ * place to keep tokens). A few seconds is long enough to cover one page's burst and short enough that
+ * a revoked grant is not honoured beyond it.
+ *
+ * ASSET PATHS ONLY. The page and the frame decide afresh every time; they are one request each, and
+ * they are the request where being current matters.
+ */
+const DECISION_TTL_MS = 60_000;
+/**
+ * How long a decision stays usable as a FALLBACK after it goes stale.
+ *
+ * The key is the credential, so an unchanged cookie cannot have become a different viewer. When the
+ * auth call fails we would rather answer with what that same credential was told a minute ago than
+ * downgrade it to "anonymous" and 404 a page the person is looking at.
+ */
+const DECISION_FALLBACK_MS = 10 * 60_000;
+const decisions = new Map<string, { at: number; value: unknown }>();
+
+function decisionKey(request: Request, repo: string, slug: string): string {
+  return createHash('sha256')
+    .update(`${request.headers.get('cookie') ?? ''}\n${repo}/${slug}`)
+    .digest('hex');
+}
+
+function rememberedDecision(key: string): unknown | null {
+  const hit = decisions.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > DECISION_TTL_MS) return null;
+  return hit.value;
+}
+
+/** The last decision this credential got for this member, however old, or null. */
+function staleDecision(key: string): unknown | null {
+  const hit = decisions.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > DECISION_FALLBACK_MS) {
+    decisions.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function rememberDecision(key: string, value: unknown): void {
+  // Bounded, so a long-lived process cannot grow one entry per viewer per member for ever. The cache
+  // is a burst absorber; anything older than the TTL is dead weight, and clearing on size is enough.
+  if (decisions.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of decisions) if (now - v.at > DECISION_TTL_MS) decisions.delete(k);
+    if (decisions.size > 500) decisions.clear();
+  }
+  decisions.set(key, { at: Date.now(), value });
+}
+
+/**
+ * Who is asking — or `undefined` when that could not be established.
+ *
+ * THE THREE ANSWERS ARE NOT TWO. `null` means "nobody is signed in", which is a VERDICT. A GoTrue
+ * call that threw or timed out means "I do not know", which is not — and returning `null` for it made
+ * a transient failure indistinguishable from a logged-out visitor, so a private lagoon 404'd for its
+ * own owner whenever the auth call lost a race. Under a burst of module requests it lost often.
+ *
+ * The rest of this route already keeps that distinction for the database ("THE DATABASE IS DOWN, AND
+ * THAT IS NOT A VERDICT"); this is the same rule one layer up.
+ */
+async function viewerOf(): Promise<{ userId: string } | null | undefined> {
   try {
     const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
     return data.user ? { userId: data.user.id } : null;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -203,8 +285,13 @@ const serve = async (request: Request) => {
   // while its records 404'd. The listing and the gate have to agree, or the listing is the leak.
   if (request.method === 'GET') {
     try {
+      // `undefined` is "could not ask" — see `viewerOf`. For the RAIL that is not worth guessing
+      // about: throwing here falls through to serving the page without a shell, which is the same
+      // thing this block already does when the store cannot be read.
+      const who = await viewerOf();
+      if (who === undefined) throw new Error('viewer unknown');
       const visible = await visibilityFor({
-        viewer: await viewerOf(),
+        viewer: who,
         shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
       });
       if (pathname === '/api/health') return apiHealth();
@@ -229,20 +316,36 @@ const serve = async (request: Request) => {
     }
   }
 
-  const record = parseRecordPath(pathname);
+  let record = parseRecordPath(pathname);
   /**
-   * Take `__motu_frame` back off before the hop.
+   * `__motu_frame` GOES THROUGH UNTOUCHED — the host owns it now.
    *
-   * ONE FUNCTION FOR EVERY PROXY PATH, because there is more than one and the first version only
-   * covered the last of them: the ABSTAIN branch returns earlier, and on this host every repo
-   * abstains, so nearly every frame asked the host for an address it has never heard of and got a
-   * 404 for a page that exists.
+   * This used to strip the suffix before the hop, because the address was the app's own and the host
+   * had never heard of it. The host implements it (`server.mjs`, `isFrame`): the suffixed path serves
+   * the ARTIFACT and the bare path serves the SHELL. Once that landed, stripping became a recursion.
+   *
+   *   frame asks /r/latest/all/__motu_frame  ->  stripped to /r/latest/all  ->  host returns the SHELL
+   *   that shell contains a frame pointing at /r/latest/all/__motu_frame    ->  stripped again  -> ...
+   *
+   * The page renders as a stack of shells inside shells, each drawn a little later than the last, and
+   * it looks like a rendering bug rather than a routing one — it was reported as "the lagoon is
+   * broken", chased through the artifact, the store and the tunnel, and none of them were involved.
+   *
+   * Two hosts disagreeing about who owns an address is the shape of this failure; the rule now is
+   * that the host owns it and this proxy passes it along.
    */
-  const bareRewrite = (p: string) =>
-    record?.bare ? p.replace(/\/__motu_frame(?=(\/__motu_reload)?$)/, '') : p;
+  const bareRewrite = (p: string) => p;
 
   // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
   // page or the index is still the HOST's read secret and still handled there.
+  //
+  // EXCEPT A LIVE MEMBER'S ASSETS, which are not a record and are not "no opinion" either: they are
+  // the dev server's modules under the member's own prefix, and on a PRIVATE repo they need the same
+  // credential the page just got. Without it the host refuses them anonymously and the browser is
+  // handed HTML where it asked for JavaScript — a frame that loads and then renders nothing. Treated
+  // as `bare` so it takes the artifact path below (authorize, then proxy) and never draws a shell.
+  const asset = record ? null : parseMemberAssetPath(pathname);
+  if (asset) record = { ...asset, isReload: false, bare: true };
   if (!record) return proxyToHost(request);
 
   // THE SHELL, for a page. Every lagoon carries the rail that used to belong to a group — see
@@ -251,8 +354,13 @@ const serve = async (request: Request) => {
   // request are the page itself and go straight through.
   if (!record.isReload && !record.bare) {
     try {
+      // `undefined` is "could not ask" — see `viewerOf`. For the RAIL that is not worth guessing
+      // about: throwing here falls through to serving the page without a shell, which is the same
+      // thing this block already does when the store cannot be read.
+      const who = await viewerOf();
+      if (who === undefined) throw new Error('viewer unknown');
       const visible = await visibilityFor({
-        viewer: await viewerOf(),
+        viewer: who,
         shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
       });
       // GATED BY THE SAME PREDICATE THE INDEX USES, and placed before the authorize block for one
@@ -262,15 +370,20 @@ const serve = async (request: Request) => {
       // there, exactly as before — the shell is never the thing that reveals one exists.
       if (!(await visible(record.repo))) throw new Error('not visible');
       const members = await railMembers(visible);
-      if (members.length) {
-        const at = focusIndex(members, record.repo, record.slug);
+      const at = focusIndex(members, record.repo, record.slug);
+      // A SHELL AROUND SOMEBODY ELSE'S LAGOON IS WORSE THAN NO SHELL. `at < 0` means the member being
+      // asked for is not in the rail at all — it has no PUBLISHED record, which is exactly what a
+      // live-only lagoon looks like, and a normal thing to want to look at. `focusIndex` used to
+      // answer 0 there, so the shell framed whoever came first: a request for one lagoon served
+      // another, with a rail that did not contain the repo in the URL. Fall through instead and serve
+      // the page as it always was.
+      if (members.length && at >= 0) {
         return new Response(
-          composedPage({
-            id: null,
-            // THE LAGOON'S OWN NAME in the bay, not `repo · slug`. That was the group's title format
-            // and it is one thing a group has that a single lagoon does not — a name of its own. At
-            // rail width it wrapped to two lines and collided with the count beside it.
-            group: members[at]?.title ?? record.slug,
+          // `lagoonPage`, which is what `composedPage` was renamed to when a group stopped being the
+          // only thing with a shell. This call still said `composedPage`, so the app could not BUILD
+          // — the process serving it is an older build from before the rename, and any deploy would
+          // have failed. `id` and `group` went with the group concept and are no longer parameters.
+          lagoonPage({
             docTitle: `${record.repo}/${record.slug}`,
             members: members.map((m, i) => ({ ...m, i })),
             live: true,
@@ -299,14 +412,34 @@ const serve = async (request: Request) => {
 
   const shareToken = cookieValue(request.headers.get('cookie'), SHARE_COOKIE);
 
-  let decision;
+  // Typed explicitly: `typeof decision` is used below to cast a remembered value back, and an
+  // inferred `let` is `undefined` at that point.
+  let decision: Awaited<ReturnType<typeof authorize>>;
+  // One burst of modules is one decision. See `decisions` above for why this exists and why it is
+  // keyed by the credential.
+  const cacheKey = asset ? decisionKey(request, record.repo, record.slug) : null;
+  const remembered = cacheKey ? rememberedDecision(cacheKey) : null;
   try {
-    decision = await authorize({ viewer: await viewerOf(), shareToken }, record, {
-      projects: postgresProjectStore(),
-      memberships: postgresMembershipStore(),
-      access: postgresAccessStore(),
-      shareLinks: postgresShareLinkStore(),
-    });
+    if (remembered) {
+      decision = remembered as Awaited<ReturnType<typeof authorize>>;
+    } else {
+      const viewer = await viewerOf();
+      // COULD NOT ASK — so do not answer as though nobody was there. What this same credential was
+      // told before is a better answer than a downgrade, and if there is nothing to fall back on the
+      // request goes on to be decided normally with no viewer.
+      const fallback = viewer === undefined && cacheKey ? staleDecision(cacheKey) : null;
+      decision =
+        (fallback as Awaited<ReturnType<typeof authorize>> | null) ??
+        (await authorize({ viewer: viewer ?? null, shareToken }, record, {
+          projects: postgresProjectStore(),
+          memberships: postgresMembershipStore(),
+          access: postgresAccessStore(),
+          shareLinks: postgresShareLinkStore(),
+        }));
+      // Only a decision made with a KNOWN viewer is worth remembering; caching one made blind would
+      // pin the downgrade this exists to prevent.
+      if (cacheKey && !fallback && viewer !== undefined) rememberDecision(cacheKey, decision);
+    }
   } catch (err) {
     // THE DATABASE IS DOWN, AND THAT IS NOT A VERDICT. Failing closed here would 404 every public
     // lagoon on the host over an outage in a component none of them need; failing open would be the

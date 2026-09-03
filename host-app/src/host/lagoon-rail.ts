@@ -10,9 +10,10 @@
 // this viewer may see. A group is then only a way of LOOKING at lagoons — which is what it always
 // was — and stops needing to be a thing you browse to.
 import { store } from './store.ts'
+import { liveFor, liveMap } from './live.ts'
 import type { Visible } from './read-routes.ts'
 
-/** One lagoon in the rail, in the shape `composedPage` renders. */
+/** One lagoon in the rail, in the shape `lagoonPage` renders. */
 export type RailMember = {
   repo: string
   slug: string
@@ -49,6 +50,11 @@ export type RailMember = {
  */
 export async function railMembers(visible: Visible): Promise<RailMember[]> {
   const s = store()
+  // WHICH OF THESE IS A RUNNING DEV SERVER. `live` was hardcoded `null` here, so the rail could never
+  // draw the badge the view already knows how to render — a member being served live is the one thing
+  // about it that changes minute to minute, and the list that shows every lagoon was the one place
+  // not saying it. One request for the whole rail, and an unreachable registry is simply no badges.
+  const serving = await liveMap();
   const repos = s.listRepos() as Array<{ repo: string; slugs: string[]; brand: string | null }>
   const keep = await Promise.all(repos.map((r) => visible(r.repo)))
   const out: RailMember[] = []
@@ -64,7 +70,7 @@ export async function railMembers(visible: Visible): Promise<RailMember[]> {
         hash: rec.hash,
         title: rec.title || slug,
         sha: rec.sha ?? null,
-        live: null,
+        live: liveFor(serving, r.repo, 'latest', slug),
         brand: r.brand ?? null,
         frameHref: `/${r.repo}/latest/${slug}/__motu_frame`,
       })
@@ -74,7 +80,18 @@ export async function railMembers(visible: Visible): Promise<RailMember[]> {
 }
 
 /** Where the lagoon being looked at sits in that rail, or 0 if it is not in it. */
+/**
+ * Where the requested member sits in the rail, or `-1` when it is not there at all.
+ *
+ * IT USED TO ANSWER 0 FOR "NOT FOUND", which is the shape of bug this codebase exists to refuse: the
+ * shell then framed whoever happened to be FIRST, so asking for one lagoon quietly served another —
+ * a rail with the requested repo nowhere in it and somebody else's page in the frame. Measured: a
+ * request for `shlinkio/shlink-web-client/all.develop` rendered `twentyhq/twenty`.
+ *
+ * A member is missing from the rail whenever it has no PUBLISHED record — which is exactly the case
+ * for a lagoon that only exists as a running dev server, and that is a normal thing to look at.
+ * The caller falls through to serving the page itself rather than wrapping the wrong one.
+ */
 export function focusIndex(members: RailMember[], repo: string, slug: string): number {
-  const at = members.findIndex((m) => m.repo === repo && m.slug === slug)
-  return at < 0 ? 0 : at
+  return members.findIndex((m) => m.repo === repo && m.slug === slug)
 }

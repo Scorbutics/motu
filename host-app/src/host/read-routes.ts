@@ -54,7 +54,10 @@ export async function apiRepos(visible: Visible) {
 
 /** `GET /api/groups` — members filtered, and an empty group dropped rather than shown empty. */
 export async function apiGroups(visible: Visible) {
-  const all = store().listGroups() as Array<{ members?: Array<{ repo: string }> }>
+  // `listGroups` went with the groups feature. An empty list is the truthful answer for a host that
+  // has no groups, and it keeps this endpoint's shape for anything still calling it.
+  const all = ((store() as unknown as { listGroups?: () => Array<{ members?: Array<{ repo: string }> }> }).listGroups?.() ??
+    []) as Array<{ members?: Array<{ repo: string }> }>
   const groups: unknown[] = []
   for (const g of all) {
     const members = []

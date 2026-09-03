@@ -10,7 +10,7 @@ import type { ShareLink } from '../src/auth/share-links.ts';
 import { tokenHash } from '../src/auth/share-links.ts';
 import type { AccessStore, CachedAnswer } from '../src/auth/repo-access.ts';
 import { FRESH_FOR_MS } from '../src/auth/repo-access.ts';
-import { parseRecordPath } from '../src/host/records.ts';
+import { parseRecordPath, parseMemberAssetPath } from '../src/host/records.ts';
 
 const NOW = new Date('2026-08-27T12:00:00Z');
 const ORG = 'org-1';
@@ -354,4 +354,37 @@ test('a link does not make a project the database has never heard of readable', 
     (await authorize(asker(LINK_TOKEN), { repo: 'acme/never-seen', ref: 'latest', slug: 'all' }, d)).outcome,
     'abstain',
   );
+});
+
+// A LIVE MEMBER'S ASSETS ARE THE MEMBER, for the purpose of deciding who may read them.
+//
+// These paths are not records — the tail is arbitrary — so the route used to proxy them with no
+// credential at all. Correct for a public repo, and on a private one the host refuses anonymously and
+// the browser is handed HTML where it asked for a module: the frame loads and renders nothing.
+test('parseMemberAssetPath resolves a live member from its asset paths', () => {
+  assert.deepEqual(parseMemberAssetPath('/acme/web/latest/all/@vite/client'), {
+    repo: 'acme/web',
+    ref: 'latest',
+    slug: 'all',
+  });
+  assert.deepEqual(parseMemberAssetPath('/acme/web/latest/all/src/main.tsx'), {
+    repo: 'acme/web',
+    ref: 'latest',
+    slug: 'all',
+  });
+  // A repo whose own name ends in `latest` still resolves: the LAST occurrence wins, as on the host.
+  assert.deepEqual(parseMemberAssetPath('/acme/latest/latest/all/@react-refresh'), {
+    repo: 'acme/latest',
+    ref: 'latest',
+    slug: 'all',
+  });
+});
+
+test('parseMemberAssetPath declines anything that is not an asset under a member', () => {
+  // The member itself is a RECORD, not an asset — it parses elsewhere and must not be caught here.
+  assert.equal(parseMemberAssetPath('/acme/web/latest/all'), null);
+  assert.equal(parseMemberAssetPath('/acme/web/latest/all/__motu_frame'), null);
+  // No `latest`, nothing to hang a member on.
+  assert.equal(parseMemberAssetPath('/acme/web/3ce53a9/all/@vite/client'), null);
+  assert.equal(parseMemberAssetPath('/'), null);
 });

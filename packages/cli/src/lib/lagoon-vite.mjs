@@ -10,6 +10,7 @@
 // A project declares its posture in motu.config.json and its lagoon in lagoon.config.json. That is all.
 // `motu lagoon eject` writes the old files back out for a project that genuinely needs to fork.
 import { createRequire } from 'node:module';
+import { injectDock } from './dock-inject.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -354,6 +355,7 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // and one copy per adapter would be three copies of one decision.
       ...(env.MOTU_DEBUG === '0' ? [] : [motuProvenance(lagoonJson.alias, paths.lagoonDir)]),
       ...(excludedPlugin ? [excludedPlugin] : []),
+      motuDevDock(),
       ...(host.plugins ?? []),
     ],
     // These defines are the contract with `motu island verify`, which sets the matching MOTU_* env
@@ -497,4 +499,30 @@ function savedCorpora(paths) {
     }
   }
   return out;
+}
+
+/**
+ * THE DOCK, IN THE DEV LOOP.
+ *
+ * `motu lagoon serve` injects it (`injectDock`) and the motu host injects it around a published
+ * artifact — so the dock was present everywhere a lagoon is LOOKED at, and absent from the one place
+ * it is WORKED in. The documentation said `lagoon dev` drew it; it never did, which is a claim that
+ * survived because nobody checks for a control they are not currently missing.
+ *
+ * That gap is what makes a view addressable-but-invisible: the region/mountpoints/page control lives
+ * in the dock, so a region declaring a `page` had no way to be switched to except by editing the URL.
+ *
+ * Injected into the dev server's HTML rather than bundled, exactly as the other two do it — change
+ * the dock and nothing needs rebuilding.
+ */
+function motuDevDock() {
+  return {
+    name: 'motu:dev-dock',
+    // `post` so the app's own transforms have finished. The dock appends to the document and reads
+    // the page's published control surface at runtime, so it does not care what else is in there.
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html) => injectDock(html),
+    },
+  };
 }

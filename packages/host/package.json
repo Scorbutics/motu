@@ -1,6 +1,8 @@
 {
   "name": "@motu/host",
   "version": "0.1.0",
+  "description": "Server for the shared motu lagoon host: stores published region previews and serves a live URL per branch.",
+  "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "preview-server", "hosting", "ui-preview"],
   "license": "MIT",
   "type": "module",
   "bin": {

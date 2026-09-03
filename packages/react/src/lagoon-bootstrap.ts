@@ -46,7 +46,9 @@ export interface LagoonBootstrapOptions {
   /** Outward channel; a console-logging no-op by default. */
   host?: HostBridge;
   /** 'region' (the app's arrangement) or 'mountpoints' (every declared slot, framed separately). */
-  view?: 'region' | 'mountpoints';
+  view?: 'region' | 'mountpoints' | 'page';
+  /** The page component, called with the archipelago's declared props. */
+  page?: (props: never) => ReactNode;
   /** Initial store contents so bound islands render meaningfully. Overrides `overrides.seed`. */
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store (same as the real composition roots). */
@@ -326,8 +328,10 @@ markSandbox();
     ...opts,
     view:
       opts.view ??
-      (typeof location !== 'undefined' && new URLSearchParams(location.search).get('view') === 'mountpoints'
-        ? 'mountpoints'
+      (typeof location !== 'undefined'
+        ? (({ page: 'page', mountpoints: 'mountpoints', region: 'region' } as const)[
+            new URLSearchParams(location.search).get('view') ?? ''
+          ] ?? undefined)
         : undefined),
   };
   installHarness(opts, host);
@@ -461,6 +465,9 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
       // Only for a whole-region target: a single-island target is mounted through a synthesised
       // one-slot config, and the app's layout would place slots that mount does not have.
       layout: target.kind === 'archipelago' ? forRegion.layout : undefined,
+      // Same gate as `layout`, for the same reason — the application's page places the whole region,
+      // so it is meaningless against a synthesised one-slot target.
+      page: target.kind === 'archipelago' ? forRegion.page : undefined,
       // NOT gated on the view the way `layout` is: providers are what an island cannot render
       // without, so a single-slot mount needs them exactly as much as the region does.
       providers: forRegion.providers,
@@ -486,9 +493,20 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
     channels,
     // The checks that drive a region open `?view=mountpoints`; the React branch above has always
     // honoured it and this one dropped it.
-    view: opts.view,
+    //
+    // `page` is REFUSED here rather than quietly downgraded. This is the custom-element path — a host
+    // whose islands are not React — and it has no application page module to render. Falling back to
+    // the region view would hand back a page that looks right and answers a different question, which
+    // is the failure this whole view exists to make impossible.
+    view: opts.view === 'page' ? undefined : opts.view,
   });
 
+  if (opts.view === 'page') {
+    console.error(
+      'motu: ?view=page renders the application\'s own page module and is React-only — this lagoon ' +
+        'mounts islands as custom elements, so there is no page to render. The region view was shown instead.',
+    );
+  }
   document.getElementById(opts.mountId ?? 'lagoon')?.appendChild(el);
   return el;
 }

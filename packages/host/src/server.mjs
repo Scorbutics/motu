@@ -77,6 +77,38 @@ export function mergeLive(repos, liveMembers) {
   return [...byRepo.values()].sort((a, b) => a.repo.localeCompare(b.repo));
 }
 
+/**
+ * AN OPEN GALLERY FOR A LOCAL AGENT — off unless asked for, and never reachable from outside.
+ *
+ * An agent working on this machine has no browser session and no cookie, so every private repo 404s
+ * at it. That is correct for the internet and useless for the thing the host exists to support: an
+ * agent that cannot open the gallery cannot check its own work, and cannot tell "this is private"
+ * from "I broke it" — which is exactly the confusion that produced the report this was written for.
+ *
+ * THREE CONDITIONS, ALL REQUIRED, and the third is the one that makes this safe rather than a hole:
+ *
+ *   1. `MOTU_HOST_OPEN_LOCAL=1` — the operator asks for it. Absent, nothing here changes.
+ *   2. the peer address is loopback.
+ *   3. the request carries NO forwarding header.
+ *
+ * (3) exists because (2) is not sufficient on this host, and believing it was would publish every
+ * private lagoon. A Funnel terminates at tailscaled and proxies to 127.0.0.1, and the host-app in
+ * front of this one proxies to 127.0.0.1 as well — so a request from the public internet arrives here
+ * from LOOPBACK. What distinguishes it is that a proxy announces itself: `x-forwarded-for`,
+ * `forwarded`, `x-real-ip`. Any of them present and this refuses, whatever the socket says.
+ *
+ * It grants READ only. Writes still need the token — an open gallery is for looking.
+ */
+const OPEN_LOCAL = process.env.MOTU_HOST_OPEN_LOCAL === '1';
+const FORWARD_HEADERS = ['x-forwarded-for', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto'];
+
+function localOpen(req) {
+  if (!OPEN_LOCAL) return false;
+  if (FORWARD_HEADERS.some((h) => req.headers[h] !== undefined)) return false;
+  const addr = req.socket?.remoteAddress ?? '';
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+}
+
 function liveRegistry(ttlMs = 90_000) {
   const entries = new Map(); // "repo/slug" -> { url, at }
   const key = (repo, slug) => `${repo}/${slug}`;
@@ -341,7 +373,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     const adminOk = Boolean(token) && tokenMatches(bearer, token);
     const readSecret = readSecretFrom({ cookieHeader: req.headers.cookie, bearer });
     /** A reader's verdict for one repo, and the 404 that hides a private one's existence. */
-    const readable = (repo) => canRead(access, repo, { adminOk, readSecret });
+    const readable = (repo) => localOpen(req) || canRead(access, repo, { adminOk, readSecret });
 
     // UNLOCKING A PRIVATE LINK. A browser following a URL cannot set a header, so the secret arrives
     // once as `?k=`, becomes an HttpOnly cookie, and is redirected away — so it stops appearing in the
@@ -615,7 +647,19 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         const liveSlug = normalizeSegment(segments[at + 1]);
         const rest = segments.slice(at + 2);
         const endpoint = liveRepo && liveSlug && readable(liveRepo) ? live.endpointFor(liveRepo, liveSlug) : null;
-        if (endpoint && rest[rest.length - 1] !== '__motu_hmr') {
+        // `__motu_frame` IS THIS HOST'S ADDRESS, NOT THE DEV SERVER'S — the one tail under a member
+        // prefix that must not be forwarded.
+        //
+        // Everything else below a live member belongs to Vite, which is why the path goes whole. The
+        // frame suffix is the exception: it means "the bytes without the shell", it is answered by the
+        // member route further down (which proxies the dev server's ROOT for a live member), and Vite
+        // has no such route — so forwarding it returned 404 for a page that exists.
+        //
+        // The symptom was a blank frame and a dock stuck on "waiting for the lagoon…", because the
+        // shell renders fine and only its iframe 404s. It appears exactly when a member is LIVE, which
+        // is why a published lagoon looked healthy and starting a dev server "broke" it.
+        const tail = rest[rest.length - 1];
+        if (endpoint && tail !== '__motu_hmr' && !rest.includes('__motu_frame')) {
           // THE RAW TAIL, not the decoded segments re-encoded. `segments` is decoded, so rebuilding
           // the path with `encodeURIComponent` turned `@vite/client` into `%40vite/client` and the
           // dev server answered 404 — a bug introduced by being careful in the wrong direction.

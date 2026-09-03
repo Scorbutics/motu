@@ -90,3 +90,40 @@ export function parseRecordPath(pathname: string): RecordPath | null {
   if (!repo || !ref || !slug) return null;
   return { repo, ref, slug, isReload, bare };
 }
+
+/**
+ * A live member's ASSET path — the member prefix, plus a tail that belongs to its dev server.
+ *
+ * `parseRecordPath` answers null for these, because the tail is arbitrary: `/@vite/client` has no
+ * valid ref, `/src/main.tsx` puts four segments where a repo takes two. The route then treated them
+ * as "not a record, no opinion" and proxied them WITHOUT a credential — which is correct for a public
+ * repo and fatal for a private one. The host refuses the anonymous request, the browser gets HTML
+ * where it asked for a module, and the frame renders nothing:
+ *
+ *     __motu_frame    200  html          <- the page arrives
+ *     @vite/client    404  html          <- NS_ERROR_CORRUPTED_CONTENT
+ *     main.tsx        404  html
+ *
+ * Only a PRIVATE repo with a LIVE member is affected, which is why it survived every test against
+ * the public ones.
+ *
+ * Parsed around `latest` exactly as the host parses it (`server.mjs`, the live prefix proxy), last
+ * occurrence winning, so a repository whose own name ends in `latest` still resolves.
+ */
+export function parseMemberAssetPath(pathname: string): { repo: string; ref: string; slug: string } | null {
+  const segments = pathname.split('/').filter(Boolean)
+  if (segments.length < 5) return null
+  const at = segments.lastIndexOf('latest')
+  // `at >= 1` leaves room for a repo before it; `> at + 2` means there is a tail after the slug, which
+  // is what makes this an ASSET rather than the member itself (that one parses as a record already).
+  if (at < 1 || segments.length <= at + 2) return null
+  // THE RESERVED TAILS ARE NOT ASSETS. `__motu_frame` and `__motu_reload` are addresses this app and
+  // the host own between them, and both already parse as a RECORD — so a path ending in one is never
+  // an asset, and saying so here keeps the two parsers from disagreeing about the same URL.
+  const tail = segments.slice(at + 2)
+  if (tail.some((s) => s === '__motu_frame' || s === '__motu_reload')) return null
+  const repo = normalizeRepo(segments.slice(0, at).join('/'))
+  const slug = normalizeSegment(segments[at + 1])
+  if (!repo || !slug) return null
+  return { repo, ref: 'latest', slug }
+}

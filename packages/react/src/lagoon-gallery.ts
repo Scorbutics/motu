@@ -455,7 +455,16 @@ markSandbox();
     refused = true;
   }
 
-  let view: TideView = localStorage.getItem(VIEW_KEY) === 'mountpoints' ? 'mountpoints' : 'region';
+  // THE URL WINS OVER THE REMEMBERED VIEW. Every other declared state here is an address, and a view
+  // that could only be reached by clicking would be the one thing in the lagoon a person cannot hand
+  // to someone else — including to the check that drives it.
+  const requestedView = new URLSearchParams(location.search).get('view');
+  let view: TideView =
+    requestedView === 'page' || requestedView === 'mountpoints' || requestedView === 'region'
+      ? (requestedView as TideView)
+      : localStorage.getItem(VIEW_KEY) === 'mountpoints'
+        ? 'mountpoints'
+        : 'region';
 
   function mount(id: string): void {
     if (!id) return;
@@ -484,12 +493,21 @@ markSandbox();
         hostProps,
         view,
       });
+      // A region offers `page` only when it declares one. Computed per region, on every mount, because
+      // the answer changes with the station and a stale control is worse than no control.
+      tide.setViews(ov.page ? ['region', 'mountpoints', 'page'] : ['region', 'mountpoints']);
+      // AND FALL BACK RATHER THAN SHOW AN EMPTY FRAME. Switching to a region with no page while the
+      // page view is active would render the "no page declared" placeholder and look like a failure.
+      if (view === 'page' && !ov.page) view = 'region';
       tide.setActive(current, view);
       tide.setFlows(flowsOf(id), activeFlowName(id));
       applyRequestedFlow(id);
       return;
     }
 
+    // The custom-element path has no application page module to render — see `lagoon-bootstrap`.
+    tide.setViews(['region', 'mountpoints']);
+    if (view === 'page') view = 'region';
     root!.replaceChildren();
     const el = document.createElement('motu-archipelago');
     el.setAttribute('name', id);
@@ -647,6 +665,14 @@ markSandbox();
         scenario: currentScenario,
       }),
       show: (id: string) => onStation(id),
+      /**
+       * WHICH VIEWS THIS REGION CAN OFFER — the dock draws one pill per entry.
+       *
+       * `page` exists only where the region declares one, so the list is per-region and recomputed on
+       * read rather than captured: the dock asks after every change, and a pill for a view the current
+       * station cannot render would open the "no page declared" placeholder and read as a failure.
+       */
+      views: () => (regionOverrides(overrides, current).page ? ['region', 'mountpoints', 'page'] : ['region', 'mountpoints']),
       setView: (next: TideView) => onView(next),
       runFlow: (name: string | null) => onFlow(name),
       /**
@@ -934,6 +960,14 @@ markSandbox();
   const onView = (next: TideView) => {
       view = next;
       localStorage.setItem(VIEW_KEY, next);
+      // THE ADDRESS FOLLOWS THE SCREEN, as it does for a flow and a scenario. Without this the page
+      // view was reachable by URL and not QUOTABLE from the dock: pressing Page changed what you were
+      // looking at and left the address naming the region view, so pasting it sent someone else
+      // somewhere else. `replaceState`, not a navigation — the mount already happened.
+      const url = new URL(location.href);
+      if (next === 'region') url.searchParams.delete('view');
+      else url.searchParams.set('view', next);
+      history.replaceState(null, '', url.toString());
       if (island) mountIsland(island);
       else mount(current);
   };
@@ -945,6 +979,12 @@ markSandbox();
     // remount: a flow leaves the region where its last step put it, and going back to what the page
     // establishes is a state too.
   const onFlow = (name: string | null) => {
+      // A FLOW IS THE REGION'S, so asking for one leaves the page view rather than replaying against
+      // it. The page renders what the PAGE renders — with peps' login seeded to an expired link that
+      // is the error banner and not the form — so a flow driving `login-form` there fails on its
+      // first step with "no island mounted under slot", which is true and is not a finding about the
+      // flow. Same rule the station list already keeps: picking a station leaves island mode.
+      if (view === 'page') onView('region');
       // WHICH STATE IS SHOWING, remembered rather than inferred. A host drawing this panel from
       // outside cannot read it from anywhere else: the in-page dock kept it in its own DOM, so a
       // second reader had nothing to go on and lit "As seeded" forever, whatever you pressed.
@@ -1040,6 +1080,7 @@ markSandbox();
    */
   const tide = {
     setActive: (..._a: unknown[]) => controlChanged(),
+    setViews: (..._a: unknown[]) => {},
     setFlows: (..._a: unknown[]) => controlChanged(),
     /** The outcome of a flow already lands in `__motuLagoonState`, which is what a driver reads. */
     setFlowOutcome: (..._a: unknown[]) => {},

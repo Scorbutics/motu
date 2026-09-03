@@ -28,6 +28,37 @@ motu lagoon states
 
 Open either one. It is the real components, still interactive, rendered from a declared seed.
 
+### The loop this is built for
+
+The reason the declarations and the addressable states matter together: **an agent can build a region
+and a human can look at it, in the same loop, without either waiting on the other.**
+
+    an agent builds a region        declared: who owns which key, which island fills which slot
+      ↓
+    the lagoon serves it live       every state at its own URL, in the shared gallery
+      ↓
+    a human looks — and so does     the URL is the handover; a passing check is not
+    a fresh agent
+      ↓
+    feedback goes back in           the region is one page's worth of work, so the cycle is short
+      ↓
+    integrate, with the checks      slots typed against the page, one producer per key, removable
+      ↓
+    ship
+
+Every piece of motu is shaped by that loop. States are declared rather than scripted so an agent can
+enumerate them (`motu lagoon states`) and a human can bookmark one. Ownership is declared so several
+agents can work one screen at once without a coordination mechanism — the archipelago IS the claim
+registry, and a second claim on a key fails in that agent's own branch. The lagoon is hosted rather
+than local so the preview outlives the agent session that produced it, and it is scoped per branch so
+concurrent agents do not overwrite each other's. `motu check` prints where to look, because a summary
+of files is not a handover.
+
+The perception step is deliberately not the author's. An agent that built a region is the worst reader
+of it: what it invented sits in its own context as a premise. So the look belongs to a human, or to a
+fresh agent given the URL and nothing else — which is the one check in the set that catches something
+invented whole rather than merely drifted.
+
 ### What motu is not
 
 The comparison people reach for is a component workshop (Storybook, and component testing around it),

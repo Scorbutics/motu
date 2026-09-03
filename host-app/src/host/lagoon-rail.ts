@@ -10,6 +10,7 @@
 // this viewer may see. A group is then only a way of LOOKING at lagoons — which is what it always
 // was — and stops needing to be a thing you browse to.
 import { store } from './store.ts'
+import { liveFor, liveMap } from './live.ts'
 import type { Visible } from './read-routes.ts'
 
 /** One lagoon in the rail, in the shape `lagoonPage` renders. */
@@ -49,6 +50,11 @@ export type RailMember = {
  */
 export async function railMembers(visible: Visible): Promise<RailMember[]> {
   const s = store()
+  // WHICH OF THESE IS A RUNNING DEV SERVER. `live` was hardcoded `null` here, so the rail could never
+  // draw the badge the view already knows how to render — a member being served live is the one thing
+  // about it that changes minute to minute, and the list that shows every lagoon was the one place
+  // not saying it. One request for the whole rail, and an unreachable registry is simply no badges.
+  const serving = await liveMap();
   const repos = s.listRepos() as Array<{ repo: string; slugs: string[]; brand: string | null }>
   const keep = await Promise.all(repos.map((r) => visible(r.repo)))
   const out: RailMember[] = []
@@ -64,7 +70,7 @@ export async function railMembers(visible: Visible): Promise<RailMember[]> {
         hash: rec.hash,
         title: rec.title || slug,
         sha: rec.sha ?? null,
-        live: null,
+        live: liveFor(serving, r.repo, 'latest', slug),
         brand: r.brand ?? null,
         frameHref: `/${r.repo}/latest/${slug}/__motu_frame`,
       })

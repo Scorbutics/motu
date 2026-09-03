@@ -62,6 +62,36 @@ export function regionDeclaresPage(id) {
       return false;
     }
   }
+  // THE ARRAY FORM, which is the other half of how a lagoon declares its regions.
+  //
+  // `regions = [loginRegion, directoryRegion, …]`, each built by `overridesFor(archipelago, {…})` in
+  // its own module. There is no region id in that list to match on — the id lives inside the
+  // archipelago the call points at — so this reads the PER-REGION MODULE instead, the same
+  // `<lagoonDir>/src/regions/<id>` convention the rest of the CLI already maps a changed file by.
+  //
+  // Missing this cost the address on a real project: the check found the page and reported on it
+  // while `motu lagoon states` said the region had none, which is the two-answers-to-one-question
+  // shape this file exists to avoid.
+  return regionModuleDeclaresPage(id);
+}
+
+/** Does `<lagoonDir>/src/regions/<id>.(tsx|ts)` pass a `page` to `overridesFor`? */
+function regionModuleDeclaresPage(id) {
+  for (const ext of ['.tsx', '.ts']) {
+    const file = resolve(paths.lagoonDir, 'src/regions', `${id}${ext}`);
+    if (!existsSync(file)) continue;
+    try {
+      const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+      const sf = project.createSourceFile(`region${ext}`, readFileSync(file, 'utf8'));
+      for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        if (call.getExpression().getText() !== 'overridesFor') continue;
+        const spec = call.getArguments()[1]?.asKind(SyntaxKind.ObjectLiteralExpression);
+        if (spec?.getProperty('page')) return true;
+      }
+    } catch {
+      return false;
+    }
+  }
   return false;
 }
 

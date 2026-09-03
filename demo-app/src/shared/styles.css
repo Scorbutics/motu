@@ -753,6 +753,9 @@
   /* The banner's two decorations, read off the design: a pale disc sweeping through the teal, and a
      warm haze bleeding up from the bottom-right corner. */
   --mc-veil: rgba(255, 255, 255, 0.042);
+  /* Standard's field is BRIGHT teal, so the same veil that reads on the deep banner disappears on it.
+     The decoration is the design's, not the opacity. */
+  --mc-veil-lit: rgba(255, 255, 255, 0.1);
   --mc-warm: rgba(232, 120, 78, 0.5);
 }
 
@@ -829,6 +832,14 @@
     radial-gradient(circle 190px at 74% 96%, var(--mc-veil) 0%, var(--mc-veil) 96%, transparent 97%),
     radial-gradient(circle 250px at 96% -34%, var(--mc-veil) 0%, var(--mc-veil) 96%, transparent 97%);
 }
+/* SAME CIRCLES, SAME PLACE ON THE CARD. The percentages above are read against the BANNER; standard's
+   veil is painted on the whole card, so those same numbers put both circles out of sight. These are
+   the premium positions re-expressed against a full-height card. */
+.mc--standard::before {
+  background:
+    radial-gradient(circle 190px at 74% 34%, var(--mc-veil-lit) 0%, var(--mc-veil-lit) 96%, transparent 97%),
+    radial-gradient(circle 250px at 96% -12%, var(--mc-veil-lit) 0%, var(--mc-veil-lit) 96%, transparent 97%);
+}
 .mc--premium .mc__banner::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(52% 88% at 97% 100%, var(--mc-warm) 0%, transparent 66%);
@@ -836,6 +847,11 @@
 /* The banner's own content sits ON the decoration, not under it. */
 .mc__brand, .mc__banner .mc-pill { position: relative; z-index: 1; }
 .mc--standard .mc__body { position: relative; z-index: 1; }
+/* STANDARD IS THE SAME CARD, NOT A TALLER ONE. Its banner has no fold to cross, so it centred its
+   brand row in premium's 146px and left the identity to start below all of it — 48px taller than the
+   card it is meant to sit beside. It gets a banner sized for what it actually holds, and the identity
+   lands where premium's does. */
+.mc--standard .mc__banner { min-height: 104px; }
 .mc--standard {
   background: radial-gradient(120% 140% at 80% 0%, var(--mc-teal-glow) 0%, var(--mc-teal-bright) 46%, var(--mc-teal-foot) 100%);
 }
@@ -868,7 +884,7 @@
    Visible only once the card got narrow enough for the crop to reach the initials. */
 .mc__identity { display: flex; align-items: flex-start; gap: 16px; padding-top: 12px; position: relative; z-index: 1; }
 .mc--premium .mc__avatar { margin-top: -58px; }
-.mc--standard .mc__identity { padding-top: 4px; }
+.mc--standard .mc__identity { padding-top: 0; }
 .mc__avatar {
   width: 96px; height: 96px; flex: 0 0 auto; border-radius: 50%;
   display: grid; place-items: center; object-fit: cover;

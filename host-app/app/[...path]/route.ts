@@ -29,6 +29,7 @@ import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
 import { groupView } from '@/src/host/group-routes';
+import { parseMemberAssetPath } from '@/src/host/records';
 import { railMembers, focusIndex } from '@/src/host/lagoon-rail';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { lagoonPage } from '@motu/host/src/views.mjs';
@@ -229,7 +230,7 @@ const serve = async (request: Request) => {
     }
   }
 
-  const record = parseRecordPath(pathname);
+  let record = parseRecordPath(pathname);
   /**
    * `__motu_frame` GOES THROUGH UNTOUCHED — the host owns it now.
    *
@@ -251,6 +252,14 @@ const serve = async (request: Request) => {
 
   // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
   // page or the index is still the HOST's read secret and still handled there.
+  //
+  // EXCEPT A LIVE MEMBER'S ASSETS, which are not a record and are not "no opinion" either: they are
+  // the dev server's modules under the member's own prefix, and on a PRIVATE repo they need the same
+  // credential the page just got. Without it the host refuses them anonymously and the browser is
+  // handed HTML where it asked for JavaScript — a frame that loads and then renders nothing. Treated
+  // as `bare` so it takes the artifact path below (authorize, then proxy) and never draws a shell.
+  const asset = record ? null : parseMemberAssetPath(pathname);
+  if (asset) record = { ...asset, isReload: false, bare: true };
   if (!record) return proxyToHost(request);
 
   // THE SHELL, for a page. Every lagoon carries the rail that used to belong to a group — see

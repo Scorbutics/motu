@@ -314,6 +314,9 @@ importers:
       '@motu/chrome':
         specifier: workspace:*
         version: link:../chrome
+      '@motu/types':
+        specifier: workspace:*
+        version: link:../types
 
   packages/coverage:
     dependencies:
@@ -362,6 +365,9 @@ importers:
       '@motu/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@motu/types':
+        specifier: workspace:*
+        version: link:../types
       react:
         specifier: '>=18'
         version: 18.3.1

@@ -43,6 +43,9 @@ if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split("."
   apt-get install -y -qq nodejs
 fi
 corepack enable
+# NON-INTERACTIVE, or the first run stops on "Corepack is about to download ... [Y/n]"
+# and waits forever behind whatever ran it.
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 corepack prepare pnpm@10.15.0 --activate
 
 # ---------------------------------------------------------------- caddy
@@ -88,7 +91,7 @@ say "install + build"
 # @motu/cli, which never runs here — the CLI drives a browser on your machine and uploads
 # only the result. Downloading Chromium onto this box buys nothing and costs ~400 MB.
 sudo -u motu env HOME=/home/motu PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-  bash -lc "cd $APP && pnpm install --frozen-lockfile && node scripts/build-packages.mjs"
+  bash -lc "cd $APP && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile && node scripts/build-packages.mjs"
 
 # ---------------------------------------------------------------- token
 if [ ! -f "$ENVFILE" ]; then

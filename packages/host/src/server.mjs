@@ -613,7 +613,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     if (path === '/') {
       // FILTERED, or the gate leaks the very thing it hides: a private repo the visitor cannot open
       // would still be listed here by name, with its lagoon count.
-      const repos = mergeLive(store.listRepos(), live.list()).filter((r) => readable(r.repo));
+      const repos = mergeLive(store.listRepos(), [...live.list(), ...drafts.list()]).filter((r) => readable(r.repo));
       return html(res, 200, rootIndexPage({ repos, stats: store.stats() }), NO_STORE);
     }
 
@@ -812,9 +812,15 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     // LIVE SLUGS ARE PART OF THE LISTING, and a repo whose ONLY members are live still has a page.
     // `store.listRepo` answers from published records alone, so without this a branch preview 404s at
     // the repo level while serving perfectly one path deeper — reachable, unlistable, undiscoverable.
+    // BOTH KINDS OF LIVE. A member is live by PULL (a dev server this host can fetch) or by PUSH (a
+    // draft: the machine sends its bytes, because the host cannot reach it). `/api/live` has always
+    // reported both; this listing read only the first, so a pushed member served perfectly at its own
+    // URL and appeared nowhere — which is indistinguishable, to the person looking for it, from not
+    // being there at all.
+    //
+    // Push is not the exotic case. It is what a host on a VPS gets from every laptop in the team.
     const liveSlugs = repo
-      ? live
-          .list()
+      ? [...live.list(), ...drafts.list()]
           .filter((e) => e.member.slice(0, e.member.lastIndexOf('/')) === repo)
           .map((e) => e.member.slice(e.member.lastIndexOf('/') + 1))
       : [];

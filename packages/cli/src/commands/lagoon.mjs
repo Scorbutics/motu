@@ -444,7 +444,10 @@ export function lagoonServeCommand(argv) {
     process.exit(1);
   }
   const { entry, target, title } = resolved;
-  const slug = paths.publishAs?.slug ?? resolved.slug;
+  // BRANCH-SCOPED, exactly as `lagoon dev` is. `serve --watch --live-push` announces to the host too,
+  // so without this a preview of a work-in-progress branch overwrites the member a team bookmarks —
+  // the same collision the dev server already avoids. A publish is deliberate and keeps its own slug.
+  const slug = liveSlugFor(paths.publishAs?.slug ?? resolved.slug, argv, REPO_ROOT);
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
 
   const port = Number.parseInt(String(argv.port ?? 8817), 10);
@@ -944,7 +947,7 @@ export function liveSlugFor(baseSlug, argv, cwd) {
   return clean(`${baseSlug}.${branch}`) || baseSlug;
 }
 
-function announceDevServer({ slug, port, liveUrl }) {
+function announceDevServer({ slug, port, liveUrl, protocol = 'http' }) {
   const cfg = loadHostConfig();
   const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
   const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
@@ -959,7 +962,7 @@ function announceDevServer({ slug, port, liveUrl }) {
       ...(body ? { body: JSON.stringify(body) } : {}),
     }).catch(() => null);
 
-  const announceUrl = liveUrl || `http://127.0.0.1:${port}`;
+  const announceUrl = liveUrl || `${protocol}://127.0.0.1:${port}`;
   let announced = false;
   let warnedUrlFile = false;
   let refused = false;
@@ -1152,9 +1155,17 @@ export async function lagoonDevCommand(argv) {
   // on a shared machine that should not become the address a whole team is looking at.
   if (argv.live !== false && !argv['no-live']) {
     const resolvedPort = server.config.server.port ?? Number(argv.port) ?? 5173;
+    // THE PROTOCOL THE SERVER ACTUALLY SPEAKS. The announcement was always `http://`, so a lagoon on
+    // an HTTPS dev server registered an address the host could not fetch: it appeared in the gallery,
+    // said `live`, and every page under it answered 502. A project gets HTTPS from its own Vite config
+    // (a cert plugin, `server.https`) — the lagoon borrows that config, so this is not exotic.
+    //
+    // Read from Vite's resolved config rather than guessed, because that is the thing that decides it.
+    const isHttps = Boolean(server.config.server?.https);
     const stopAnnouncing = announceDevServer({
       slug: liveSlugFor(paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all', argv, REPO_ROOT),
       port: resolvedPort,
+      protocol: isHttps ? 'https' : 'http',
       liveUrl: typeof argv.liveUrl === 'string' ? argv.liveUrl : argv['live-url'],
     });
     const leave = () => {

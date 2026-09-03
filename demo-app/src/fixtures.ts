@@ -9,12 +9,11 @@ import {
   roles as memberResultsRoles,
   scenarios as memberResultsScenarios,
 } from './islands/member-results/fixtures.mock.js';
-import { fixtures as userSearch, roles as userSearchRoles } from './islands/user-search/fixtures.mock.js';
 
-export const ALL_FIXTURES: Fixture[] = [...companyLookup, ...memberResults, ...userSearch];
+export const ALL_FIXTURES: Fixture[] = [...companyLookup, ...memberResults];
 
 export const ALL_ROLES: string[] = [
-  ...new Set([...companyLookupRoles, ...memberResultsRoles, ...userSearchRoles]),
+  ...new Set([...companyLookupRoles, ...memberResultsRoles]),
 ];
 
 /**

@@ -723,3 +723,98 @@
 }
 
 .org-tree__company { font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--_text); }
+
+/* ---------------------------------------------------------------- create a member: form + card ---
+   Two islands, one region key. Everything here paints from the token block at the top of this sheet,
+   so both islands take the legacy skin by default and the motu skin when the host opts in — the
+   demo's whole point is that the same components look right in both. */
+
+.gm-card {
+  background: var(--_surface, #fff);
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius);
+  box-shadow: var(--_shadow);
+}
+
+/* ---- the form ---- */
+.gm-form { padding: 18px; }
+.gm-form__head { margin-bottom: 14px; }
+.gm-form__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--_text); }
+.gm-form__hint { margin: 2px 0 0; font-size: 12px; color: var(--_muted); }
+/* Two-up where there is room, stacked where there is not. The breakpoint is the CARD's, not the
+   viewport's: this island is placed beside another one, so it must fold on its own width. */
+.gm-form__row { display: grid; grid-template-columns: 1fr; gap: 0 12px; }
+@container (min-width: 380px) { .gm-form__row { grid-template-columns: 1fr 1fr; } }
+.gm-input--area { resize: vertical; min-height: 54px; font: inherit; }
+.gm-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--_text); margin-top: 4px; }
+.gm-check input { accent-color: var(--_primary); width: 15px; height: 15px; }
+.gm-form__actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.gm-btn {
+  font: inherit; font-size: 13px; padding: 7px 14px; border-radius: var(--_radius-sm);
+  border: 1px solid var(--_border); background: transparent; color: var(--_text); cursor: pointer;
+}
+.gm-btn--ghost:hover { border-color: var(--_primary); color: var(--_primary); }
+
+/* ---- the card ---- */
+.gm-mcard { overflow: hidden; container-type: inline-size; }
+.gm-mcard__banner { height: 64px; background: var(--_grad); }
+.gm-mcard__identity { display: flex; gap: 14px; align-items: flex-end; padding: 0 18px; margin-top: -34px; }
+.gm-mcard__avatar-wrap { position: relative; width: 76px; height: 76px; flex: 0 0 auto; }
+.gm-card__ring { position: absolute; inset: 0; transform: rotate(-90deg); }
+.gm-card__ring-track { stroke: var(--_border); opacity: 0.5; }
+/* The ring is the one thing that ANIMATES, and only as the draft fills — a value changing under you
+   is worth a transition; a layout moving is not. */
+.gm-card__ring-fill { stroke: var(--_accent); transition: stroke-dashoffset 420ms cubic-bezier(0.4, 0, 0.2, 1); }
+.gm-mcard__avatar {
+  position: absolute; inset: 6px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--_surface, #fff); border: 1px solid var(--_border);
+  font-size: 22px; font-weight: 700; letter-spacing: 0.02em; color: var(--_primary);
+}
+.gm-mcard--empty .gm-mcard__avatar { border-style: dashed; color: var(--_muted); }
+.gm-mcard__who { padding-bottom: 4px; min-width: 0; }
+.gm-mcard__name {
+  margin: 0; font-size: 17px; font-weight: 700; color: var(--_text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gm-mcard--empty .gm-mcard__name { color: var(--_muted); font-weight: 600; }
+.gm-mcard__sub { margin: 4px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.gm-mcard__org { color: var(--_muted); }
+.gm-mcard__muted { color: var(--_muted); }
+.gm-chip {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+}
+.gm-chip--role { background: color-mix(in srgb, var(--_primary) 12%, transparent); color: var(--_primary-strong); }
+.gm-mcard__bio {
+  margin: 14px 18px 0; padding-left: 10px; border-left: 2px solid var(--_accent);
+  font-size: 13px; line-height: 1.5; color: var(--_text);
+}
+.gm-mcard__bio--ghost { border-left-color: var(--_border); color: var(--_muted); font-style: italic; }
+.gm-mcard__facts { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 16px 18px 0; }
+@container (min-width: 360px) { .gm-mcard__facts { grid-template-columns: 1fr 1fr; } }
+.gm-mcard__fact dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--_muted); }
+.gm-mcard__fact dd {
+  margin: 3px 0 0; font-size: 13px; color: var(--_text);
+  display: flex; align-items: center; gap: 7px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gm-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.gm-dot--on { background: var(--_primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--_primary) 18%, transparent); }
+.gm-dot--off { background: var(--_border); }
+.gm-mcard__foot { display: flex; align-items: center; gap: 10px; padding: 16px 18px 18px; }
+.gm-mcard__meter { flex: 1 1 auto; height: 5px; border-radius: 999px; background: var(--_border); overflow: hidden; }
+.gm-mcard__meter-fill {
+  display: block; height: 100%; border-radius: 999px; background: var(--_grad);
+  transition: width 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gm-mcard__meter-label { font-size: 11px; color: var(--_muted); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+/* MOTION IS A PREFERENCE. The two transitions above are the only ones, and they go away when asked. */
+@media (prefers-reduced-motion: reduce) {
+  .gm-card__ring-fill, .gm-mcard__meter-fill { transition: none; }
+}
+
+/* The Users region: form and card side by side where there is room, stacked where there is not. */
+.gm-arch--split { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+@media (min-width: 900px) { .gm-arch--split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }

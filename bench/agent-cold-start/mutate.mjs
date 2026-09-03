@@ -35,6 +35,10 @@ const BENCH = '/home/scorbutics/dev/motu-bench';
 const PAIRINGS = {
   formbricks: { root: 'formbricks', spec: 'runs/mutations/mutations.md' },
   shlink: { root: 'shlink', spec: 'runs/mutations-shlink/mutations.md' },
+  // The set that measures what motu actually claims: drift in the WIRING between components rather
+  // than logic inside one. The first shlink set asked for "plausible developer mistakes" and got
+  // eight function-body errors — real bugs, and none of them a thing motu attempts to catch.
+  'shlink-composition': { root: 'shlink', spec: 'runs/mutations-shlink/composition.md' },
 };
 
 const args = process.argv.slice(2);
@@ -56,9 +60,9 @@ function parseSpec() {
   const text = readFileSync(SPEC, 'utf8');
   const out = [];
   for (const block of text.split(/^## /m).slice(1)) {
-    const id = block.match(/^(M\d+)/)?.[1];
+    const id = block.match(/^([MC]\d+)/)?.[1];
     if (!id) continue;
-    const name = block.split('\n')[0].replace(/^M\d+\s*[—-]\s*/, '').trim();
+    const name = block.split('\n')[0].replace(/^[MC]\d+\s*[—-]\s*/, '').trim();
     const symptom = block.match(/\*\*User-visible symptom:\*\*\s*(.+)/)?.[1]?.trim() ?? '';
     const edits = {};
     for (const armBlock of block.split(/^### /m).slice(1)) {

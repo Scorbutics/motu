@@ -11,8 +11,8 @@
 // state. It answers "is this wired?", which is the question that blocks adoption; the runtime half
 // ("does the wired page hold the same values it held before") needs the host's own dev server and is
 // a separate lane.
-import { existsSync, readFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
 import { sep } from 'node:path';
 import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
@@ -261,12 +261,107 @@ function checkRegion(region, sources) {
   //     the chrome only: an island summoned by a data row has no `<X.Island slot>` to find, and
   //     demanding one would report the app's own design as an error.
   {
+  // PARSED, NOT MATCHED. A regex over JSX cannot tell an element from a string that looks like one,
+  // cannot follow a tag across a line break, and reports the same answer for a placement inside a
+  // comment as for a real one. It also cannot see ORDER, which is the thing a page can silently
+  // change: swapping two valid slots type-checks (both names are declared), renders, and passes every
+  // motu check — measured, including `archipelago snapshot`, because the snapshot pictures the REGION
+  // through the lagoon's frame and never the page.
+  //
+  // ts-morph is already how every other host-source question here is answered; this was the last
+  // regex standing in the middle of it.
   const placed = new Map();
-  const slotRe = new RegExp(`<(?:${islandNames.map(escapeRe).join('|')})\\s[^>]*?slot=["'\`]([^"'\`]+)`, 'g');
+  const order = [];
   for (const [file, text] of sources) {
-    for (const [, slot] of code(text).matchAll(slotRe)) {
-      placed.set(slot, [...(placed.get(slot) ?? []), file]);
+    let sf;
+    try {
+      sf = sourceFileAt(file);
+    } catch {
+      sf = null;
     }
+    if (!sf) {
+      // Unparseable (a syntax the host's own build accepts and ts-morph does not): say so rather than
+      // silently reporting the file as placing nothing.
+      add('warn', 'placed', `${paths.rel(file)} could not be parsed, so its placements were not read`);
+      continue;
+    }
+    const elements = [
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+      ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+    ];
+    for (const el of elements) {
+      const tag = el.getTagNameNode().getText();
+      if (!islandNames.includes(tag)) continue;
+      const attr = el.getAttribute?.('slot');
+      const init = attr?.getInitializer?.();
+      // A literal is the only form that names a slot statically; `slot={x}` is a placement motu
+      // cannot attribute, and saying so beats guessing.
+      const slot =
+        init?.getKind?.() === SyntaxKind.StringLiteral
+          ? init.getLiteralText()
+          : init?.getKind?.() === SyntaxKind.JsxExpression
+            ? null
+            : attr
+              ? null
+              : undefined;
+      if (slot === null) {
+        add('warn', 'placed', `${paths.rel(file)} places an island with a computed \`slot\`, which cannot be attributed`);
+        continue;
+      }
+      if (slot === undefined) continue;
+      placed.set(slot, [...(placed.get(slot) ?? []), file]);
+      order.push({ slot, file, pos: el.getStart() });
+    }
+  }
+
+  // TWO PLACEMENTS OF ONE SLOT is a real defect and the regex could not report it: the page renders
+  // the island twice, both copies bind the same keys, and whichever writes last wins.
+  for (const [slot, files] of placed) {
+    if (files.length > 1) {
+      add('error', 'placed', `slot '${slot}' is placed ${files.length} times (${[...new Set(files.map((f) => paths.rel(f)))].join(', ')}) — two copies of one island share its declared keys, and the later write wins`);
+    }
+  }
+
+  // THE ORDER THE PAGE PLACES THEM IN, remembered between runs. motu cannot know which order is
+  // RIGHT — in a thin-overlay region the arrangement is the page's own business — but it can say that
+  // it moved, which is the one thing nothing else here notices. (`root` removes this question
+  // entirely: the arrangement is then declared once and the page cannot reorder it.)
+  const sequence = order
+    .sort((a, b) => (a.file === b.file ? a.pos - b.pos : a.file.localeCompare(b.file)))
+    .map((o) => o.slot)
+    .join(' → ');
+  if (sequence) {
+    // DRIFT, NOT CORRECTNESS. motu cannot know which order is right — in a thin-overlay region the
+    // arrangement is the page's own business — but it can say that it CHANGED, and nothing else
+    // notices: swapping two declared slots type-checks (both names are valid), renders, passes every
+    // flow, and passes `archipelago snapshot`, because the snapshot pictures the region through the
+    // lagoon's frame and never the page. Measured on a real screen: the search box moved below the
+    // list and every motu check stayed green.
+    //
+    // Remembered per region, beside the other caches. A first run records and says nothing — there is
+    // no drift from an order nobody has seen before.
+    const file = resolve(paths.cacheDir ?? resolve(paths.root ?? '.', '.motu/cache'), 'placement-order.json');
+    let seen = {};
+    try {
+      seen = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {}
+    const previous = seen[region.id];
+    if (previous && previous !== sequence) {
+      add(
+        'warn',
+        'placement-order',
+        `the page's slot order changed: was \`${previous}\`, now \`${sequence}\` — motu cannot say which is ` +
+          `right, only that the ARRANGEMENT moved and no other check sees it. If this was intended, this ` +
+          `warning is spent by the next run; if it was not, the page now renders the region in a ` +
+          `different shape than the one that was reviewed. Declaring \`root\` removes the question.`,
+      );
+    } else {
+      add('ok', 'placement-order', `the page places: ${sequence}`);
+    }
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify({ ...seen, [region.id]: sequence }));
+    } catch {}
   }
 
   // A ROOT REGION places its islands BY PROP NAME. `<X.Root results={…} />` is the page saying it

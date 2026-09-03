@@ -837,3 +837,73 @@ reading the region back, a slot wired to a neighbour's data, a provider removed 
 mount, a declared write that never fires. Several of those cannot even be expressed against the props
 implementation, because it has no declaration to break — which is itself the comparison. That is the
 table to build; the one above is not it.
+
+---
+
+# The composition-drift experiment — what motu actually sees
+
+The previous set measured logic inside component bodies, which motu declines to check. This one
+mutates the WIRING BETWEEN components: a value severed from its consumer, a component in the wrong
+position, a callback dropped, a dependency removed so the page cannot mount. The author's test was
+"if you deleted the component's body and kept its interface, would the bug still exist?"
+
+## First, the flaw in my own set
+
+I forbade the author from running any build, so it could not verify its edits were type-preserving —
+and **only three of the eight (C3, C7, C8) compile on BOTH sides**. The other five fail `tsc` on one
+side or the other, which measures the compiler rather than either arm's detection. That is my
+instruction's fault, not the author's, and it shrinks the usable sample to three.
+
+On the three valid ones: **props tests caught 2 (C7, C8); motu caught 0.**
+
+## The finding, which does not depend on the sample size
+
+Every uncaught region drift has one of two structural causes, and both are properties of the design
+rather than gaps in this region's evidence:
+
+**1. motu never renders the host page.** C3 (search box moved below the list) and C6 (a dependency
+dropped from `withDependencies`, so the page crashes on load) both edit `ManageServers.tsx`. Every
+motu runtime check — `region-flow`, `lagoon-render`, and **`archipelago snapshot`** — renders the
+region through the LAGOON's own frame. The page is read only by `integrate check`, statically, by
+regex. So a page that crashes on load leaves motu completely green.
+
+I tested the snapshot case specifically, because arrangement is exactly what snapshots claim: created
+a baseline, applied C3, re-ran `archipelago snapshot` — **PASS**. The arrangement changed on the page
+and the picture did not, because the picture is of the region, not the page.
+
+The host rules already gesture at this — *"the lagoon renders every declared slot unconditionally…
+NOTHING proves the page reaches it"* — as a caveat about conditional placement. Measured, it is
+broader: **the page's composition is unrendered by motu, entirely.**
+
+**2. A flow emits past the component's own handler.** C4 strips `onChange` forwarding inside the
+island's component, so the search box is inert; the flow emits the declared event directly and the
+coupling still carries. Same boundary the previous set found with a logic mutation, now confirmed on a
+wiring one.
+
+## What motu did catch, and it is the right pair
+
+- **C1 — a severed `bind`.** The region declared it reads `searchTerm`; the declaration was removed;
+  `region-flow` failed. This is the class motu exists for and no unit test would state it, because in
+  the props implementation the equivalent is just a prop nobody passes.
+- **C5 — `removal-check`** caught a callback dropped at the composition root.
+
+## What to do with this
+
+The gap is specific and closable: **nothing renders the host page.** `integrate check` reads it with
+regexes and cannot see whether the page mounts, whether a slot receives the right data, or whether the
+arrangement is what was intended. Closing it means rendering the PAGE — the host's own test runner, or
+a motu check that mounts the page rather than the region.
+
+Until then the honest claim is narrow and still worth making: motu catches drift in what is DECLARED
+(a binding removed, an owner changed, a region no longer composed) and previews every declared state
+without a backend. It does not catch drift in the page that hosts the region, and it never sees inside
+a component.
+
+## Caveats
+
+- Three usable mutations out of eight, for the reason above. This is a direction, not a rate.
+- The author discarded a two-writer race because the feature has one producer and one setter on each
+  side, so forcing a second writer meant inventing plumbing neither implementation has. motu's
+  one-producer rule prevents a class this screen is too small to exhibit.
+- Both trees restored byte-exactly after every run; all sixteen round-trips pre-verified before
+  measuring.

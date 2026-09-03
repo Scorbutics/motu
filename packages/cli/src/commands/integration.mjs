@@ -17,6 +17,7 @@ import { sep } from 'node:path';
 import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
+import { slotNameOfElement } from '../lib/island-placement.mjs';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
@@ -294,16 +295,11 @@ function checkRegion(region, sources) {
       if (!islandNames.includes(tag)) continue;
       const attr = el.getAttribute?.('slot');
       const init = attr?.getInitializer?.();
-      // A literal is the only form that names a slot statically; `slot={x}` is a placement motu
-      // cannot attribute, and saying so beats guessing.
-      const slot =
-        init?.getKind?.() === SyntaxKind.StringLiteral
-          ? init.getLiteralText()
-          : init?.getKind?.() === SyntaxKind.JsxExpression
-            ? null
-            : attr
-              ? null
-              : undefined;
+      // THE RULE LIVES IN `island-placement.mjs` now, because `verify`'s island-composition asks the
+      // same question and used to answer it with a regex. Applied here inline because this loop also
+      // needs the ELEMENT (for props and conditional placement); the shared module is what keeps the
+      // two from disagreeing about what counts as a named slot.
+      const slot = slotNameOfElement(init, attr);
       if (slot === null) {
         add('warn', 'placed', `${paths.rel(file)} places an island with a computed \`slot\`, which cannot be attributed`);
         continue;

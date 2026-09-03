@@ -10,7 +10,8 @@
 //           Chromium) so layout/CSS/paint are exercised; `--fast` uses an in-process happy-dom mount.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
-import { conditionalSlots } from '../lib/lagoon-declares.mjs';
+import { conditionalSlots, frameModuleFor, nestedSlots } from '../lib/lagoon-declares.mjs';
+import { placementsIn } from '../lib/island-placement.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, dirname, resolve } from 'node:path';
@@ -2340,96 +2341,6 @@ function registeredTags() {
  * it belongs to, so the module is identified by what it POINTS AT, never by a spelling that could
  * disagree with the registry.
  */
-function frameModuleFor(id) {
-  for (const f of ['src/lagoon.tsx', 'src/lagoon.ts']) {
-    const overrides = resolve(paths.lagoonDir, f);
-    if (!existsSync(overrides)) continue;
-    const src = readFileSync(overrides, 'utf8');
-    const named = new RegExp(`(^|[\\s{,])['"\`]?${id}['"\`]?\\s*:\\s*([A-Za-z_$][\\w$]*)?`, 'm');
-    const moduleOf = (ident) => {
-      const spec = src.match(new RegExp(`import\\s*\\{[^}]*\\b${ident}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`));
-      if (!spec) return null;
-      const base = resolve(dirname(overrides), spec[1].replace(/\.js$/, ''));
-      return ['.tsx', '.ts', '/index.tsx', '/index.ts', ''].map((e) => base + e).find((c) => existsSync(c)) ?? null;
-    };
-
-    // `\s*` BEFORE THE CLOSER, NOT `\n`. These used to require a newline, so a one-line
-    // `export const regions = [corpusRegion, signinRegion];` — which is how a small project writes
-    // it — matched nothing, no frame was found, and `region-root` reported a frame-composed region
-    // as having no frame at all. That is an ERROR telling a correct stage-1 project to declare a
-    // `root` it does not need, produced by the formatting of a file nobody thought was load-bearing.
-    /**
-     * The region's entry is an OBJECT (`{ seed, layout, providers }`), not a bare identifier.
-     *
-     * This is the shape the scaffolded `lagoon.tsx` recommends in its own commented-out example and
-     * the one CLAUDE.md documents — and it used to leave `module: null`, which `frameIsPageCheck`
-     * reads as "no frame" and reports as `no root`. Two independent cold-start agents, on two
-     * different applications, lost their longest debugging stretch of the run to that message, and
-     * both found the cause only by reading this file. The error named the archipelago; the problem
-     * was a regex that could not see past a `{`.
-     *
-     * So look INSIDE the entry for `layout`, and distinguish the two ways it can be written: a
-     * component identifier (resolvable to a module, so the frame checks below can run) or an inline
-     * arrow (nothing to open — declared, but not inspectable).
-     */
-    const layoutInEntry = (text, at) => {
-      const open = text.indexOf('{', at);
-      if (open < 0) return null;
-      let depth = 0;
-      let end = open;
-      for (; end < text.length; end++) {
-        if (text[end] === '{') depth++;
-        else if (text[end] === '}' && --depth === 0) break;
-      }
-      const entry = text.slice(open, end + 1);
-      const ident = entry.match(/\blayout\s*:\s*([A-Za-z_$][\w$]*)\s*[,}]/);
-      if (ident) return { module: moduleOf(ident[1]), declared: true, exportName: ident[1] };
-      if (/\blayout\s*:/.test(entry)) return { module: null, declared: true, inline: true };
-      return { module: null, declared: true };
-    };
-
-    const kindFirst = src.match(/export const layout[^=]*=\s*\{([\s\S]*?)\s*\};/);
-    const inKindFirst = kindFirst && kindFirst[1].match(named);
-    if (inKindFirst) {
-      if (inKindFirst[2]) return { module: moduleOf(inKindFirst[2]), declared: true, exportName: inKindFirst[2] };
-      // Kind-first holds the layout VALUE directly, so anything that is not an identifier here — an
-      // arrow, a JSX expression — is an inline layout, not a missing one.
-      return { module: null, declared: true, inline: true };
-    }
-
-    const asRecord = src.match(/export const regions[^=]*=\s*\{([\s\S]*?)\s*\};/);
-    if (asRecord) {
-      const entry = asRecord[1].match(named);
-      if (!entry) continue;
-      if (entry[2]) return { module: moduleOf(entry[2]), declared: true, exportName: entry[2] };
-      const inside = layoutInEntry(asRecord[1], entry.index);
-      if (inside) return inside;
-      return { module: null, declared: true };
-    }
-
-    const asArray = src.match(/export const regions[^=]*=\s*\[([\s\S]*?)\s*\];/);
-    if (!asArray) continue;
-    let sawSomeModule = false;
-    for (const ident of asArray[1].match(/[A-Za-z_$][\w$]*/g) ?? []) {
-      const module = moduleOf(ident);
-      if (!module) continue;
-      const body = readFileSync(module, 'utf8');
-      // Whose region is this? `overridesFor(<x>Archipelago, …)`, and `<x>Archipelago` imported from
-      // `…/<id>/<id>.archipelago`. Both halves are required: an identifier alone could name any
-      // region whose camel-case happens to collide.
-      const bound = body.match(/overridesFor\(\s*([A-Za-z_$][\w$]*)/);
-      if (!bound) continue;
-      sawSomeModule = true;
-      const from = body.match(new RegExp(`import\\s*\\{[^}]*\\b${bound[1]}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`));
-      if (!from || !new RegExp(`(^|/)${id}\\.archipelago(\\.[jt]sx?)?$`).test(from[1])) continue;
-      return { module, declared: true };
-    }
-    // The array exists and nothing in it could be read: unresolvable, so loud rather than quiet.
-    if (!sawSomeModule) return { module: null, declared: true };
-  }
-  return { module: null, declared: false };
-}
-
 /**
  * IS THE REGION THE PAGE, OR A DRAWING OF IT?
  *
@@ -2493,18 +2404,13 @@ function islandCompositionCheck(report, id, region, composedBy, sources) {
   );
   // Nested by DECLARATION: motu fills these into the outer island's props, in the page and in the
   // lagoon alike, so a frame that does not name them is composing them all the same.
-  const nested = new Set(
-    [...archText.replace(/^ {2}slots\s*:[\s\S]*?^ {2}\},/m, '').matchAll(/\bslots\s*:\s*\{([\s\S]*?)\n\s*\},/g)].flatMap((m) =>
-      [...m[1].matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)].map(([, , rest]) =>
-        rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1),
-      ),
-    ).filter(Boolean),
-  );
+  const nested = nestedSlots(paths.archipelagoFile(id));
   const placed = new Set();
+  // PARSED, and the same parse `integrate check` uses — see `island-placement.mjs`. This asked the
+  // same question with a pattern, which could not see a multi-line element, a computed slot, or a
+  // commented-out one.
   for (const code of composedBy) {
-    for (const [, slot] of code.matchAll(/<[A-Z][A-Za-z0-9]*\.Island\s[^>]*?slot=["'`]([^"'`]+)/g)) {
-      if (declared.has(slot)) placed.add(slot);
-    }
+    for (const slot of placementsIn(code).named) if (declared.has(slot)) placed.add(slot);
   }
 
   if (!placed.size) {

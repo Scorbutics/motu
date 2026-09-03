@@ -29,6 +29,7 @@ import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, n
 import {
   runLagoon,
   runArchipelagoLagoon,
+  pageRenderLagoon,
   differentiateLagoon,
   responsiveLagoon,
   axeLagoon,
@@ -3636,6 +3637,45 @@ export async function runArchipelagoVerify(argv, id) {
           report.error('lagoon-render', `archipelago <${id}> did not render — unknown id or boot failure`);
         }
         reportRuntimeDiagnostics(report, r, 'region', declaredReach({ regionId: id }));
+
+        // THE PAGE ITSELF — the only check here that renders the application rather than the region.
+        // Reuses the same pooled page: the whole runtime lane is one browser re-aimed per check, and
+        // a second boot for this would double the cost of a region's run for one navigation.
+        const pr = await step('page-render', () => pageRenderLagoon({ id, port }));
+        if (!pr.declared) {
+          report.ok('page-render', `no \`page\` declared for '${id}' — the application's own page is not checked`, {
+            n: 0,
+            of: 'page(s)',
+          });
+        } else if (pr.crashed) {
+          report.error(
+            'page-render',
+            `the application's own page threw while rendering:\n      ${pr.crashed.split('\n').slice(0, 6).join('\n      ')}`,
+          );
+        } else {
+          const declaredRegion2 = readRegions(paths.archipelagosDir).find((x) => x.id === id);
+          const declared2 =
+            declaredRegion2?.membership === 'catalogue'
+              ? []
+              : (declaredRegion2?.islands ?? []).filter((i) => !i.planned).map((i) => i.slot);
+          const reached = new Set(pr.slots.filter((x) => x.len > 0).map((x) => x.slot));
+          const missing = declared2.filter((slot) => !reached.has(slot));
+          if (missing.length) {
+            // THE GAP NOTHING ELSE SEES. The region view places every slot unconditionally, and
+            // `integrate check` can only read that the page NAMES the slot. This is the page running.
+            report.error(
+              'page-render',
+              `the page renders, but never reaches: ${missing.join(', ')} — the slot is placed in the ` +
+                `source and the branch containing it did not run (a conditional, a permission gate, an ` +
+                `empty-state early return). Open ?region=${id}&view=page to see what the page did instead`,
+            );
+          } else {
+            report.ok('page-render', `the application's own page renders and reaches all ${declared2.length} slot(s)`, {
+              n: declared2.length,
+              of: 'slot(s) reached by the page',
+            });
+          }
+        }
       } catch (err) {
         const msg = String(err?.message || err).split('\n')[0];
         const env = environmentalCause(err);

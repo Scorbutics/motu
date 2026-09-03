@@ -8,7 +8,7 @@
 //
 // So the React host's lagoon renders through the same `<ArchipelagoProvider>` / `<Island>` its pages
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
-import { createElement, Fragment, type ReactNode } from 'react';
+import { Component, createElement, Fragment, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { lagoonHarness } from './lagoon-harness';
 import {
@@ -51,7 +51,9 @@ export interface ReactLagoonOptions {
    * attribute, class names included, so recorded callsite frames (`motu archipelago record-frame`)
    * apply to either mount path.
    */
-  view?: 'region' | 'mountpoints';
+  view?: 'region' | 'mountpoints' | 'page';
+  /** EXPERIMENTAL — the application's own page module, for `view: 'page'`. See `RegionOverrides.page`. */
+  page?: () => ReactNode;
   /**
    * The APPLICATION's own arrangement for this region, called with a renderer for each slot.
    *
@@ -130,6 +132,30 @@ declare global {
 }
 
 /** Render every slot of `config` into `mountEl`, in one React tree. */
+
+/**
+ * A page that throws must FAIL VISIBLY, not blank the lagoon.
+ *
+ * This view exists to catch a page that crashes on load — the one failure no other check here can
+ * see. Without a boundary React unmounts the whole tree on a render error, which is a white screen
+ * that looks exactly like a page still loading; the check driving this view would then have to
+ * distinguish "crashed" from "slow" by guessing. The marker below is what it reads instead.
+ */
+class PageErrorBoundary extends Component<{ children: ReactNode }, { err: Error | null }> {
+  state: { err: Error | null } = { err: null };
+  static getDerivedStateFromError(err: Error) {
+    return { err };
+  }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div data-motu-page="crashed" style={{ padding: 16, font: '13px/1.5 ui-monospace, monospace' }}>
+        <strong>This page threw while rendering.</strong>
+        <pre style={{ whiteSpace: 'pre-wrap' }}>{String(this.state.err?.stack ?? this.state.err)}</pre>
+      </div>
+    );
+  }
+}
 
 /**
  * The region as the APPLICATION composes it: its `root`, with an island in every prop the archipelago
@@ -241,6 +267,27 @@ export function mountReactLagoon(
       <Fragment key={island.slot}>{islandNode(island.slot)}</Fragment>
     ),
   );
+
+  // THE PAGE VIEW RENDERS THE APPLICATION, not the region. Deliberately outside the provider below:
+  // the page composes its OWN region (`createRegion` … `<X.Region>`), so wrapping it in a second
+  // ArchipelagoProvider would seed a store the page never reads and hide the very thing this view
+  // exists to show. Providers, channels and the wire are already installed for every view, so what
+  // renders here is the page with its environment and its data answered, and nothing else supplied.
+  if (opts.view === 'page') {
+    const root = createRoot(mountEl);
+    roots.set(mountEl, root);
+    root.render(
+      opts.page ? (
+        <PageErrorBoundary>{opts.providers ? opts.providers(opts.page(), '') : opts.page()}</PageErrorBoundary>
+      ) : (
+        <div className="motu-empty" data-motu-page="absent">
+          This region declares no <code>page</code>, so there is nothing to render here. Add{' '}
+          <code>page: () =&gt; &lt;YourPage /&gt;</code> to its lagoon overrides.
+        </div>
+      ),
+    );
+    return;
+  }
 
   const tree = (
     <ArchipelagoProvider

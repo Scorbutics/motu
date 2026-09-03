@@ -39,6 +39,27 @@ export interface RegionOverrides {
    * `layout`: getting the two confused is invisible in the region view and fatal in mountpoints.
    */
   providers?: (children: ReactNode, slot: string) => ReactNode;
+  /**
+   * THE APPLICATION'S OWN PAGE — the module the router renders, composed exactly as production
+   * composes it (its own `createRegion`, its own `<X.Region>`, its own `<X.Island slot=…>`).
+   *
+   * EXPERIMENTAL, and narrow on purpose. Every other view here renders the region: motu supplies the
+   * provider, the seed and the arrangement, so what is proved is that the ISLANDS work and that the
+   * declared couplings carry. What none of them can reach is the page itself — `integrate check`
+   * reads the host's SOURCE, so it sees `<X.Island slot="y">` and cannot see whether the branch
+   * containing it ever runs. A slot inside `{isOpen && …}` or a `.map()` is reported as conditionally
+   * placed, and nothing anywhere proves the page REACHES it. That gap has been the honest boundary of
+   * static integration checking; this is the smallest thing that closes it.
+   *
+   * The lagoon installs `providers`, `channels` and `wire` and then renders this, adding NO provider
+   * of its own — the page brings its own region. So a page that crashes on load crashes here, and a
+   * slot the page never reaches is a slot that never appears in the DOM.
+   *
+   * It is only renderable where the page module can be IMPORTED into a browser bundle. A React page
+   * on a Vite or a plain-React host qualifies; a Next server component does not, and says so rather
+   * than pretending.
+   */
+  page?: () => ReactNode;
   /** Per slot: the props the PAGE passes on the island element itself, for what is not region state. */
   props?: Record<string, Record<string, unknown>>;
   /**
@@ -67,7 +88,7 @@ export interface RegionOverrides {
 }
 
 /** The fields of a region override, so a reader cannot forget one the writer supplied. */
-const REGION_FIELDS = ['seed', 'channels', 'wire', 'layout', 'providers', 'props', 'hostProps'] as const;
+const REGION_FIELDS = ['seed', 'channels', 'wire', 'layout', 'providers', 'props', 'hostProps', 'page'] as const;
 
 /** The kind-first maps, one per field of `RegionOverrides`. */
 type KindFirst = {

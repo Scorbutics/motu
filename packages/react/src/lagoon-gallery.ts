@@ -455,7 +455,16 @@ markSandbox();
     refused = true;
   }
 
-  let view: TideView = localStorage.getItem(VIEW_KEY) === 'mountpoints' ? 'mountpoints' : 'region';
+  // THE URL WINS OVER THE REMEMBERED VIEW. Every other declared state here is an address, and a view
+  // that could only be reached by clicking would be the one thing in the lagoon a person cannot hand
+  // to someone else — including to the check that drives it.
+  const requestedView = new URLSearchParams(location.search).get('view');
+  let view: TideView =
+    requestedView === 'page' || requestedView === 'mountpoints' || requestedView === 'region'
+      ? (requestedView as TideView)
+      : localStorage.getItem(VIEW_KEY) === 'mountpoints'
+        ? 'mountpoints'
+        : 'region';
 
   function mount(id: string): void {
     if (!id) return;

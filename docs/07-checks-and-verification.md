@@ -178,6 +178,7 @@ Skipped under `--fast`, which says so via `region-runtime`. Gated at `verify.mjs
 |---|---|---|---|
 | `region-runtime` | Meta: flows, mutation and the region render need a browser and were **not** run because `--fast` was passed. | skip | `verify.mjs:3128` |
 | `lagoon-render` (region) | The region frame renders and every declared, non-planned slot mounts its island. Warns when a declared slot is not placed by this arrangement (behind an overlay or a conditional branch). Warns and skips when the region is layout-less — islands placed individually across the host. | ok, warn, error, inconclusive | `verify.mjs:3146`, `:3154`, `:3167`, `:3172`, `:3180`, `:3183`, `:3190`–`:3194` |
+| `page-render` (region) | **EXPERIMENTAL.** Renders the APPLICATION'S OWN PAGE (the `page` override) rather than the region, and asks three things: it mounted without throwing, every declared slot is present in the DOM, and each rendered something. This is the only check that can see a slot the page NAMES but never REACHES — one inside `{isOpen && …}`, a ternary or a `.map()` whose branch does not run. Skips (`0 examined`) when the region declares no `page`. | ok, skip, error | browser | `playwright-lagoon.mjs` `pageRenderLagoon`, `verify.mjs` `page-render` |
 | `region-flow` | Every declared flow step ends as declared. Absent evidence, unreadable evidence and step-less evidence each get their own warning rather than a silent pass. A `ReferenceError`/`TypeError` is rethrown — that is a bug in motu, not a region that could not be driven. | ok, warn, error, inconclusive | `verify.mjs:1759`, `:1773`, `:1778`, `:1803`, `:1821`, `:1825` |
 | `flow-mutation` | A step that cannot fail is not a check. **By construction**: a step whose `expect` names only keys it just `provide`d asserts the lagoon stored what it was handed (error). **By mutation**: the stimulus is changed crudely and re-run; an assertion that still holds is asserting a constant (error). A mutant that *broke* the region proves nothing and is a warning, not a kill. Counts what came back, not what was sent. | ok, warn, error, skip, inconclusive | `verify.mjs:1637`, `:1698`, `:1720`, `:1728`, `:1735`, `:1742` |
 | `wiring-live` | Firing each declared write actually moves the key it claims to write. Precise about its limit: it fires the event **itself**, through the lagoon's emit seam, so it cannot tell you the component still produces it. | ok, error, skip, inconclusive | `verify.mjs:1857`, `:1861`, `:1864`, `:1870` |
@@ -462,3 +463,57 @@ Three shapes do **not** appear in JSON and exist only on the human path: `strict
 `motu archipelago coverage --json` (`region-coverage.mjs:474-507`) owns stdout entirely — the prose printer is disabled (`region-coverage.mjs:159`) so a parser cannot get half of each. Its payload carries `covered`, `systemic`, `uncovered[]` (each with `share`, `count`, `differsBy`, `fingerprint` and a paste-able `scenario` skeleton), `unreachable`, `keysDiffer`, `caveats` and `pass`.
 
 `motu removal-check` has no `--json` of its own: its summary surfaces under `motu check --json` → `removal`.
+
+
+## `page-render`: the gap static integration checking cannot close (experimental)
+
+`integrate check` reads the host's SOURCE. It can see `<X.Island slot="list">` and it cannot see
+whether the branch containing that JSX ever runs — a slot inside a conditional, a permission gate or a
+`.map()` callback is reported as *conditionally placed*, which is a warning rather than an answer. The
+lagoon cannot close it from the other side either: the region view renders every declared slot
+unconditionally, because motu supplies the arrangement there.
+
+So between the two of them, the lagoon proves the island works, `integrate check` proves the page
+names it, and nothing proved the page reaches it.
+
+`page-render` renders the application's own page module in the lagoon:
+
+```ts
+// roots/lagoon/src/regions/manage-servers.tsx
+import { ManageServers } from '../../../../src/servers/ManageServers';
+
+export const ManageServersPage = () => <ManageServers />;
+```
+
+```ts
+regions: {
+  'manage-servers': { seed, providers, layout: Frame, page: ManageServersPage },
+}
+```
+
+The page brings its OWN region (its `createRegion`, its `<X.Region>`, its `<X.Island>`), so the lagoon
+adds no provider of its own — it installs `providers`, `channels` and `wire`, then renders the page.
+Open it at `?region=<id>&view=page`.
+
+**Measured, on shlink.** Putting the `list` island behind a branch that never runs:
+
+    motu check          PASS  2 island(s), 1 region(s), removable
+    integrate check     PASS  1 region(s) integrated
+    page-render         ✗     the page renders, but never reaches: list
+
+And making the page throw on load gives the stack rather than a blank screen, because the view wraps
+the page in an error boundary that marks the failure — a white screen and a slow page are otherwise
+the same thing to a check.
+
+### What it does not do, and where it does not work
+
+It asserts *presence*, not content: no interaction, no flow replay, no text assertions. Those are the
+region's flows, and making the same claim twice against a slower page buys nothing.
+
+It needs the page module to be IMPORTABLE INTO A BROWSER BUNDLE. A React page on a Vite or plain-React
+host qualifies. **A Next.js server component does not** — it is not a client module, and no amount of
+lagoon makes it one. The custom-element mount path refuses `view=page` outright and says why, rather
+than falling back to the region view and answering a different question.
+
+It is EXPERIMENTAL: one region, one host shape, evidenced above. Treat the boundary as real until a
+second host shape is on that list.

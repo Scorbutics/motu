@@ -44,7 +44,13 @@ import { motuKitCss } from '@motu/chrome/kit';
 import { motuDockCss } from '@motu/chrome/dock';
 import { MOTU_MARK_SVG } from '@motu/chrome/mark';
 
-export type TideView = 'region' | 'mountpoints';
+/**
+ * `page` is EXPERIMENTAL and only reachable by URL (`&view=page`) — it is not offered as a toggle.
+ * It renders the application's own page module rather than the region, so it exists on the regions
+ * that declare a `page` override and nowhere else; a control that is dead on most regions teaches
+ * people the wrong thing about the two views that always work.
+ */
+export type TideView = 'region' | 'mountpoints' | 'page';
 /**
  * Which vertical edge the dock stands against.
  *

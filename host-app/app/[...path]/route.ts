@@ -28,6 +28,7 @@ import { postgresShareLinkStore } from '@/src/auth/share-link-store';
 import { cookieMaxAgeSeconds, grants, tokenHash } from '@/src/auth/share-links';
 import { createClient } from '@/src/supabase/server';
 import { proxyToHost } from '@/src/upstream';
+import { createHash } from 'node:crypto';
 import { groupView } from '@/src/host/group-routes';
 import { parseMemberAssetPath } from '@/src/host/records';
 import { railMembers, focusIndex } from '@/src/host/lagoon-rail';
@@ -167,6 +168,59 @@ async function unlock(request: Request, url: URL, record: { repo: string; ref: s
 }
 
 /** Whoever is asking, or null. Never throws: an unreadable session is nobody, not an error. */
+/**
+ * THE DECISION FOR ONE MEMBER, REMEMBERED FOR A FEW SECONDS — because a lagoon is not one request.
+ *
+ * `viewerOf()` calls `supabase.auth.getUser()`, which is a GoTrue ROUND-TRIP. That is fine once per
+ * page. It is not fine once per MODULE: a Vite dev server's frame pulls a hundred-odd `@fs` modules
+ * in one burst, and authorizing each of them separately turns one page load into a hundred auth
+ * round-trips. Under that load some of them lose — `viewerOf` answers null, the decision flips to
+ * deny, and the browser is handed HTML where it asked for JavaScript:
+ *
+ *     Loading module … was blocked because of a disallowed MIME type ("text/html")
+ *
+ * The failures are a RANDOM SUBSET, which is what gives it away: `club.archipelago.ts` loads and
+ * `regions/club.tsx` does not, with timings from 700ms to 12.6s. Nothing about the paths differs —
+ * only how many were in flight.
+ *
+ * KEYED BY THE CREDENTIAL, not just the member: two viewers must never share an answer. The cookie
+ * header carries the session, so it is part of the key (hashed — this is a decision cache, not a
+ * place to keep tokens). A few seconds is long enough to cover one page's burst and short enough that
+ * a revoked grant is not honoured beyond it.
+ *
+ * ASSET PATHS ONLY. The page and the frame decide afresh every time; they are one request each, and
+ * they are the request where being current matters.
+ */
+const DECISION_TTL_MS = 5_000;
+const decisions = new Map<string, { at: number; value: unknown }>();
+
+function decisionKey(request: Request, repo: string, slug: string): string {
+  return createHash('sha256')
+    .update(`${request.headers.get('cookie') ?? ''}\n${repo}/${slug}`)
+    .digest('hex');
+}
+
+function rememberedDecision(key: string): unknown | null {
+  const hit = decisions.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > DECISION_TTL_MS) {
+    decisions.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function rememberDecision(key: string, value: unknown): void {
+  // Bounded, so a long-lived process cannot grow one entry per viewer per member for ever. The cache
+  // is a burst absorber; anything older than the TTL is dead weight, and clearing on size is enough.
+  if (decisions.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of decisions) if (now - v.at > DECISION_TTL_MS) decisions.delete(k);
+    if (decisions.size > 500) decisions.clear();
+  }
+  decisions.set(key, { at: Date.now(), value });
+}
+
 async function viewerOf() {
   try {
     const supabase = await createClient();
@@ -322,13 +376,20 @@ const serve = async (request: Request) => {
   const shareToken = cookieValue(request.headers.get('cookie'), SHARE_COOKIE);
 
   let decision;
+  // One burst of modules is one decision. See `decisions` above for why this exists and why it is
+  // keyed by the credential.
+  const cacheKey = asset ? decisionKey(request, record.repo, record.slug) : null;
+  const remembered = cacheKey ? rememberedDecision(cacheKey) : null;
   try {
-    decision = await authorize({ viewer: await viewerOf(), shareToken }, record, {
-      projects: postgresProjectStore(),
-      memberships: postgresMembershipStore(),
-      access: postgresAccessStore(),
-      shareLinks: postgresShareLinkStore(),
-    });
+    decision =
+      (remembered as typeof decision) ??
+      (await authorize({ viewer: await viewerOf(), shareToken }, record, {
+        projects: postgresProjectStore(),
+        memberships: postgresMembershipStore(),
+        access: postgresAccessStore(),
+        shareLinks: postgresShareLinkStore(),
+      }));
+    if (cacheKey && !remembered) rememberDecision(cacheKey, decision);
   } catch (err) {
     // THE DATABASE IS DOWN, AND THAT IS NOT A VERDICT. Failing closed here would 404 every public
     // lagoon on the host over an outage in a component none of them need; failing open would be the

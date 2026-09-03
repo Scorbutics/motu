@@ -31,7 +31,7 @@ import { proxyToHost } from '@/src/upstream';
 import { groupView } from '@/src/host/group-routes';
 import { railMembers, focusIndex } from '@/src/host/lagoon-rail';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
-import { composedPage } from '@motu/host/src/views.mjs';
+import { lagoonPage } from '@motu/host/src/views.mjs';
 import { store, access, normalizeRepo } from '@/src/host/store';
 // @motu/host is plain ESM node; tsc reads it through allowJs.
 import { visibilityFor } from '@/src/host/visibility';
@@ -231,15 +231,23 @@ const serve = async (request: Request) => {
 
   const record = parseRecordPath(pathname);
   /**
-   * Take `__motu_frame` back off before the hop.
+   * `__motu_frame` GOES THROUGH UNTOUCHED — the host owns it now.
    *
-   * ONE FUNCTION FOR EVERY PROXY PATH, because there is more than one and the first version only
-   * covered the last of them: the ABSTAIN branch returns earlier, and on this host every repo
-   * abstains, so nearly every frame asked the host for an address it has never heard of and got a
-   * 404 for a page that exists.
+   * This used to strip the suffix before the hop, because the address was the app's own and the host
+   * had never heard of it. The host implements it (`server.mjs`, `isFrame`): the suffixed path serves
+   * the ARTIFACT and the bare path serves the SHELL. Once that landed, stripping became a recursion.
+   *
+   *   frame asks /r/latest/all/__motu_frame  ->  stripped to /r/latest/all  ->  host returns the SHELL
+   *   that shell contains a frame pointing at /r/latest/all/__motu_frame    ->  stripped again  -> ...
+   *
+   * The page renders as a stack of shells inside shells, each drawn a little later than the last, and
+   * it looks like a rendering bug rather than a routing one — it was reported as "the lagoon is
+   * broken", chased through the artifact, the store and the tunnel, and none of them were involved.
+   *
+   * Two hosts disagreeing about who owns an address is the shape of this failure; the rule now is
+   * that the host owns it and this proxy passes it along.
    */
-  const bareRewrite = (p: string) =>
-    record?.bare ? p.replace(/\/__motu_frame(?=(\/__motu_reload)?$)/, '') : p;
+  const bareRewrite = (p: string) => p;
 
   // NOT A RECORD: the app has no opinion. Unchanged from phase 0 — including `?k=`, which on a group
   // page or the index is still the HOST's read secret and still handled there.
@@ -265,12 +273,11 @@ const serve = async (request: Request) => {
       if (members.length) {
         const at = focusIndex(members, record.repo, record.slug);
         return new Response(
-          composedPage({
-            id: null,
-            // THE LAGOON'S OWN NAME in the bay, not `repo · slug`. That was the group's title format
-            // and it is one thing a group has that a single lagoon does not — a name of its own. At
-            // rail width it wrapped to two lines and collided with the count beside it.
-            group: members[at]?.title ?? record.slug,
+          // `lagoonPage`, which is what `composedPage` was renamed to when a group stopped being the
+          // only thing with a shell. This call still said `composedPage`, so the app could not BUILD
+          // — the process serving it is an older build from before the rename, and any deploy would
+          // have failed. `id` and `group` went with the group concept and are no longer parameters.
+          lagoonPage({
             docTitle: `${record.repo}/${record.slug}`,
             members: members.map((m, i) => ({ ...m, i })),
             live: true,

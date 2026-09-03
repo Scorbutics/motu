@@ -23,7 +23,7 @@ import { html } from './read-routes.ts'
 import type { Visible } from './read-routes.ts'
 import { upstreamOrigin, proxyToHost } from '../upstream.ts'
 // @motu/host is plain ESM node; tsc reads it through allowJs.
-import { composedPage, errorPage } from '@motu/host/src/views.mjs'
+import { lagoonPage, errorPage } from '@motu/host/src/views.mjs'
 import { wrapFragment, withRepoMeta } from '@motu/host/src/document.mjs'
 
 const NO_STORE = 'no-store'
@@ -147,5 +147,7 @@ export async function groupView(
   // The pin: what this view would be if it were frozen now. Live members pin their last published
   // build, because a dev server has nothing to pin — and the footer says so.
   const snap = s.snapshot(name) as { id?: string } | null
-  return html(200, composedPage({ id: snap?.id ?? null, group: name, members, live: true }))
+  // `lagoonPage`, the current name. `id` and `group` were parameters of the GROUP shell and no longer
+  // exist; the lagoon's own name reaches the bay through `docTitle`.
+  return html(200, lagoonPage({ docTitle: name, members, live: true }))
 }

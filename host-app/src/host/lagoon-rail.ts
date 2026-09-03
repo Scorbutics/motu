@@ -12,7 +12,7 @@
 import { store } from './store.ts'
 import type { Visible } from './read-routes.ts'
 
-/** One lagoon in the rail, in the shape `composedPage` renders. */
+/** One lagoon in the rail, in the shape `lagoonPage` renders. */
 export type RailMember = {
   repo: string
   slug: string

@@ -18,6 +18,7 @@
 // rather than public: unguessable, not access-controlled. That is the right posture for one person
 // and the wrong one for a team, and closing it is the accounts work that gates external teams.
 import { createServer } from 'node:http';
+import { connect as netConnect } from 'node:net';
 import { gunzipSync, brotliDecompressSync } from 'node:zlib';
 import { timingSafeEqual } from 'node:crypto';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
@@ -564,6 +565,57 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       return send(res, 200, 'image/png', bytes, IMMUTABLE);
     }
 
+    // --- a LIVE dev server's own sub-paths ----------------------------------------------------
+    //
+    // A published lagoon is ONE self-contained page, so proxying a single URL was always enough. A dev
+    // server is an ORIGIN: its page references `/@vite/client`, `/@react-refresh` and a module graph,
+    // and those resolved at this host's root, where nothing served them — the viewer got the HTML and
+    // a 404 for everything in it. Measured directly: `/@vite/client` was 404 here and 200 on the dev
+    // server.
+    //
+    // So the member's path is a PREFIX, and everything under it belongs to whatever is live there. The
+    // CLI sets Vite's `base` to the same prefix, which is what makes the dev server emit URLs that
+    // arrive here in the first place.
+    //
+    // Parsed around `latest` rather than from the right, because the tail is now arbitrary. The LAST
+    // occurrence wins, so a repository whose own name ends in `latest` still resolves.
+    if (segments.length >= 4) {
+      const at = segments.lastIndexOf('latest');
+      if (at >= 1 && segments.length > at + 2) {
+        const liveRepo = normalizeRepo(segments.slice(0, at).join('/'));
+        const liveSlug = normalizeSegment(segments[at + 1]);
+        const rest = segments.slice(at + 2);
+        const endpoint = liveRepo && liveSlug && readable(liveRepo) ? live.endpointFor(liveRepo, liveSlug) : null;
+        if (endpoint && rest[rest.length - 1] !== '__motu_hmr') {
+          // THE RAW TAIL, not the decoded segments re-encoded. `segments` is decoded, so rebuilding
+          // the path with `encodeURIComponent` turned `@vite/client` into `%40vite/client` and the
+          // dev server answered 404 — a bug introduced by being careful in the wrong direction.
+          // THE PATH IS FORWARDED WHOLE. The CLI sets Vite's `base` to this same member prefix, so the
+          // prefix belongs to the DEV SERVER — it serves `/<repo>/latest/<slug>/@vite/client` and
+          // knows nothing about `/@vite/client`. Stripping it here (the obvious reverse-proxy reflex)
+          // asked for a path that does not exist: 404 through the host, 200 on the dev server at the
+          // full address.
+          const target = `${endpoint.replace(/\/+$/, '')}${path}${url.search}`;
+          try {
+            const up = await fetch(target, { headers: { accept: req.headers.accept ?? '*/*' } });
+            const body = Buffer.from(await up.arrayBuffer());
+            const headers = { 'cache-control': 'no-store' };
+            for (const h of ['content-type', 'etag', 'last-modified']) {
+              const v = up.headers.get(h);
+              if (v) headers[h] = v;
+            }
+            res.writeHead(up.status, headers);
+            return void res.end(body);
+          } catch {
+            // NO FALLBACK TO PUBLISHED BYTES HERE. The page route can fall back because both sides are
+            // HTML; a module request answered with a published page would be handed to the browser as
+            // JavaScript and fail somewhere unrelated to the cause.
+            return json(res, 502, { error: 'the live dev server did not answer' });
+          }
+        }
+      }
+    }
+
     // --- per-repo ---------------------------------------------------------------------------
     // Parsed FROM THE RIGHT: a repo id may carry an owner segment (`acme/web`), so the last two
     // segments are ref and slug and everything before them is the repo.
@@ -830,6 +882,21 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     return json(res, 200, { ok: true, repo, accepted, count: accepted.length });
   }
 
+  /**
+   * THE HMR SOCKET, forwarded to whichever dev server is live for this member.
+   *
+   * `proxyLive` speaks HTTP with `fetch`, which cannot carry a protocol upgrade — so a viewer on the
+   * canonical URL got the dev server's HTML, complete with its HMR client, and that client then had
+   * nowhere to connect. The page was LIVE (a refresh showed current code) and never HOT (an edit did
+   * not push itself), which is the half of the promise people actually notice.
+   *
+   * Addressed under the page's own path (`/<repo>/latest/<slug>/__motu_hmr`), for the same reason the
+   * reload stream is: one member, one prefix, and no second route to keep in step. The CLI points
+   * Vite's client at it when it announces.
+   *
+   * A raw socket pipe, not a framework: an upgrade is the client's bytes and the server's bytes, and
+   * anything in between is a chance to corrupt a frame.
+   */
   const server = createServer((req, res) => {
     handle(req, res).catch((err) => {
       // Never leak a stack to an unauthenticated reader; the operator has the console.
@@ -837,6 +904,48 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       if (!res.headersSent) json(res, 500, { error: 'internal error' });
       else res.end();
     });
+  });
+
+  server.on('upgrade', (req, socket, head) => {
+    const fail = () => {
+      try {
+        socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+      } catch {}
+      socket.destroy();
+    };
+    try {
+      const url = new URL(req.url ?? '/', 'http://placeholder');
+      const segs = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+      if (segs[segs.length - 1] !== '__motu_hmr' || segs.length < 4) return fail();
+      const parts = segs.slice(0, -1);
+      const slug = normalizeSegment(parts[parts.length - 1]);
+      const ref = normalizeSegment(parts[parts.length - 2]);
+      const repo = parts.slice(0, -2).join('/');
+      // `latest` only, exactly as the page route decides: an immutable URL is never live, and a
+      // socket that ignored that would be a live channel hanging off a frozen address.
+      const target = ref === 'latest' ? live.endpointFor(repo, slug) : null;
+      if (!target) return fail();
+      const dest = new URL(target);
+      const upstream = netConnect(
+        { host: dest.hostname, port: Number(dest.port || 80) },
+        () => {
+          // The dev server's own path, not ours: Vite matches on what it was configured with.
+          const head1 = `GET ${url.pathname}${url.search} HTTP/1.1\r\n`;
+          const headers = Object.entries(req.headers)
+            .filter(([k]) => k.toLowerCase() !== 'host')
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}\r\n`)
+            .join('');
+          upstream.write(`${head1}host: ${dest.host}\r\n${headers}\r\n`);
+          if (head?.length) upstream.write(head);
+          socket.pipe(upstream);
+          upstream.pipe(socket);
+        },
+      );
+      upstream.on('error', fail);
+      socket.on('error', () => upstream.destroy());
+    } catch {
+      fail();
+    }
   });
 
   return { server, store };

@@ -708,9 +708,21 @@ A live member expires after 90 seconds and the CLI heartbeats every 30, so a dev
 decays back to the last publish on its own rather than leaving a dead address. Stopping the server
 deregisters immediately.
 
-**Live is not yet HOT.** The host proxies HTTP, not the WebSocket upgrade, so Vite's HMR channel does
-not reach a remote viewer: a refresh shows current code, an edit does not push itself. Proxying the
-upgrade is what closes that gap.
+**Live is HOT.** The member's path is a PREFIX: `motu lagoon dev` sets Vite's `base` to it, so every
+URL the dev server emits already carries it, and the host forwards everything under that prefix —
+the page, the module graph, and the HMR WebSocket upgrade at `…/__motu_hmr`. A viewer sees your edits
+without refreshing.
+
+Three things about this are easy to get backwards, and each cost a debugging round:
+
+- **The prefix belongs to the dev server, not the proxy.** With `base` set, it serves
+  `/<repo>/latest/<slug>/@vite/client` and knows nothing about `/@vite/client`, so the host forwards
+  the path WHOLE. Stripping it is the reverse-proxy reflex and it is wrong here.
+- **Vite concatenates `base` with `server.hmr.path`**, so the path must be relative (`__motu_hmr`).
+  Giving the full path doubles the prefix; the page and every asset still work and only the socket
+  fails, which is visible nowhere except inside the served `@vite/client` module.
+- **The live registry is in memory.** A host restart forgets every live member until the next
+  heartbeat (30s), so a 404 straight after restarting the host means "not re-registered yet".
 
 ## Known traps
 

@@ -921,6 +921,32 @@ export function lagoonServeCommand(argv) {
  * effort" implemented as swallowing the response is how a rejected registration produced no output
  * at all, which `serve` learned the hard way and this inherits: said once, not every beat.
  */
+/**
+ * Where a REMOTE viewer's HMR client should connect, given the host that will be proxying the page.
+ *
+ * Vite bakes the socket address into its client from the dev server's own config, so by default it
+ * tells every viewer to reach `127.0.0.1:<port>` — true for the person who started it and useless for
+ * anyone arriving through the lagoon host. Pointing it at the host's own origin, under the member's
+ * path, is what makes an edit push itself to someone else's browser.
+ *
+ * Returns null when no host is configured, and the dev server then keeps Vite's local default — the
+ * common case of iterating alone must not be made worse by a feature for sharing.
+ */
+export function hmrForHost({ slug, repo, base }) {
+  if (!base) return null;
+  const u = new URL(base);
+  return {
+    protocol: u.protocol === 'https:' ? 'wss' : 'ws',
+    host: u.hostname,
+    clientPort: Number(u.port || (u.protocol === 'https:' ? 443 : 80)),
+    // RELATIVE TO `base`, which is already the member's prefix. Vite concatenates the two, so giving
+    // the full path here produced `/<repo>/latest/<slug>/<repo>/latest/<slug>/__motu_hmr` — a doubled
+    // prefix the host could not route and the socket never opened, while the page and its assets were
+    // fine. The client's own module is where this is visible; nothing else reports it.
+    path: '__motu_hmr',
+  };
+}
+
 function announceDevServer({ slug, port, liveUrl }) {
   const cfg = loadHostConfig();
   const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
@@ -973,6 +999,8 @@ export async function lagoonDevCommand(argv) {
   // formatting and carries no `host`/`motuRoot`, which would silently yield an alias-free lagoon.
   const cfg = loadMotuConfig();
   const vite = await resolveVite(cfg);
+  const hostCfg = loadHostConfig();
+  const hostBase = (process.env.MOTU_HOST_URL || hostCfg.url || '').replace(/\/+$/, '');
   const config = await buildLagoonViteConfig(cfg, {
     ...process.env,
     ...(target ? { MOTU_TARGET: target } : {}),
@@ -981,6 +1009,21 @@ export async function lagoonDevCommand(argv) {
     ...(argv.allowAnyHost || argv['allow-any-host'] ? { MOTU_ALLOW_ANY_HOST: '1' } : {}),
   });
   if (argv.port) config.server.port = Number(argv.port);
+  // HMR THROUGH THE HOST, when there is one and we are going to announce. Without this the page is
+  // live and never hot for anyone but the person who started the server.
+  if (hostBase && argv.live !== false && !argv['no-live']) {
+    const liveSlug = paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all';
+    const liveRepo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
+    // THE MEMBER'S PATH IS THE BASE. A dev server emits absolute URLs (`/@vite/client`, the module
+    // graph) computed from `base`, and through the host those arrive under the member's prefix — so
+    // unless the dev server KNOWS that prefix, every asset it names resolves at the host's root, where
+    // nothing serves it. Measured: the page proxied fine and `/@vite/client` 404'd.
+    //
+    // Local viewing is unaffected: Vite serves the base path locally too, and `printUrls` shows it.
+    config.base = `/${liveRepo}/latest/${liveSlug}/`;
+    const hmr = hmrForHost({ slug: liveSlug, repo: liveRepo, base: hostBase });
+    if (hmr) config.server = { ...config.server, hmr: { ...hmr, ...(config.server?.hmr ?? {}) } };
+  }
   config.clearScreen = false;
   const server = await vite.createServer(config);
   await server.listen();

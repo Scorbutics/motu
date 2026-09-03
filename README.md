@@ -2,12 +2,23 @@
 
 # motu
 
-**A workshop for an application's screens, not its components.**
+**An architecture framework for building a page's regions incrementally — keeping the state between
+components coherent, the boundaries explicit, and the backend dependencies declared.**
 
-Every state a screen can be in gets an address you can open in a browser — with no backend, no
-session and no login. Because those states are *declared* rather than scripted, the same
-declarations also run as a deterministic integration suite, and cross-component state ownership
-becomes a build error instead of a bug.
+motu's units are architectural. A region of a page is an **island**; who owns which piece of that
+region's state is declared in an **archipelago**; what the region asks of a backend is declared at its
+edge. None of that is documentation — a second island writing a key someone else owns is a build
+error, a slot that does not exist fails the host's typecheck, and a dependency that goes out an
+undeclared door shows up named.
+
+What this buys is the thing that is normally hard: **you can build one region at a time, out of the
+box, and integrate it without a surprise at the end.** The declarations are what make the pieces
+compose, and what make the last mile uneventful.
+
+The **lagoon** follows from that architecture rather than being the point of it. Once a region has
+declared its state, its seed and its dependencies, it can be rendered with nothing around it — so
+every state the region can be in gets an address you can open in a browser, with no backend, no
+session and no login. The same declarations then run as a deterministic integration suite.
 
 ```
 motu lagoon states
@@ -16,6 +27,20 @@ motu lagoon states
 ```
 
 Open either one. It is the real components, still interactive, rendered from a declared seed.
+
+### What motu is not
+
+The comparison people reach for is a component workshop (Storybook, and component testing around it),
+and the overlap is real but shallow. There the unit is a **component** and the product is a
+**catalogue**: it shows you a component in a state you wrote, and it is good at that. Here the unit is
+a **region of a page** and the product is a **declaration of ownership that the build enforces**. A
+catalogue has no notion of who owns a piece of state, so nothing tells it when a second writer
+appears; that is the check motu exists to make possible.
+
+So the two are complementary, and if what you want is a component gallery you want the gallery. What
+you cannot get by assembling one out of existing parts is the architecture underneath: ownership
+declared per key, slots typed against the page, dependencies pinned at the region's edge, and the
+whole of it removable in one command.
 
 > **Status:** early, and narrower than it looks. Works, used daily, not published to npm — install
 > from a checkout (below). MIT licensed. **motu mounts React components into a page**, so the stack

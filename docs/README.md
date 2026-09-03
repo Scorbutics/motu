@@ -3,6 +3,14 @@
 The reference set for motu: what it is, how to drive it, and how to adopt it into an application that
 already exists.
 
+**What motu is, in one paragraph.** An architecture framework for building a page's regions
+incrementally, keeping the state between components coherent, the boundaries explicit and the backend
+dependencies declared. Ownership of a region's state is declared per key and enforced by the build;
+the lagoon — where every declared state has an address you can open — is what that architecture makes
+possible, not the thing motu is. If you read only one page for the reasoning, read
+[05 — Archipelagos and regions](05-archipelagos-and-regions.md); the lagoon in
+[08](08-lagoon.md) is downstream of it.
+
 Start at the [project README](../README.md) for the pitch and the ten-minute path. This set is the
 detail behind it — read in order if you are new; jump straight in if you are not.
 

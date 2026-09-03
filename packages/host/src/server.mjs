@@ -48,6 +48,35 @@ import { loadAccess, isPublic, canRead, canIngest, cookieValue, readSecretFrom, 
  * published build. That is also what happens when a proxy attempt fails — a dev server that died mid
  * request should degrade to static, not to an error page.
  */
+/**
+ * A LIVE MEMBER THAT WAS NEVER PUBLISHED IS STILL A LAGOON.
+ *
+ * The index enumerates the STORE, so it can only show what someone published. That was fine while
+ * live meant "a preview of a member that already exists" — and it stops being fine the moment a dev
+ * server announces itself under a slug of its own (a branch, an agent's working copy), because such a
+ * member has no blob, appears in no listing, and is reachable ONLY by someone who already has the URL.
+ * A preview nobody can find is not a preview; it is a secret.
+ *
+ * So the index is the union: published repos, plus any repo or slug that only exists right now.
+ * Repos that exist solely as live members are carried with zero records, which is TRUE — nothing is
+ * stored — and the row still reaches the repo page where the live slug is listed and marked.
+ */
+export function mergeLive(repos, liveMembers) {
+  const byRepo = new Map(repos.map((r) => [r.repo, { ...r, slugs: [...r.slugs] }]));
+  for (const { member } of liveMembers) {
+    const cut = String(member ?? '').lastIndexOf('/');
+    if (cut <= 0) continue;
+    const repo = member.slice(0, cut);
+    const slug = member.slice(cut + 1);
+    if (!repo || !slug) continue;
+    const row = byRepo.get(repo) ?? { repo, slugs: [], records: 0 };
+    if (!row.slugs.includes(slug)) row.slugs.push(slug);
+    row.live = true;
+    byRepo.set(repo, row);
+  }
+  return [...byRepo.values()].sort((a, b) => a.repo.localeCompare(b.repo));
+}
+
 function liveRegistry(ttlMs = 90_000) {
   const entries = new Map(); // "repo/slug" -> { url, at }
   const key = (repo, slug) => `${repo}/${slug}`;
@@ -552,7 +581,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     if (path === '/') {
       // FILTERED, or the gate leaks the very thing it hides: a private repo the visitor cannot open
       // would still be listed here by name, with its lagoon count.
-      const repos = store.listRepos().filter((r) => readable(r.repo));
+      const repos = mergeLive(store.listRepos(), live.list()).filter((r) => readable(r.repo));
       return html(res, 200, rootIndexPage({ repos, stats: store.stats() }), NO_STORE);
     }
 
@@ -736,8 +765,19 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     }
 
     const repo = normalizeRepo(segments.join('/'));
+    // LIVE SLUGS ARE PART OF THE LISTING, and a repo whose ONLY members are live still has a page.
+    // `store.listRepo` answers from published records alone, so without this a branch preview 404s at
+    // the repo level while serving perfectly one path deeper — reachable, unlistable, undiscoverable.
+    const liveSlugs = repo
+      ? live
+          .list()
+          .filter((e) => e.member.slice(0, e.member.lastIndexOf('/')) === repo)
+          .map((e) => e.member.slice(e.member.lastIndexOf('/') + 1))
+      : [];
     const listing = repo && readable(repo) && store.listRepo(repo);
-    if (listing) return html(res, 200, repoIndexPage(listing), NO_STORE);
+    if (listing) return html(res, 200, repoIndexPage({ ...listing, liveSlugs }), NO_STORE);
+    if (repo && readable(repo) && liveSlugs.length)
+      return html(res, 200, repoIndexPage({ repo, aliases: {}, history: [], liveSlugs }), NO_STORE);
 
     return html(res, 404, errorPage(404, `nothing at ${path}`), NO_STORE);
   }

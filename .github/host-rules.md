@@ -1,3 +1,25 @@
+motu is an ARCHITECTURE framework: you build a page's regions one at a time, and what keeps them
+coherent is DECLARED — who owns each piece of region state, which island fills which slot, what the
+region asks of a backend. The lagoon (every declared state at its own URL) is what those declarations
+make possible; it is not a component gallery and it is not the product. When a rule below asks you to
+declare something, the declaration IS the work — the preview is how you check it.
+
+WHAT MOTU DOES NOT CHECK: unit tests and `tsc` are deliberately outside every motu check. motu is
+integration-shaped — regions, coupling, what renders from a declared seed. Logic inside a source or a
+helper needs the host's OWN test runner, and motu will never tell you it is missing. Run the host's
+typecheck and tests yourself; a green `motu check` says nothing about either.
+
+THE LAGOON IS PART OF THE HANDOVER, not an optional step. Before you say UI work is done, a person
+must be able to OPEN it:
+
+    motu lagoon dev --detach      # survives your session; stop it with --stop
+
+It announces itself to the shared host and appears in the gallery under a slug scoped to your branch,
+so several agents working the same repository do not overwrite each other's preview. Every `motu
+check` verdict prints either the live URL or how to start one. **End your report with that URL and
+the specific state you want looked at** (`motu lagoon states`) — a summary of a passing check is not
+a handover, because the thing the work is for is a rendered region and nobody has seen it.
+
 UI work goes through motu (islands, archipelagos, the lagoon):
  - What the region SHOWS or ACTS ON is an island; what merely ARRANGES it is not. A pure layout and an
    overlay anchored to a DOM id anywhere on the page stay host components. A control that owns region

@@ -9,6 +9,7 @@
 //           non-empty shadow DOM in both native and legacy fit. Default: a REAL browser (Playwright/
 //           Chromium) so layout/CSS/paint are exercised; `--fast` uses an in-process happy-dom mount.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { readLiveUrl } from '../lib/live-url.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, dirname, resolve } from 'node:path';
@@ -2294,6 +2295,25 @@ function printReport(report, title, errors, warns) {
   } else {
     console.log(color.green(color.bold('PASS')) + color.dim(`  ${warns.length} warning(s)`));
   }
+  printLagoonAvailability();
+}
+
+/**
+ * WHERE A PERSON CAN LOOK AT THIS RIGHT NOW — printed under every verdict, pass or fail.
+ *
+ * A green report describes files. The thing the work is FOR is a rendered region, and for the whole
+ * of a bench run no agent ever handed one over: each finished on a passing check and a summary, and
+ * the person who asked for the work had nothing to open. The rules already said to look; nothing in
+ * the loop ever mentioned it, so it was the step that quietly did not happen.
+ *
+ * This is a NUDGE, not a gate, and deliberately so. Failing a static check because no dev server is
+ * running would make `motu check` depend on a process and a network — untrue to what it examines, and
+ * unrunnable in CI. So: the URL when there is one, and how to get one when there is not.
+ */
+function printLagoonAvailability() {
+  const url = readLiveUrl();
+  if (url) console.log(color.dim('  look at it: ') + url);
+  else console.log(color.dim('  no live lagoon — start one with: motu lagoon dev --detach'));
 }
 
 /** All island tags declared in the registry, gathered from each islands/<kebab>/element.ts `tag:`. */

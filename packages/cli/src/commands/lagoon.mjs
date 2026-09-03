@@ -17,6 +17,7 @@
 // the page survives with no /assets/ behind it. Serving the artifact does.
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
+import { clearLiveUrl, writeLiveUrl } from '../lib/live-url.mjs';
 import { createServer } from 'node:http';
 import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
 import { networkInterfaces } from 'node:os';
@@ -947,6 +948,34 @@ export function hmrForHost({ slug, repo, base }) {
   };
 }
 
+/**
+ * The member a DEV SERVER announces itself as — the published slug, scoped by branch.
+ *
+ * One slug per project was right while a dev server was something a person started on their laptop.
+ * It stops being right the moment several agents work the same repository at once: they all announce
+ * `<repo>/latest/all`, each heartbeat overwrites the last, and whoever looks sees whichever agent
+ * beat most recently — with nothing anywhere saying that is what happened.
+ *
+ * A branch is the identity that already distinguishes concurrent work, so `all@fix-search` and
+ * `all@add-filters` are separate members of the same repo and coexist in the gallery. The default
+ * branch keeps the bare slug, because that is the address a person bookmarks and it should not move.
+ *
+ * `--as <slug>` overrides, for work that is not on its own branch.
+ */
+export function liveSlugFor(baseSlug, argv, cwd) {
+  // THE HOST'S RULE, NOT A LOOSER ONE. A slug is a path segment on the host's disk, so the host
+  // validates it as `[A-Za-z0-9][A-Za-z0-9._-]*` and refuses anything else. Building a nicer-looking
+  // `all@branch` here got the announcement rejected with "repo and slug are required" while the dev
+  // server carried on serving a base path for a member that would never exist — so the sanitiser is
+  // the host's own alphabet, applied here, and a slug that cannot be announced is not invented.
+  const clean = (s) => s.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '');
+  const explicit = typeof argv?.as === 'string' ? argv.as : null;
+  if (explicit) return clean(explicit) || baseSlug;
+  const { branch } = gitIdentity(cwd);
+  if (!branch || /^(main|master|trunk)$/.test(branch)) return baseSlug;
+  return clean(`${baseSlug}.${branch}`) || baseSlug;
+}
+
 function announceDevServer({ slug, port, liveUrl }) {
   const cfg = loadHostConfig();
   const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
@@ -964,6 +993,7 @@ function announceDevServer({ slug, port, liveUrl }) {
 
   const announceUrl = liveUrl || `http://127.0.0.1:${port}`;
   let announced = false;
+  let warnedUrlFile = false;
   let refused = false;
   const beat = async () => {
     const res = await call('/api/live', { url: announceUrl });
@@ -972,6 +1002,21 @@ function announceDevServer({ slug, port, liveUrl }) {
       const why = await res.json().catch(() => null);
       console.error(color.red(`  ✗ the host refused this as a live member: ${why?.error ?? res.status}`));
       console.error(color.dim(`    announced: ${announceUrl}`));
+    }
+    if (res?.ok) {
+      // REWRITTEN EVERY BEAT, so the file's own mtime says how long ago this was true. A URL left on
+      // disk by a dev server that has since been killed is worse than no URL: it sends whoever reads
+      // it to a page that no longer exists, and it reads exactly like a working one.
+      try {
+        writeLiveUrl(`${base}/${repo}/latest/${slug}`);
+      } catch (err) {
+        // SAID ONCE, not swallowed. An unwritable cache dir must not take the dev server down, and a
+        // silent failure here is how the checks came to report "no live lagoon" while one was serving.
+        if (!warnedUrlFile) {
+          warnedUrlFile = true;
+          console.error(color.dim(`  (could not record the live URL for motu check: ${err?.message ?? err})`));
+        }
+      }
     }
     if (res?.ok && !announced) {
       announced = true;
@@ -986,6 +1031,7 @@ function announceDevServer({ slug, port, liveUrl }) {
   timer.unref?.();
   return async () => {
     clearInterval(timer);
+    clearLiveUrl();
     // Bounded: leaving must not hang on a host that has gone away.
     await Promise.race([call('/api/live/off'), new Promise((r) => setTimeout(r, 2000))]);
   };
@@ -1078,7 +1124,7 @@ async function deregisterLive() {
   const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
   if (!base || !hostToken) return;
   const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
-  const slug = paths.publishAs?.slug ?? 'all';
+  const slug = liveSlugFor(paths.publishAs?.slug ?? 'all', {}, REPO_ROOT);
   const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
   await Promise.race([
     fetch(`${base}/api/live/off?${qs}`, { method: 'POST', headers: { authorization: `Bearer ${hostToken}` } }).catch(() => null),
@@ -1115,7 +1161,7 @@ export async function lagoonDevCommand(argv) {
   // HMR THROUGH THE HOST, when there is one and we are going to announce. Without this the page is
   // live and never hot for anyone but the person who started the server.
   if (hostBase && argv.live !== false && !argv['no-live']) {
-    const liveSlug = paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all';
+    const liveSlug = liveSlugFor(paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all', argv, REPO_ROOT);
     const liveRepo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
     // THE MEMBER'S PATH IS THE BASE. A dev server emits absolute URLs (`/@vite/client`, the module
     // graph) computed from `base`, and through the host those arrive under the member's prefix — so
@@ -1139,7 +1185,7 @@ export async function lagoonDevCommand(argv) {
   if (argv.live !== false && !argv['no-live']) {
     const resolvedPort = server.config.server.port ?? Number(argv.port) ?? 5173;
     const stopAnnouncing = announceDevServer({
-      slug: paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all',
+      slug: liveSlugFor(paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all', argv, REPO_ROOT),
       port: resolvedPort,
       liveUrl: typeof argv.liveUrl === 'string' ? argv.liveUrl : argv['live-url'],
     });

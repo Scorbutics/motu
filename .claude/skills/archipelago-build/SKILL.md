@@ -217,11 +217,29 @@ state rendering. It runs no typecheck and no test runner. Two things are yours:
 
 - **logic inside the component** (a filter that stops matching a field, `some` for `every`, an
   off-by-one) — renders fine, composes fine, passes everything here;
-- **the path from a user's action to a declared output** — a flow EMITS the island's declared event,
-  entering the region past the component's own handler, so a handler that drops its argument passes
-  every flow you can write.
+- **the path from a user's action to a declared output** — a flow that EMITS the island's declared
+  event enters the region past the component's own handler, so a handler that drops its argument
+  passes it. Write `{ click: '<accessible name>' }` instead when the control has one: the component
+  fires its own output, by the path a person takes. Accessible name only — no selectors, no `fill`,
+  no waits. Anything beyond one click is Playwright's job, not motu's.
 
 Measured on a real screen: of eight injected regressions, the project's unit tests caught five and
 motu's flows caught one — and that one was a render assertion the tests missed. Different
 instruments. If the component you just wrote or wrapped carries logic, say in your handover that it
 needs unit tests in the host's own runner, and do not present a green `motu check` as coverage.
+
+
+## Before you hand this over
+
+A person has to be able to OPEN what you built. Start (or confirm) the detached lagoon, which
+announces itself to the shared host under a slug scoped to your branch:
+
+    motu lagoon dev --detach
+    motu lagoon states          # the address of each declared state
+
+**End your report with the live URL and the one or two states you want looked at.** A passing check
+describes files; the work is a rendered region, and until someone opens it nobody has seen it. Every
+`motu check` verdict now prints the live URL, or how to start one if there is none.
+
+And say plainly what motu did not check: the host's typecheck and its test runner, both of which are
+yours to run.

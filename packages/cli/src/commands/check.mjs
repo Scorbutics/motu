@@ -12,6 +12,7 @@
 // Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
 // (a browser per island), which belongs in CI or before a release, not in a tight loop.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readLiveUrl } from '../lib/live-url.mjs';
 import { resolve } from 'node:path';
 import { color, paths, hostStrictBoundaries } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
@@ -305,5 +306,9 @@ export async function checkCommand(argv) {
     color.dim('  motu checks composition. Your typecheck and unit tests are yours and are not run here:'),
   );
   console.log(color.dim('  a logic bug inside a component, or a handler that drops its argument, passes every check above.'));
+  // AND WHERE TO LOOK AT IT. `check` is the verdict an agent reads and quotes; without this line the
+  // handover is a summary of files and nobody has opened the region the work is for.
+  const live = readLiveUrl();
+  console.log(live ? color.dim('  look at it: ') + live : color.dim('  no live lagoon — start one with: motu lagoon dev --detach'));
   process.exit(pass ? 0 : 1);
 }

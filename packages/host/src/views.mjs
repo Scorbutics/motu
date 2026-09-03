@@ -788,7 +788,7 @@ export function rootIndexPage({ repos, stats }) {
   });
 }
 
-export function repoIndexPage({ repo, aliases, history }) {
+export function repoIndexPage({ repo, aliases, history, liveSlugs = [] }) {
   const byId = new Map(history.map((r) => [r.id, r]));
   const current = Object.entries(aliases.latest ?? {})
     .map(([slug, id]) => ({ slug, rec: byId.get(id) }))
@@ -809,6 +809,18 @@ export function repoIndexPage({ repo, aliases, history }) {
   //
   // So the row carries the two links it has — the sha, and `Open →` — and is not itself one. Which is
   // also what the design draws: a card with an explicit action, not a card that is entirely a target.
+  // A live slug that is ALSO published appears in both sections, deliberately: the two rows point at
+  // the same URL but answer different questions — "what is deployed" and "what is being worked on
+  // right now" — and collapsing them would hide whichever the reader came for.
+  const liveRows = [...liveSlugs].sort().map((slug) =>
+    motuRow({
+      label: escapeHtml(slug),
+      scale: 'page',
+      sub: '<em class="live-dot motu-breathe">live</em> · served by a dev server right now',
+      trailing: `<a class="motu-open" href="/${escapeHtml(repo)}/latest/${escapeHtml(slug)}">Open →</a>`,
+    }),
+  );
+
   const latestRows = current.map(({ slug, rec }, i) =>
     motuRow({
       label: rec.title || slug,
@@ -855,6 +867,13 @@ export function repoIndexPage({ repo, aliases, history }) {
         ` · ${current.length} lagoon${current.length === 1 ? '' : 's'}`,
     }),
     body:
+      // LIVE FIRST, because it is the one section that is only true right now. A published lagoon is
+      // still there tomorrow; a dev server's member is gone ninety seconds after the process is. The
+      // slugs here have no record behind them — no sha, no published date — so they get their own
+      // section rather than being faked into the Latest rail with empty columns.
+      (liveRows.length
+        ? `<section><div class="motu-cap panel-cap">Live now<span class="motu-cap-trail">served by a dev server · gone when it stops</span></div>${motuRailedList(liveRows)}</section>`
+        : '') +
       `<section><div class="motu-cap panel-cap">Latest</div>${
         latestRows.length
           ? motuRailedList(latestRows)

@@ -36,6 +36,19 @@ so those two facts bound everything below.
 **`--host none` (plain React) is accepted and thinly evidenced** — the code path exists, no consumer
 here proves it.
 
+### Hard requirements, found the hard way
+
+- **React 18 or newer.** `@motu/react` peer-depends on `>=18` and mounts with `createRoot` from
+  `react-dom/client`. A React 17 application is a wall, not a rough edge — measured: an adoption of a
+  real React 17 app could not start.
+- **A `node_modules` your package manager actually writes.** motu resolves `@motu/*` through symlinks
+  it recreates in `node_modules/` on every invocation. **Yarn PnP has no `node_modules`**, so that
+  mechanism has nothing to write into; yarn with `nodeLinker: node-modules` works and is what has been
+  tested.
+- **The lagoon runs the HOST's Vite on a `vite` host**, so a host plugin the lagoon cannot run is
+  dropped by name rather than taken as fatal — but a plugin your components genuinely need at
+  transform time is a real constraint on what will render.
+
 ### Not supported, and not close
 
 - **Angular 2+.** The `angularjs` adapter is AngularJS **1.x**. The names collide; the frameworks do

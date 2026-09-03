@@ -13,6 +13,7 @@
     "gen:contract": "node packages/codegen/src/cli.mjs ../ocean/web-console/target/classes/motu-manifest.json demo-app/contract/src",
     "typecheck": "tsc -b --noEmit",
     "smoke:scaffold": "node scripts/smoke-scaffold.mjs",
+    "smoke:live": "node scripts/smoke-live.mjs",
     "build:packages": "node scripts/build-packages.mjs",
     "release": "node scripts/release.mjs",
     "release:dry": "node scripts/release.mjs --dry-run"

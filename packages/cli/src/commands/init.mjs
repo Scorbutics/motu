@@ -146,9 +146,19 @@ function keptPackageJsonNotice(appRoot, skipped, motuDependencies) {
   // `npm install` deletes, leaving nothing to say what was needed or why the build then fails.
   // The CLI re-creates them on every invocation, so this is legibility, not breakage.
   if (!motuDependencies) {
-    console.log(color.dim('  @motu/* are resolved by symlinks the CLI re-creates in node_modules/ on every run —'));
-    console.log(color.dim('  nothing in package.json records them, because no workspace here could satisfy the range.'));
-    console.log(color.dim('  After `npm install` wipes them, any `motu` command puts them back.'));
+    // THERE IS A FIX NOW, so this stops describing the hazard and names it.
+    //
+    // This used to end with "after `npm install` wipes them, any motu command puts them back", which
+    // is true and is not a fix: the person who runs `npm install` is usually not the person who runs
+    // a motu command next. Measured on shlink — `npm install` printed `removed 9 packages` and the
+    // host build then failed with `Cannot find module '@motu/react'`, an error pointing nowhere near
+    // the cause. CI and a fresh clone hit it every time.
+    console.log(color.yellow('  ! nothing in package.json records @motu/*, and `npm install` deletes them as extraneous.'));
+    console.log(color.dim('    Record them as `file:` paths, which npm creates itself and never prunes:'));
+    console.log('');
+    console.log('      motu link');
+    console.log('');
+    console.log(color.dim('    (`motu link --check` asserts it, for CI. A workspace project needs neither.)'));
     console.log('');
     return;
   }

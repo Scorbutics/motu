@@ -120,9 +120,11 @@ here proves it.
 - **Host bundlers other than Next's or Vite's.** webpack, rsbuild, Parcel, CRA are untested for the
   HOST build. The lagoon is always Vite regardless, so the risk is your app's own build, not the
   preview.
-- **npm and yarn are unproven.** Every project above uses pnpm. `npm install` deletes motu's
-  no-install symlinks as extraneous (see [Getting started](docs/02-getting-started.md)), which the CLI
-  works around by re-creating them on every invocation — but nothing here regularly runs on npm.
+- **npm works, and needs one command.** `npm install` deletes bare symlinks as extraneous, so a
+  single-package project records them instead: `motu link` writes `@motu/*` into package.json as
+  `file:` paths, which npm creates itself and never prunes. Verified on a real npm app (shlink):
+  three consecutive installs, nine links intact, typecheck clean. `motu link --check` asserts it in
+  CI. A workspace project needs neither. **yarn is still unproven.**
 
 If your stack is not in the first table, assume it does not work yet. Adding a stack is real work
 (an adapter, its verify layer, a lagoon that can build it), and the project would rather say "no"

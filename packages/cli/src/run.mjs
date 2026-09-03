@@ -49,6 +49,7 @@ const USAGE = `${color.bold('motu')} — island / archipelago CLI
 
 ${color.bold('Usage:')}
   motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
+  motu link [--check]                               record @motu/* in package.json (npm deletes bare links)
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
   motu island create <name> --from <specifier>      ...over a component the app ALREADY owns (React hosts)
   motu check                                        every island + every region + removal, one verdict
@@ -218,6 +219,13 @@ async function main() {
   if (group === 'init') {
     // Top-level verb: sub is an optional target dir positional.
     return initCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
+  }
+
+  // `motu link` — record @motu/* in package.json so the package manager stops deleting them.
+  // `--check` asserts instead of writing, which is the CI half of the same question.
+  if (group === 'link') {
+    const { linkCommand } = await import('./commands/link.mjs');
+    return linkCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
   }
 
   // The last mile, and its own verb because it asks about the HOST, not about motu's files:

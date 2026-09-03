@@ -193,7 +193,25 @@ const HOST_ALIASES = hostTsconfigAliases();
  * not find it. Feeding the tsconfig's own mappings to Vite makes one answer serve both.
  */
 export function hostAliasEntries() {
-  return HOST_ALIASES.filter((a) => a.prefix && a.target).map((a) => ({ find: a.prefix, replacement: a.target + '/' }));
+  return (
+    HOST_ALIASES
+      // PREFIX MAPPINGS ONLY (`@/*`), never exact module names.
+      //
+      // tsconfig `paths` is TYPE resolution; a Vite alias is RUNTIME resolution, and they are not the
+      // same mechanism. A Next project mapping `"react": ["./node_modules/@types/react/index.d.ts"]`
+      // — a common and correct thing to do — had that handed to Vite by this function, so `react`
+      // resolved to a declaration file and `react/jsx-runtime` to `…/index.d.ts/jsx-runtime`. It also
+      // aliased every `@motu/*` onto a single source file. The dev server crashed on a real project
+      // with an error naming esbuild and nothing else.
+      //
+      // Only the wildcard forms say WHERE SOURCE LIVES, which is what the lagoon needed. An exact name
+      // says what a package IS, which this must not touch. The trailing `/` is the discriminator:
+      // `hostTsconfigAliases` strips the `*`, so `@/*` becomes `@/` while a bare `react` stays `react`.
+      .filter((a) => a.prefix?.endsWith('/') && a.target)
+      // And never a declaration file, whatever its shape — nothing runtime resolves to one.
+      .filter((a) => !/\.d\.[cm]?ts$/.test(a.target))
+      .map((a) => ({ find: a.prefix, replacement: a.target + '/' }))
+  );
 }
 
 /**

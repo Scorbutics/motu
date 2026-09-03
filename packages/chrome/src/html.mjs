@@ -93,6 +93,8 @@ export function motuRow({
   surface = 'card',
   /** Distance from the newest, which is what fades this row's gauge. */
   age = null,
+  /** Page scale only: raw markup in the title line, after the kind. Compose it with `motuPill`. */
+  badge = '',
 }) {
   // THE KIT'S ATTRIBUTES, because the kit owns .motu-row now. A server row is a CARD -- it sits on
   // its own ground with a hairline -- and motu-grow is what the kit calls the cell that takes the
@@ -114,6 +116,10 @@ export function motuRow({
       `${tone ? `<span class="motu-dot" data-tone="${escapeHtml(tone)}"></span>` : ''}` +
       `<span class="motu-name">${escapeHtml(label)}</span>` +
       `${kind ? `<span class="motu-kind"${kindTone ? ` data-tone="${escapeHtml(kindTone)}"` : ''}>${escapeHtml(kind)}</span>` : ''}` +
+      // A STATE, beside the kind, exactly where the React row puts its <Pill> — raw, because it is
+      // markup the caller composed with `motuPill`. `live` is the only one so far and it is the reason
+      // this slot exists: a kind says what a row IS, and no amount of kinds says what it is DOING.
+      `${badge}` +
       `</span>` +
       `${sub ? `<span class="motu-sub">${sub}</span>` : ''}` +
       `</span>` +
@@ -131,8 +137,45 @@ export function motuRailedList(rows) {
   return `<div class="motu-railed"><ul class="motu-list">${rows.join('')}</ul></div>`;
 }
 
-export function motuPill(text, state = 'on') {
-  return `<span class="motu-pill" data-state="${escapeHtml(state)}">${escapeHtml(text)}</span>`;
+/**
+ * A state, as a chip.
+ *
+ * THE REACT PILL'S ATTRIBUTES — `data-tone`, `data-fill`, `data-mono` — because the kit's CSS is
+ * written against those and a server-rendered pill that used its own would be a second pill in one
+ * package, which is what `kit.mjs:306` already had to say out loud once. The legacy `data-state` form
+ * is kept for a string second argument; nothing in the repo passed one, which is why widening this
+ * was safe.
+ */
+export function motuPill(text, opts = 'on') {
+  if (typeof opts === 'string') return `<span class="motu-pill" data-state="${escapeHtml(opts)}">${escapeHtml(text)}</span>`;
+  const { tone = '', fill = false, mono = false, className = '', title = '' } = opts ?? {};
+  return (
+    `<span class="motu-pill${className ? ` ${escapeHtml(className)}` : ''}"` +
+    `${tone ? ` data-tone="${escapeHtml(tone)}"` : ''}` +
+    `${fill ? ' data-fill' : ''}` +
+    `${mono ? ' data-mono' : ''}` +
+    `${title ? ` title="${escapeHtml(title)}"` : ''}` +
+    `>${escapeHtml(text)}</span>`
+  );
+}
+
+/**
+ * Labelled numbers, side by side — the string half of the kit's `Meter`.
+ *
+ * A METER, NOT A SENTENCE, and the argument is the React component's: `2 objects · 3.1 MB · cap
+ * 1000/repo` is three facts run together in prose, which is the shape of a footnote. Same dl/dt/dd,
+ * same class, so the same rules dress both.
+ */
+export function motuMeter(items) {
+  const cells = items
+    .filter(Boolean)
+    .map(
+      (it) =>
+        `<div${it.tone ? ` data-tone="${escapeHtml(it.tone)}"` : ''}>` +
+        `<dt>${escapeHtml(it.label)}</dt><dd>${escapeHtml(String(it.value))}</dd></div>`,
+    )
+    .join('');
+  return `<dl class="motu-meter">${cells}</dl>`;
 }
 
 /**

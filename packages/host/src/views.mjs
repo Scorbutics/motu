@@ -31,6 +31,8 @@ import {
   motuPanel,
   motuRow,
   motuRailedList,
+  motuPill,
+  motuMeter,
   escapeHtml,
   PRIMARY_DETECT_JS,
   PRIMARY_VAR_NAMES,
@@ -770,31 +772,61 @@ ${PRIMARY_DETECT_JS}
 // --- the indexes --------------------------------------------------------------------------------
 
 export function rootIndexPage({ repos, stats }) {
-  const repoRows = repos.map((r) =>
+  const n = (x) => Number(x ?? 0).toLocaleString('en');
+  const repoRows = repos.map((r, i) =>
     motuRow({
       href: `/${r.repo}/`,
       label: r.repo,
-      sub: `${r.slugs.length} lagoon${r.slugs.length === 1 ? '' : 's'} · ${r.records} record${r.records === 1 ? '' : 's'}`,
+      scale: 'page',
+      index: i,
+      // A repo holding records is live water; one holding none is not broken, it is EMPTY — which is
+      // `neutral`, not `warn`. Same reading as the React row's <Dot>, because it is the same dot.
+      tone: r.records ? 'ok' : 'neutral',
+      kind: 'repo',
+      // HOW FULL, AS A RATIO, so it is drawn rather than written — the one number on the row that is
+      // not a count. Against `maxRecords`, the same cap the readout names, because the two disagreeing
+      // six hundred pixels apart is exactly what the React row's own comment was written about.
+      fill: stats.maxRecords ? Math.min(100, (r.records / stats.maxRecords) * 100) : null,
+      badge: r.live ? motuPill('live', { tone: 'ok', fill: true, className: 'motu-breathe', title: 'served live from somebody\'s dev server' }) : '',
+      sub:
+        escapeHtml(`${r.slugs.length} lagoon${r.slugs.length === 1 ? '' : 's'}`) +
+        (r.live ? escapeHtml(' · updating as it is edited') : ''),
+      trailing: escapeHtml(`${n(r.records)} / ${n(stats.maxRecords)}`),
     }),
   );
 
   return motuPage({
     title: 'motu lagoons',
+    // THE MASTHEAD, which is the SAME BAY the console uses and not a second header — `shape` is the
+    // tall end of one component. This page asked for the chrome-scale form and got a 16px band above
+    // a settings list, while the app's own front page rendered the masthead: one product, two
+    // openings, drifting apart because nothing compares them. The vocabulary was already here.
     bay: motuBay({
+      shape: 'masthead',
+      leading: motuMark(),
       title: 'motu',
-      subtitle: 'published lagoons',
-      meta: `${stats.blobs} object${stats.blobs === 1 ? '' : 's'} · ${size(stats.bytes)} · cap ${stats.maxRecords}/repo`,
+      headline: 'Your lagoons',
+      blurb: 'Every declared state, published and addressable.',
+      // THE READOUT IS A METER, not a sentence: three separate facts, each with a label over a value
+      // and tabular figures, rather than prose run together with dots.
+      meta: motuMeter([
+        { label: 'Objects', value: n(stats.blobs) },
+        { label: 'Size', value: size(stats.bytes) },
+        { label: 'Cap', value: `${n(stats.maxRecords)}/repo` },
+      ]),
     }),
     body:
       // ONE KIND OF THING. A "Composed" panel of groups listed above this and, on a host where every
       // group holds very nearly every repository, said the same thing twice while pushing the actual
       // list down the page — which is what `b1719dd` removed from the motu-built index region and
       // never removed from here, so the two indexes disagreed for months.
-      motuPanel({
-        caption: 'Repositories',
-        rows: repoRows,
-        empty: 'Nothing published yet — run motu lagoon publish --remote from a project.',
-      }),
+      repoRows.length
+        ? motuRailedList(repoRows)
+        : motuPanel({
+            caption: 'Repositories',
+            rows: [],
+            empty: 'Nothing published yet — run motu lagoon publish --remote from a project.',
+          }),
   });
 }
 

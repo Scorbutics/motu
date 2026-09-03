@@ -74,7 +74,18 @@ export async function railMembers(visible: Visible): Promise<RailMember[]> {
 }
 
 /** Where the lagoon being looked at sits in that rail, or 0 if it is not in it. */
+/**
+ * Where the requested member sits in the rail, or `-1` when it is not there at all.
+ *
+ * IT USED TO ANSWER 0 FOR "NOT FOUND", which is the shape of bug this codebase exists to refuse: the
+ * shell then framed whoever happened to be FIRST, so asking for one lagoon quietly served another —
+ * a rail with the requested repo nowhere in it and somebody else's page in the frame. Measured: a
+ * request for `shlinkio/shlink-web-client/all.develop` rendered `twentyhq/twenty`.
+ *
+ * A member is missing from the rail whenever it has no PUBLISHED record — which is exactly the case
+ * for a lagoon that only exists as a running dev server, and that is a normal thing to look at.
+ * The caller falls through to serving the page itself rather than wrapping the wrong one.
+ */
 export function focusIndex(members: RailMember[], repo: string, slug: string): number {
-  const at = members.findIndex((m) => m.repo === repo && m.slug === slug)
-  return at < 0 ? 0 : at
+  return members.findIndex((m) => m.repo === repo && m.slug === slug)
 }

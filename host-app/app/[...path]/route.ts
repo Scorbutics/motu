@@ -270,8 +270,14 @@ const serve = async (request: Request) => {
       // there, exactly as before — the shell is never the thing that reveals one exists.
       if (!(await visible(record.repo))) throw new Error('not visible');
       const members = await railMembers(visible);
-      if (members.length) {
-        const at = focusIndex(members, record.repo, record.slug);
+      const at = focusIndex(members, record.repo, record.slug);
+      // A SHELL AROUND SOMEBODY ELSE'S LAGOON IS WORSE THAN NO SHELL. `at < 0` means the member being
+      // asked for is not in the rail at all — it has no PUBLISHED record, which is exactly what a
+      // live-only lagoon looks like, and a normal thing to want to look at. `focusIndex` used to
+      // answer 0 there, so the shell framed whoever came first: a request for one lagoon served
+      // another, with a rail that did not contain the repo in the URL. Fall through instead and serve
+      // the page as it always was.
+      if (members.length && at >= 0) {
         return new Response(
           // `lagoonPage`, which is what `composedPage` was renamed to when a group stopped being the
           // only thing with a shell. This call still said `composedPage`, so the app could not BUILD

@@ -2534,6 +2534,35 @@ function frameIsPageCheck(report, id, region) {
   // rather than mounting the whole region, and nothing compares those two — which is the same class of
   // gap a hand-written frame has, so it gets the same kind of line.
   const layoutDecl = /^\s*layout\s*:/m.test(blankComments(archText));
+  // AND ONLY AN OCEAN. `layout` is a template of `<motu-island slot="…">` markers rendered by the
+  // custom element; a REACT host has no custom element to render it and `<X.Island>` is the binding
+  // it does have, so the same declaration composes nothing there.
+  //
+  // This branch did not ask, so a Vite or Next region declaring `layout` — which is what the
+  // scaffold's own commented example suggests — passed `region-root` green, passed every other static
+  // check, and then failed the runtime pass outright: "archipelago did not render", "reaches NONE of
+  // its declared slots". A cold-start agent lost its remaining budget to exactly that, and nothing in
+  // the CLI said `layout` was the wrong shape for its host until the expensive check ran.
+  //
+  // An ERROR rather than a warning: unlike a stage-1 overlay, this is not a shape someone can ship
+  // and migrate later — it does not work at all on this host.
+  if (layoutDecl && HOST !== 'angularjs') {
+    report.error(
+      'region-root',
+      `this region declares \`layout\` in the ARCHIPELAGO — the ocean's composition, a template of ` +
+        `<motu-island> markers rendered by <motu-archipelago>. This project's host is \`${HOST}\`, ` +
+        `which has no such element: the region would pass every static check and render NOTHING.\n` +
+        `    TWO THINGS ARE CALLED \`layout\` AND THIS IS THE OTHER ONE. In the LAGOON OVERRIDES, ` +
+        `\`layout: (island) => <YourPageFrame island={island} />\` is a React frame and is correct here — ` +
+        `that is the one the scaffold's commented example shows. In the ARCHIPELAGO, \`layout\` is the ` +
+        `ocean's template and means nothing on a React host.\n` +
+        `    So: move it to the region's lagoon overrides, or declare \`root\` — the application's own ` +
+        `layout component, with \`slots\` mapping its props to islands, which is the form with no ` +
+        `second copy anywhere. See docs/06-composition-and-adoption.md`,
+    );
+    report.skip('island-composition', '`layout` is not a composition on this host — see region-root');
+    return;
+  }
   if (layoutDecl) {
     report.ok(
       'region-root',

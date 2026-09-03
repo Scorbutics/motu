@@ -979,6 +979,12 @@ markSandbox();
     // remount: a flow leaves the region where its last step put it, and going back to what the page
     // establishes is a state too.
   const onFlow = (name: string | null) => {
+      // A FLOW IS THE REGION'S, so asking for one leaves the page view rather than replaying against
+      // it. The page renders what the PAGE renders — with peps' login seeded to an expired link that
+      // is the error banner and not the form — so a flow driving `login-form` there fails on its
+      // first step with "no island mounted under slot", which is true and is not a finding about the
+      // flow. Same rule the station list already keeps: picking a station leaves island mode.
+      if (view === 'page') onView('region');
       // WHICH STATE IS SHOWING, remembered rather than inferred. A host drawing this panel from
       // outside cannot read it from anywhere else: the in-page dock kept it in its own DOM, so a
       // second reader had nothing to go on and lit "As seeded" forever, whatever you pressed.

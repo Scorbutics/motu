@@ -1,9 +1,23 @@
-# Run 1 — 2026-09-02
+# Cold-start adoption: what a stranger hits
 
-Three agents (Sonnet), two unfamiliar production monorepos, one control. Raw data:
-`motu-bench/runs/trace-final.jsonl`, `metrics.json`, and one `journal.md` per arm.
+**These numbers do not measure what motu is for.** They measure the ON-RAMP — how many CLI
+invocations an adoption takes, how often the CLI says no. That is a real question for a project asking
+strangers to try it, and it is not the question of whether the framework catches the bugs it exists to
+catch. For that, see [`bench/coupling/RESULTS.md`](../coupling/RESULTS.md), which injects coupling
+defects and asks four instruments the same question.
 
-## The numbers
+Measured across two rounds. The counters barely moved between them; the JOURNALS found four real
+defects, every one of them first-hour and stranger-facing:
+
+| | found by | fixed |
+|---|---|---|
+| `ownership` never fired — `writes` parsed only if the event name was quoted, so two islands could claim one key and `motu check` said PASS | arm-b journal | yes |
+| a React host declaring `layout` passed every static check and rendered nothing (the archipelago's `layout` is the ocean's; the lagoon override's is not — same word, two meanings) | arm-b journal | yes |
+| `vite-plugin-pwa` made the lagoon unbootable; the documented escape was forking the app's Vite config into the adopter's repo | arm-c journal | yes |
+| `npm install` deletes motu's links and nothing records them — untestable by the arm itself, whose brief forbids running it | run separately | yes (`motu link`) |
+
+So: **keep this as a first-run fuzzer, do not read its table as evidence about the framework.** The
+one number in it worth watching is `init → first lagoon`, which did not improve between rounds.
 
 | | arm-a-next (formbricks, no skills) | arm-b-vite (novu, skills) | control (no motu) |
 |---|---|---|---|

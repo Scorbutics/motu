@@ -28,6 +28,35 @@ motu lagoon states
 
 Open either one. It is the real components, still interactive, rendered from a declared seed.
 
+### Does it catch anything?
+
+Six **coupling** defects — the class that lives between components, where every part is individually
+correct and the composition is wrong — injected into a real app (shlink), and four instruments asked
+the same question. Full method and caveats in [`bench/coupling/RESULTS.md`](bench/coupling/RESULTS.md).
+
+```
+           tsc  motu-types   lint   tests    motu  motu-rt
+  C1         ✓       ✓         ✓       ✓       ✓       ·   the two islands are placed in each other's slots
+  C2         ·       ✓         ·       ·       ✓       ✓   a second island claims a key another produces
+  C3         ·       ✓         ·       ✓       ✓       ✓   a slot name typo in the page
+  C4         ·       ·         ·       ✓       ·       ✓   the reader stops binding the key it reads
+  C5         ·       ✓         ·       ✓       ·       ✓   a declared write wired to an event the island never emits
+  C6         ·       ·         ·       ✓       ✓       ·   the region is composed but never wrapped
+```
+
+**motu caught 6 of 6; the app's own tooling caught 5 of 6; one defect was motu's alone.** That is
+smaller than the pitch, and it is the number rather than the pitch.
+
+The reason the app does so well is worth knowing: shlink has a test that renders the whole page, and a
+page-level integration test sees composition because composition is what it renders. So the honest
+claim is not "motu catches what your tests miss" — it is:
+
+> a page-level integration test catches most coupling defects; motu is that test, declared instead of
+> written, plus one class the test cannot see.
+
+The one it caught alone is **two islands claiming one key**: nothing renders differently, the store
+just has two writers and no owner. Caught statically, in about a second, because ownership is declared.
+
 ### The loop this is built for
 
 The reason the declarations and the addressable states matter together: **an agent can build a region

@@ -750,6 +750,10 @@
   --mc-coral-hi: #ef8560;
   --mc-teal-shade: #0b6152;
   --mc-teal-foot: #0f8770;
+  /* The banner's two decorations, read off the design: a pale disc sweeping through the teal, and a
+     warm haze bleeding up from the bottom-right corner. */
+  --mc-veil: rgba(255, 255, 255, 0.042);
+  --mc-warm: rgba(232, 120, 78, 0.5);
 }
 
 .gm-card {
@@ -798,24 +802,49 @@
 .mc__banner {
   position: relative;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 18px 20px 0;
+  padding: 20px 26px 0;
   /* THE BANNER IS A THIRD OF THE CARD in the design, not a strip: it is what the avatar crosses, and
      an avatar crossing a thin bar reads as a mistake rather than a composition. */
-  min-height: 132px;
+  min-height: 146px;
 }
 .mc--premium { background: var(--mc-cream); }
 .mc--premium .mc__banner {
   background: radial-gradient(120% 150% at 78% 0%, var(--mc-teal-hi) 0%, var(--mc-teal-deep) 62%);
   padding-bottom: 42px;
 }
+
+/* THE BANNER IS NOT A FLAT FIELD. The design draws two things on the teal that a single gradient
+   cannot make: a pale disc sweeping across it, and a warm haze rising from the bottom-right — the
+   coral of the badge echoed in the light. Without them the banner reads as a colour swatch, which is
+   the single largest difference between this card and the one that was drawn. */
+/* WHERE THE DECORATION IS CLIPPED IS THE DECORATION. On premium the banner is its own field and the
+   veil ends with it, at the fold. On standard the banner has no background — the CARD is teal — so a
+   veil clipped to the banner box drew a hard horizontal band across a continuous colour. Same paint,
+   different element, because on standard the whole card is the banner. */
+.mc--premium .mc__banner::before, .mc--standard::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  /* CIRCLES, AND MOSTLY OFF THE CARD. Sized as ellipses to fit the banner they became centred ovals
+     — a blob, where the design shows only the EDGE of something much larger sweeping past. */
+  background:
+    radial-gradient(circle 190px at 74% 96%, var(--mc-veil) 0%, var(--mc-veil) 96%, transparent 97%),
+    radial-gradient(circle 250px at 96% -34%, var(--mc-veil) 0%, var(--mc-veil) 96%, transparent 97%);
+}
+.mc--premium .mc__banner::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(52% 88% at 97% 100%, var(--mc-warm) 0%, transparent 66%);
+}
+/* The banner's own content sits ON the decoration, not under it. */
+.mc__brand, .mc__banner .mc-pill { position: relative; z-index: 1; }
+.mc--standard .mc__body { position: relative; z-index: 1; }
 .mc--standard {
   background: radial-gradient(120% 140% at 80% 0%, var(--mc-teal-glow) 0%, var(--mc-teal-bright) 46%, var(--mc-teal-foot) 100%);
 }
 
-.mc__brand { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: #fff; }
+.mc__brand { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #fff; }
 .mc__logo {
-  width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center;
-  background: rgba(255, 255, 255, 0.16); color: #fff;
+  width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.14); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.34);
 }
 
 /* The badge is the tier, and the design gives each its own: coral on premium, frosted on standard. */
@@ -826,7 +855,7 @@
 .mc-pill--premium { background: linear-gradient(135deg, var(--mc-coral-hi) 0%, var(--mc-coral) 100%); color: #fff; box-shadow: 0 4px 12px rgba(226, 113, 74, 0.35); }
 .mc-pill--standard { background: var(--mc-frost); color: var(--mc-teal-ink); }
 
-.mc__body { padding: 0 20px 22px; }
+.mc__body { padding: 0 26px 26px; }
 
 /* THE AVATAR STRADDLES THE BANNER on premium — the overlap is what makes the card read as a profile
    rather than a header with a list under it. */
@@ -838,7 +867,7 @@
    positioned itself — and the avatar, which is supposed to CROSS the fold, was sliced in half by it.
    Visible only once the card got narrow enough for the crop to reach the initials. */
 .mc__identity { display: flex; align-items: flex-start; gap: 16px; padding-top: 12px; position: relative; z-index: 1; }
-.mc--premium .mc__avatar { margin-top: -70px; }
+.mc--premium .mc__avatar { margin-top: -58px; }
 .mc--standard .mc__identity { padding-top: 4px; }
 .mc__avatar {
   width: 96px; height: 96px; flex: 0 0 auto; border-radius: 50%;
@@ -874,12 +903,14 @@
    with hairlines — the same information, two different objects. */
 .mc__field {
   display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
-  background: var(--mc-white); border-radius: 16px; padding: 14px 18px;
+  background: var(--mc-white); border-radius: 16px; padding: 15px 18px;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 2px rgba(14, 40, 34, 0.05), 0 6px 16px rgba(14, 40, 34, 0.05);
 }
-.mc--premium .mc__field--email { margin-top: 20px; }
-.mc__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.mc--premium .mc__field--email { margin-top: 22px; }
+.mc__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
 .mc__pair .mc__field { flex-direction: column; align-items: flex-start; gap: 4px; }
-.mc__field--number { background: var(--mc-coral-soft); }
+.mc__field--number { background: var(--mc-coral-soft); border-color: rgba(226, 113, 74, 0.42); box-shadow: none; }
 .mc__label { font-size: 14px; color: var(--mc-muted); flex: 0 0 auto; }
 .mc__field--number .mc__label { color: var(--mc-coral-ink); }
 .mc__value {
@@ -892,7 +923,7 @@
 .mc__value--empty { color: var(--mc-muted); font-weight: 600; letter-spacing: normal; }
 
 .mc__panel { margin-top: 18px; background: var(--mc-frost); border-radius: 18px; padding: 4px 18px; }
-.mc__panel .mc__field { background: transparent; border-radius: 0; padding: 15px 0; border-bottom: 1px solid rgba(12, 97, 83, 0.12); }
+.mc__panel .mc__field { background: transparent; border: 0; box-shadow: none; border-radius: 0; padding: 15px 0; border-bottom: 1px solid rgba(12, 97, 83, 0.12); }
 .mc__panel .mc__field:last-child { border-bottom: 0; }
 .mc__panel .mc__pair { display: contents; }
 .mc__panel .mc__field--number { background: transparent; }
@@ -912,13 +943,13 @@
    put a label and a long address on one line, and the two fact boxes stack. */
 @container (max-width: 340px) {
   .mc__avatar { width: 72px; height: 72px; font-size: 23px; border-width: 4px; }
-  .mc--premium .mc__avatar { margin-top: -52px; }
+  .mc--premium .mc__avatar { margin-top: -42px; }
   .mc__banner { min-height: 108px; }
   .mc__field--email { flex-direction: column; align-items: flex-start; gap: 3px; }
   .mc__field--email .mc__value { text-align: left; }
   .mc__pair { grid-template-columns: 1fr; }
-  .mc__body { padding: 0 14px 18px; }
-  .mc__banner { padding: 14px 14px 0; }
+  .mc__body { padding: 0 16px 20px; }
+  .mc__banner { padding: 14px 16px 0; }
 }
 
 /* ---- the compact row, for the members list ---- */

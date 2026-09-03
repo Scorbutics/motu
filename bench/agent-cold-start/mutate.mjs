@@ -23,8 +23,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const BENCH = '/home/scorbutics/dev/motu-bench';
-const SPEC = resolve(BENCH, 'runs/mutations/mutations.md');
-const ROOT = resolve(BENCH, 'formbricks');
+
+/**
+ * Which pairing to drive. A pairing is one repository holding two implementations of one feature and
+ * a mutation document written against both.
+ *
+ * `formbricks` was the first and could not be measured on the region side: its region contains an
+ * island the lagoon cannot bundle, so its flows are red before any mutation is applied. `shlink` is
+ * the pairing that works — a fully bundlable region, and a control that has its own test suite.
+ */
+const PAIRINGS = {
+  formbricks: { root: 'formbricks', spec: 'runs/mutations/mutations.md' },
+  shlink: { root: 'shlink', spec: 'runs/mutations-shlink/mutations.md' },
+};
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -32,6 +43,10 @@ const flag = (name) => {
   return i === -1 ? null : (args[i + 1] ?? true);
 };
 const arm = flag('arm');
+const pairing = PAIRINGS[String(flag('pairing') ?? 'shlink')];
+if (!pairing) throw new Error(`unknown --pairing; expected one of ${Object.keys(PAIRINGS).join(', ')}`);
+const SPEC = resolve(BENCH, pairing.spec);
+const ROOT = resolve(BENCH, pairing.root);
 const listOnly = args.includes('--list');
 const apply = flag('apply');
 const revert = flag('revert');

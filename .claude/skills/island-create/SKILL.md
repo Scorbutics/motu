@@ -205,3 +205,19 @@ sets `"regionRoot": "required"` in `motu.config.json`, and a frame becomes an er
 - Never widen backend surface beyond the specific `@BrowserCallable` method you need.
 - Keep motu terminology (island/ocean/archipelago/lagoon/mainland) in prose only; imports/types stay
   literal. The end state is the mainland — keep the `ui/` component a plain component that de-wraps.
+
+## Before you hand it over: motu did not test your logic
+
+`motu check` is green when the region COMPOSES — islands placed, declared couplings carrying, every
+state rendering. It runs no typecheck and no test runner. Two things are yours:
+
+- **logic inside the component** (a filter that stops matching a field, `some` for `every`, an
+  off-by-one) — renders fine, composes fine, passes everything here;
+- **the path from a user's action to a declared output** — a flow EMITS the island's declared event,
+  entering the region past the component's own handler, so a handler that drops its argument passes
+  every flow you can write.
+
+Measured on a real screen: of eight injected regressions, the project's unit tests caught five and
+motu's flows caught one — and that one was a render assertion the tests missed. Different
+instruments. If the component you just wrote or wrapped carries logic, say in your handover that it
+needs unit tests in the host's own runner, and do not present a green `motu check` as coverage.

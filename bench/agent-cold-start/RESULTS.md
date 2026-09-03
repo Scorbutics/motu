@@ -728,3 +728,112 @@ regressions are the same class** (provider cross-wire), so any arm catching that
 four times — results must be read by CLASS, not count; and three of those four are **ambiguous to
 apply**, because cross-wiring one provider produces a line identical to another's. The harness refused
 them rather than mutating the wrong line, which is the behaviour it was built for.
+
+---
+
+# The defect-detection table (shlink pairing)
+
+The measurement formbricks could not support: one repository, one feature, two implementations, the
+same eight blind-authored regressions injected into each, and each side's own checks run against them.
+Deterministic, no agent in the loop. Both baselines green before anything was injected — the region's
+static AND runtime, which is the precondition formbricks never met.
+
+| gate | caught |
+|---|---|
+| **props** — `tsc` | 0 / 8 |
+| **props** — `oxlint` | 0 / 8 |
+| **props** — `npm test` (41 files, 237 tests) | **5 / 8** |
+| **region** — `motu check` (static) | 0 / 8 |
+| **region** — `archipelago verify --runtime` (4 flows) | **1 / 8** |
+
+**motu lost, five to one.** That is the headline and it should not be softened.
+
+## Why, and the part that is structural rather than a matter of effort
+
+The obvious explanation is volume: shlink's suite is 237 tests written by its own developers over
+years, and the region's evidence is four flows written by one agent in one session. The control agent
+added no tests at all — the 5/8 is entirely shlink's pre-existing suite catching regressions in code
+it already covered.
+
+But volume is not the whole answer, and the rest matters more.
+
+**A flow emits a DECLARED OUTPUT; it does not act on the UI.** `M6` breaks the search box's callback
+so it ignores its argument — the user types and nothing filters. The region's flow drives
+`emit: { slot: 'server-search', event: 'search-term', detail: 'staging' }`, which enters the region
+*past* the broken callback, so the coupling still holds and the flow still passes. The control's tests
+use a real interaction, and catch it.
+
+That is a boundary of the model, not a gap in this region's evidence: **motu's flows verify that a
+declared coupling carries, and cannot verify the path from a user's action to that declaration.** No
+amount of additional flows fixes M6; a flow is the wrong instrument for it.
+
+The two remaining misses (`M5`, `M7` — both about the auto-connect column) are the ordinary kind: no
+flow asserts that column, and one could be written. `M1` (search stops matching URLs) is the same —
+the flow's search term happens to match a name.
+
+## What this does and does not say about motu
+
+It does NOT say motu detects poorly in general. It says:
+
+- **motu's coverage is exactly the evidence someone wrote, and nothing more.** It is not automatic. A
+  region with four flows catches what four flows assert.
+- **An established test suite over the same feature is a stronger detector of behavioural regressions**
+  than a region's flows, and a project that has one should not be told otherwise.
+- **Flows and tests catch different classes.** The five the tests caught are behavioural; motu's one
+  catch (`M3`, the empty state inverted) is a RENDER assertion — the class that made the earlier
+  perception catches possible, and the class a props-drilling test suite tends not to make.
+
+The honest pitch that survives this table is narrower than "motu catches regressions": it is that
+motu makes states ADDRESSABLE and RENDERABLE without a backend, that ownership is declared rather than
+conventional, and that a fresh reader can be pointed at a URL. Those claims are supported by four
+rounds of evidence. "Better regression detection than the project's own tests" is not, and this table
+is the reason to stop implying it.
+
+## Caveats that travel with the numbers
+
+- The set was blind-authored, but **two edits were repaired by me**: `M1` was not type-preserving (it
+  left a destructured binding unused, so it failed typecheck — scoring as a control "catch" of a
+  malformed mutation), and `M2` could not be reverted because its REPLACEMENT text was not unique,
+  which silently contaminated every later mutation in the first run. Both repairs kept the intended
+  symptom and were applied symmetrically to both implementations.
+- The first props run was invalid for a third reason: `ENOSPC` again, from vitest's own Vite watcher.
+  `CHOKIDAR_USEPOLLING=1` fixed it. Fifth distinct place that limit has bitten.
+- The two implementations derive from **different ancestor blobs** of the same original component, not
+  a linear patch chain — found by the mutation author, not by me.
+- One screen, eight regressions, one pairing. A case study with instrumentation.
+
+## CORRECTION: the table above measures the wrong axis
+
+The comparison is invalid as a judgement of motu, and the fault is in how it was designed.
+
+The mutation author was asked for "plausible developer mistakes" on a screen that filters a list. It
+produced what that request implies: **six of the eight are pure logic errors inside a component body**
+— a narrowed filter predicate, a dropped `toLowerCase`, `some` where `every` was meant, an off-by-one
+on a count. Those are unit-test-shaped by construction, and unit testing is a job motu deliberately
+does not do. `motu check --help` states the boundary outright: *"motu check runs MOTU's gates only.
+Your typecheck/linter are yours: `<host build> && motu check`."* No `tsc` and no test runner is invoked
+by any motu check, on purpose.
+
+So the table shows a tool losing a race it declines to enter, and reporting it as "motu lost 5 to 1"
+would tell a reader something untrue about what motu attempts. The numbers are real; the framing they
+invite is not.
+
+**What survives from it, and is worth keeping:**
+
+- **The structural finding stands, and is the valuable part.** A flow emits a DECLARED OUTPUT, so a
+  bug in the path from a user's action to that declaration is invisible to it (`M6`: the search
+  callback ignores its argument; the flow emits past the break and passes). That is a real boundary of
+  the model, it is not fixable with more flows, and it belongs in the docs.
+- **motu's one catch was a RENDER assertion** (`M3`, the empty state inverted) — the class that also
+  produced the four perception catches across the rounds, and the class a props-drilling suite tends
+  not to make.
+- **The control added no tests.** Its 5/8 is shlink's own pre-existing suite catching regressions in
+  code it already covered — which says something good about shlink, and nothing about either arm's
+  approach to the change.
+
+**The experiment that would actually measure motu** mutates the COMPOSITION rather than a component
+body: an island placed in the wrong slot, a region key claimed by two writers, a page that stops
+reading the region back, a slot wired to a neighbour's data, a provider removed so the island cannot
+mount, a declared write that never fires. Several of those cannot even be expressed against the props
+implementation, because it has no declaration to break — which is itself the comparison. That is the
+table to build; the one above is not it.

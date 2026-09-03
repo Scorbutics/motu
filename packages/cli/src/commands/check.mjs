@@ -290,5 +290,20 @@ export async function checkCommand(argv) {
         )
       : color.red(color.bold('FAIL')) + color.dim('  see above'),
   );
+  // WHAT THIS VERDICT DOES NOT COVER, said on the line a reader actually takes away.
+  //
+  // motu checks composition: that a region's islands are placed, that a declared coupling carries,
+  // that every state renders. It runs no typecheck and no test runner, deliberately — and an agent
+  // reading a green PASS has no way to know that from the output. Measured: a defect-detection
+  // experiment injected eight regressions, six of them ordinary logic errors inside a component body,
+  // and motu was scored as having "missed" them. It had not missed them; it had never been asked.
+  //
+  // A flow also emits an island's DECLARED OUTPUT rather than acting on the UI, so a bug between a
+  // user's action and that declaration — a handler that ignores its argument — passes every flow. The
+  // instrument for that is a unit test, and saying so here is cheaper than the confusion is.
+  console.log(
+    color.dim('  motu checks composition. Your typecheck and unit tests are yours and are not run here:'),
+  );
+  console.log(color.dim('  a logic bug inside a component, or a handler that drops its argument, passes every check above.'));
   process.exit(pass ? 0 : 1);
 }

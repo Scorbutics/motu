@@ -390,6 +390,27 @@ What it CANNOT prove is the seam on the other side of the port: that the real ad
 stays green while production breaks. The lagoon replaces the host module so completely that nothing
 shows a fetch happened — that is the point of it, and it is the boundary.
 
+## WHAT MOTU DOES NOT CHECK, and is your job
+
+motu checks COMPOSITION: that a region's islands are placed, that a declared coupling carries, that
+every declared state renders. It runs no typecheck and no test runner, and it never will — a green
+`motu check` says nothing whatever about whether your components are correct inside.
+
+Two classes are yours, and no amount of motu makes them motu's:
+
+- **Logic inside a component.** A filter that stops matching on one field, `some` where `every` was
+  meant, an off-by-one on a count. These render fine, compose fine, and pass every check here.
+- **The path from a user's action to a declared output.** A flow EMITS an island's declared event —
+  `emit: { slot: 'search', event: 'term', detail: 'staging' }` — which enters the region *past* the
+  component's own handler. A handler that ignores its argument, so typing changes nothing, passes
+  every flow you can write. This is not a gap to be closed with more flows; it is where the model
+  ends and a unit test begins.
+
+Measured, on a real screen: eight regressions injected into a motu region and into the same feature
+built with plain props. The project's own unit tests caught five; motu's flows caught one — and that
+one was a RENDER assertion, the class the tests missed. They are different instruments. Write both,
+and do not read a green `motu check` as coverage.
+
 So a source that carries logic gets UNIT TESTS, in the host's own runner, over a hand-made port. Not
 because motu asks for a second suite, but because that is the only place the branches no rendered
 state distinguishes can be reached: a lookup that THREW versus one that answered null, a deadline, the

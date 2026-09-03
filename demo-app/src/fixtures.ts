@@ -9,6 +9,9 @@ import {
   roles as memberResultsRoles,
   scenarios as memberResultsScenarios,
 } from './islands/member-results/fixtures.mock.js';
+import { scenarios as memberCardScenarios } from './islands/member-card/fixtures.mock.js';
+import { scenarios as memberFormScenarios } from './islands/member-form/fixtures.mock.js';
+import { scenarios as usersFlows } from './archipelagos/users/users.evidence.js';
 
 export const ALL_FIXTURES: Fixture[] = [...companyLookup, ...memberResults];
 
@@ -28,7 +31,18 @@ export const ALL_ROLES: string[] = [
  */
 export const ALL_SCENARIOS: Record<string, Scenario[]> = {
   'x-member-results': memberResultsScenarios,
+  'x-member-card': memberCardScenarios,
+  'x-member-form': memberFormScenarios,
 };
 
-/** No region declares flows yet — the shape is here so the entry can pass it unconditionally. */
-export const ALL_FLOWS: Record<string, RegionScenario[]> = {};
+/**
+ * THE REGION FLOWS, keyed by archipelago id — what `?region=<id>&flow=<name>` addresses.
+ *
+ * This was `{}` with a comment saying no region declared any, and it stayed `{}` after one did. Same
+ * drift the scenario map above already suffered: a hand-written catalogue is only as current as the
+ * last person who remembered it, and nothing fails when it is forgotten — the address just refuses,
+ * which reads as "the flow is broken" rather than "the list is stale".
+ */
+export const ALL_FLOWS: Record<string, RegionScenario[]> = {
+  users: usersFlows,
+};

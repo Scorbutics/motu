@@ -7,7 +7,7 @@ export const memberCardElement: ElementSpec = {
   options: {
     // READS ONLY. It has no output at all, which is the point of it: everything on screen is a
     // function of one region key, so there is no second source of truth to drift.
-    contract: { input: ['draft'] as (keyof MemberCardProps & string)[] },
+    contract: { input: ['draft', 'loading', 'showActions', 'layout'] as (keyof MemberCardProps & string)[] },
     legacy: 'fill',
   },
 };

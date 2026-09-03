@@ -33,7 +33,7 @@ export const CONTRACTS = {
     effects: [],
   },
   'x-member-card': {
-    input: ['draft'],
+    input: ['draft', 'loading', 'showActions', 'layout'],
     output: {  },
     effects: [],
   },
@@ -43,7 +43,7 @@ export const CONTRACTS = {
     effects: [],
   },
   'x-member-form': {
-    input: ['draft', 'organisations'],
+    input: ['draft', 'chapters'],
     output: { onDraftChanged: 'member-draft', onReset: 'member-reset' },
     effects: [],
   },

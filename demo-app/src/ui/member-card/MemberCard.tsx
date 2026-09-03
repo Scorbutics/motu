@@ -1,101 +1,150 @@
 import type { MotuFit } from '@motu/core';
-import { completenessOf, initialsOf, type MemberDraft } from '../../shared/member-draft.js';
+import { initialsOf, type MemberDraft } from '../../shared/member-draft.js';
 
 export interface MemberCardProps {
   /** The draft the form publishes. Absent or empty is a designed state, not a broken one. */
   draft?: MemberDraft;
+  /** The skeleton state: the shape is known before the data is. */
+  loading?: boolean;
+  /** Contact/edit actions under the card. The design's default is without them. */
+  showActions?: boolean;
+  /** `card` or the members-list `row` (full width, one line). */
+  layout?: 'card' | 'row';
   /** Injected footprint, for the fit axis. CSS-only island: accepted and unused. */
   fit?: MotuFit;
 }
 
-/** The ring around the avatar: one arc per profile field, filled as the draft fills. */
-function CompletenessRing({ value }: { value: number }) {
-  const size = 76;
-  const stroke = 3;
-  const r = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * r;
+/** The product mark that sits in the card's header, as drawn in the design. */
+function BrandChip() {
   return (
-    <svg className="gm-card__ring" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle className="gm-card__ring-track" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} fill="none" />
-      <circle
-        className="gm-card__ring-fill"
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        strokeWidth={stroke}
-        fill="none"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - value)}
-        strokeLinecap="round"
-      />
-    </svg>
+    <span className="mc__brand">
+      <span className="mc__logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+          <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2.4" />
+        </svg>
+      </span>
+      motu demo-app
+    </span>
+  );
+}
+
+function Avatar({ draft }: { draft: MemberDraft | undefined }) {
+  const initials = initialsOf(draft?.fullName);
+  if (draft?.photo) return <img className="mc__avatar mc__avatar--photo" src={draft.photo} alt="" loading="lazy" />;
+  return (
+    <span className={`mc__avatar${initials ? '' : ' mc__avatar--blank'}`} aria-hidden="true">
+      {initials || '·'}
+    </span>
   );
 }
 
 /**
- * The member profile, drawn from whatever the draft holds so far.
+ * The member card, from the design.
  *
- * A CARD THAT IS NEVER BLANK. Every field has a resting state — a placeholder name, a dashed avatar,
- * a muted line where the bio will go — so the island renders from defaults alone AND the empty state
- * is the first thing a designer sees rather than the last. That rule is motu's; the reason to like it
- * is that "what does this look like with nothing in it" is the question UIs usually answer badly.
+ * TWO CARDS, NOT ONE RESTYLED. The tier does not tint a shared card — it picks a different one, which
+ * is what the design draws and why `tier` reads as a variant rather than a colour:
  *
- * It reads ONE prop. Everything on screen is a function of the draft, which is what makes it safe to
- * drive from a region key: there is no second source of truth to drift.
+ *   PREMIUM   a deep-teal banner with a coral badge, cream body, and the member number in coral —
+ *             the number is the thing being sold, so it is the thing that is coloured.
+ *   STANDARD  the whole card in bright teal, its details in one frosted panel, badge in white.
+ *
+ * Everything is a function of one region key plus its own display props, so there is no second source
+ * of truth to drift — and every field has a resting state, because the island must render from
+ * defaults alone and an empty card is the first thing anyone sees.
  */
-export function MemberCard({ draft, fit }: MemberCardProps) {
+export function MemberCard({ draft, loading = false, showActions = false, layout = 'card', fit }: MemberCardProps) {
   void fit;
+  const tier = draft?.tier ?? 'premium';
   const name = draft?.fullName?.trim();
-  const initials = initialsOf(name);
-  const completeness = completenessOf(draft);
-  const listed = draft?.listed ?? false;
+  const chapter = draft?.chapter?.trim();
+  const email = draft?.email?.trim();
 
-  return (
-    <article className={`gm-card gm-mcard${name ? '' : ' gm-mcard--empty'}`} aria-label="Member preview">
-      <div className="gm-mcard__banner" aria-hidden="true" />
-
-      <div className="gm-mcard__identity">
-        <div className="gm-mcard__avatar-wrap">
-          <CompletenessRing value={completeness} />
-          <div className="gm-mcard__avatar">{initials || '—'}</div>
+  if (loading) {
+    return (
+      <article className={`mc mc--${tier} mc--loading`} aria-busy="true" aria-label="Loading member">
+        <div className="mc__banner">
+          <span className="mc-skel mc-skel--pill" />
         </div>
+        <div className="mc__body">
+          <div className="mc__identity">
+            <span className="mc-skel mc-skel--avatar" />
+            <span className="mc__skel-lines">
+              <span className="mc-skel mc-skel--line" style={{ width: '58%' }} />
+              <span className="mc-skel mc-skel--line" style={{ width: '38%' }} />
+            </span>
+          </div>
+          <span className="mc-skel mc-skel--box" />
+          <span className="mc-skel mc-skel--box" />
+        </div>
+      </article>
+    );
+  }
 
-        <div className="gm-mcard__who">
-          <h3 className="gm-mcard__name">{name || 'Their name appears here'}</h3>
-          <p className="gm-mcard__sub">
-            {draft?.role ? <span className="gm-chip gm-chip--role">{draft.role}</span> : null}
-            {draft?.organisation ? <span className="gm-mcard__org">{draft.organisation}</span> : null}
-            {!draft?.role && !draft?.organisation ? <span className="gm-mcard__muted">Role &amp; organisation</span> : null}
-          </p>
+  if (layout === 'row') {
+    return (
+      <article className={`mc-row mc-row--${tier}`} aria-label={name ? `${name}, ${tier}` : 'Member'}>
+        <Avatar draft={draft} />
+        <span className="mc-row__who">
+          <span className="mc-row__name">{name || 'Unnamed member'}</span>
+          <span className="mc-row__chapter">{chapter || 'No chapter yet'}</span>
+        </span>
+        <span className={`mc-pill mc-pill--${tier}`}>{tier}</span>
+        <span className="mc-row__no">{draft?.memberNo ? draft.memberNo : '—'}</span>
+      </article>
+    );
+  }
+
+  const details = (
+    <>
+      <div className="mc__field mc__field--email">
+        <span className="mc__label">Email</span>
+        <span className={`mc__value mc__value--link${email ? '' : ' mc__value--empty'}`}>{email || 'not given yet'}</span>
+      </div>
+      <div className="mc__pair">
+        <div className="mc__field">
+          <span className="mc__label">Joined</span>
+          <span className={`mc__value mc__value--strong${draft?.joined ? '' : ' mc__value--empty'}`}>
+            {draft?.joined || '—'}
+          </span>
+        </div>
+        <div className="mc__field mc__field--number">
+          <span className="mc__label">Member no.</span>
+          <span className={`mc__value mc__value--number${draft?.memberNo ? '' : ' mc__value--empty'}`}>
+            {draft?.memberNo || '—'}
+          </span>
         </div>
       </div>
+    </>
+  );
 
-      {draft?.bio ? (
-        <blockquote className="gm-mcard__bio">{draft.bio}</blockquote>
-      ) : (
-        <div className="gm-mcard__bio gm-mcard__bio--ghost">A line about them will sit here.</div>
-      )}
+  return (
+    <article className={`mc mc--${tier}${name ? '' : ' mc--empty'}`} aria-label="Member card">
+      <div className="mc__banner">
+        <BrandChip />
+        <span className={`mc-pill mc-pill--${tier}`}>{tier}</span>
+      </div>
 
-      <dl className="gm-mcard__facts">
-        <div className="gm-mcard__fact">
-          <dt>Email</dt>
-          <dd className={draft?.email ? '' : 'gm-mcard__muted'}>{draft?.email || 'not given yet'}</dd>
+      <div className="mc__body">
+        <div className="mc__identity">
+          <Avatar draft={draft} />
+          <span className="mc__who">
+            <h3 className="mc__name">{name || 'Their name appears here'}</h3>
+            <p className="mc__chapter">{chapter || 'No chapter yet'}</p>
+          </span>
         </div>
-        <div className="gm-mcard__fact">
-          <dt>Directory</dt>
-          <dd>
-            <span className={`gm-dot ${listed ? 'gm-dot--on' : 'gm-dot--off'}`} aria-hidden="true" />
-            {listed ? 'Listed publicly' : 'Not listed'}
-          </dd>
-        </div>
-      </dl>
 
-      <footer className="gm-mcard__foot">
-        <div className="gm-mcard__meter" role="img" aria-label={`Profile ${Math.round(completeness * 100)}% complete`}>
-          <span className="gm-mcard__meter-fill" style={{ width: `${Math.round(completeness * 100)}%` }} />
-        </div>
-        <span className="gm-mcard__meter-label">{Math.round(completeness * 100)}% complete</span>
-      </footer>
+        {/* Standard gathers its details into one frosted panel; premium lays them out on the cream. */}
+        {tier === 'standard' ? <div className="mc__panel">{details}</div> : details}
+
+        {showActions ? (
+          <div className="mc__actions">
+            <button type="button" className="mc-btn mc-btn--primary">
+              View profile
+            </button>
+            <button type="button" className="mc-btn">Message</button>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }

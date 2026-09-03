@@ -725,9 +725,24 @@
 .org-tree__company { font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--_text); }
 
 /* ---------------------------------------------------------------- create a member: form + card ---
-   Two islands, one region key. Everything here paints from the token block at the top of this sheet,
-   so both islands take the legacy skin by default and the motu skin when the host opts in — the
-   demo's whole point is that the same components look right in both. */
+   The card follows the MemberCard design: teal and CORAL, two tiers that are two different cards.
+   Declared as `--mc-*` so the design's own palette survives whichever skin the host is wearing —
+   this card is a branded artefact, not a themed one. */
+:where(:host, .motu-root) {
+  --mc-ink: #16241f;
+  --mc-muted: #8b857a;
+  --mc-cream: #faf7f2;
+  --mc-white: #ffffff;
+  --mc-line: #ece7dd;
+  --mc-teal: #0f7a68;
+  --mc-teal-deep: #0a4f45;
+  --mc-teal-bright: #14a184;
+  --mc-teal-ink: #0c6153;
+  --mc-coral: #e2714a;
+  --mc-coral-ink: #cf5a33;
+  --mc-coral-soft: #fbe6de;
+  --mc-frost: rgba(255, 255, 255, 0.86);
+}
 
 .gm-card {
   background: var(--_surface, #fff);
@@ -741,13 +756,8 @@
 .gm-form__head { margin-bottom: 14px; }
 .gm-form__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--_text); }
 .gm-form__hint { margin: 2px 0 0; font-size: 12px; color: var(--_muted); }
-/* Two-up where there is room, stacked where there is not. The breakpoint is the CARD's, not the
-   viewport's: this island is placed beside another one, so it must fold on its own width. */
 .gm-form__row { display: grid; grid-template-columns: 1fr; gap: 0 12px; }
 @container (min-width: 380px) { .gm-form__row { grid-template-columns: 1fr 1fr; } }
-.gm-input--area { resize: vertical; min-height: 54px; font: inherit; }
-.gm-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--_text); margin-top: 4px; }
-.gm-check input { accent-color: var(--_primary); width: 15px; height: 15px; }
 .gm-form__actions { display: flex; justify-content: flex-end; margin-top: 14px; }
 .gm-btn {
   font: inherit; font-size: 13px; padding: 7px 14px; border-radius: var(--_radius-sm);
@@ -755,66 +765,185 @@
 }
 .gm-btn--ghost:hover { border-color: var(--_primary); color: var(--_primary); }
 
-/* ---- the card ---- */
-.gm-mcard { overflow: hidden; container-type: inline-size; }
-.gm-mcard__banner { height: 64px; background: var(--_grad); }
-.gm-mcard__identity { display: flex; gap: 14px; align-items: flex-end; padding: 0 18px; margin-top: -34px; }
-.gm-mcard__avatar-wrap { position: relative; width: 76px; height: 76px; flex: 0 0 auto; }
-.gm-card__ring { position: absolute; inset: 0; transform: rotate(-90deg); }
-.gm-card__ring-track { stroke: var(--_border); opacity: 0.5; }
-/* The ring is the one thing that ANIMATES, and only as the draft fills — a value changing under you
-   is worth a transition; a layout moving is not. */
-.gm-card__ring-fill { stroke: var(--_accent); transition: stroke-dashoffset 420ms cubic-bezier(0.4, 0, 0.2, 1); }
-.gm-mcard__avatar {
-  position: absolute; inset: 6px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--_surface, #fff); border: 1px solid var(--_border);
-  font-size: 22px; font-weight: 700; letter-spacing: 0.02em; color: var(--_primary);
+/* ================================================================== the card ==== */
+.mc {
+  position: relative; overflow: hidden;
+  /* THE CARD HAS A SIZE. Opened on its own — `?target=island:x-member-card` — it has no column to sit
+     in, and without this it stretched the full width of the viewport: the banner became a strip and
+     the identity row a horizon. An island must look right ALONE, because that is one of the addresses
+     it ships with. */
+  width: 100%; max-width: 420px;
+  /* THE CARD ADAPTS TO ITS OWN WIDTH, not the viewport's. It is an island: it sits in a region column
+     on one page, alone at an island address, and in a phone's full width — three different widths at
+     the same viewport size, which a media query cannot tell apart. */
+  container-type: inline-size;
+  border-radius: 24px;
+  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif);
+  color: var(--mc-ink);
+  box-shadow: 0 2px 6px rgba(14, 40, 34, 0.06), 0 18px 42px rgba(14, 40, 34, 0.12);
+  transition: box-shadow 220ms ease, transform 220ms ease;
 }
-.gm-mcard--empty .gm-mcard__avatar { border-style: dashed; color: var(--_muted); }
-.gm-mcard__who { padding-bottom: 4px; min-width: 0; }
-.gm-mcard__name {
-  margin: 0; font-size: 17px; font-weight: 700; color: var(--_text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.gm-mcard--empty .gm-mcard__name { color: var(--_muted); font-weight: 600; }
-.gm-mcard__sub { margin: 4px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
-.gm-mcard__org { color: var(--_muted); }
-.gm-mcard__muted { color: var(--_muted); }
-.gm-chip {
-  display: inline-block; padding: 2px 9px; border-radius: 999px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
-}
-.gm-chip--role { background: color-mix(in srgb, var(--_primary) 12%, transparent); color: var(--_primary-strong); }
-.gm-mcard__bio {
-  margin: 14px 18px 0; padding-left: 10px; border-left: 2px solid var(--_accent);
-  font-size: 13px; line-height: 1.5; color: var(--_text);
-}
-.gm-mcard__bio--ghost { border-left-color: var(--_border); color: var(--_muted); font-style: italic; }
-.gm-mcard__facts { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 16px 18px 0; }
-@container (min-width: 360px) { .gm-mcard__facts { grid-template-columns: 1fr 1fr; } }
-.gm-mcard__fact dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--_muted); }
-.gm-mcard__fact dd {
-  margin: 3px 0 0; font-size: 13px; color: var(--_text);
-  display: flex; align-items: center; gap: 7px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.gm-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
-.gm-dot--on { background: var(--_primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--_primary) 18%, transparent); }
-.gm-dot--off { background: var(--_border); }
-.gm-mcard__foot { display: flex; align-items: center; gap: 10px; padding: 16px 18px 18px; }
-.gm-mcard__meter { flex: 1 1 auto; height: 5px; border-radius: 999px; background: var(--_border); overflow: hidden; }
-.gm-mcard__meter-fill {
-  display: block; height: 100%; border-radius: 999px; background: var(--_grad);
-  transition: width 420ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.gm-mcard__meter-label { font-size: 11px; color: var(--_muted); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.mc:hover { box-shadow: 0 4px 10px rgba(14, 40, 34, 0.08), 0 26px 60px rgba(14, 40, 34, 0.18); transform: translateY(-2px); }
 
-/* MOTION IS A PREFERENCE. The two transitions above are the only ones, and they go away when asked. */
-@media (prefers-reduced-motion: reduce) {
-  .gm-card__ring-fill, .gm-mcard__meter-fill { transition: none; }
+/* THE BANNER. A deep-teal field for premium; for standard the banner IS the card, so it is
+   transparent and the card's own gradient shows through. */
+.mc__banner {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 18px 20px 0;
+  /* THE BANNER IS A THIRD OF THE CARD in the design, not a strip: it is what the avatar crosses, and
+     an avatar crossing a thin bar reads as a mistake rather than a composition. */
+  min-height: 132px;
+}
+.mc--premium { background: var(--mc-cream); }
+.mc--premium .mc__banner {
+  background: radial-gradient(120% 150% at 78% 0%, #12786a 0%, var(--mc-teal-deep) 62%);
+  padding-bottom: 42px;
+}
+.mc--standard {
+  background: radial-gradient(120% 140% at 80% 0%, #1cb595 0%, var(--mc-teal-bright) 46%, #0f8770 100%);
 }
 
-/* The Users region: form and card side by side where there is room, stacked where there is not. */
-.gm-arch--split { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
-@media (min-width: 900px) { .gm-arch--split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+.mc__brand { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: #fff; }
+.mc__logo {
+  width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.16); color: #fff;
+}
+
+/* The badge is the tier, and the design gives each its own: coral on premium, frosted on standard. */
+.mc-pill {
+  display: inline-block; padding: 7px 15px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap;
+}
+.mc-pill--premium { background: linear-gradient(135deg, #ef8560 0%, var(--mc-coral) 100%); color: #fff; box-shadow: 0 4px 12px rgba(226, 113, 74, 0.35); }
+.mc-pill--standard { background: var(--mc-frost); color: var(--mc-teal-ink); }
+
+.mc__body { padding: 0 20px 22px; }
+
+/* THE AVATAR STRADDLES THE BANNER on premium — the overlap is what makes the card read as a profile
+   rather than a header with a list under it. */
+/* ONLY THE AVATAR STRADDLES, and `flex-start` is what guarantees it. Bottom-aligning the row let the
+   name's own box grow upward THROUGH the fold, so a long name — the state most likely to be long —
+   was drawn on the dark banner and clipped by it. Aligning to the top pins every text line inside the
+   body and lets the avatar rise on its own margin. */
+/* ABOVE THE BANNER. The banner is `position: relative`, so it paints over later content that is not
+   positioned itself — and the avatar, which is supposed to CROSS the fold, was sliced in half by it.
+   Visible only once the card got narrow enough for the crop to reach the initials. */
+.mc__identity { display: flex; align-items: flex-start; gap: 16px; padding-top: 12px; position: relative; z-index: 1; }
+.mc--premium .mc__avatar { margin-top: -70px; }
+.mc--standard .mc__identity { padding-top: 4px; }
+.mc__avatar {
+  width: 96px; height: 96px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center; object-fit: cover;
+  font-size: 30px; font-weight: 800; letter-spacing: 0.02em;
+  border: 5px solid #fff;
+  box-shadow: 0 8px 22px rgba(10, 60, 50, 0.22);
+}
+.mc--premium .mc__avatar { background: linear-gradient(150deg, #17977f 0%, var(--mc-teal) 55%, #0b6152 100%); color: #fff; }
+.mc--standard .mc__avatar { background: linear-gradient(160deg, #ffffff 0%, #eef7f4 100%); color: var(--mc-teal-ink); }
+.mc__avatar--blank { opacity: 0.75; }
+.mc__who { min-width: 0; }
+/* A NAME WRAPS; IT DOES NOT GET CUT. `Maria Guadalupe Fernández de la Cruz` truncating to
+   "Maria Guadalu…" is the card failing at the one job it has. Two lines, then ellipsis — and
+   `anywhere` so a single unbroken word shrinks the box rather than overflowing it. */
+.mc__name {
+  margin: 0; font-size: clamp(19px, 6cqi, 26px); font-weight: 800; line-height: 1.18; letter-spacing: -0.01em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mc__chapter {
+  margin: 4px 0 0; font-size: clamp(13px, 3.6cqi, 15px);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mc--premium .mc__name { color: var(--mc-ink); }
+.mc--premium .mc__chapter { color: var(--mc-muted); }
+.mc--standard .mc__name { color: #fff; }
+.mc--standard .mc__chapter { color: rgba(255, 255, 255, 0.82); }
+.mc--empty .mc__name { opacity: 0.65; font-weight: 700; }
+
+/* THE DETAILS. Premium floats each field on the cream; standard gathers them into one frosted panel
+   with hairlines — the same information, two different objects. */
+.mc__field {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  background: var(--mc-white); border-radius: 16px; padding: 14px 18px;
+}
+.mc--premium .mc__field--email { margin-top: 20px; }
+.mc__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.mc__pair .mc__field { flex-direction: column; align-items: flex-start; gap: 4px; }
+.mc__field--number { background: var(--mc-coral-soft); }
+.mc__label { font-size: 14px; color: var(--mc-muted); flex: 0 0 auto; }
+.mc__field--number .mc__label { color: var(--mc-coral-ink); }
+.mc__value {
+  font-size: clamp(13px, 3.6cqi, 15px); font-weight: 600; min-width: 0;
+  overflow-wrap: anywhere; text-align: right;
+}
+.mc__value--link { color: var(--mc-teal-ink); font-weight: 700; }
+.mc__value--strong { font-size: clamp(16px, 4.6cqi, 19px); font-weight: 800; color: var(--mc-ink); }
+.mc__value--number { font-size: clamp(16px, 4.6cqi, 19px); font-weight: 800; color: var(--mc-coral-ink); letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
+.mc__value--empty { color: var(--mc-muted); font-weight: 600; letter-spacing: normal; }
+
+.mc__panel { margin-top: 18px; background: var(--mc-frost); border-radius: 18px; padding: 4px 18px; }
+.mc__panel .mc__field { background: transparent; border-radius: 0; padding: 15px 0; border-bottom: 1px solid rgba(12, 97, 83, 0.12); }
+.mc__panel .mc__field:last-child { border-bottom: 0; }
+.mc__panel .mc__pair { display: contents; }
+.mc__panel .mc__field--number { background: transparent; }
+.mc__panel .mc__field--number .mc__label { color: var(--mc-muted); }
+.mc__panel .mc__value--number { color: var(--mc-teal-ink); font-size: 15px; }
+.mc__panel .mc__pair .mc__field { flex-direction: row; align-items: baseline; }
+
+.mc__actions { display: flex; gap: 10px; margin-top: 16px; }
+.mc-btn {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 11px 16px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--mc-line); background: var(--mc-white); color: var(--mc-ink); flex: 1 1 auto;
+}
+.mc-btn--primary { background: var(--mc-teal); border-color: var(--mc-teal); color: #fff; }
+.mc-btn--primary:hover { background: var(--mc-teal-ink); }
+
+/* NARROW — a phone, or the card in a tight column. The avatar shrinks, the email row stops trying to
+   put a label and a long address on one line, and the two fact boxes stack. */
+@container (max-width: 340px) {
+  .mc__avatar { width: 72px; height: 72px; font-size: 23px; border-width: 4px; }
+  .mc--premium .mc__avatar { margin-top: -52px; }
+  .mc__banner { min-height: 108px; }
+  .mc__field--email { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .mc__field--email .mc__value { text-align: left; }
+  .mc__pair { grid-template-columns: 1fr; }
+  .mc__body { padding: 0 14px 18px; }
+  .mc__banner { padding: 14px 14px 0; }
+}
+
+/* ---- the compact row, for the members list ---- */
+.mc-row {
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-height: 68px;
+  background: var(--mc-white); border: 1px solid var(--mc-line); border-radius: 16px;
+  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif); color: var(--mc-ink);
+}
+.mc-row .mc__avatar { width: 44px; height: 44px; font-size: 15px; border-width: 3px; box-shadow: none; }
+.mc-row--premium .mc__avatar { background: linear-gradient(150deg, #17977f, #0b6152); color: #fff; }
+.mc-row--standard .mc__avatar { background: #eef7f4; color: var(--mc-teal-ink); }
+.mc-row__who { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.mc-row__name { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-row__chapter { font-size: 13px; color: var(--mc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-row .mc-pill { padding: 5px 11px; font-size: 10px; }
+.mc-row--standard .mc-pill--standard { background: #eef7f4; }
+.mc-row__no { font-size: 13px; color: var(--mc-muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+/* ---- the loading skeleton ---- */
+.mc--loading .mc__banner { min-height: 96px; }
+.mc__skel-lines { display: grid; gap: 9px; flex: 1 1 auto; }
+.mc-skel {
+  display: block; border-radius: 8px;
+  background: linear-gradient(90deg, var(--mc-line) 25%, var(--mc-cream) 37%, var(--mc-line) 63%);
+  background-size: 400% 100%; animation: mc-shimmer 1.4s ease infinite;
+}
+.mc-skel--avatar { width: 96px; height: 96px; border-radius: 50%; flex: 0 0 auto; border: 5px solid #fff; }
+.mc-skel--line { height: 13px; }
+.mc-skel--pill { width: 104px; height: 30px; border-radius: 999px; margin-left: auto; }
+.mc-skel--box { height: 52px; border-radius: 16px; margin-top: 14px; }
+@keyframes mc-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+/* MOTION IS A PREFERENCE. */
+@media (prefers-reduced-motion: reduce) { .mc, .mc-skel { transition: none; animation: none; } }
+
+/* The Users region's arrangement lives in its archipelago template — see users.archipelago.ts. */

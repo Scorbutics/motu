@@ -5,7 +5,7 @@ export const memberFormElement: ElementSpec = {
   tag: 'x-member-form',
   component: MemberForm,
   options: {
-    contract: { input: ['draft', 'organisations'] as (keyof MemberFormProps & string)[] },
+    contract: { input: ['draft', 'chapters'] as (keyof MemberFormProps & string)[] },
     // THE RENAME IS THE DECISION, and `events` is where a decision goes. `contract.output` is READ
     // FROM THE COMPONENT by `motu island sync` — it derives `onDraftChanged` -> `draft-changed` — so
     // writing a different name there is overwritten on the next sync, silently, and the archipelago

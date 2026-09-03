@@ -5,7 +5,7 @@
 // SHOWS once the form has spoken. Every assertion below is on the card's rendered text while the
 // stimulus goes into the form.
 import type { RegionScenario } from '@motu/runtime/mock';
-import { COMPLETE, EMPTY, PARTIAL } from '../../shared/member-draft-evidence.js';
+import { EMPTY, PREMIUM, STANDARD } from '../../shared/member-draft-evidence.js';
 
 const SEED = { draft: EMPTY };
 
@@ -27,18 +27,21 @@ export const scenarios: RegionScenario[] = [
     name: 'typing a name draws it on the card',
     seed: SEED,
     steps: [
-      { emit: { slot: 'member-form', event: 'member-draft', detail: PARTIAL }, expectRender: { 'member-card': 'Ada Lovelace' } },
+      {
+        emit: { slot: 'member-form', event: 'member-draft', detail: PREMIUM },
+        expectRender: { 'member-card': 'Ada Lovelace' },
+      },
     ],
   },
   {
-    name: 'a complete profile fills the card',
+    name: 'the chapter and member number reach the card',
     seed: SEED,
     steps: [
       {
-        emit: { slot: 'member-form', event: 'member-draft', detail: COMPLETE },
-        // The role and the organisation come from different fields of one key: asserting both is what
-        // makes this more than a smoke test of the name.
-        expectRender: { 'member-card': 'Analytical Engines' },
+        emit: { slot: 'member-form', event: 'member-draft', detail: STANDARD },
+        // Two different fields of one key: asserting a second one is what makes this more than a
+        // smoke test of the name.
+        expectRender: { 'member-card': 'South chapter' },
       },
     ],
   },
@@ -48,7 +51,7 @@ export const scenarios: RegionScenario[] = [
     name: 'clearing the form returns the card to its resting state',
     seed: SEED,
     steps: [
-      { emit: { slot: 'member-form', event: 'member-draft', detail: COMPLETE }, expectRender: { 'member-card': 'Ada Lovelace' } },
+      { emit: { slot: 'member-form', event: 'member-draft', detail: PREMIUM }, expectRender: { 'member-card': 'Ada Lovelace' } },
       { emit: { slot: 'member-form', event: 'member-draft', detail: EMPTY }, expectRender: { 'member-card': 'Their name appears here' } },
     ],
   },

@@ -1,28 +1,32 @@
 // THE VOCABULARY BOTH ISLANDS SPEAK, and the only thing they share.
 //
-// The form OWNS this shape and publishes it; the card READS it and draws it. Neither imports the
-// other — a form that knew about a card, or a card that knew which form filled it, is the coupling
-// motu exists to keep out of components and in the region's declaration instead.
+// Taken from the MemberCard design canvas: tier, chapter, member number, joined date, photo. The form
+// OWNS this shape and publishes it; the card READS it and draws it. Neither imports the other — a
+// form that knew about a card, or a card that knew which form filled it, is the coupling motu exists
+// to keep out of components and in the region's declaration instead.
 //
 // Every field optional, because the card must render from DEFAULTS ALONE: the first thing anyone sees
-// in the lagoon is an empty draft, and that is a state worth designing rather than an accident.
+// is an empty draft, and that is a state worth designing rather than an accident.
 
-/** What a member can be, in this demo's vocabulary. Mirrors the roles the legacy Users page used. */
-export const MEMBER_ROLES = ['Member', 'Volunteer', 'Instructor', 'Coordinator', 'Staff'] as const;
-export type MemberRole = (typeof MEMBER_ROLES)[number];
+/** Membership tier. `premium` is the design's default and the one with the gold treatment. */
+export const MEMBER_TIERS = ['premium', 'standard'] as const;
+export type MemberTier = (typeof MEMBER_TIERS)[number];
 
 export interface MemberDraft {
   fullName?: string;
   email?: string;
-  role?: MemberRole;
-  organisation?: string;
-  /** A short line the member writes about themselves; the card renders it as a quote. */
-  bio?: string;
-  /** Opt-in to the member directory. The card says so, because it changes what the profile IS. */
-  listed?: boolean;
+  /** The chapter they belong to — "South chapter", "Northwest coastal chapter". */
+  chapter?: string;
+  tier?: MemberTier;
+  /** Membership number. Six digits in the design's examples. */
+  memberNo?: string;
+  /** Joined date, as the design writes it: dd/mm/yyyy. */
+  joined?: string;
+  /** Avatar URL. Absent falls back to initials, which is the design's default state. */
+  photo?: string;
 }
 
-/** Initials for the avatar: two letters at most, from the words of the name. */
+/** Initials for the avatar fallback: two letters at most, from the words of the name. */
 export function initialsOf(name: string | undefined): string {
   const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
   if (!words.length) return '';
@@ -32,13 +36,13 @@ export function initialsOf(name: string | undefined): string {
 }
 
 /**
- * How complete the draft is, 0..1 — the card shows it as a ring around the avatar.
+ * How complete the profile is, 0..1 — the card shows it as a bar in the footer.
  *
- * Counted over the fields a PERSON would consider part of a profile, so `listed` (a preference) is
- * deliberately not one of them: ticking a checkbox should not look like filling in your name.
+ * Counted over the fields a PERSON fills in, so `memberNo` and `joined` are deliberately excluded:
+ * they are assigned rather than typed, and counting them would make a blank form look half done.
  */
 export function completenessOf(draft: MemberDraft | undefined): number {
-  const fields = [draft?.fullName, draft?.email, draft?.role, draft?.organisation, draft?.bio];
+  const fields = [draft?.fullName, draft?.email, draft?.chapter, draft?.tier, draft?.photo];
   const filled = fields.filter((v) => typeof v === 'string' && v.trim() !== '').length;
   return filled / fields.length;
 }

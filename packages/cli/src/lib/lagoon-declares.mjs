@@ -306,3 +306,105 @@ export function nestedSlots(file) {
   }
   return out;
 }
+
+/** The object literal that declares `islands: [...]`, wherever it sits. */
+function configLiteral(sf) {
+  return sf
+    .getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)
+    .find((o) =>
+      o.getProperty('islands')?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()?.asKind(SyntaxKind.ArrayLiteralExpression),
+    );
+}
+
+const propInit = (obj, name) => obj?.getProperty(name)?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+const str = (node) => node?.asKind(SyntaxKind.StringLiteral)?.getLiteralValue();
+/** A property name with quoting removed: `searchTerm` and `'search-term'` answer the same way. */
+const nameOf = (p) => {
+  const a = p.asKind(SyntaxKind.PropertyAssignment) ?? p.asKind(SyntaxKind.ShorthandPropertyAssignment);
+  return a ? a.getName().replace(/^['"`]|['"`]$/g, '') : null;
+};
+
+/**
+ * The islands an archipelago declares, read from its SOURCE by parsing it.
+ *
+ * THIS EXISTS BECAUSE `writes` WAS INVISIBLE ON ORDINARY CODE. The reader this replaces matched
+ * `/'([^']+)':\s*…/` — it required the EVENT NAME TO BE QUOTED — so a region writing the idiomatic
+ * `writes: { searchTerm: 'searchTerm' }` parsed as writing NOTHING.
+ *
+ * That is not a cosmetic miss. `ownership` — "a key has ONE producer", the rule the whole
+ * parallel-agent story rests on — is computed from these writes, so on any project with unquoted keys
+ * it compared empty sets and could never fire. Measured on shlink: two islands declaring the same
+ * key, `motu check` green with zero warnings, and the region then reported that key as HOST-FED
+ * because the producer had vanished. The guarantee the documentation makes ("a second claim on a key
+ * fails on their first `motu check`") was not true there, and nothing said so.
+ *
+ * Quoted or not, nested or not, commented or not — they are the same nodes to a parser.
+ */
+export function islandsFromSource(text) {
+  const out = [];
+  let sf;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    sf = project.createSourceFile('a.ts', text);
+  } catch {
+    return null; // unparseable: the caller keeps its previous answer rather than losing the islands
+  }
+  const islands = propInit(configLiteral(sf), 'islands')?.asKind(SyntaxKind.ArrayLiteralExpression);
+  if (!islands) return out;
+  for (const el of islands.getElements()) {
+    const entry = el.asKind(SyntaxKind.ObjectLiteralExpression);
+    if (!entry) continue;
+    const slot = str(propInit(entry, 'slot'));
+    if (!slot) continue;
+
+    // `writes: { <event>: '<key>' }` and the rename form `{ <event>: { <field>: '<key>' } }`.
+    const writes = {};
+    for (const p of propInit(entry, 'writes')?.asKind(SyntaxKind.ObjectLiteralExpression)?.getProperties() ?? []) {
+      const event = nameOf(p);
+      const init = p.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+      if (!event || !init) continue;
+      const direct = str(init);
+      if (direct) {
+        writes[event] = direct;
+        continue;
+      }
+      const map = init.asKind(SyntaxKind.ObjectLiteralExpression);
+      if (map) {
+        writes[event] = Object.fromEntries(
+          map.getProperties().map((q) => [nameOf(q), str(q.asKind(SyntaxKind.PropertyAssignment)?.getInitializer())]).filter(([k, v]) => k && v),
+        );
+      }
+    }
+
+    // `bind` is either the rename map `{ prop: 'key' }` or the array `['key', { prop: 'key' }]`.
+    const bind = {};
+    const bindInit = propInit(entry, 'bind');
+    const bindMap = bindInit?.asKind(SyntaxKind.ObjectLiteralExpression);
+    if (bindMap) {
+      for (const p of bindMap.getProperties()) {
+        const key = str(p.asKind(SyntaxKind.PropertyAssignment)?.getInitializer());
+        if (nameOf(p) && key) bind[nameOf(p)] = key;
+      }
+    }
+    for (const item of bindInit?.asKind(SyntaxKind.ArrayLiteralExpression)?.getElements() ?? []) {
+      const bare = str(item);
+      // A bare entry binds a prop of the same name; an object entry is a rename.
+      if (bare) bind[bare] = bare;
+      for (const p of item.asKind(SyntaxKind.ObjectLiteralExpression)?.getProperties() ?? []) {
+        const key = str(p.asKind(SyntaxKind.PropertyAssignment)?.getInitializer());
+        if (nameOf(p) && key) bind[nameOf(p)] = key;
+      }
+    }
+
+    out.push({
+      slot,
+      element: str(propInit(entry, 'element')),
+      writes,
+      member: str(propInit(entry, 'member')),
+      reads: (propInit(entry, 'reads')?.asKind(SyntaxKind.ArrayLiteralExpression)?.getElements() ?? []).map(str).filter(Boolean),
+      planned: propInit(entry, 'planned')?.getText() === 'true',
+      bind,
+    });
+  }
+  return out;
+}

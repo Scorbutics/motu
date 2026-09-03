@@ -18,6 +18,7 @@
 // It is a CODEMOD, not a refactor: it may leave state the page also keeps under another name. That is
 // the honest trade — the ejected app compiles and behaves the same, and a human can tidy after.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { islandsFromSource } from './lagoon-declares.mjs';
 import { blankComments as blankCommentsShared } from './util.mjs';
 import { dirname, resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
@@ -289,6 +290,20 @@ function splitTopLevel(body) {
 
 /** slot -> { element, writes: { event: key | { field: key } } }, from the config's text. */
 function readIslands(text) {
+  // PARSED FIRST. The reader below matches text, and two of its misses were load-bearing:
+  //
+  //   - `writes` required the EVENT NAME TO BE QUOTED, so `writes: { searchTerm: 'searchTerm' }` —
+  //     ordinary code — parsed as writing nothing. `ownership` is computed from these writes, so on
+  //     any project spelling them that way the "one producer per key" rule compared empty sets and
+  //     could not fire. Measured on shlink: two islands claiming one key, `motu check` green.
+  //   - the root's `slots` mapping was read as if its entries were ISLANDS, inventing an island per
+  //     mapped slot with no element — which is where "login-form, login-form" and a two-slot region
+  //     reporting "1/4" came from.
+  //
+  // The regex stays as the fallback for a file ts-morph cannot parse: losing every island there would
+  // be worse than the misses above, and `islandsFromSource` answers null rather than [] for that case.
+  const parsed = islandsFromSource(text);
+  if (parsed) return parsed;
   const code = blankComments(text);
   const islands = [];
   for (const block of balancedBlocks(code, /\bslot:\s*'([^']+)'/g)) {

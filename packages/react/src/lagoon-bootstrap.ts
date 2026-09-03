@@ -47,6 +47,8 @@ export interface LagoonBootstrapOptions {
   host?: HostBridge;
   /** 'region' (the app's arrangement) or 'mountpoints' (every declared slot, framed separately). */
   view?: 'region' | 'mountpoints' | 'page';
+  /** The page component, called with the archipelago's declared props. */
+  page?: (props: never) => ReactNode;
   /** Initial store contents so bound islands render meaningfully. Overrides `overrides.seed`. */
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store (same as the real composition roots). */

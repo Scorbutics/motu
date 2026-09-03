@@ -200,6 +200,46 @@ export function bindEntries(spec: { bind?: BindDeclaration<never> | undefined })
   return pairs(bind as Record<string, string | undefined>);
 }
 
+/**
+ * What a region declares when it is a whole page: the props its screen needs, and — in the type only
+ * — which screen that is.
+ *
+ * `props` is DATA and survives to runtime; the component is a phantom type parameter and does not
+ * exist at all once TypeScript is done. That split is what lets an archipelago name an application
+ * component without importing one.
+ */
+export interface PageDeclaration<P> {
+  props: P;
+  /**
+   * Phantom: carries the component's props type without carrying the component. Never read.
+   *
+   * METHOD SYNTAX ON PURPOSE. A property-style `(props: P) => unknown` is checked contravariantly
+   * under `strictFunctionTypes`, so no concrete declaration is assignable to the field's type and
+   * every archipelago that declared a page failed to compile. A method is bivariant, which is what a
+   * phantom marker wants: it exists to carry `P`, not to be called.
+   */
+  __page?(props: P): unknown;
+}
+
+/**
+ * Declare that this archipelago IS a page, and pin the props to the real component's.
+ *
+ *     import type { LoginScreen } from '@/components/auth/login-screen'
+ *     page: pageOf<typeof LoginScreen>({ authError: null }),
+ *
+ * The type argument is the COMPONENT, so renaming a prop on the screen fails here — which is the
+ * whole point of writing it down. The value is the props the lagoon renders it with, and it is the
+ * region's own answer to "what state is this page in", exactly as `seed` is for the islands.
+ */
+export function pageOf<C extends (props: never) => unknown>(
+  props: C extends (props: infer P) => unknown ? P : never,
+): PageDeclaration<C extends (props: infer P) => unknown ? P : never> {
+  return { props };
+}
+
+/** The props a region's page takes, or `never` where the region declares no page. */
+export type PagePropsOf<A> = A extends { page?: PageDeclaration<infer P> } ? ([P] extends [never] ? never : P) : never;
+
 export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag extends string = string> {
   id: string;
   islands: readonly IslandSpec<TRegion, TTag>[];
@@ -299,6 +339,38 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * lets the checks ask the answerable question instead of the unanswerable one.
    */
   membership?: 'placed' | 'catalogue';
+  /**
+   * THIS REGION IS A WHOLE PAGE, and here is what the page needs to render.
+   *
+   * A region is a group of islands that share state. SOME regions are also a PAGE — the thing a route
+   * renders, with its own component in the application — and that is a different claim: it says there
+   * is one screen this region is the whole of, and that screen can be rendered on its own.
+   *
+   * Declaring it earns two things nothing else can give:
+   *
+   *   - the lagoon can render the APPLICATION'S OWN PAGE (`?view=page`), not just motu's arrangement
+   *     of the islands, so `page-render` can ask whether the page reaches the slots it names;
+   *   - the props are TYPED against the real component, so the question that blocked this — "what does
+   *     that screen need in order to render?" — is answered by the compiler instead of guessed.
+   *
+   * WHAT LIVES HERE IS THE TYPE AND THE DATA, never the component. The archipelago must stay 100%
+   * motu or `removal-check` strips it instead of deleting it, so the component is named by a TYPE-ONLY
+   * import (which erases) and supplied at runtime by the lagoon overrides. The compiler holds the two
+   * halves together; nothing at runtime imports the application from here.
+   *
+   *     import type { LoginScreen } from '@/components/auth/login-screen'
+   *     page: pageOf<typeof LoginScreen>({ authError: null }),
+   *
+   * ABSENT MEANS "a group of islands", which is a perfectly good thing for a region to be and stays
+   * the default. This is not required and will not become required: an archipelago is host-agnostic —
+   * an ocean's region has no React component to point at — and a region can legitimately be a panel
+   * rather than a page.
+   */
+  // `any` rather than `never` or `unknown`: this field only has to ACCEPT every concrete declaration.
+  // The precise type is recovered where it matters — `PagePropsOf<A>` reads it from the archipelago's
+  // own inferred type at the call site, which is what types the lagoon override.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  page?: PageDeclaration<any>;
   /**
    * The region's INBOUND seam, named.
    *

@@ -52,8 +52,8 @@ export interface ReactLagoonOptions {
    * apply to either mount path.
    */
   view?: 'region' | 'mountpoints' | 'page';
-  /** EXPERIMENTAL — the application's own page module, for `view: 'page'`. See `RegionOverrides.page`. */
-  page?: () => ReactNode;
+  /** EXPERIMENTAL — the application's own page component, for `view: 'page'`. See `RegionOverrides.page`. */
+  page?: (props: never) => ReactNode;
   /**
    * The APPLICATION's own arrangement for this region, called with a renderer for each slot.
    *
@@ -281,7 +281,16 @@ export function mountReactLagoon(
     roots.set(mountEl, root);
     root.render(
       opts.page ? (
-        <PageErrorBoundary>{opts.providers ? opts.providers(opts.page(), '') : opts.page()}</PageErrorBoundary>
+        // THE PROPS COME FROM THE ARCHIPELAGO, which is where the region declared it is a page. The
+        // lagoon supplies the component and nothing else: two places would be two answers to "what
+        // state is this page in", and the region already owns that question for its islands.
+        <PageErrorBoundary>
+          {(() => {
+            const page = opts.page as (props: unknown) => ReactNode;
+            const props = (config as { page?: { props?: unknown } }).page?.props ?? {};
+            return opts.providers ? opts.providers(page(props), '') : page(props);
+          })()}
+        </PageErrorBoundary>
       ) : (
         <div className="motu-empty" data-motu-page="absent">
           This region declares no <code>page</code>, so there is nothing to render here. Add{' '}

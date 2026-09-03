@@ -12,6 +12,7 @@
 import { channelRegionId } from '@motu/core';
 import type { AnyArchipelagoConfig, DeclaredChannel, RegionOf, SlotsOf } from '@motu/core';
 import type { DeclaredWire } from './lagoon-wire';
+import type { PagePropsOf } from '@motu/core';
 import type { ReactNode } from 'react';
 
 /** Everything the lagoon can be told about ONE region. */
@@ -67,7 +68,7 @@ export interface RegionOverrides {
    * on a Vite or a plain-React host qualifies; a Next server component does not, and says so rather
    * than pretending.
    */
-  page?: () => ReactNode;
+  page?: (props: never) => ReactNode;
   /** Per slot: the props the PAGE passes on the island element itself, for what is not region state. */
   props?: Record<string, Record<string, unknown>>;
   /**
@@ -201,13 +202,22 @@ export function overridesFor<const A extends AnyArchipelagoConfig>(
     /** The wire fake beneath the app's own client. Must have been built against THIS archipelago. */
     wire?: DeclaredWire<A['id']>;
     /**
-     * EXPERIMENTAL — the application's own page module. See `RegionOverrides.page`.
+     * THE COMPONENT for a region that declares itself a page — see `ArchipelagoConfig.page`.
+     *
+     * Typed FROM the archipelago: it is called with the props that region declared, so a screen whose
+     * props have changed fails here rather than at the first render. Where the archipelago declares no
+     * page, this field is refused with a message rather than silently accepted — a lagoon cannot make
+     * a region into a page on its own, because "this region is a whole screen" is a claim about the
+     * application and belongs where the region is declared.
      *
      * Listed here because this function enumerates what it forwards: a field the type allows and this
-     * body forgets is dropped in silence, and the check downstream then reports "no page declared"
-     * for a region whose overrides declare one.
+     * body forgets is dropped in silence, which cost an afternoon the first time.
      */
-    page?: () => ReactNode;
+    page?: [PagePropsOf<A>] extends [never]
+      ? {
+          'motu: this archipelago does not declare a page': 'add `page: pageOf<typeof YourScreen>({ … })` to it first';
+        }
+      : (props: PagePropsOf<A>) => ReactNode;
   },
 ): BoundRegionOverrides {
   for (const channel of spec.channels ?? []) {

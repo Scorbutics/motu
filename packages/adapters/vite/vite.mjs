@@ -20,8 +20,29 @@
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 
-/** Reporters and size guards: they describe a build the lagoon is not doing. */
-const DROP = /visualizer|bundle|size-?limit|checker|legacy/i;
+/**
+ * Plugins the lagoon does not borrow, because they describe a build it is not doing.
+ *
+ * Reporters and size guards assert on an output that does not exist here. SERVICE-WORKER plugins are
+ * the addition, and they are the sharpest case: `vite-plugin-pwa` contributes five plugins, and they
+ * do not merely go unused — `dev-sw` adds an `options` hook and `build` a `generateBundle`, which
+ * between them build the SERVICE WORKER from `srcDir` resolved into the lagoon's copied root, where
+ * nothing is. The whole build dies before anything renders:
+ *
+ *     [UNRESOLVED_ENTRY] Cannot resolve entry module .motu/cache/lagoon/src/service-worker.ts
+ *
+ * GUARDING THEM IS NOT ENOUGH, and that was tried first: the guard below drops a plugin whose hook
+ * THROWS, and this one does not throw. It succeeds and asks the build for an entry that cannot exist,
+ * so the failure lands in rolldown's entry resolution where no plugin hook can catch it.
+ *
+ * A service worker means nothing in a preview — it is offline caching for a deployed app — so this
+ * costs the lagoon nothing and is not a workaround.
+ *
+ * Measured on shlink (Vite + npm): the lagoon was unbootable, `motu lagoon serve` failed three times
+ * identically, and the adopter's fix was to fork the app's Vite config into their own repository —
+ * motu-only code in the host, which adopting motu exists to avoid.
+ */
+const DROP = /visualizer|bundle|size-?limit|checker|legacy|pwa|service-?worker|workbox/i;
 /** A React transform, whatever the flavour (plugin-react, plugin-react-swc, plugin-react-oxc). */
 const IS_REACT = /^vite:react|react-swc|react-oxc|react-babel|react-refresh/i;
 
@@ -61,18 +82,60 @@ export async function contribute({ paths, lagoonJson }) {
   // may of course mean a component that no longer compiles — which is a legible failure naming the
   // plugin, instead of an assertion from a file the adopter did not write.
   const dropped = [];
+  // EVERY HOOK THAT CAN FAIL, AND ASYNCHRONOUSLY. The first version wrapped four CONFIG-TIME hooks
+  // with a synchronous try/catch, which missed the case its own comment above names.
+  //
+  // `vite-plugin-pwa` does not throw while configuring. It succeeds, and then launches its OWN build
+  // for the service worker from `closeBundle` — against `srcDir` resolved into the lagoon's copied
+  // root, where nothing is:
+  //
+  //     [UNRESOLVED_ENTRY] Cannot resolve entry module .motu/cache/lagoon/src/service-worker.ts
+  //
+  // Two reasons the guard could not see it: `closeBundle` was not in the list, and that child build is
+  // ASYNC — it rejects a promise rather than throwing, so a synchronous `catch` never runs. Measured
+  // on shlink: the lagoon was unbootable, `lagoon serve` failed three times identically, and the
+  // adopter forked the app's Vite config into their own repo to get past it — motu-only code in the
+  // host, which adopting motu exists to avoid.
+  //
+  // A build-time hook that fails is dropped for the REST of the run too: a service worker half-built
+  // once is not worth attempting again on the next rebuild.
+  const HOOKS = [
+    'config',
+    'configResolved',
+    'configureServer',
+    'options',
+    'buildStart',
+    'transformIndexHtml',
+    'renderStart',
+    'generateBundle',
+    'writeBundle',
+    'buildEnd',
+    'closeBundle',
+  ];
   const guard = (plugin) => {
     const wrapped = { ...plugin };
-    for (const hook of ['config', 'configResolved', 'configureServer', 'buildStart']) {
+    const record = (hook, err) => {
+      if (!dropped.some((d) => d.name === plugin.name)) {
+        dropped.push({ name: plugin.name, hook, message: String(err?.message ?? err).split('\n')[0] });
+      }
+    };
+    for (const hook of HOOKS) {
       const original = plugin[hook];
       if (typeof original !== 'function') continue;
       wrapped[hook] = function (...args) {
+        // Already failed once in this run: do not call it again.
+        if (dropped.some((d) => d.name === plugin.name)) return undefined;
         try {
-          return original.apply(this, args);
+          const out = original.apply(this, args);
+          // A REJECTED PROMISE IS A FAILURE TOO, and it is the one that mattered here.
+          return out && typeof out.then === 'function'
+            ? out.then(undefined, (err) => {
+                record(hook, err);
+                return undefined;
+              })
+            : out;
         } catch (err) {
-          if (!dropped.some((d) => d.name === plugin.name)) {
-            dropped.push({ name: plugin.name, hook, message: String(err?.message ?? err).split('\n')[0] });
-          }
+          record(hook, err);
           return undefined;
         }
       };

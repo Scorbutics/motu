@@ -67,6 +67,22 @@ export async function fetchShot(host, hash) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+/**
+ * Every shot this repo has, with its status.
+ *
+ * THROUGH `api`, WHICH SENDS THE TOKEN, and that is the whole reason this function exists rather than
+ * a bare `fetch` at the call site. `/api/baselines` is gated by `readable(repo)`, so on a PRIVATE repo
+ * an unauthenticated read gets 404 — and the caller that did this swallowed the failure in a
+ * `try/catch`, leaving "which member islands also changed" empty. An empty answer there does not read
+ * as an error; it reads as `no member changed`, which is how a region diff concludes THE ARRANGEMENT
+ * MOVED when in truth it could not see the members at all.
+ */
+export async function listShots(host, island = null) {
+  const q = new URLSearchParams({ repo: host.id.repo });
+  if (island) q.set('island', island);
+  return api(host, `/api/baselines?${q}`);
+}
+
 /** Move the accepted pointer. `island` null accepts everything the repo has pending. */
 export async function acceptShots(host, island) {
   const q = new URLSearchParams({ repo: host.id.repo });

@@ -57,22 +57,48 @@ export function secretMatches(offered, expectedHashHex) {
  */
 export function loadAccess(dir) {
   const file = resolve(dir, ACCESS_FILE);
-  if (!existsSync(file)) return { repos: {}, readHash: null, malformed: false };
+  if (!existsSync(file)) return { repos: {}, readHash: null, defaultVisibility: 'public', malformed: false };
   try {
     const raw = JSON.parse(readFileSync(file, 'utf8'));
     return {
       repos: raw && typeof raw.repos === 'object' && raw.repos ? raw.repos : {},
       readHash: typeof raw?.readHash === 'string' ? raw.readHash : null,
+      // WHICH WAY THE HOST LEANS for a repo nobody has written a policy for. It lives HERE, in the
+      // policy file, rather than in a flag or an environment variable, for the reason the `access`
+      // subcommand already learned the hard way: a value the service reads from its unit file is a
+      // value your shell does not have, so the two disagree silently and the command that reports
+      // the policy reports a different one from the host enforcing it. The file is re-read per
+      // request, so flipping this takes effect without a restart.
+      //
+      // Anything but the exact string 'private' is public, so a typo opens the host rather than
+      // closing it — the same direction as `malformed`, and for the same reason: locking an operator
+      // out of their own host over a stray character is the worse failure.
+      defaultVisibility: raw?.defaultVisibility === 'private' ? 'private' : 'public',
       malformed: false,
     };
   } catch {
-    return { repos: {}, readHash: null, malformed: true };
+    return { repos: {}, readHash: null, defaultVisibility: 'public', malformed: true };
   }
 }
 
-/** Is this repo's content public? Unlisted repos are, which is what the host did before this existed. */
+/**
+ * Is this repo's content public?
+ *
+ * A repo with a policy answers for itself. One WITHOUT falls back to the host's default, which is
+ * `public` unless somebody wrote `defaultVisibility` down — so the host still behaves exactly as it
+ * did before this existed, and a personal host on a public domain can close the door for everything
+ * at once instead of remembering to do it per repo.
+ *
+ * THIS IS WHAT CLOSES THE WINDOW. Visibility is per repo and a repo comes into existence by being
+ * published to, so with a public default there is a gap between the first publish landing and
+ * somebody marking it private. An agent publishing an ephemeral per-branch lagoon cannot close that
+ * gap itself — nothing in the wire protocol sets visibility — so the only place it CAN be closed is
+ * before the repo exists.
+ */
 export function isPublic(access, repo) {
-  return access.repos?.[repo]?.visibility !== 'private';
+  const declared = access.repos?.[repo]?.visibility;
+  if (declared) return declared !== 'private';
+  return access.defaultVisibility !== 'private';
 }
 
 /**

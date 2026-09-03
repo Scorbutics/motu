@@ -131,7 +131,10 @@ if (argv._[0] === 'access') {
     console.error(color.red(`✗ ${file} is not valid JSON — refusing to overwrite it`));
     process.exit(1);
   }
-  const out = { readHash: access.readHash, repos: { ...access.repos } };
+  // CARRY WHAT WE ARE NOT CHANGING. This object REPLACES the file, so a key omitted here is a key
+  // deleted — and the one that matters is `defaultVisibility`: minting a read token would have
+  // silently reopened every repo on the host.
+  const out = { readHash: access.readHash, defaultVisibility: access.defaultVisibility, repos: { ...access.repos } };
   const repo = typeof argv.repo === 'string' ? argv.repo : null;
   const minted = [];
 
@@ -164,17 +167,39 @@ if (argv._[0] === 'access') {
     }
     out.repos[repo] = { ...(out.repos[repo] ?? {}), visibility: argv.private ? 'private' : 'public' };
   }
-  if (!minted.length && !argv.private && !argv.public) {
+  // WHICH WAY A REPO NOBODY HAS DECIDED ABOUT LEANS. Its own switch rather than a spelling of
+  // --private, because it is a different act: --private closes ONE repo that already exists, this
+  // decides what happens to every repo that does NOT exist yet — including the ones an agent is
+  // about to create by publishing to them.
+  let defaultChanged = false;
+  if (argv.default !== undefined) {
+    const want = String(argv.default);
+    if (want !== 'private' && want !== 'public') {
+      console.error(color.red(`✗ --default takes private or public, got "${want}"`));
+      process.exit(1);
+    }
+    defaultChanged = out.defaultVisibility !== want;
+    out.defaultVisibility = want;
+  }
+  if (!minted.length && !argv.private && !argv.public && argv.default === undefined) {
     console.log('');
     console.log('  motu-host access --read                      mint the secret that opens EVERY private lagoon');
     console.log('  motu-host access --repo <r> --read           mint one that opens only that repo');
     console.log('  motu-host access --repo <r> --ingest         mint a write-only coverage token for one repo');
     console.log('  motu-host access --repo <r> --private        stop serving that repo to strangers');
     console.log('  motu-host access --repo <r> --public         serve it again');
+    console.log('  motu-host access --default private           close every repo nobody decided about');
     console.log('');
     const names = Object.keys(access.repos);
     console.log(color.dim(`  ${file}`));
     console.log(color.dim(`  ${names.length} repo(s) with a policy${names.length ? `: ${names.join(', ')}` : ''}`));
+    // SAID OUT LOUD, because "no policy" reads as public and is the one thing here nobody can infer
+    // from the repo list — a host leaning private lists nothing and serves nothing to strangers.
+    console.log(
+      access.defaultVisibility === 'private'
+        ? color.dim('  default for a repo with no policy: PRIVATE — including ones not published yet')
+        : color.dim('  default for a repo with no policy: public  (motu-host access --default private)'),
+    );
     console.log(color.dim(`  read secret ${access.readHash ? 'set' : 'NOT set — every private lagoon is closed to everyone but the admin token'}`));
     process.exit(0);
   }
@@ -188,6 +213,14 @@ if (argv._[0] === 'access') {
   }
   if (argv.private) console.log(`  ${color.green('✓')} ${repo} is private — strangers get 404, not 403`);
   if (argv.public) console.log(`  ${color.green('✓')} ${repo} is public`);
+  if (argv.default !== undefined) {
+    const now = out.defaultVisibility;
+    console.log(
+      `  ${color.green('✓')} repos with no policy of their own are ${now.toUpperCase()}${defaultChanged ? '' : ' (unchanged)'}`,
+    );
+    if (now === 'private')
+      console.log(color.dim('    a publish now creates a CLOSED repo — mint a reader with --read, then visit /?k=<secret> once'));
+  }
   if (minted.length) {
     console.log('');
     console.log(color.dim('  Shown once. Only the digest is stored, so this cannot be read back — mint a new one if it is lost.'));

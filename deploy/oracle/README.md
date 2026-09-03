@@ -106,7 +106,25 @@ Verify: `curl -sS https://your-name.duckdns.org/api/live` → `{"live":[]}`.
 ## 6. Before pointing anything real at it
 
 **Reads are open by default.** On a laptop behind a tunnel that was obscurity; on a
-public domain it is publication. Decide per repo:
+public domain it is publication. Close the door for everything at once — including
+repos that do not exist yet, which is the only way to beat the window between an
+agent's first publish and your marking it private:
+
+```bash
+sudo -u motu MOTU_HOST_DIR=/var/lib/motu-host \
+  node /opt/motu/packages/host/src/cli.mjs access --default private
+```
+
+A publisher keeps full access to its own lagoon: the upload token reads as admin, so
+an agent can read back what it published without holding a read secret. To read a
+private lagoon in a BROWSER, mint one and visit it once — it becomes a cookie and the
+secret is redirected out of the URL, so every later link is a plain one:
+
+```bash
+... access --read          # then open https://<host>/?k=<secret> once, per browser
+```
+
+Or decide per repo:
 
 ```bash
 sudo -u motu MOTU_HOST_DIR=/var/lib/motu-host \

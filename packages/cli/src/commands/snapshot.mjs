@@ -14,7 +14,7 @@ import { readRegions } from '../lib/eject.mjs';
 import { readScenarios } from './verify.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { captureLagoon, captureRegionLagoon } from '../playwright-lagoon.mjs';
-import { resolveBaselineHost, putShot, fetchShot, acceptShots, writeRemoteArtifacts } from '../lib/baselines.mjs';
+import { resolveBaselineHost, putShot, fetchShot, acceptShots, listShots, writeRemoteArtifacts } from '../lib/baselines.mjs';
 import {
   compareBuffers,
   compareSnapshot,
@@ -390,8 +390,7 @@ export async function archipelagoSnapshotCommand(argv) {
   let comparedIslands = new Set();
   if (host) {
     try {
-      const res = await fetch(`${host.base}/api/baselines?repo=${encodeURIComponent(host.id.repo)}`);
-      const body = await res.json();
+      const body = await listShots(host);
       changedIslands = new Set(body.shots.filter((x) => x.status === 'changed').map((x) => x.island));
       // An island with NO accepted baseline can never report `changed`, so "no member changed" would
       // be true of an island nobody has ever compared. Claiming ARRANGEMENT on that is the check

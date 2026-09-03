@@ -172,6 +172,55 @@ t('a private repo answers [] rather than refusing',
 t('...and the set is empty for a stranger',
   JSON.parse(await (await get('/api/coverage/known?repo=acme/secret&region=actions&h=7f46c60a')).text()).length === 0);
 
+// A HOST THAT LEANS CLOSED — the deployment this was added for: a personal preview host on a public
+// domain, published to by agents that create a repo simply by publishing to it. Visibility is per
+// repo and nothing in the wire protocol sets it, so with a public default there is a window between
+// the first publish landing and somebody marking it private. The default is the only place that
+// window can be closed.
+//
+// The half that matters most here is the LAST two: an agent must keep full access to the lagoon it
+// just published, or closing the door locks out the only party that has to walk through it.
+console.log('\nhost access — a host whose default is private\n');
+{
+  const shut = mkdtempSync(resolve(tmpdir(), 'motu-access-shut-'));
+  writeFileSync(
+    resolve(shut, 'access.json'),
+    JSON.stringify({
+      defaultVisibility: 'private',
+      readHash: digest('READSECRET').toString('hex'),
+      // ONE repo says otherwise, because a default is only a default: an explicit policy has to win
+      // in BOTH directions or "public by exception" is unreachable on a closed host.
+      repos: { 'acme/announced': { visibility: 'public' } },
+    }),
+  );
+  const shutHost = createLagoonHost({ dir: shut, token: 'ADMIN' });
+  await new Promise((r) => shutHost.server.listen(0, '127.0.0.1', r));
+  const S = `http://127.0.0.1:${shutHost.server.address().port}`;
+  const sget = (path, headers = {}) => fetch(`${S}${path}`, { headers, redirect: 'manual' });
+  const admin = { authorization: 'Bearer ADMIN' };
+
+  await fetch(`${S}/api/publish?repo=acme/fresh&slug=all&title=F`, { method: 'POST', body: '<h1>FRESH</h1>', headers: admin });
+  await fetch(`${S}/api/publish?repo=acme/announced&slug=all&title=A`, { method: 'POST', body: '<h1>ANNOUNCED</h1>', headers: admin });
+
+  t('a repo nobody wrote a policy for is CLOSED', (await sget('/acme/fresh/latest/all')).status === 404);
+  t('...and is not named on the index either', !(await (await sget('/')).text()).includes('acme/fresh'));
+  t('an explicit `public` still overrides the default', (await sget('/acme/announced/latest/all')).status === 200);
+  t('the read secret opens the closed one', (await sget('/acme/fresh/latest/all', { cookie: 'motu_read=READSECRET' })).status === 200);
+
+  // THE PUBLISHER KEEPS ITS OWN LAGOON. The upload token is the admin token, and `canRead` takes it
+  // as `adminOk` — so an agent can read back what it just published without holding a read secret,
+  // which is what keeps the read secret out of CI environments and PR bodies entirely.
+  t('the AGENT reads its own lagoon with the upload token', (await sget('/acme/fresh/latest/all', admin)).status === 200);
+  // And the one that broke: `snapshot --remote` asks this to explain a region diff, and the caller
+  // swallowed the failure — so an unauthenticated 404 became "no member island changed", which reads
+  // as "the arrangement moved". A wrong conclusion, not an error.
+  t('...and its baselines, which a region diff needs', (await sget('/api/baselines?repo=acme/fresh', admin)).status === 200);
+  t('...while a stranger asking the same gets 404', (await sget('/api/baselines?repo=acme/fresh')).status === 404);
+
+  shutHost.server.close();
+  rmSync(shut, { recursive: true, force: true });
+}
+
 console.log('\nhost access — a read token scoped to one repo\n');
 await post('/api/publish?repo=acme/other&slug=all&title=O2', '<h1>OTHER PAGE</h1>', { authorization: 'Bearer ADMIN' });
 const OTHER = { authorization: 'Bearer READ-OTHER' };

@@ -191,7 +191,15 @@ async function unlock(request: Request, url: URL, record: { repo: string; ref: s
  * ASSET PATHS ONLY. The page and the frame decide afresh every time; they are one request each, and
  * they are the request where being current matters.
  */
-const DECISION_TTL_MS = 5_000;
+const DECISION_TTL_MS = 60_000;
+/**
+ * How long a decision stays usable as a FALLBACK after it goes stale.
+ *
+ * The key is the credential, so an unchanged cookie cannot have become a different viewer. When the
+ * auth call fails we would rather answer with what that same credential was told a minute ago than
+ * downgrade it to "anonymous" and 404 a page the person is looking at.
+ */
+const DECISION_FALLBACK_MS = 10 * 60_000;
 const decisions = new Map<string, { at: number; value: unknown }>();
 
 function decisionKey(request: Request, repo: string, slug: string): string {
@@ -203,7 +211,15 @@ function decisionKey(request: Request, repo: string, slug: string): string {
 function rememberedDecision(key: string): unknown | null {
   const hit = decisions.get(key);
   if (!hit) return null;
-  if (Date.now() - hit.at > DECISION_TTL_MS) {
+  if (Date.now() - hit.at > DECISION_TTL_MS) return null;
+  return hit.value;
+}
+
+/** The last decision this credential got for this member, however old, or null. */
+function staleDecision(key: string): unknown | null {
+  const hit = decisions.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > DECISION_FALLBACK_MS) {
     decisions.delete(key);
     return null;
   }
@@ -221,13 +237,24 @@ function rememberDecision(key: string, value: unknown): void {
   decisions.set(key, { at: Date.now(), value });
 }
 
-async function viewerOf() {
+/**
+ * Who is asking — or `undefined` when that could not be established.
+ *
+ * THE THREE ANSWERS ARE NOT TWO. `null` means "nobody is signed in", which is a VERDICT. A GoTrue
+ * call that threw or timed out means "I do not know", which is not — and returning `null` for it made
+ * a transient failure indistinguishable from a logged-out visitor, so a private lagoon 404'd for its
+ * own owner whenever the auth call lost a race. Under a burst of module requests it lost often.
+ *
+ * The rest of this route already keeps that distinction for the database ("THE DATABASE IS DOWN, AND
+ * THAT IS NOT A VERDICT"); this is the same rule one layer up.
+ */
+async function viewerOf(): Promise<{ userId: string } | null | undefined> {
   try {
     const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
     return data.user ? { userId: data.user.id } : null;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -258,8 +285,13 @@ const serve = async (request: Request) => {
   // while its records 404'd. The listing and the gate have to agree, or the listing is the leak.
   if (request.method === 'GET') {
     try {
+      // `undefined` is "could not ask" — see `viewerOf`. For the RAIL that is not worth guessing
+      // about: throwing here falls through to serving the page without a shell, which is the same
+      // thing this block already does when the store cannot be read.
+      const who = await viewerOf();
+      if (who === undefined) throw new Error('viewer unknown');
       const visible = await visibilityFor({
-        viewer: await viewerOf(),
+        viewer: who,
         shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
       });
       if (pathname === '/api/health') return apiHealth();
@@ -322,8 +354,13 @@ const serve = async (request: Request) => {
   // request are the page itself and go straight through.
   if (!record.isReload && !record.bare) {
     try {
+      // `undefined` is "could not ask" — see `viewerOf`. For the RAIL that is not worth guessing
+      // about: throwing here falls through to serving the page without a shell, which is the same
+      // thing this block already does when the store cannot be read.
+      const who = await viewerOf();
+      if (who === undefined) throw new Error('viewer unknown');
       const visible = await visibilityFor({
-        viewer: await viewerOf(),
+        viewer: who,
         shareToken: cookieValue(request.headers.get('cookie'), SHARE_COOKIE),
       });
       // GATED BY THE SAME PREDICATE THE INDEX USES, and placed before the authorize block for one
@@ -375,21 +412,34 @@ const serve = async (request: Request) => {
 
   const shareToken = cookieValue(request.headers.get('cookie'), SHARE_COOKIE);
 
-  let decision;
+  // Typed explicitly: `typeof decision` is used below to cast a remembered value back, and an
+  // inferred `let` is `undefined` at that point.
+  let decision: Awaited<ReturnType<typeof authorize>>;
   // One burst of modules is one decision. See `decisions` above for why this exists and why it is
   // keyed by the credential.
   const cacheKey = asset ? decisionKey(request, record.repo, record.slug) : null;
   const remembered = cacheKey ? rememberedDecision(cacheKey) : null;
   try {
-    decision =
-      (remembered as typeof decision) ??
-      (await authorize({ viewer: await viewerOf(), shareToken }, record, {
-        projects: postgresProjectStore(),
-        memberships: postgresMembershipStore(),
-        access: postgresAccessStore(),
-        shareLinks: postgresShareLinkStore(),
-      }));
-    if (cacheKey && !remembered) rememberDecision(cacheKey, decision);
+    if (remembered) {
+      decision = remembered as Awaited<ReturnType<typeof authorize>>;
+    } else {
+      const viewer = await viewerOf();
+      // COULD NOT ASK — so do not answer as though nobody was there. What this same credential was
+      // told before is a better answer than a downgrade, and if there is nothing to fall back on the
+      // request goes on to be decided normally with no viewer.
+      const fallback = viewer === undefined && cacheKey ? staleDecision(cacheKey) : null;
+      decision =
+        (fallback as Awaited<ReturnType<typeof authorize>> | null) ??
+        (await authorize({ viewer: viewer ?? null, shareToken }, record, {
+          projects: postgresProjectStore(),
+          memberships: postgresMembershipStore(),
+          access: postgresAccessStore(),
+          shareLinks: postgresShareLinkStore(),
+        }));
+      // Only a decision made with a KNOWN viewer is worth remembering; caching one made blind would
+      // pin the downgrade this exists to prevent.
+      if (cacheKey && !fallback && viewer !== undefined) rememberDecision(cacheKey, decision);
+    }
   } catch (err) {
     // THE DATABASE IS DOWN, AND THAT IS NOT A VERDICT. Failing closed here would 404 every public
     // lagoon on the host over an outage in a component none of them need; failing open would be the

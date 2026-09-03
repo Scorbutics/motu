@@ -492,7 +492,16 @@ regions: {
 ```
 
 The page brings its OWN region (its `createRegion`, its `<X.Region>`, its `<X.Island>`), so the lagoon
-adds no provider of its own — it installs `providers`, `channels` and `wire`, then renders the page.
+adds no provider of its own — it installs `providers` and the `wire`, then renders the page.
+
+**`channels` do not fire in this view.** They are installed by motu's `ArchipelagoProvider`, which this
+view does not mount. A region fed by a channel renders here with those keys unset, and `page-render`
+can then report a slot as unreached when the truth is that nothing fed it. It is fixable — the store is
+module state keyed by archipelago id — and it is not fixed, because the project this was built against
+declares no channels, so the fix could not be failed on purpose before being believed.
+
+The lagoon's own `seed` does not apply either, and that one IS by design: the page establishes its own
+first paint through its binding's `seed` and its own providers, which is exactly what production does.
 Open it at `?region=<id>&view=page`.
 
 **Measured, on shlink.** Putting the `list` island behind a branch that never runs:

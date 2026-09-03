@@ -271,8 +271,11 @@ export function mountReactLagoon(
   // THE PAGE VIEW RENDERS THE APPLICATION, not the region. Deliberately outside the provider below:
   // the page composes its OWN region (`createRegion` … `<X.Region>`), so wrapping it in a second
   // ArchipelagoProvider would seed a store the page never reads and hide the very thing this view
-  // exists to show. Providers, channels and the wire are already installed for every view, so what
-  // renders here is the page with its environment and its data answered, and nothing else supplied.
+  // exists to show. `providers` and the `wire` are installed for every view, so what renders here is
+  // the page with its environment and its HTTP answered, and nothing else supplied.
+  //
+  // The cost of skipping the provider is that CHANNELS do not fire here — they are installed by it.
+  // See `RegionOverrides.page` for what that means and why it is not fixed yet.
   if (opts.view === 'page') {
     const root = createRoot(mountEl);
     roots.set(mountEl, root);

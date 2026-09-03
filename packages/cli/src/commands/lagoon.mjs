@@ -15,12 +15,12 @@
 // it. That is the check nothing else performs: `dev:lagoon` serves the source through vite with the
 // dev proxy, so it never proves the inlining worked, the mock transport renders with no backend, or
 // the page survives with no /assets/ behind it. Serving the artifact does.
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, watch as fsWatch } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, statSync, watch as fsWatch } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
 import { networkInterfaces } from 'node:os';
-import { resolve, sep } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
 import { gitIdentity, uploadLagoon, loadHostConfig } from '../lib/remote.mjs';
@@ -991,7 +991,110 @@ function announceDevServer({ slug, port, liveUrl }) {
   };
 }
 
+/** Where a detached dev server records itself, so a later `--stop` can find it. */
+function devPidFile(cfg) {
+  return resolve(cfg.cacheDir, 'lagoon-dev.pid');
+}
+
+/**
+ * `--detach` / `--stop` — a lagoon that outlives the shell that started it.
+ *
+ * An agent's dev server dies with the agent's session. Watched repeatedly across four bench rounds:
+ * the run ends, the URL a person was told to open goes dark, and the only trace is a heartbeat that
+ * stops. The host degrades correctly — the member expires after 90s and `latest` falls back to the
+ * last publish — so nothing is broken, but nothing is watchable either, and watching an agent work is
+ * the point of announcing at all.
+ *
+ * A pidfile rather than a daemon: the process is an ordinary detached child, so `--stop` is a signal
+ * and a crash needs no cleanup beyond the host's own expiry.
+ */
+function detachDevServer(cfg, argv) {
+  const file = devPidFile(cfg);
+  const existing = readPid(file);
+  if (existing) {
+    console.error(color.red(`✗ a detached lagoon is already running (pid ${existing})`));
+    console.error(color.dim('  stop it first: motu lagoon dev --stop'));
+    process.exit(1);
+  }
+  // The same argv minus the flag that got us here, so the child does the ordinary thing.
+  const args = process.argv.slice(2).filter((a) => a !== '--detach');
+  const out = openSync(resolve(cfg.cacheDir, 'lagoon-dev.log'), 'a');
+  // `process.argv[1]` is the CLI entry that is running us — the only path guaranteed to be the same
+  // motu the caller invoked, which matters when several checkouts exist on one machine.
+  const child = spawn(process.execPath, [process.argv[1], ...args], {
+    detached: true,
+    stdio: ['ignore', out, out],
+    cwd: process.cwd(),
+    env: process.env,
+  });
+  child.unref();
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, String(child.pid));
+  console.log(color.dim(`  detached (pid ${child.pid}) — logs: ${paths.rel(resolve(cfg.cacheDir, 'lagoon-dev.log'))}`));
+  console.log(color.dim('  stop it with: motu lagoon dev --stop'));
+}
+
+/** The pid a previous `--detach` wrote, when that process is still alive. */
+function readPid(file) {
+  try {
+    const pid = Number(readFileSync(file, 'utf8').trim());
+    if (!pid) return null;
+    process.kill(pid, 0); // throws when it is gone
+    return pid;
+  } catch {
+    return null;
+  }
+}
+
+function stopDetachedDev(cfg) {
+  const file = devPidFile(cfg);
+  const pid = readPid(file);
+  if (!pid) {
+    console.log(color.dim('  no detached lagoon is running'));
+    try {
+      rmSync(file, { force: true });
+    } catch {}
+    return;
+  }
+  // SIGTERM, not SIGKILL: the dev server's own handler deregisters it from the host on the way out,
+  // which is the difference between `latest` falling back at once and doing it 90 seconds later.
+  process.kill(pid, 'SIGTERM');
+  try {
+    rmSync(file, { force: true });
+  } catch {}
+  // AND DEREGISTER FROM HERE, rather than trusting the child's own exit path. Measured: the process
+  // died and the host still listed the member 54 seconds later, because a signal handler racing an
+  // async POST against process exit is not something to rely on. The host would have expired it at
+  // 90s anyway — this is the difference between `latest` falling back at once and a minute of
+  // serving an address with nothing behind it.
+  void deregisterLive();
+  console.log(color.dim(`  stopped the detached lagoon (pid ${pid})`));
+}
+
+/** Tell the host this member is gone. Best effort and bounded: stopping must not hang on a dead host. */
+async function deregisterLive() {
+  const cfg = loadHostConfig();
+  const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
+  const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
+  if (!base || !hostToken) return;
+  const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
+  const slug = paths.publishAs?.slug ?? 'all';
+  const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
+  await Promise.race([
+    fetch(`${base}/api/live/off?${qs}`, { method: 'POST', headers: { authorization: `Bearer ${hostToken}` } }).catch(() => null),
+    new Promise((r) => setTimeout(r, 2000)),
+  ]);
+}
+
 export async function lagoonDevCommand(argv) {
+  if (argv.stop) {
+    const { loadMotuConfig } = await import('../lib/config.mjs');
+    return stopDetachedDev(loadMotuConfig());
+  }
+  if (argv.detach) {
+    const { loadMotuConfig } = await import('../lib/config.mjs');
+    return detachDevServer(loadMotuConfig(), argv);
+  }
   const { entry, target } = resolveTarget(argv);
   const { buildLagoonViteConfig, resolveVite } = await import('../lib/lagoon-vite.mjs');
   const { loadMotuConfig } = await import('../lib/config.mjs');

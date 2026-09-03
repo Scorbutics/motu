@@ -724,6 +724,17 @@ Three things about this are easy to get backwards, and each cost a debugging rou
 - **The live registry is in memory.** A host restart forgets every live member until the next
   heartbeat (30s), so a 404 straight after restarting the host means "not re-registered yet".
 
+### Outliving the shell that started it
+
+    motu lagoon dev --detach     # runs on, logs to .motu/cache/lagoon-dev.log
+    motu lagoon dev --stop       # signals it and deregisters the member at once
+
+An agent's dev server dies with its session, which is exactly when someone wants to keep watching.
+`--detach` reparents it; `--stop` signals it AND tells the host directly, because a signal handler
+racing an async POST against process exit is not reliable — measured, the process died and the host
+listed the member for another 54 seconds. A second `--detach` refuses while one is running, and a
+crash needs no cleanup: the member expires on its own after 90 seconds.
+
 ## Known traps
 
 **Absolute asset paths.** `/images/…` works under `lagoon dev`, because Vite serves it, and 404s the

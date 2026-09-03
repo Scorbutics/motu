@@ -742,6 +742,14 @@
   --mc-coral-ink: #cf5a33;
   --mc-coral-soft: #fbe6de;
   --mc-frost: rgba(255, 255, 255, 0.86);
+  /* Gradient stops, named so the sheet has no loose colours: the highlight each surface lifts to. */
+  --mc-teal-hi: #12786a;
+  --mc-teal-glow: #1cb595;
+  --mc-teal-av: #17977f;
+  --mc-mint: #eef7f4;
+  --mc-coral-hi: #ef8560;
+  --mc-teal-shade: #0b6152;
+  --mc-teal-foot: #0f8770;
 }
 
 .gm-card {
@@ -797,11 +805,11 @@
 }
 .mc--premium { background: var(--mc-cream); }
 .mc--premium .mc__banner {
-  background: radial-gradient(120% 150% at 78% 0%, #12786a 0%, var(--mc-teal-deep) 62%);
+  background: radial-gradient(120% 150% at 78% 0%, var(--mc-teal-hi) 0%, var(--mc-teal-deep) 62%);
   padding-bottom: 42px;
 }
 .mc--standard {
-  background: radial-gradient(120% 140% at 80% 0%, #1cb595 0%, var(--mc-teal-bright) 46%, #0f8770 100%);
+  background: radial-gradient(120% 140% at 80% 0%, var(--mc-teal-glow) 0%, var(--mc-teal-bright) 46%, var(--mc-teal-foot) 100%);
 }
 
 .mc__brand { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: #fff; }
@@ -815,7 +823,7 @@
   display: inline-block; padding: 7px 15px; border-radius: 999px;
   font-size: 11px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap;
 }
-.mc-pill--premium { background: linear-gradient(135deg, #ef8560 0%, var(--mc-coral) 100%); color: #fff; box-shadow: 0 4px 12px rgba(226, 113, 74, 0.35); }
+.mc-pill--premium { background: linear-gradient(135deg, var(--mc-coral-hi) 0%, var(--mc-coral) 100%); color: #fff; box-shadow: 0 4px 12px rgba(226, 113, 74, 0.35); }
 .mc-pill--standard { background: var(--mc-frost); color: var(--mc-teal-ink); }
 
 .mc__body { padding: 0 20px 22px; }
@@ -839,8 +847,8 @@
   border: 5px solid #fff;
   box-shadow: 0 8px 22px rgba(10, 60, 50, 0.22);
 }
-.mc--premium .mc__avatar { background: linear-gradient(150deg, #17977f 0%, var(--mc-teal) 55%, #0b6152 100%); color: #fff; }
-.mc--standard .mc__avatar { background: linear-gradient(160deg, #ffffff 0%, #eef7f4 100%); color: var(--mc-teal-ink); }
+.mc--premium .mc__avatar { background: linear-gradient(150deg, var(--mc-teal-av) 0%, var(--mc-teal) 55%, var(--mc-teal-shade) 100%); color: #fff; }
+.mc--standard .mc__avatar { background: linear-gradient(160deg, #ffffff 0%, var(--mc-mint) 100%); color: var(--mc-teal-ink); }
 .mc__avatar--blank { opacity: 0.75; }
 .mc__who { min-width: 0; }
 /* A NAME WRAPS; IT DOES NOT GET CUT. `Maria Guadalupe Fernández de la Cruz` truncating to
@@ -920,13 +928,13 @@
   font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif); color: var(--mc-ink);
 }
 .mc-row .mc__avatar { width: 44px; height: 44px; font-size: 15px; border-width: 3px; box-shadow: none; }
-.mc-row--premium .mc__avatar { background: linear-gradient(150deg, #17977f, #0b6152); color: #fff; }
-.mc-row--standard .mc__avatar { background: #eef7f4; color: var(--mc-teal-ink); }
+.mc-row--premium .mc__avatar { background: linear-gradient(150deg, var(--mc-teal-av), var(--mc-teal-shade)); color: #fff; }
+.mc-row--standard .mc__avatar { background: var(--mc-mint); color: var(--mc-teal-ink); }
 .mc-row__who { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .mc-row__name { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-row__chapter { font-size: 13px; color: var(--mc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-row .mc-pill { padding: 5px 11px; font-size: 10px; }
-.mc-row--standard .mc-pill--standard { background: #eef7f4; }
+.mc-row--standard .mc-pill--standard { background: var(--mc-mint); }
 .mc-row__no { font-size: 13px; color: var(--mc-muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 
 /* ---- the loading skeleton ---- */

@@ -647,7 +647,19 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         const liveSlug = normalizeSegment(segments[at + 1]);
         const rest = segments.slice(at + 2);
         const endpoint = liveRepo && liveSlug && readable(liveRepo) ? live.endpointFor(liveRepo, liveSlug) : null;
-        if (endpoint && rest[rest.length - 1] !== '__motu_hmr') {
+        // `__motu_frame` IS THIS HOST'S ADDRESS, NOT THE DEV SERVER'S — the one tail under a member
+        // prefix that must not be forwarded.
+        //
+        // Everything else below a live member belongs to Vite, which is why the path goes whole. The
+        // frame suffix is the exception: it means "the bytes without the shell", it is answered by the
+        // member route further down (which proxies the dev server's ROOT for a live member), and Vite
+        // has no such route — so forwarding it returned 404 for a page that exists.
+        //
+        // The symptom was a blank frame and a dock stuck on "waiting for the lagoon…", because the
+        // shell renders fine and only its iframe 404s. It appears exactly when a member is LIVE, which
+        // is why a published lagoon looked healthy and starting a dev server "broke" it.
+        const tail = rest[rest.length - 1];
+        if (endpoint && tail !== '__motu_hmr' && !rest.includes('__motu_frame')) {
           // THE RAW TAIL, not the decoded segments re-encoded. `segments` is decoded, so rebuilding
           // the path with `encodeURIComponent` turned `@vite/client` into `%40vite/client` and the
           // dev server answered 404 — a bug introduced by being careful in the wrong direction.

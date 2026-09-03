@@ -66,9 +66,22 @@ function importGraph(hostRoot, motuRoot, cfg) {
     } catch {
       continue;
     }
+    // TYPE-ONLY IMPORTS ARE NOT IMPORTS, for the one question this graph answers.
+    //
+    // The rule downstream is "a file is deleted whole only if EVERY import it makes is motu's". A
+    // `import type { X } from '@/app/…'` erases at compile time: it cannot make the file need the
+    // application at runtime, and counting it disqualifies a file that is still 100% motu once the
+    // types are gone. That matters the moment a motu declaration wants to be TYPED against the host —
+    // an archipelago naming the props of the page it belongs to, say — which is otherwise impossible
+    // without making the archipelago undeletable.
+    //
+    // Both spellings: the whole clause (`import type { X } from`) and nothing else, since a mixed
+    // `import { type X, y }` still imports `y` for real.
     graph.set(
       full,
-      [...text.matchAll(/(?:^|\n)\s*(?:import|export)[^'"\n]*?from\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+      [...text.matchAll(/(?:^|\n)\s*(?:import|export)(?!\s+type\s)[^'"\n]*?from\s*['"]([^'"]+)['"]/g)].map(
+        (m) => m[1],
+      ),
     );
   }
   return graph;

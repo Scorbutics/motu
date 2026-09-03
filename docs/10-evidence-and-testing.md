@@ -630,3 +630,25 @@ screenshots included (`acme/motu/src/shared/directory-evidence.ts:74`).
 [09 — Coverage](09-coverage.md) ·
 [11 — Contract and backend](11-contract-and-backend.md) ·
 [13 — Agents and skills](13-agents-and-skills.md)
+
+## `click` — the user's half of a coupling
+
+A step may name a control to click, by its ACCESSIBLE NAME:
+
+    { click: 'Continue with Google', expectRender: { form: 'Signing in with Google' } }
+
+`emit` fires an island's DECLARED output, which enters the region past the component's own handler. So
+a control whose callback was dropped leaves an emit-only flow green while the screen is dead — measured
+twice, once as a logic mutation and once as a wiring one, and both times the coupling was reported as
+carrying when nothing a user did could make it carry. `click` closes that: the component fires its own
+output, by the path a person takes.
+
+It inherits the constraint that keeps island scenarios from being browser tests. A control is named,
+never selected; resolution is exact-name first, then the narrowest containing match, visible elements
+only, across the whole document so a portal is reachable. A control with no accessible name cannot be
+driven — which is a feature, not a gap. When the name matches nothing, the failure lists what IS
+clickable in that state.
+
+**There is deliberately no `fill`, no waits and no scripting.** Text entry, timing and multi-step
+interaction are where a harness becomes a second, untyped test suite, and Playwright is better at that
+than this will ever be. If a flow needs them, it has stopped being a flow.

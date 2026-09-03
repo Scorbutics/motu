@@ -153,8 +153,20 @@ export interface ScenarioInteraction {
  *
  * Scenarios describe a state; this describes what happens next. `emit` fires an island's DECLARED
  * output — the same seam the wiring probe uses — so a flow can only ever do what the archipelago says
- * that island can do. No selectors, no synthetic clicks: the moment a harness accepts arbitrary DOM
- * scripting it is a second, untyped test suite, and it stops being derivable from the declarations.
+ * that island can do. NO SELECTORS: the moment a harness accepts arbitrary DOM scripting it is a
+ * second, untyped test suite, and it stops being derivable from the declarations.
+ *
+ * `click` is the one exception, and it exists because the rule above was hiding a FALSE CLAIM. A flow
+ * that only ever emits enters the region PAST the component's own handler, so a search box whose
+ * `onChange` was dropped is inert on screen while every flow still passes: the coupling is reported as
+ * carrying when nothing a user does can make it carry. Measured twice — once as a logic mutation, once
+ * as a wiring one — and in both cases the flow was green and the feature was dead.
+ *
+ * It inherits the constraint that keeps island scenarios from being browser tests: a control is named
+ * by its ACCESSIBLE NAME, never a selector, resolved by the same function `Scenario.click` uses. A
+ * control with no accessible name cannot be driven, which is a feature. There is deliberately no
+ * `fill`, no waits and no scripting — a flow that needs those has become a browser test, and Playwright
+ * is better at that than this will ever be.
  *
  * Lives beside the archipelago (`<id>.evidence.ts`), because the mapping it asserts is the region's.
  */
@@ -187,6 +199,18 @@ export interface RegionStep {
    * is the thing that fails when the store is right and the screen is wrong.
    */
   expectRender?: Record<string, string | { text?: string; notText?: string }>;
+  /**
+   * A control to click, BY ACCESSIBLE NAME — the user's half of a coupling.
+   *
+   * `emit` proves the region carries a declared output. This proves something the region cannot say by
+   * itself: that acting on what is rendered actually produces that output. The two together are the
+   * whole claim; `emit` alone is the half that can pass while the screen is dead.
+   *
+   * Resolved exactly as an island scenario's `click` is — exact accessible name first, then the
+   * narrowest containing match, visible elements only, searching the document so a control inside a
+   * portal is reachable.
+   */
+  click?: string;
 }
 
 /** Structural arg matching: `undefined` pattern slot = wildcard; plain objects match as a subset. */

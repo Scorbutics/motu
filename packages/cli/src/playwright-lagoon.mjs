@@ -639,6 +639,41 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
             } else if (st.provide) {
               // The APPLICATION moving its own state, which is how a host-fed key ever changes.
               for (const [k, v] of Object.entries(st.provide)) lagoon.provide(k, v);
+            } else if (st.click) {
+              // THE USER'S HALF. `emit` enters the region past the component's own handler, so a
+              // control whose callback was dropped leaves an emit-only flow green while the screen is
+              // dead — measured twice. Clicking the RENDERED control makes the component fire its own
+              // declared output, which is the path a person actually takes.
+              //
+              // Accessible name, never a selector: the same rule island scenarios follow, resolved the
+              // same way. Exact match first so a short name is not stolen by a longer control that
+              // contains it, then the narrowest containing match; visible elements only; the whole
+              // document, so a control inside a portal is reachable.
+              const name = String(st.click).trim();
+              const CLICKABLE =
+                'button, [role="button"], input[type="checkbox"], [role="checkbox"], [role="switch"], [role="radio"], [role="menuitem"], [role="tab"], a[href], label, summary';
+              const nameOf = (el) => {
+                const aria = el.getAttribute('aria-label') ?? el.getAttribute('title') ?? el.getAttribute('alt');
+                return `${aria ?? ''} ${el.innerText ?? el.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
+              };
+              const candidates = [...document.querySelectorAll(CLICKABLE)].filter(
+                (el) => el.offsetParent !== null || el.getClientRects().length > 0,
+              );
+              const el =
+                candidates.find((c) => nameOf(c) === name) ??
+                candidates.filter((c) => nameOf(c).includes(name)).sort((a, b) => nameOf(a).length - nameOf(b).length)[0];
+              if (!el) {
+                // NAME WHAT WAS THERE. "nothing is named X" turns writing a flow into guessing at the
+                // accessible names a component happens to produce; the whole point of naming controls
+                // this way is that the names are legible, so print them.
+                const available = [...new Set(candidates.map(nameOf).filter(Boolean))].slice(0, 12);
+                return {
+                  error:
+                    `nothing clickable is named "${name}" — clickable here: ` +
+                    (available.length ? available.map((n) => `"${n}"`).join(', ') : '(nothing clickable is rendered)'),
+                };
+              }
+              el.click();
             } else if (Object.keys(st.expectRender ?? {}).length) {
               // A COVERAGE step: no stimulus, only "this slot renders its own island". Legitimate and
               // not a data flow — some islands take no input at all (Twenty's tasks and timeline
@@ -646,7 +681,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
               // there is nothing to drive and the claim is still worth making: it is what catches a
               // slot wired to another island's data.
             } else {
-              return { error: 'a step must `emit`, `provide`, or assert with `expectRender`' };
+              return { error: 'a step must `emit`, `provide`, `click`, or assert with `expectRender`' };
             }
             // Settle, then re-check: an assertion may become true a tick or three after the write —
             // a store subscriber, an effect, a real component's render pass. Polling keeps the check

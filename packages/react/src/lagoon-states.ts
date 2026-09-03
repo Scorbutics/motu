@@ -439,6 +439,21 @@ export async function replayFlow(flow: RegionScenario, upTo: number | null): Pro
       }
     } else if (step.provide) {
       for (const [k, v] of Object.entries(step.provide)) lagoon.provide(k, v);
+    } else if (step.click) {
+      // THE USER'S HALF OF THE COUPLING. `emit` enters the region past the component's own handler, so
+      // a control whose callback was dropped leaves every emit-only flow green while the screen is
+      // dead. Clicking drives the rendered control and lets the component fire its own declared
+      // output — the same path a person takes.
+      //
+      // Settle FIRST: an earlier step can reveal the control this one names, and resolving before the
+      // DOM is quiet finds the page mid-render. Same order `replayInteractions` uses, for the same
+      // reason.
+      await waitForDomQuiet();
+      const el = findClickable(step.click);
+      if (!el) {
+        return { ...base, applied: i, error: `step ${i + 1}: nothing clickable is named "${step.click}"` };
+      }
+      el.click();
     }
     // A step that only asserts (`expectRender`) moves nothing — it is still a step, and skipping it
     // silently would make `step=3` mean different things here and in the check.

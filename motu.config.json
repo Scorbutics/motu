@@ -4,5 +4,9 @@
   "isolation": "light",
   "publishAs": {
     "repo": "Scorbutics/motu-demo-app"
-  }
+  },
+  "hostSources": [
+    "demo-app/src",
+    "demo-app/roots/app/src"
+  ]
 }

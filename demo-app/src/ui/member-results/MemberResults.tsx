@@ -250,7 +250,7 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
                       </span>
                       <span className="gm-card__email">{firstString(row, ['email']) ?? '—'}</span>
                       <span className="gm-card__meta">
-                        {firstString(row, ['coordinator']) ?? '—'} · Joined {fmtDate(row)}
+                        {firstString(row, ['chapter', 'coordinator']) ?? '—'} · Joined {fmtDate(row)}
                       </span>
                     </button>
                   </li>
@@ -328,8 +328,8 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
                         <td>{firstString(row, ['surname']) ?? '—'}</td>
                         <td>{firstString(row, ['firstname']) ?? '—'}</td>
                         <td className="gm-muted">{fmtDate(row)}</td>
-                        <td className="gm-muted" title={firstString(row, ['coordinator'])}>
-                          {firstString(row, ['coordinator']) ?? '—'}
+                        <td className="gm-muted" title={firstString(row, ['chapter', 'coordinator'])}>
+                          {firstString(row, ['chapter', 'coordinator']) ?? '—'}
                         </td>
                       </tr>
                     );

@@ -10,6 +10,7 @@
 // (`src/islands/member-results/fixtures.mock.ts`) — a functional stub that really filters, which is
 // what lets a flow drive a search and assert on the answer rather than on a recorded constant.
 import type { RegionScenario } from '@motu/runtime/mock';
+import { MEMBER_SEARCH_CONFIG } from '../../ui/member-search-ng/search.config.js';
 
 // EVERY KEY THE REGION CARRIES, not just the interesting ones — a flow run against a region shaped
 // differently from the one users get is internally consistent on both sides, so nothing notices.
@@ -17,8 +18,13 @@ import type { RegionScenario } from '@motu/runtime/mock';
 // `status: 'active'` rather than `{}` for a reason each flow below depends on: the chips island
 // renders NOTHING when no filter is set (`entries.length === 0` -> null), so a region seeded empty
 // has a slot that cannot be asserted on and an island that cannot be emitted from.
+// THE SAME KEYS A REAL PAGE LOAD ESTABLISHES. `integrate check`'s `flow-shape` compares this list
+// against what the page seeds, and it caught `searchConfig` missing here: the page hands the search
+// island its field schema on every load, and every flow previewed a region that had never been
+// given one. A preview shaped differently from the page is a preview of a page nobody visits.
 const SEED = {
   criteria: { status: 'active' as const },
+  searchConfig: MEMBER_SEARCH_CONFIG,
   selectedMember: null,
   resultCount: 0,
 };

@@ -7,7 +7,11 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/shared/styles.css"
+    "./styles.css": "./src/shared/styles.css",
+    "./archipelagos/members": "./src/archipelagos/members/members.archipelago.ts",
+    "./search-config": "./src/ui/member-search-ng/search.config.ts",
+    "./archipelagos/users": "./src/archipelagos/users/users.archipelago.ts",
+    "./archipelagos/admin": "./src/archipelagos/admin/admin.archipelago.ts"
   },
   "dependencies": {
     "@motu/adapter-angularjs": "workspace:*",

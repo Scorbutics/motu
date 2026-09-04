@@ -1,0 +1,4 @@
+.env.local
+roots/app/dist/
+supabase/.temp/
+supabase/.branches/

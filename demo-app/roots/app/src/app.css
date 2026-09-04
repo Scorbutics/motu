@@ -1,0 +1,30 @@
+/* The page's own chrome — everything an island draws is the island's, not this file's.
+   Kept deliberately thin: if this stylesheet starts describing what a card or a row looks like,
+   the arrangement has begun to own its islands' appearance, which is the coupling the region
+   declaration exists to make visible. */
+:root { color-scheme: light; }
+body {
+  margin: 0;
+  background: #f2f0ea;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  color: #14201c;
+}
+.app__page { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; display: flex; flex-direction: column; gap: 20px; }
+.app__toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.app__footer {
+  margin-top: 8px; padding-top: 16px; border-top: 1px solid #ddd9d0;
+  font-size: 13px; color: #6b7a74; font-variant-numeric: tabular-nums;
+}
+
+.app__nav {
+  display: flex; gap: 4px; padding: 14px 24px 0; max-width: 1120px; margin: 0 auto;
+}
+.app__tab {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; cursor: pointer;
+  border: 1px solid transparent; border-radius: 999px; background: transparent; color: #6b7a74;
+}
+.app__tab:hover { color: #0f766e; }
+.app__tab--on { background: #fff; border-color: #ddd9d0; color: #14201c; }
+.app__split { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+@media (min-width: 900px) { .app__split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+.app__stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

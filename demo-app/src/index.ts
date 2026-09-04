@@ -11,7 +11,15 @@ export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry.js';
 
 export { ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from './fixtures.js';
 
-export type { MemberRow, MemberCriteria } from './shared/member-types.js';
+export type { MemberRow, MemberCriteria, MemberPage } from './shared/member-types.js';
+
+// The application's own data code, exported because BOTH sides need it: the page composes a
+// transport over the source, and anything previewing the region reaches the same module.
+export { membersSource, PER_PAGE } from './shared/members-source.js';
+export { MEMBER_SEARCH_CONFIG } from './ui/member-search-ng/search.config.js';
+export type { MembersPort, MembersQueryResult, MembersSource } from './shared/members-source.js';
+export { companiesSource, LOOKUP_LIMIT } from './shared/companies-source.js';
+export type { CompaniesPort, CompaniesQueryResult } from './shared/companies-source.js';
 export { ATLAS_CHART, HELIOS_CHART, ATLAS_COMPANY, HELIOS_COMPANY, orgChartFor, companyName } from './shared/org-types.js';
 export type { OrgChart, OrgDepartment, OrgPerson } from './shared/org-types.js';
 export type { MotuTheme, MotuFit, LegacyStrategy } from '@motu/core';

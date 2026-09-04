@@ -349,7 +349,16 @@ export function currentSeams() {
       target: c.target,
       method: c.method,
       by: c.by,
+      // TWO SHAPES OF THE SAME PAYLOAD. The row shows as much as one line holds; the panel expands to
+      // the pretty-printed whole, which is the only form in which a nested `p_sessions` is readable.
       request: c.request === undefined ? '' : typeof c.request === 'string' ? c.request : JSON.stringify(c.request),
+      detail:
+        c.request === undefined
+          ? ''
+          : typeof c.request === 'string'
+            ? c.request
+            : JSON.stringify(c.request, null, 2),
+      at: c.at,
       status: c.status ?? 0,
       response: c.response ?? '',
       // A 4xx/5xx is the row worth seeing: an RPC no fixture answers 404s here and the app's own

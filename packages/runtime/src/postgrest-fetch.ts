@@ -253,8 +253,15 @@ const callsKey = '__motuWireCalls';
 const MAX_CALLS = 200;
 let callSeq = 0;
 
-/** Bounded, and never the whole body — a payload can be an entire regenerated series. */
-function summarise(value: unknown, max = 2000): unknown {
+/**
+ * Bounded, and never the whole body.
+ *
+ * 20 kB rather than 2, because the panel EXPANDS these now: a row you can open to read the payload is
+ * only worth opening if the payload is there, and the largest real one here — a regenerated séance
+ * series — is about 21 kB. The ring above bounds the count; this bounds each entry, and the product
+ * is the worst case. It is a dev overlay in a page that already holds the application.
+ */
+function summarise(value: unknown, max = 20_000): unknown {
   if (value === undefined || value === null) return value;
   try {
     const json = JSON.stringify(value);

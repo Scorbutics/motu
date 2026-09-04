@@ -90,7 +90,21 @@ const DOCK_CSS = `
  * to let you look at a layout. The panel is a deliberate, temporary act and is allowed to overlay;
  * the rail is permanent and is not.
  */
+/* PINNED: reserve the PANEL too, so the region and the panel are both usable at once.
+ *
+ * The paragraph above is still right about the default — insetting on every open would reflow the
+ * application each time the dock is touched. What it did not anticipate is a panel you WATCH while
+ * you work: the Network log is read by doing something on the page and seeing the call appear, and
+ * an overlay makes that literally impossible on the half of the region it covers. So the reserve
+ * became a choice rather than a rule. Unpinned is unchanged; pinned costs one reflow, when you ask
+ * for it. */
 html[data-motu-dock="right"] { padding-right: var(--motu-dock-rail, 46px); }
+html[data-motu-dock="right"][data-motu-dock-pin="1"] {
+  padding-right: calc(var(--motu-dock-rail, 46px) + var(--motu-dock-panel, 340px));
+}
+html[data-motu-dock="left"][data-motu-dock-pin="1"] {
+  padding-left: calc(var(--motu-dock-rail, 46px) + var(--motu-dock-panel, 340px));
+}
 html[data-motu-dock="left"] { padding-left: var(--motu-dock-rail, 46px); }
 html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 /* An application's own fixed furniture is positioned against the VIEWPORT, which no padding here can
@@ -574,6 +588,50 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   font: 500 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 #tide .seam-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* A NETWORK ROW IS A BUTTON, so the payload under it can be opened from the keyboard as well as the
+   mouse. Everything here is undoing a button's own defaults so it still lays out as a row. */
+#tide .seam-row--btn {
+  width: 100%;
+  /* A FIFTH COLUMN for the chevron. The seam-row rule declares four, so the ::after became a fifth
+     grid ITEM and wrapped onto a line of its own under every row. (No backticks in this sheet: it is
+     a JS template literal and one ends it. That is three times in one session.) */
+  grid-template-columns: 8px minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr) 10px;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  font: 500 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#tide .seam-row--btn:hover { background: var(--surface-row-hover, var(--surface-row)); }
+#tide .seam-row--btn:focus-visible { outline: 2px solid var(--motu-primary, #0f766e); outline-offset: 1px; }
+/* The chevron is the affordance; rotating it is how an accordion says which way it goes. */
+#tide .seam-row--btn::after {
+  /* The literal character, not a CSS unicode escape. This whole sheet is a JS template literal, where
+     a backslash followed by a digit opens an OCTAL escape and the module refuses to parse — and the
+     comment explaining that originally contained one, so it failed twice for the same reason. The
+     stylesheet guard caught both, which is what it is for. */
+  content: "›";
+  justify-self: end;
+  opacity: .55;
+  transition: transform .12s ease;
+}
+#tide .seam-row--btn[aria-expanded="true"]::after { transform: rotate(90deg); }
+#tide .wire-call { display: grid; gap: 3px; }
+/* SELECTABLE AND WRAPPED, which is the whole reason this is not a title attribute: a payload you
+   cannot copy is a payload you end up retyping. Capped so one large body cannot own the panel. */
+#tide .wire-detail {
+  margin: 0 0 4px;
+  padding: 7px 9px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 7px;
+  background: var(--surface-sunken, rgba(0,0,0,.05));
+  font: 400 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+#tide .wire-detail[hidden] { display: none; }
 #tide .seam-row__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
 #tide .seam-row[data-tone="broken"] .seam-row__dot { background: var(--motu-danger, #b91c1c); }
 #tide .seam-row[data-tone="warn"] .seam-row__dot { background: var(--motu-caution, #b45309); }
@@ -791,6 +849,19 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
   background: rgba(255,255,255,.22); color: inherit; }
 #tide .scope__x:hover { background: rgba(255,255,255,.38); }
 #tide .scope__x:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
+/* The pin, beside the fold. Same shape as the fold so the two read as one pair of controls. */
+#tide .bay-pin {
+  flex: 0 0 auto;
+  width: 24px; height: 24px;
+  border: 0; border-radius: 7px;
+  cursor: pointer;
+  background: rgba(255,255,255,.18);
+  color: inherit;
+  font-size: 13px; line-height: 1;
+}
+#tide .bay-pin:hover { background: rgba(255,255,255,.32); }
+#tide .bay-pin[aria-pressed="true"] { background: var(--motu-on-primary, #fff); color: var(--motu-primary-deep, #0b5b55); }
+#tide .bay-pin:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
 
 /* The decision count on the Seams tab — OUTSIDE the phone media query, which is where it first
    landed and where it silently did nothing on a desktop viewport. Sized to two digits and no wider:
@@ -1075,9 +1146,37 @@ function motuMountDock(opts) {
   var scopeClose = el('button', { class: 'scope__x', type: 'button', title: 'Leave this island', 'aria-label': 'Leave this island and show the whole region' }, ['\u00d7']);
   var scopeChip = el('div', { class: 'scope', hidden: '' }, [el('span', { class: 'scope__dot' }), scopeName, scopeClose]);
 
+  // PIN: reserve the page for the panel instead of covering it.
+  //
+  // Remembered across reloads, deliberately: the person who wants this is watching a log while they
+  // act, and acting includes reloading. A preference that resets every time is one you set every
+  // time, which is how a mode becomes an annoyance.
+  var PIN_KEY = 'motu:dock:pin';
+  var pinned = false;
+  try { pinned = localStorage.getItem(PIN_KEY) === '1'; } catch (e) { pinned = false; }
+  var pin = el('button', {
+    class: 'bay-pin', type: 'button',
+    title: 'Reserve space for the panel instead of covering the page',
+    'aria-label': 'Pin the panel beside the page',
+    'aria-pressed': pinned ? 'true' : 'false',
+  }, ['\u25e8']);
+  var applyPin = function () {
+    var root = document.documentElement;
+    // Only meaningful while the panel is OPEN: a closed panel covers nothing, and reserving for it
+    // would leave a 340px hole beside a dock that is not there.
+    if (pinned && tide.dataset.open === 'true') root.setAttribute('data-motu-dock-pin', '1');
+    else root.removeAttribute('data-motu-dock-pin');
+    pin.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+  };
+  pin.addEventListener('click', function () {
+    pinned = !pinned;
+    try { localStorage.setItem(PIN_KEY, pinned ? '1' : '0'); } catch (e) { /* private mode: this session only */ }
+    applyPin();
+  });
+
   var masthead = el('div', { class: 'motu-bay', 'data-shape': 'masthead' }, [
     grab,
-    el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), fold]),
+    el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), pin, fold]),
   ]);
 
   var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
@@ -1139,6 +1238,9 @@ function motuMountDock(opts) {
   var open = function (on) {
     tide.dataset.open = on ? 'true' : 'false';
     railOpen.setAttribute('aria-expanded', on ? 'true' : 'false');
+    // The reserve follows the panel: a closed panel covers nothing, so holding 340px for it would
+    // leave a gap beside a dock that is not there.
+    applyPin();
   };
   railOpen.addEventListener('click', function () { open(true); });
   pick.addEventListener('click', function () {
@@ -1637,13 +1739,22 @@ function motuMountDock(opts) {
         // the difference between "the page is not wired" and "the stand-in did not record it".
         var wire = seamData.wire || [];
         listSection('Network', wire.length, wire.map(function (c) {
-          return el('div', {
-            class: 'seam-row',
+          // AN ACCORDION, because a title attribute was the wrong instrument: it cannot be selected,
+          // cannot be copied, does not wrap, and never appears at all on a touch device. The payload
+          // is the reason to look — a nested `p_sessions` is unreadable as one line and perfectly
+          // clear pretty-printed — so it gets a surface rather than a tooltip.
+          var id = 'wire-' + c.seq;
+          var body = el('pre', { class: 'wire-detail', id: id, hidden: 'hidden' }, [
+            c.method + ' ' + c.target + '  \u2192  ' + c.status + (c.response ? '  ' + c.response : ''),
+            '\n' + (c.by || 'unattributed') + (c.at ? '  \u00b7  ' + new Date(c.at).toLocaleTimeString() : ''),
+            '\n\n' + (c.detail || '(no payload)'),
+          ]);
+          var row = el('button', {
+            class: 'seam-row seam-row--btn',
+            type: 'button',
             'data-tone': c.tone,
-            // The full payload on hover: the row shows as much as fits, and a regenerated series is
-            // several kilobytes that no row can hold.
-            title: c.method + ' ' + c.target + '\n' + (c.request || '(no payload)') + '\n\n'
-              + c.status + ' ' + (c.response || '') + '\n' + c.by,
+            'aria-expanded': 'false',
+            'aria-controls': id,
           }, [
             el('i', { class: 'seam-row__dot' }),
             el('span', { class: 'seam-row__l' }, [
@@ -1653,6 +1764,15 @@ function motuMountDock(opts) {
             el('span', { class: 'seam-row__d' }, [c.request || '']),
             el('span', { class: 'seam-row__r' }, [c.response || '']),
           ]);
+          row.addEventListener('click', function () {
+            var open = row.getAttribute('aria-expanded') === 'true';
+            row.setAttribute('aria-expanded', open ? 'false' : 'true');
+            // `hidden` as the toggle, not a style: the attribute is what the accessibility tree reads,
+            // and a payload hidden only by CSS is still announced.
+            if (open) body.setAttribute('hidden', 'hidden');
+            else body.removeAttribute('hidden');
+          });
+          return el('div', { class: 'wire-call' }, [row, body]);
         }),
         // The empty state is a real answer here, and a different one from "asked for" being empty:
         // no request AT ALL means the screen is rendering entirely from the seed.

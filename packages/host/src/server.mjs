@@ -926,6 +926,18 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       slug,
       deduped: out.deduped,
       bytes: out.bytes,
+      // WHAT WE ACTUALLY STORED, so the publisher can check it against what it sent without
+      // downloading the page back. `deduped` says "these bytes were already here" and `bytes` says
+      // how many — neither says WHICH, so a host that stored the wrong blob reports success in a
+      // shape nothing can contradict. The content hash is the one field that can be wrong, and a
+      // publisher holding the same bytes can tell.
+      hash: out.hash,
+      // A LIVE DEV SERVER SHADOWS `latest`, and the publisher cannot see that from here. The member
+      // route proxies a registered dev server ahead of the store, on purpose — so a publish made
+      // while `lagoon dev` is running hands back a `latest` URL that serves VITE, not the build just
+      // published. It looks exactly like a publish that did not land. Say so; the immutable URL is
+      // never shadowed and is the one to trust in that moment.
+      live: !!live.endpointFor(repo, slug),
       ...(absolute.length ? { warnings: [`references ${absolute.length} absolute path(s) that will 404 when hosted: ${absolute.join(', ')}`] } : {}),
       urls: {
         latest: `/${repo}/latest/${slug}`,

@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 
 /**
@@ -113,5 +114,24 @@ export async function uploadLagoon({ url, token, repo, slug, title, sha, branch,
     const detail = payload?.error ?? text.slice(0, 200).replace(/\s+/g, ' ').trim();
     throw new Error(`host refused the upload (${res.status}): ${detail || 'no detail'}`);
   }
-  return { ...payload, base, sentBytes: gz.length };
+
+  // DID IT STORE WHAT WE SENT? A 200 with a URL in it is not an answer to that question, and for a
+  // while it was the only one we had: the CLI printed the host's URLs as fact and never checked one.
+  // When a publish then looked wrong, there was nothing to distinguish "the host mis-stored it" from
+  // "you are looking at the wrong thing" — which cost an afternoon of diagnosing a host bug that did
+  // not exist.
+  //
+  // Hashing costs nothing over the wire, which is why it is the check rather than fetching the page
+  // back: both sides hold the bytes, so both can name them. A host that returns no hash is older than
+  // this and is simply unverified — say that, never silently pass.
+  const sentHash = createHash('sha256').update(body, 'utf8').digest('hex');
+  const verified = payload?.hash ? payload.hash === sentHash : null;
+  if (verified === false) {
+    throw new Error(
+      `host stored different bytes than were sent (sent ${sentHash.slice(0, 12)}, host has ${String(payload.hash).slice(0, 12)}) — ` +
+      `the URLs it returned would show someone else's build`,
+    );
+  }
+
+  return { ...payload, base, sentBytes: gz.length, verified };
 }

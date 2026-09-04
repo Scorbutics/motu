@@ -293,7 +293,7 @@ async function uploadPublished({ remote, token: flagToken, page, slug, title, ou
   const latest = `${res.base}${res.urls.latest}`;
   const immutable = `${res.base}${res.urls.immutable}`;
   if (json) {
-    console.log(JSON.stringify({ ok: true, file: out, bytes, repo: id.repo, slug, deduped: !!res.deduped, urls: { latest, immutable, ...(res.urls.branch ? { branch: `${res.base}${res.urls.branch}` } : {}) } }, null, 2));
+    console.log(JSON.stringify({ ok: true, file: out, bytes, repo: id.repo, slug, deduped: !!res.deduped, verified: res.verified, live: !!res.live, urls: { latest, immutable, ...(res.urls.branch ? { branch: `${res.base}${res.urls.branch}` } : {}) } }, null, 2));
     return 0;
   }
   console.log('');
@@ -301,6 +301,15 @@ async function uploadPublished({ remote, token: flagToken, page, slug, title, ou
     color.dim(` (${(res.sentBytes / 1024).toFixed(0)} kB gzipped)${res.deduped ? ' · unchanged, deduped' : ''}`));
   console.log(`  ${latest}   ${color.dim('(the bookmark — always current)')}`);
   console.log(`  ${immutable}   ${color.dim('(this build, forever)')}`);
+  // A LIVE DEV SERVER IS SERVING THAT FIRST URL, not this build. The host proxies a registered
+  // `lagoon dev` ahead of the store for `latest` — deliberately — so publishing mid-session hands
+  // back a bookmark that shows vite. Indistinguishable from a publish that never landed, until you
+  // stop the dev server. The immutable URL is never shadowed, so point at it.
+  if (res.live)
+    console.log(color.yellow('  a live dev server is registered for this slug — it is what the `latest` URL serves right now.\n') +
+      color.yellow('  stop it (`motu lagoon dev --stop`) to see THIS build there, or use the immutable URL above.'));
+  if (res.verified === null)
+    console.log(color.yellow('  host returned no content hash — it is older than this check, so nothing confirms it stored what was sent'));
   if (id.dirty) console.log(color.yellow('  working tree is dirty — the immutable URL is keyed by content, not by HEAD'));
   // The host sees what only a host can: paths that resolve against the ORIGIN. They work in
   // `lagoon dev` (vite serves them) and 404 once published, so this is the first place they surface.

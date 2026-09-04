@@ -482,7 +482,13 @@ function checkRegion(region, sources) {
   // whoever reads it, and no other check can see it: the archipelago declares the key, the island
   // binds it, the lagoon SEEDS it (that is what a preview does), and the host quietly feeds nothing.
   const produced = new Set(liveIslands.flatMap((i) => Object.values(i.writes ?? {}).map((t) => (typeof t === 'string' ? t : Object.values(t)).toString())).flat());
-  const seeded = seededKeys(sources, binding, code);
+  // SEEDING HAS TWO SHAPES, and this used to know only one. `seededKeys` reads the CALL forms
+  // (`X.seed(k, v)` / `X.seed({ k })`); a page can equally hand the seed to `createRegion` as an
+  // option, which is what the scaffolding writes and what the docs show. `flow-shape`, twenty lines
+  // below, already took the union for exactly that reason — and this check did not, so a page that
+  // seeded the option form was told its keys were "never established" while its neighbour counted
+  // them in the same run. Two readers of one fact, disagreeing out loud.
+  const seeded = new Set([...seededKeys(sources, binding, code), ...createRegionSeedKeys(bindingFile, constName)]);
   // THREE acts establish a host-fed key, not two: seed, a passed prop, and `provide()`. The docstring
   // above named two and the check believed it, so a key the page provides on mount was reported as
   // never established — advice to go and do what the page already does.
@@ -527,8 +533,8 @@ function checkRegion(region, sources) {
   // putting it HERE: that finding cost a beacon, a corpus and a comparison to learn, and it is two
   // literal object key-lists in source. No browser, no traffic, no production.
   const flowSeeded = flowSeedKeys(region.id);
-  // BOTH WAYS A PAGE CAN SEED: the call forms `seededKeys` knows, and the `createRegion` option.
-  const pageSeeded = new Set([...seeded, ...createRegionSeedKeys(bindingFile, constName)]);
+  // `seeded` is already both shapes (see the note where it is built).
+  const pageSeeded = seeded;
   if (flowSeeded === null) {
     add('skip', 'flow-shape', 'no readable flows — nothing to compare the page\'s seed against');
   } else if (!pageSeeded.size) {

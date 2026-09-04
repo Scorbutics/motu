@@ -52,6 +52,7 @@ import {
   hostFedKeys,
   openIslandWindow,
   closeIslandWindow,
+  type IslandSpec
 } from '@motu/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap';
 
@@ -60,6 +61,16 @@ interface ArchipelagoValue {
   store: Store;
   host: HostBridge | undefined;
   byTag: Map<string, ReactElementSpec>;
+  /**
+   * Tags registered by `define` rather than as a React component — an AngularJS island, or anything
+   * else a non-React adapter registers.
+   *
+   * `byTag` filters on `'component' in e`, so those tags were absent from it and `<X.Island>` warned
+   * "not in the element registry" for an island that WAS registered. A React page could therefore
+   * never place a declared slot held by a non-React island, which makes a mixed region unplaceable
+   * and `integrate check` unsatisfiable — the region declares a slot the host is unable to fill.
+   */
+  customTags: Set<string>;
   /**
    * What the islands want published this commit, flushed by the provider as ONE write.
    *
@@ -171,6 +182,7 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
       byTag: new Map(
         elements.filter((e): e is ReactElementSpec => 'component' in e).map((e) => [e.tag, e]),
       ),
+      customTags: new Set(elements.filter((e) => !('component' in e)).map((e) => e.tag)),
       pending: new Map<string, { value: unknown; source: string }>(),
       schedule: () => {},
       flush: () => {},
@@ -430,6 +442,12 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
     return null;
   }
   if (!elementSpec) {
+    // A NON-REACT ISLAND IS STILL AN ISLAND. Everything below assumes a React component taking props
+    // and callbacks; an adapter-registered element takes PROPERTIES and emits DOM EVENTS. It is the
+    // same island either way, so the slot renders — through the custom element it registered.
+    if (ctx.customTags.has(spec.element)) {
+      return createElement(CustomElementIsland, { slot, spec, ctx, fit, className, extra });
+    }
     console.warn(`motu: slot "${slot}" wants <${spec.element}>, which is not in the element registry`);
     return null;
   }
@@ -504,6 +522,82 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
     DEBUG ? createElement(IslandWindow, { key: 'motu-window-open', tag: spec.element }) : null,
     hosted ? cloneElement(hosted, resolved) : createElement(Component as never, resolved),
     DEBUG ? createElement(IslandWindow, { key: 'motu-window-close' }) : null,
+  );
+}
+
+/**
+ * A slot held by an island registered through an ADAPTER rather than as a React component.
+ *
+ * It is wired from the ARCHIPELAGO ALONE — `bind` in, `on` out — and reads nothing off the element.
+ * That is deliberate rather than a shortcut: a `define`-only spec keeps its contract inside the
+ * closure it hands the adapter, so there is no `declaredInputs` to consult here, and the declaration
+ * is the only thing both sides already agree on.
+ *
+ * Props are set as PROPERTIES, not attributes: a bound value is an object (`criteria`, a field
+ * schema), and an attribute would stringify it to "[object Object]".
+ */
+function CustomElementIsland({
+  slot,
+  spec,
+  ctx,
+  fit,
+  className,
+  extra,
+}: {
+  slot: string;
+  spec: IslandSpec;
+  ctx: ArchipelagoValue;
+  fit?: string;
+  className?: string;
+  extra?: Record<string, unknown>;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+  useSyncExternalStore(
+    (cb) => ctx.store.subscribe(cb),
+    () => ctx.store.getRevision(),
+    () => ctx.store.getRevision(),
+  );
+
+  // Outputs, attached once. Each declared event name routes through `applyOutput`, the same path the
+  // custom-element host uses — so an island's declared `writes` behave identically in both.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const listeners = Object.keys((spec.on ?? {}) as Record<string, unknown>).map((eventName) => {
+      const fn = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        runWithWriteSource(slot, () => applyOutput(spec, eventName, detail, { store: ctx.store, host: ctx.host! }));
+      };
+      el.addEventListener(eventName, fn);
+      return [eventName, fn] as const;
+    });
+    return () => listeners.forEach(([name, fn]) => el.removeEventListener(name, fn));
+  }, [slot, spec, ctx.store, ctx.host]);
+
+  // Inputs, re-applied on every store revision — the same coarse re-apply the React path does.
+  useEffect(() => {
+    const el = ref.current as (HTMLElement & Record<string, unknown>) | null;
+    if (!el) return;
+    const props: Record<string, unknown> = { ...(spec.props ?? {}) };
+    for (const [prop, key] of bindEntries(spec)) {
+      if (!key) continue;
+      const value = ctx.store.get(key);
+      if (value !== undefined) props[prop] = value;
+    }
+    if (fit) props.fit = fit;
+    Object.assign(props, extra ?? {});
+    for (const [k, v] of Object.entries(props)) el[k] = v;
+  });
+
+  return createElement(
+    'div',
+    {
+      className,
+      'data-motu-island': spec.element,
+      'data-motu-slot': slot,
+      style: className ? undefined : { display: 'contents' },
+    },
+    createElement(spec.element, { ref }),
   );
 }
 

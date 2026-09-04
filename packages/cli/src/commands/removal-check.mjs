@@ -59,7 +59,14 @@ function importGraph(hostRoot, motuRoot, cfg) {
     //
     // Guarded on the two being different so the repo-root project, whose hostRoot IS the checkout,
     // does not start treating motu's own packages as the host.
-    if (full.startsWith(motuRoot) && (hostRoot === motuRoot || !full.startsWith(hostRoot))) continue;
+    //
+    // AND AN EXPLICIT ANSWER IS NOT A GUESS. When `hostSources` named the directories, this skip was
+    // still discarding them: for a host that lives INSIDE the checkout `hostRoot === motuRoot`, so
+    // every file matched and the walk returned nothing — over a project whose config said, in as many
+    // words, where its application is. That is `hostSources` shipping as a no-op for the second time,
+    // and the failure it produces is the worst one here: "examined no files" is reported as a FAILING
+    // load-bearing check, so the fix looks like a bug in the host.
+    if (resolved.origin !== 'config' && full.startsWith(motuRoot) && (hostRoot === motuRoot || !full.startsWith(hostRoot))) continue;
     let text;
     try {
       text = readFileSync(full, 'utf8');

@@ -59,7 +59,33 @@ function collect() {
     }
   }
   const traced = new Set(lens.calls.map((c) => `${c.service}.${c.method}`)).size;
-  return { islands, writes, verdicts, calls: lens.calls.length, traced };
+
+  // WHAT THE REGION PROMISED ITS DATA WOULD COME FROM, against what a channel actually produced.
+  // Both halves are already in this document — the archipelago config carries `sources`, the channel
+  // registry carries the keys each installed channel has written — so this needs no CLI and no
+  // report file: the page can answer it about itself, live, which is the only place a person is
+  // looking when it matters.
+  const stores = new Set(lens.activeStores());
+  const channelKeys = new Set<string>();
+  for (const channel of getChannels()) {
+    if (stores.size && !stores.has(channel.store)) continue;
+    for (const key of channel.keys) channelKeys.add(key);
+  }
+  const sources = new Map<string, string[]>();
+  for (const config of archipelagoConfigs()) {
+    // Only the region on screen. `regionIdOfStore` is how everything else here scopes itself.
+    const mine = [...stores].some((store) => regionIdOfStore(store) === config.id);
+    if (stores.size && !mine) continue;
+    for (const [name, src] of Object.entries(config.sources ?? {})) {
+      // Both declared forms expose `produces` at RUNTIME — the imported source object carries its
+      // own, and the `{ module, produces }` form states it inline. The CLI has to regex the file for
+      // this; here it is just a property.
+      const produces = (src as { produces?: readonly string[] })?.produces ?? [];
+      sources.set(name, [...produces]);
+    }
+  }
+
+  return { islands, writes, verdicts, calls: lens.calls.length, traced, sources, channelKeys };
 }
 
 /**

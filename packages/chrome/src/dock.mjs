@@ -792,6 +792,31 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 #tide .scope__x:hover { background: rgba(255,255,255,.38); }
 #tide .scope__x:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
 
+/* The decision count on the Seams tab — OUTSIDE the phone media query, which is where it first
+   landed and where it silently did nothing on a desktop viewport. Sized to two digits and no wider:
+   a badge that grows changes the tab's width, which moves the segmented thumb under the cursor. */
+#tide .tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25em;
+  height: 1.25em;
+  margin-left: 0.4em;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* The display rule above beats the bare hidden attribute, so say it explicitly — otherwise a region
+   with nothing to decide shows an empty pill, which reads as a badge whose number failed to load.
+   (No backticks in this string: it is a JS template literal, and one would end it. There is a test
+   named for that hazard in @motu/host, which is how well known it is.) */
+#tide .tab-badge[hidden] { display: none; }
+
 @media (max-width: 760px) {
   #tide {
     top: auto;
@@ -1072,7 +1097,12 @@ function motuMountDock(opts) {
   var tabs = el('div', { class: 'motu-segmented tabs', role: 'tablist' });
   var tabThumb = el('span', { class: 'motu-segmented__thumb' });
   var statesTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'true' }, ['States']);
-  var seamsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Seams']);
+  // THE COUNT BELONGS ON THE TAB, not only inside it. The findings were the last section of the
+  // second tab, so a region could be reporting something a person had to answer while every visible
+  // surface said nothing — you had to already suspect it to go and look. This is the one number that
+  // makes the tab worth opening, so it lives where the tab is.
+  var seamsBadge = el('span', { class: 'tab-badge', hidden: 'hidden' });
+  var seamsTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Seams', seamsBadge]);
   // ISLANDS IS A DIFFERENT QUESTION, which is why it is a tab and not more rows under Seams. Seams
   // asks how the region is WIRED; this asks what each island was actually given. The same key answers
   // both from opposite ends — Seams says who reads `shots`, this says whether shot-list got it.
@@ -1165,6 +1195,27 @@ function motuMountDock(opts) {
       var live = control();
       if (live) fn(live);
     };
+  };
+
+  /**
+   * The decision count, refreshed whatever tab is showing.
+   *
+   * DECISIONS ONLY. A badge that counted every finding would sit permanently at "3" on a healthy
+   * region — an optimisation note is not news — and a number that is always on is a number nobody
+   * reads. This one is absent until something is actually waiting on a person.
+   */
+  var paintSeamsBadge = function () {
+    var ctl = control();
+    var report = ctl && ctl.findings ? ctl.findings() : null;
+    var n = report && report.tally ? report.tally.decisions : 0;
+    if (n > 0) {
+      seamsBadge.textContent = String(n);
+      seamsBadge.removeAttribute('hidden');
+      seamsTab.setAttribute('title', n + (n === 1 ? ' finding needs' : ' findings need') + ' a decision');
+    } else {
+      seamsBadge.setAttribute('hidden', 'hidden');
+      seamsTab.removeAttribute('title');
+    }
   };
 
   var showTab = function (which) {
@@ -1311,6 +1362,8 @@ function motuMountDock(opts) {
   var paint = function () {
     var cat = catalogue();
     var ctl = control();
+    // Whatever tab is up. The badge's whole job is to be right on the tab a person is NOT looking at.
+    paintSeamsBadge();
     if (!cat || !ctl) {
       // The lagoon has not booted yet, or this build predates the control surface. Say so rather than
       // drawing an empty panel that looks like a region with nothing in it.
@@ -1619,18 +1672,43 @@ function motuMountDock(opts) {
           el('span', { class: 'seam-count', 'data-tone': 'warn' }, [el('i'), t.warn + ' warning' + (t.warn === 1 ? '' : 's')]),
           el('span', { class: 'seam-count', 'data-tone': 'ok' }, [el('i'), report.islands + ' mounted']),
         ]);
-        var head = el('div', { class: 'sect__head' }, [
-          el('span', { class: 'motu-cap' }, ['Findings']),
-          el('span', { class: 'count' }, [t.decisions ? report.findings.length + ' \u00b7 ' + t.decisions + ' needs a decision' : String(report.findings.length)]),
-        ]);
-        var cards = report.findings.map(function (f) {
+        // TWO LISTS, NOT ONE, and the split is `decision` rather than tone.
+        //
+        // One list sorted by loudness put "4 keys could be props" — an optimisation — at the top of a
+        // region that was not wired at all, because both are warnings. Worse, it made the section
+        // header read "Findings 1" for a region whose one finding nobody had to act on, which is the
+        // same as saying nothing. What a person needs first is the things that are theirs to answer;
+        // everything else is worth keeping and worth keeping quiet.
+        var card = function (f) {
           return el('div', { class: 'seam-find', 'data-tone': f.tone }, [
             el('span', { class: 'seam-find__t' }, [el('i'), f.title]),
             el('span', { class: 'seam-find__d' }, [f.detail]),
           ]);
-        });
-        if (!cards.length) cards = [el('p', { class: 'motu-empty' }, ['Nothing to report about this region.'])];
-        seams.replaceChildren.apply(seams, sheetNodes.concat([tally, head]).concat(cards));
+        };
+        var decisions = report.findings.filter(function (f) { return f.decision; });
+        var noted = report.findings.filter(function (f) { return !f.decision; });
+        var blocks = [];
+        if (decisions.length) {
+          blocks.push(el('div', { class: 'sect__head' }, [
+            el('span', { class: 'motu-cap' }, ['Needs a decision']),
+            el('span', { class: 'count' }, [String(decisions.length)]),
+          ]));
+          blocks = blocks.concat(decisions.map(card));
+        }
+        if (noted.length) {
+          blocks.push(el('div', { class: 'sect__head' }, [
+            el('span', { class: 'motu-cap' }, [decisions.length ? 'Also noted' : 'Noted']),
+            el('span', { class: 'count' }, [String(noted.length)]),
+          ]));
+          blocks = blocks.concat(noted.map(card));
+        }
+        if (!blocks.length) {
+          blocks = [
+            el('div', { class: 'sect__head' }, [el('span', { class: 'motu-cap' }, ['Findings'])]),
+            el('p', { class: 'motu-empty' }, ['Nothing to report about this region.']),
+          ];
+        }
+        seams.replaceChildren.apply(seams, sheetNodes.concat([tally]).concat(blocks));
       }
     }
 

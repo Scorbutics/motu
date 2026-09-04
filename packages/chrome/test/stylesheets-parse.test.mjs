@@ -169,3 +169,28 @@ test('the dock asks for no safe-area inset', async () => {
   const withoutComments = motuDockCss().replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(!withoutComments.includes('env('), 'an env() inset is back in the dock stylesheet');
 });
+
+// THE DOCK'S SHEET, for the same reason and one file later. `dock.mjs` holds `DOCK_CSS` in exactly
+// the same kind of template literal, and it was NOT covered here — so when a comment inside it was
+// written with backticks around a property name, the string ended mid-rule and the whole lagoon died
+// with "SyntaxError: Unexpected identifier 'display'", pointing at a line that was fine. That is the
+// fifth round of the mistake this file's header counts, in the one stylesheet it did not guard.
+test('the dock sheet parses and carries the shapes its callers name', async () => {
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  for (const shape of ['#tide', '.motu-segmented', '.seam-find', '.tab-badge', '.rail-chip']) {
+    assert.ok(css.includes(shape), `${shape} is missing from the dock sheet`);
+  }
+});
+
+test('no rule in the dock sheet is stranded inside a phone media query by accident', async () => {
+  const { motuDockCss } = await import('../src/dock.mjs');
+  const css = motuDockCss();
+  // The badge belongs to the tab strip, which exists at every width. It was first written inside
+  // `@media (max-width: 760px)` — beside the phone rail it happened to be pasted next to — where it
+  // parsed, shipped, and did nothing on a desktop. Assert it is declared BEFORE that block opens.
+  const badge = css.indexOf('.tab-badge {');
+  const phone = css.indexOf('@media (max-width: 760px)');
+  assert.ok(badge > -1 && phone > -1, 'expected both the badge rule and the phone media query');
+  assert.ok(badge < phone, 'the tab badge must not be phone-only — it styles a control shown at every width');
+});

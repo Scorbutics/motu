@@ -133,3 +133,59 @@ test('inside a lagoon the same two facts are notes, not faults', async () => {
   assert.equal(defaults.decision, false);
   assert.match(defaults.detail, /scenario/);
 });
+
+// ── a declared source that nothing installs ──────────────────────────────────────────────────
+//
+// The finding this list was missing. A region can seed its keys, render perfectly, and be inert
+// because no channel was installed — every other signal looks healthy, which is why it needed a
+// finding of its own rather than a grey "No channels installed." under a table.
+
+test('a declared source with no channel is reported, and names its keys', () => {
+  const out = findingsOf({
+    ...base,
+    sources: new Map([['teams', ['timelineEntries', 'invitations']]]),
+    channelKeys: new Set(),
+  });
+  const f = find(out, 'source:teams');
+  assert.ok(f, 'expected a finding for the uninstalled source');
+  assert.match(f.title, /teams/);
+  assert.match(f.detail, /timelineEntries/);
+  assert.match(f.detail, /invitations/);
+  // BOTH WAYS OUT, like every other finding here: install it, or accept the fixed preview.
+  assert.match(f.detail, /channelFrom/);
+  assert.match(f.detail, /accept/);
+  assert.equal(f.decision, true);
+});
+
+test('a source a channel actually produced is not reported', () => {
+  const out = findingsOf({
+    ...base,
+    sources: new Map([['teams', ['timelineEntries', 'invitations']]]),
+    channelKeys: new Set(['timelineEntries']),
+  });
+  assert.equal(find(out, 'source:teams'), undefined);
+});
+
+test('a region declaring no sources says nothing about sources', () => {
+  assert.equal(findingsOf(base).some((f) => f.id.startsWith('source:')), false);
+});
+
+// ── decisions outrank observations ───────────────────────────────────────────────────────────
+//
+// The ordering bug behind all of this: "4 keys could be props" is an optimisation and was sorting
+// above a region that is not wired at all, because both are `warn`. Tone is loudness; `decision` is
+// whether it is yours to answer, and that is what a reader needs first.
+
+test('a decision sorts above a louder observation', () => {
+  const out = findingsOf({
+    ...base,
+    islands: [island('a', { x: 'shared' }), island('b', { y: 'alsoShared' })],
+    sources: new Map([['teams', ['timelineEntries']]]),
+    channelKeys: new Set(),
+  });
+  const decision = out.findIndex((f) => f.decision);
+  const observation = out.findIndex((f) => !f.decision);
+  assert.ok(decision >= 0, 'expected at least one decision');
+  assert.ok(observation >= 0, 'expected at least one observation to sort against');
+  assert.ok(decision < observation, `decision at ${decision} should precede observation at ${observation}`);
+});

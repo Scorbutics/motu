@@ -44,6 +44,13 @@ export interface Finding {
 
 export interface FindingsInput {
   islands: MountedIslandInfo[];
+  /**
+   * What the region DECLARED it gets from a source: source name -> the keys it promises.
+   * Empty when the archipelago declares none.
+   */
+  sources?: Map<string, string[]>;
+  /** Keys an installed channel has actually written — the runtime half of the promise above. */
+  channelKeys?: Set<string>;
   /** key -> who has been seen writing it ('host' and 'channel' are the ocean, not islands). */
   writes: Map<string, Set<string>>;
   /** How many host calls the islands actually made. */
@@ -125,6 +132,37 @@ export function findingsOf(input: FindingsInput): Finding[] {
     });
   }
 
+  // ── a declared source nobody installed ─────────────────────────────────────────────────────
+  //
+  // THE FINDING THIS LIST WAS MISSING, and the one that cost a session. A region can declare
+  // `sources: { teams: … }`, seed those keys, render perfectly, and be completely inert: the islands
+  // emit, the intent leaves, and nothing answers it because no channel was ever installed. Every
+  // other signal looks healthy — the page paints, the islands mount, the store holds values — so the
+  // only way to notice was to act on the page and watch nothing happen.
+  //
+  // It is a DECISION, not an observation. Seeding is a legitimate answer ("this region previews
+  // static data on purpose"), so it cannot be a defect; but somebody has to make that call, because
+  // the alternative reading is "half the migration is missing" and the region cannot tell you which.
+  for (const [name, produces] of input.sources ?? []) {
+    const written = input.channelKeys ?? new Set<string>();
+    const live = produces.filter((k) => written.has(k));
+    if (live.length) continue;
+    out.push({
+      id: `source:${name}`,
+      title: `${name} is declared but never installed`,
+      detail:
+        (produces.length
+          ? `${produces.join(', ')} — held by the seed, produced by nothing. `
+          : 'It produces no key here. ') +
+        'Islands can still ask this source for something and no channel is listening, so the region ' +
+        `looks wired and does not react. Install it with \`channelFrom({ to, id: '${name}', args: [...] })\` ` +
+        'and drop those keys from the seed, or accept that this region previews a fixed state.',
+      tone: 'warn',
+      seam: 'sheet',
+      decision: true,
+    });
+  }
+
   // ── nothing fetched ────────────────────────────────────────────────────────────────────────
   //
   // THE FINDING THAT MOST NEEDS ITS CONTEXT. Outside a lagoon, islands that render while calling
@@ -158,9 +196,14 @@ export function findingsOf(input: FindingsInput): Finding[] {
     });
   }
 
-  // Loudest first, and stable within a tone so the list does not reshuffle under the cursor.
+  // DECISIONS FIRST, then loudest, and stable within both so the list does not reshuffle under the
+  // cursor. Sorting by tone alone put "4 keys could be props" — an optimisation nobody has to act on —
+  // above a region that is not wired at all, because both are `warn`. Tone says how loud a finding is;
+  // `decision` says whether it is yours to answer, and that is the axis a reader needs first.
   const rank: Record<Verdict, number> = { broken: 0, warn: 1, neutral: 2, ok: 3 };
-  return out.sort((a, b) => rank[a.tone] - rank[b.tone]);
+  return out.sort(
+    (a, b) => Number(b.decision) - Number(a.decision) || rank[a.tone] - rank[b.tone],
+  );
 }
 
 /** The tally the panel shows above the list. Counts, not a verdict. */

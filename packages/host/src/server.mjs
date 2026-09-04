@@ -795,7 +795,18 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
             sha: rec.sha ?? null,
             live: liveUrl ?? null,
             brand: members.find((m) => m.repo === repo)?.brand ?? null,
-            frameHref: `${here}/__motu_frame`,
+            // THE STATE THE URL NAMES, CARRIED INTO THE FRAME. `?target=…&scenario=…` is addressed by
+            // the artifact, which only ever sees the frame's own URL — so a shell that built this
+            // href bare threw the name away before anything could read it, and
+            // `motu lagoon states --base <hosted url>` printed addresses that all served the DEFAULT
+            // state. Not the refusal the artifact engineers against (`__motuLagoonState.ok: false`,
+            // banner, console error): the frame was never told a name, so it had nothing to refuse,
+            // and the reader gets a plausible screen while believing it is the one they asked for.
+            //
+            // SELF ONLY. Every other member of the rail is a DIFFERENT lagoon, where this lagoon's
+            // scenario name means nothing — appending it there would turn one wrong page into a
+            // railful of them.
+            frameHref: `${here}/__motu_frame${url.search}`,
           };
           const rest = members.filter((m) => !(m.repo === repo && m.slug === slug));
           const all = [self, ...rest];

@@ -17,6 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, dirname, resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
 import { sourceFileAt } from '../lib/ts-project.mjs';
+import { declaredSourcesOf } from '../lib/declared-sources.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { reachableAppSources } from '../lib/bundlability.mjs';
@@ -3396,24 +3397,22 @@ function factoryBody(text, id) {
   return factory === -1 ? null : spec.slice(factory);
 }
 
-/** `sources` as data, straight from the archipelago file. */
+/**
+ * `sources` as data, straight from the archipelago file.
+ *
+ * PARSED, NOT MATCHED, and shared with `integrate check` — which had its own regex over the same
+ * declaration, handling only the `{ module, produces }` form. Two readers of one shape drift, and
+ * this pair had: moving a region to the by-reference form turned off the integration check that says
+ * the page installs the source, silently. What is left here is the part that is this command's own:
+ * where a by-reference source's `reaches` comes from.
+ */
 function declaredSources(id) {
-  const text = stripComments(readFileSync(paths.archipelagoFile(id), 'utf8'));
-  const block = text.match(/sources:\s*\{([\s\S]*?)\n  \},/)?.[1];
-  if (!block) return {};
+  const file = paths.archipelagoFile(id);
   const out = {};
-  // A source the region REFERENCES: `week: weekSource`. Its module is the import that brought the
-  // identifier in — the same fact, read from the one place it is written.
-  for (const [, name, ref] of block.matchAll(/(\w+):\s*(\w+),/g)) {
-    const module = text.match(new RegExp(`import\\s*\\{[^}]*\\b${ref}\\b[^}]*\\}\\s*from\\s*'([^']+)'`))?.[1];
-    if (module) out[name] = { module, produces: [], byReference: true, reaches: reachesOfSourceModule(module, paths.archipelagoFile(id)) };
-  }
-  // A source declared by module NAME: no channel installs it, the page fetches it itself.
-  for (const m of block.matchAll(/(\w+):\s*\{([\s\S]*?)\}/g)) {
-    const module = m[2].match(/module:\s*'([^']+)'/)?.[1];
-    const produces = [...(m[2].match(/produces:\s*\[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]);
-    const reaches = readEffectEntries(m[2].match(/reaches:\s*\[([\s\S]*?)\]/)?.[1] ?? '');
-    if (module) out[m[1]] = { module, produces, reaches };
+  for (const [name, src] of Object.entries(declaredSourcesOf(file))) {
+    out[name] = src.byReference
+      ? { ...src, reaches: reachesOfSourceModule(src.module, file) }
+      : { ...src, reaches: readEffectEntries(src.reachesText ?? '') };
   }
   return out;
 }

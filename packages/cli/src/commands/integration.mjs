@@ -17,6 +17,7 @@ import { sep } from 'node:path';
 import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } from '../lib/util.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
+import { declaredSourcesOf } from '../lib/declared-sources.mjs';
 import { slotNameOfElement } from '../lib/island-placement.mjs';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
@@ -269,8 +270,12 @@ function checkRegion(region, sources) {
   // motu check — measured, including `archipelago snapshot`, because the snapshot pictures the REGION
   // through the lagoon's frame and never the page.
   //
-  // ts-morph is already how every other host-source question here is answered; this was the last
-  // regex standing in the middle of it.
+  // ts-morph is how every HOST-SOURCE question here is answered. This was the last regex standing in
+  // the middle of THAT — a claim that was read as "the last regex", which it never was: the
+  // ARCHIPELAGO side was still matched, in this file and in `verify.mjs`, and the two had drifted
+  // (see `lib/declared-sources.mjs`). `sources` is now parsed and shared. `slots` is not, in either
+  // file, and its comments already carry two bugs paid for in the usual currency — a lazy pattern
+  // swallowing the entries below it, and a terminator that depends on two spaces of indent.
   const placed = new Map();
   const order = [];
   for (const [file, text] of sources) {
@@ -678,25 +683,28 @@ function checkRegion(region, sources) {
   // 3b — does the PAGE install the declared source? The region names one module per host-fed group
   //      precisely so both consumers use it; a page that fetches those keys its own way is the other
   //      half of the drift the lagoon side already refuses.
-  const sourcesBlock = readFileSync(region.file, 'utf8').match(/sources:\s*\{([\s\S]*?)\n  \},/)?.[1];
-  if (sourcesBlock) {
+  // PARSED, NOT MATCHED, and by the reader `verify` uses. The regex here matched only
+  // `{ module, produces }` — so a region declaring `teams: teamsSource`, the STRONGER form the type
+  // system checks, skipped this check entirely and nothing said so. Two readers of one declaration is
+  // how the better shape ends up with less checking than the weaker one.
+  const declaredSrc = declaredSourcesOf(region.file);
+  {
     const users = [...sources].filter(([, t]) => code(t).includes(`${binding}.`));
 
-    for (const m of sourcesBlock.matchAll(/(\w+):\s*\{([\s\S]*?)\}/g)) {
-      const module = m[2].match(/module:\s*'([^']+)'/)?.[1];
-      if (!module) continue;
+    for (const [name, src] of Object.entries(declaredSrc)) {
+      const module = src.module;
       // Resolved, not compared as text: the page says `./directory-source`, the region says
       // `@/app/dashboard/directory/directory-source`, and they are the same file.
       const target = resolveAppImport(region.file, module);
       const installed = users.some(([f, t]) =>
         [...code(t).matchAll(/from\s*['"]([^'"]+)['"]/g)].some((i) => resolveAppImport(f, i[1]) === target),
       );
-      if (installed) add('ok', 'source', `source "${m[1]}" installed from ${module}`);
+      if (installed) add('ok', 'source', `source "${name}" installed from ${module}`);
       else
         add(
           'error',
           'source',
-          `no host file that uses ${binding} imports ${module} — the region declares source "${m[1]}" ` +
+          `no host file that uses ${binding} imports ${module} — the region declares source "${name}" ` +
             `produces its keys, so the page must install it rather than feed them another way`,
         );
     }

@@ -210,6 +210,78 @@ function recordReach(kind: 'table' | 'rpc' | 'function' | 'route', name: string,
   if (method && !methods.includes(method)) methods.push(method);
 }
 
+/**
+ * THE CALLS THEMSELVES — what was asked, with what, and what came back.
+ *
+ * `DataReach` above is a SET of names: it answers "did this screen touch `team_schedules`", which is
+ * the question a DECLARATION asks. It cannot answer "did my save actually send the new hour", and
+ * that is the question a person asks when a screen appears to do nothing.
+ *
+ * WHY THIS HAS TO EXIST HERE. Intercepting `fetch` is the point of the lagoon, and the side effect is
+ * that the browser's own Network panel shows NOTHING: no request is made, so no tool that watches the
+ * network can see the app's traffic. motu removed the standard instrument, so motu owes the
+ * replacement — the same argument `traced()`/`provenance` already makes one layer up, for host
+ * modules ("the lagoon shows the result and never the question").
+ *
+ * IT PROVES THE CLIENT HALF ONLY, and the panel that renders it should say so. A request leaving with
+ * the right payload cannot tell you the refetch happened, that the response was merged, or that the
+ * screen re-rendered. It is the diagnosis for "nothing happened" — the write fired and the read did
+ * not change — not evidence that a feature works.
+ */
+export interface WireCall {
+  /** Monotonic, so a UI can order and de-duplicate without trusting the clock. */
+  seq: number;
+  at: number;
+  /** The declaration's own spelling: `rpc:set_session_agenda`, `table:teams(select)`, `fn:x`. */
+  target: string;
+  /** The HTTP verb, for the table calls where it is the difference between a read and a write. */
+  method: string;
+  /** `island:<tag>`, `source:<id>` or `unattributed` — the same attribution `data-reach` uses. */
+  by: string;
+  /** What was sent: an RPC's arguments, a write's row, a read's query string. Truncated. */
+  request?: unknown;
+  status?: number;
+  /** A SUMMARY, never the body: a row count, or the error. Bodies are unbounded and mostly noise. */
+  response?: string;
+}
+
+const callsKey = '__motuWireCalls';
+/**
+ * A ring, because a lagoon left open re-fetches forever and an unbounded log is a leak. 200 is far
+ * more than any one interaction produces (the largest here was 22) and small enough to render.
+ */
+const MAX_CALLS = 200;
+let callSeq = 0;
+
+/** Bounded, and never the whole body — a payload can be an entire regenerated series. */
+function summarise(value: unknown, max = 2000): unknown {
+  if (value === undefined || value === null) return value;
+  try {
+    const json = JSON.stringify(value);
+    if (json === undefined) return String(value);
+    return json.length <= max ? JSON.parse(json) : `${json.slice(0, max)}… (${json.length} chars)`;
+  } catch {
+    return String(value);
+  }
+}
+
+function recordCall(call: Omit<WireCall, 'seq' | 'at'>): void {
+  const g = globalThis as unknown as Record<string, WireCall[] | undefined>;
+  const calls = (g[callsKey] ??= []);
+  calls.push({ ...call, seq: ++callSeq, at: Date.now() });
+  if (calls.length > MAX_CALLS) calls.splice(0, calls.length - MAX_CALLS);
+}
+
+/** Every intercepted call, oldest first. Does NOT clear: a panel polls it, and a flow may read it twice. */
+export function readWireCalls(): WireCall[] {
+  const g = globalThis as unknown as Record<string, WireCall[] | undefined>;
+  return [...(g[callsKey] ?? [])];
+}
+
+export function clearWireCalls(): void {
+  (globalThis as unknown as Record<string, WireCall[] | undefined>)[callsKey] = [];
+}
+
 export function readDataReach(clear = true): DataReach {
   const g = globalThis as unknown as Record<string, DataReach | undefined>;
   const found = g[reachKey] ?? { tables: {}, rpcs: [], functions: [], routes: [], by: {} };
@@ -410,6 +482,53 @@ function postgrestError(status: number, message: string): Response {
  * app's own error handling runs for real against it, same as it would against an actual gap in a real
  * backend, rather than the harness hanging or throwing somewhere the app never catches.
  */
+/**
+ * The target a request is ABOUT, spelled the way a declaration spells it.
+ *
+ * Derived from the path rather than reported by the handler, so the log records a call even when the
+ * handler never ran — an origin outside `baseUrl`, an unrecognised path. Those are exactly the
+ * requests worth seeing: they are the ones that silently answered 404.
+ */
+function targetOf(req: ParsedRequest, appRoutes: string[]): string {
+  if (appRoutes.some((p) => req.path.startsWith(p))) return `route:${req.method} ${req.path}`;
+  if (req.path.startsWith('/auth/v1/')) return `auth:${req.path.slice('/auth/v1/'.length)}`;
+  if (req.path.startsWith('/functions/v1/')) return `fn:${req.path.slice('/functions/v1/'.length)}`;
+  if (req.path.startsWith('/rest/v1/rpc/')) return `rpc:${req.path.slice('/rest/v1/rpc/'.length)}`;
+  if (req.path.startsWith('/rest/v1/')) return `table:${req.path.slice('/rest/v1/'.length).split('?')[0]}`;
+  return 'unparsed';
+}
+
+/** What was SENT: an RPC's arguments or a write's row, else the query that scoped a read. */
+function requestOf(req: ParsedRequest): unknown {
+  if (req.body !== undefined && req.body !== null) return req.body;
+  const query = req.url.search.replace(/^\?/, '');
+  return query === '' ? undefined : query;
+}
+
+/**
+ * What came BACK, as one line. Never the body: a read can answer with a whole table, and a log that
+ * holds every row it ever saw is a memory leak wearing a diagnostic's clothes.
+ */
+async function responseOf(res: Response): Promise<string | undefined> {
+  if (res.status === 204) return 'no content';
+  try {
+    const text = await res.clone().text();
+    if (text === '') return undefined;
+    const parsed: unknown = JSON.parse(text);
+    if (Array.isArray(parsed)) return `${parsed.length} row(s)`;
+    if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+      // PostgREST spells an error `{ message }`; the app's own RPCs answer `{ success, error }`.
+      if (typeof obj.message === 'string') return obj.message;
+      if (obj.success === false) return `refused: ${String(obj.error ?? 'unknown')}`;
+      return Object.keys(obj).slice(0, 6).join(', ') || 'object';
+    }
+    return String(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
 export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeof fetch {
   const tables = options.tables ?? {};
   const transport = new MockTransport(options.fixtures ?? []);
@@ -417,6 +536,24 @@ export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeo
   const motuFakeFetch = async function motuFakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const req = normalize(input, init);
     recordSeen();
+    // LOGGED HERE, not in each handler, and for the same reason the handlers do their own
+    // `recordReach`: this is the one place that sees both the request and the response it produced.
+    // Attribution is read BEFORE awaiting — a fetch starts inside an island's window and resolves
+    // long after it has closed, so asking afterwards credits everything to nobody.
+    const by = ownerNow();
+    const res = await dispatch(req);
+    recordCall({
+      target: targetOf(req, options.appRoutes ?? []),
+      method: req.method,
+      by,
+      request: summarise(requestOf(req)),
+      status: res.status,
+      response: await responseOf(res),
+    });
+    return res;
+  };
+
+  const dispatch = async (req: ParsedRequest): Promise<Response> => {
 
     // BEFORE the baseUrl guard, deliberately: an application route is SAME-ORIGIN, so it never
     // matches the database origin and would otherwise be rejected as "outside baseUrl".

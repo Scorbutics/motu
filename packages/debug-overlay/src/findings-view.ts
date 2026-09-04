@@ -23,6 +23,7 @@ import {
   regionIdOfStore,
   archipelagoConfigs,
 } from '@motu/core';
+import { readWireCalls } from '@motu/runtime/postgrest-fetch';
 import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
 import { lens } from './store';
 import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, type Verdict } from './model';
@@ -331,7 +332,32 @@ export function currentSeams() {
   // newer overlay should degrade to the two-door view, not throw reading `undefined`.
   const calls = asked.filter((a) => a.via === 'contract').map((a) => ({ label: a.label, island: a.owner, detail: a.detail }));
   const traced = asked.filter((a) => a.via === 'host-module').map((a) => ({ label: a.label, island: a.owner, detail: a.detail }));
-  return { channels, asked, doorsUsed, calls, traced, intents };
+  // ── the calls themselves ─────────────────────────────────────────────────────────────────────
+  //
+  // `asked` above is the DECLARATION ledger — a set of targets, comparable to what an island or a
+  // source declares it reaches. This is the other question, and no other tool can answer it: what
+  // was actually sent, in what order, with what payload, and what came back.
+  //
+  // It has no counterpart in devtools BECAUSE of motu: the fake fetch answers without touching the
+  // network, so the browser's Network panel is empty by construction. Newest first — a person opens
+  // this straight after doing something, and what they did is the last row.
+  const wire = readWireCalls()
+    .slice(-60)
+    .reverse()
+    .map((c) => ({
+      seq: c.seq,
+      target: c.target,
+      method: c.method,
+      by: c.by,
+      request: c.request === undefined ? '' : typeof c.request === 'string' ? c.request : JSON.stringify(c.request),
+      status: c.status ?? 0,
+      response: c.response ?? '',
+      // A 4xx/5xx is the row worth seeing: an RPC no fixture answers 404s here and the app's own
+      // error handling swallows it, which is one of the ways a screen goes quiet.
+      tone: (c.status ?? 0) >= 400 ? 'broken' : 'ok',
+    }));
+
+  return { channels, asked, doorsUsed, calls, traced, intents, wire };
 }
 
 /**

@@ -1623,6 +1623,42 @@ function motuMountDock(opts) {
         'Nothing was asked for through the contract, a traced host module or the wire. If the region '
           + 'shows data anyway, it came from the seed or from a feed above.');
 
+        // ── NETWORK: the calls themselves ────────────────────────────────────────────────────────
+        //
+        // The section above answers "what does this region reach for", which is a question about
+        // DECLARATIONS. This one answers "what did it just send", which is the question a person has
+        // when a screen appears to do nothing — and it is the one no other tool can answer here,
+        // because the fake fetch replies without touching the network and the browser's own Network
+        // panel is therefore empty.
+        //
+        // IT PROVES THE CLIENT HALF ONLY. A request leaving with the right payload does not mean the
+        // refetch happened, the response was merged, or anything re-rendered. That is why this is a
+        // log and not a check: it tells you the save fired and the read came back unchanged, which is
+        // the difference between "the page is not wired" and "the stand-in did not record it".
+        var wire = seamData.wire || [];
+        listSection('Network', wire.length, wire.map(function (c) {
+          return el('div', {
+            class: 'seam-row',
+            'data-tone': c.tone,
+            // The full payload on hover: the row shows as much as fits, and a regenerated series is
+            // several kilobytes that no row can hold.
+            title: c.method + ' ' + c.target + '\n' + (c.request || '(no payload)') + '\n\n'
+              + c.status + ' ' + (c.response || '') + '\n' + c.by,
+          }, [
+            el('i', { class: 'seam-row__dot' }),
+            el('span', { class: 'seam-row__l' }, [
+              el('span', { class: 'seam-door' }, [String(c.status)]),
+              c.target,
+            ]),
+            el('span', { class: 'seam-row__d' }, [c.request || '']),
+            el('span', { class: 'seam-row__r' }, [c.response || '']),
+          ]);
+        }),
+        // The empty state is a real answer here, and a different one from "asked for" being empty:
+        // no request AT ALL means the screen is rendering entirely from the seed.
+        'No backend call was intercepted. Everything on this screen came from the seed — which is what '
+          + 'a lagoon does, and worth a second look if you just pressed save.');
+
         listSection('Pushed back', seamData.intents.length, seamData.intents.map(function (i) {
           return el('div', { class: 'seam-row', 'data-tone': 'ok', title: i.label }, [
             el('i', { class: 'seam-row__dot' }),

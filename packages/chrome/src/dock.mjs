@@ -1163,10 +1163,17 @@ function motuMountDock(opts) {
   var applyPin = function () {
     var root = document.documentElement;
     // Only meaningful while the panel is OPEN: a closed panel covers nothing, and reserving for it
-    // would leave a 340px hole beside a dock that is not there.
-    if (pinned && tide.dataset.open === 'true') root.setAttribute('data-motu-dock-pin', '1');
+    // would leave a hole beside a dock that is not there.
+    var on = pinned && tide.dataset.open === 'true';
+    if (on) root.setAttribute('data-motu-dock-pin', '1');
     else root.removeAttribute('data-motu-dock-pin');
     pin.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+    // MEASURED, NEVER ASSUMED. The reserve was a hardcoded 340px and the SEAMS tab is
+    // `width: min(560px, 46vw)` — it widens for a five-column table — so pinning covered 220px of the
+    // region on exactly the tab the pin exists for. Reading the rendered width also means a future
+    // per-tab width needs no second edit here.
+    if (on) root.style.setProperty('--motu-dock-panel', Math.round(panel.getBoundingClientRect().width) + 'px');
+    else root.style.removeProperty('--motu-dock-panel');
   };
   pin.addEventListener('click', function () {
     pinned = !pinned;
@@ -1332,6 +1339,8 @@ function motuMountDock(opts) {
       : coverageTab;
     tabThumb.style.left = on.offsetLeft + 'px';
     tabThumb.style.width = on.offsetWidth + 'px';
+    // The panel is a different width on Seams; the reserve follows the tab.
+    applyPin();
     watchWhileLooking(which);
     paint();
   };
@@ -1435,7 +1444,7 @@ function motuMountDock(opts) {
     var h = Math.round(rail.getBoundingClientRect().height);
     if (h > 0) root.style.setProperty('--motu-dock-handle', h + 'px');
   };
-  window.addEventListener('resize', function () { syncBottomReserve(); });
+  window.addEventListener('resize', function () { syncBottomReserve(); applyPin(); });
 
   // SCENARIOS DECLARED FOR A TAG, excluding nothing — the seeded default is not one of them, it is
   // what an island shows with no scenario at all, so the number here is exactly what scoping buys.

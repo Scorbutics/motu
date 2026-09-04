@@ -272,11 +272,36 @@ function summarise(value: unknown, max = 20_000): unknown {
   }
 }
 
+/**
+ * Told when a call lands.
+ *
+ * WITHOUT THIS THE PANEL IS A LIE OF OMISSION. The lens repaints on STORE WRITES, and a call that
+ * changes no region key writes nothing — so a save whose refetch returns identical data left the
+ * Network list showing the state before it, and the person who just pressed the button concluded
+ * nothing had been sent. Which is the exact confusion this section exists to end.
+ */
+const callListeners = new Set<() => void>();
+
+/** Notified whenever an intercepted call is recorded. Returns an unsubscribe. */
+export function subscribeWireCalls(cb: () => void): () => void {
+  callListeners.add(cb);
+  return () => callListeners.delete(cb);
+}
+
 function recordCall(call: Omit<WireCall, 'seq' | 'at'>): void {
   const g = globalThis as unknown as Record<string, WireCall[] | undefined>;
   const calls = (g[callsKey] ??= []);
   calls.push({ ...call, seq: ++callSeq, at: Date.now() });
   if (calls.length > MAX_CALLS) calls.splice(0, calls.length - MAX_CALLS);
+  // A listener that throws is a panel's bug, not this module's: one bad subscriber must not stop the
+  // fake from answering the request the application is waiting on.
+  callListeners.forEach((l) => {
+    try {
+      l();
+    } catch {
+      /* the panel's problem */
+    }
+  });
 }
 
 /** Every intercepted call, oldest first. Does NOT clear: a panel polls it, and a flow may read it twice. */

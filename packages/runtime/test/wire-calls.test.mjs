@@ -8,7 +8,7 @@
 // The bug this closes, three times over on one project: a write RPC answering `{ success: true }`
 // and recording nothing looks EXACTLY like a page that is not wired. One row — the call fired, with
 // the right payload, and the read came back unchanged — separates the two in a second.
-import { createPostgrestFetch, readWireCalls, clearWireCalls, readDataReach } from '../dist/postgrest-fetch.js';
+import { createPostgrestFetch, readWireCalls, clearWireCalls, readDataReach, subscribeWireCalls } from '../dist/postgrest-fetch.js';
 import { runWithIsland } from '@motu/core';
 
 let pass = 0, fail = 0;
@@ -105,6 +105,27 @@ await rpc('set_session_agenda', { p_sessions: Array.from({ length: 400 }, (_, i)
   // Truncated and SAID to be, rather than silently cut: a payload that looks complete but is not is
   // worse than one that admits it.
   t('truncates a large payload and says so', typeof call?.request === 'string' && /chars\)$/.test(call.request), String(call?.request).slice(-40));
+}
+
+// ── told when one lands ──────────────────────────────────────────────────────────────────────
+{
+  // WITHOUT THIS THE PANEL IS A MOMENT BEHIND. The lens repaints on store writes, and a call whose
+  // response changes no region key writes nothing — so the save you just made was not in the list,
+  // and "I pressed Enregistrer and nothing appeared" is the report that follows.
+  let fired = 0;
+  const off = subscribeWireCalls(() => { fired++; });
+  clearWireCalls();
+  await rpc('set_session_agenda', { p: 1 });
+  t('notifies a subscriber when a call lands', fired === 1, String(fired));
+  off();
+  await rpc('set_session_agenda', { p: 2 });
+  t('...and stops after unsubscribing', fired === 1, String(fired));
+
+  // A subscriber that throws must not stop the fake answering the request the app is awaiting.
+  const offBad = subscribeWireCalls(() => { throw new Error('panel bug'); });
+  const res = await rpc('set_session_agenda', { p: 3 });
+  t('a throwing subscriber does not break the response', res.status === 200, String(res.status));
+  offBad();
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

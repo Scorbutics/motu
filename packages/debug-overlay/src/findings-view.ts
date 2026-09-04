@@ -23,7 +23,7 @@ import {
   regionIdOfStore,
   archipelagoConfigs,
 } from '@motu/core';
-import { readWireCalls } from '@motu/runtime/postgrest-fetch';
+import { readWireCalls, subscribeWireCalls } from '@motu/runtime/postgrest-fetch';
 import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
 import { lens } from './store';
 import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, type Verdict } from './model';
@@ -104,9 +104,15 @@ export function watchSeams(fn: () => void): () => void {
   // whose corpus landed a second after it opened.
   const offLens = lens.subscribe(fn);
   const offCorpus = subscribeCorpus(fn);
+  // THREE SOURCES NOW. The lens fires on store writes and the corpus arrives asynchronously — and a
+  // WIRE CALL is neither: a request whose response changes no region key writes nothing, so the
+  // Network list stayed on the state before the save that produced it. A panel that is a moment
+  // behind is worse than one that shows nothing, because it looks current.
+  const offWire = subscribeWireCalls(fn);
   return () => {
     offLens();
     offCorpus();
+    offWire();
   };
 }
 

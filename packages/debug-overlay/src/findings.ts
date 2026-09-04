@@ -155,8 +155,16 @@ export function findingsOf(input: FindingsInput): Finding[] {
           ? `${produces.join(', ')} — held by the seed, produced by nothing. `
           : 'It produces no key here. ') +
         'Islands can still ask this source for something and no channel is listening, so the region ' +
-        `looks wired and does not react. Install it with \`channelFrom({ to, id: '${name}', args: [...] })\` ` +
-        'and drop those keys from the seed, or accept that this region previews a fixed state.',
+        'looks wired and does not react. ' +
+        // NAME THE SHAPE, not just the call. `channelFrom(...)` is what you type; a SOURCE is what you
+        // have to build, and someone reading this is usually mid-migration and has never written one.
+        // Three sentences is the most a 340px card can carry, so this is the outline and the doc has
+        // the rest.
+        `Install it: extract a source beside the page — a port the page and the lagoon fill ` +
+        `differently, a factory holding the state with subscribe/getState, \`intents\` for what islands ` +
+        `ask the host — then \`channelFrom({ to, id: '${name}', args: [...] })\` in the lagoon and drop ` +
+        'those keys from the seed. See docs/05 “Writing a source”. Or accept that this region ' +
+        'previews a fixed state.',
       tone: 'warn',
       seam: 'sheet',
       decision: true,

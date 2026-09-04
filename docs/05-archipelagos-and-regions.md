@@ -368,6 +368,75 @@ could substitute data, and the fake fetch now does that beneath the real service
 orchestration across calls — a generation guard, a debounce, reset-on-new-search — which is an
 application decision, not a motu rule.
 
+### Writing a source
+
+The declaration above says a source EXISTS. This says what to build, because the two questions were
+documented apart: `sources` and `channelFrom` are here, the port and its unit tests are in
+[11 — Contract and backend](11-contract-and-backend.md), and the runtime contract is the
+`SourceInstance` type — so "install the source" named a call and left the shape to be inferred from
+an existing one. `sources-live` and the lens finding both point here now.
+
+**A source is the application's object.** It lives beside the page, in application code, and it is
+framework-free: plain functions and a subscription, no React and no motu import beyond the type. That
+is what lets the same object run in a React effect, in a motu channel and in a unit test — and what
+makes deleting motu leave it untouched.
+
+Four pieces:
+
+```ts
+// 1. THE PORT — what the source needs, so its two callers can fill it differently.
+export interface TeamsPort {
+  myTeams(): Promise<TeamSummary[]>
+  myInvitations(): Promise<ReceivedInvitation[]>
+}
+
+// 2. THE FACTORY — the state, and how to watch it. This is where the page's fetch effect goes.
+export function createTeamsSource(port: TeamsPort, { now }: { now: () => Date }) {
+  let state = EMPTY
+  const listeners = new Set<() => void>()
+  let generation = 0                       // see "orchestration", below
+  const api = {
+    subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l) } },
+    getState: () => state,
+    async reload() { /* fetch through `port`, guard on `generation`, set, notify */ },
+    // 3. INTENTS — the page's half of what an island asks the host for.
+    intents: { 'teams-changed': () => void api.reload() },
+    dispose() { listeners.clear() },
+  }
+  return api
+}
+
+// 4. THE DECLARATION — type-only import, so it erases; `produces` is checked against the region here.
+export const teamsSource: Source<BaseRegion, TeamsKeys, [TeamsPort, { now: () => Date }]> = {
+  create: createTeamsSource,
+  produces: ['timelineEntries', 'closedTeams', 'invitations'],
+}
+```
+
+Then two installs, and they differ only in the port. The page builds it from the real services and
+subscribes with `useSyncExternalStore`; the lagoon builds it from fixtures through `channelFrom({ to,
+id: 'teams', args: [fixturePort, { now }] })` and DROPS those keys from the seed — a key that is both
+seeded and produced is the state `sources-live` reports, one layer on.
+
+Islands change too: an output that asked the host to refetch is declared `intents: { changed:
+'teams-changed' }` rather than `on: { changed: (_, { host }) => host.action('teams-changed') }`. The
+`on` form falls through to the `HostBridge`, which in a lagoon only logs — so the island emits, the
+intent leaves and nothing answers it. That is the same region reading as wired and not reacting.
+
+**When a port earns its place.** Wire mocking (`@motu/runtime/postgrest-fetch`) substitutes data
+beneath the real service, so a port whose only job was "let the lagoon return different rows" is
+now redundant — see the paragraph above. What a port still buys is a seam for ORCHESTRATION: a
+generation guard so a slow refetch cannot land after a fast one, a debounce, reset-on-new-search,
+the slower of two submits not overwriting the faster. Those are branches no rendered state
+distinguishes, which is why the source that holds them gets unit tests over a hand-made port
+([11 — Contract and backend](11-contract-and-backend.md)). A source with no such logic can take its
+data at the wire and stay thin.
+
+**What this does not close.** The adapter on the far side of the port — the few lines turning the
+backend's shape into what the port promises — is not proved by any of this. The lagoon replaces the
+host module so completely that nothing shows a fetch happened. That boundary is stated in
+[11 — Contract and backend](11-contract-and-backend.md) and it is deliberate.
+
 ### `sourced` is opt-in, and cannot always be turned on
 
 `RegionSourcesOk` — the `sourced` property of the checks argument — asserts that every host-fed key

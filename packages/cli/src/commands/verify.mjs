@@ -3343,7 +3343,14 @@ function sourcesLiveCheck(report, id, channels, region, held = []) {
         `source "${name}"${where} is SEEDED here, not installed: ${entry.keys.join(', ')} ` +
           `${entry.keys.length > 1 ? 'hold values' : 'holds a value'} no channel produced. The region renders and ` +
           `the page's own derivation is never exercised — ` +
-          `install the source with \`channelFrom({ to, id: '${name}', args: [...] })\` and drop them from the seed`,
+          `install the source with \`channelFrom({ to, id: '${name}', args: [...] })\` and drop them from the seed. ` +
+          // THE CALL IS NOT THE DESIGN. This line used to end at the channelFrom signature, which
+          // tells you what to type and nothing about what to build — and the thing to build is the
+          // source, not the channel. Whoever reads this is usually mid-migration and has never
+          // written one.
+          `That means extracting a SOURCE: a port the page and the lagoon fill differently, a factory ` +
+          `holding the state with subscribe/getState, and \`intents\` for what islands ask the host. ` +
+          `See docs/05-archipelagos-and-regions.md "Writing a source"`,
       );
     } else {
       report.warn(

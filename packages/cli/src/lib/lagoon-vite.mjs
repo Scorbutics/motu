@@ -15,6 +15,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolveLagoonRoot } from './lagoon-materialize.mjs';
+import { writeIfChanged } from './write-if-changed.mjs';
 import { motuProvenance } from './provenance-plugin.mjs';
 import { unbundlableIslands } from './bundlability.mjs';
 import { hostAliasEntries } from './util.mjs';
@@ -320,7 +321,11 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
   // whole app into a single HTML file — nothing serves /assets/* behind a static artifact.
   const singleFile = env.MOTU_SINGLEFILE === 'lagoon' ? 'lagoon' : env.MOTU_SINGLEFILE === 'main' ? 'main' : '';
 
-  const ctx = { paths, lagoonJson, env, resolveBuildDep: (n) => resolveBuildDep(n, paths.lagoonDir) };
+  // `writeIfChanged` rather than the adapter reaching for `writeFileSync`: an adapter that generates
+  // into `.motu/cache` is generating into a directory Vite WATCHES, and the write policy for that
+  // directory belongs to whoever owns it. See lib/write-if-changed.mjs — an identical write still
+  // reloads every open lagoon tab.
+  const ctx = { paths, lagoonJson, env, writeIfChanged, resolveBuildDep: (n) => resolveBuildDep(n, paths.lagoonDir) };
 
   // Islands whose import graph cannot be bundled, stubbed rather than allowed to kill the build.
   // MOTU_NO_EXCLUDE=1 restores the old all-or-nothing behaviour for anyone who needs to see the raw

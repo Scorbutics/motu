@@ -11,7 +11,7 @@
 //
 // So `motu lagoon eject` is not a special code path: it is this module writing into the project
 // instead of into the cache.
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import {
   render,
@@ -23,6 +23,10 @@ import {
   LAGOON_OVERRIDES,
   ENV_SHIM,
 } from './scaffold.mjs';
+// Every entry below is re-rendered on EVERY lagoon build and is almost always identical. See the
+// module's own doc for why an identical write is not free: Vite watches these, and a touch full-reloads
+// every open lagoon tab.
+import { writeIfChanged } from './write-if-changed.mjs';
 
 /** POSIX-style relative path for generated code (never a Windows backslash in a module specifier). */
 function relPosix(from, to) {
@@ -103,7 +107,7 @@ export function materializeLagoon(paths, outDir) {
   // `.tsx` when the project's overrides carry JSX — a region layout does.
   const overrideCandidates = ['src/lagoon.tsx', 'src/lagoon.ts'].map((f) => resolve(paths.lagoonDir, f));
   const projectOverrides = overrideCandidates.find((f) => existsSync(f)) ?? overrideCandidates[1];
-  if (!existsSync(projectOverrides)) writeFileSync(resolve(src, 'lagoon.ts'), LAGOON_OVERRIDES);
+  if (!existsSync(projectOverrides)) writeIfChanged(resolve(src, 'lagoon.ts'), LAGOON_OVERRIDES);
 
   const vars = {
     appPackage: paths.appPackage,
@@ -130,12 +134,12 @@ export function materializeLagoon(paths, outDir) {
     hostOption: '',
   };
 
-  writeFileSync(resolve(outDir, 'index.html'), render(LAGOON_INDEX_HTML, vars));
-  writeFileSync(resolve(outDir, 'lagoon.html'), render(LAGOON_FOCUS_HTML, vars));
-  writeFileSync(resolve(src, 'fixtures.ts'), render(LAGOON_FIXTURES, vars));
-  writeFileSync(resolve(src, 'main.tsx'), render(LAGOON_GALLERY_ENTRY, vars));
-  writeFileSync(resolve(src, 'lagoon.tsx'), render(LAGOON_FOCUS_ENTRY, vars));
-  if (paths.host !== 'angularjs') writeFileSync(resolve(src, 'env.ts'), render(ENV_SHIM, vars));
+  writeIfChanged(resolve(outDir, 'index.html'), render(LAGOON_INDEX_HTML, vars));
+  writeIfChanged(resolve(outDir, 'lagoon.html'), render(LAGOON_FOCUS_HTML, vars));
+  writeIfChanged(resolve(src, 'fixtures.ts'), render(LAGOON_FIXTURES, vars));
+  writeIfChanged(resolve(src, 'main.tsx'), render(LAGOON_GALLERY_ENTRY, vars));
+  writeIfChanged(resolve(src, 'lagoon.tsx'), render(LAGOON_FOCUS_ENTRY, vars));
+  if (paths.host !== 'angularjs') writeIfChanged(resolve(src, 'env.ts'), render(ENV_SHIM, vars));
 
   return outDir;
 }

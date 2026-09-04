@@ -894,23 +894,31 @@ export function lagoonServeCommand(argv) {
  * at all, which `serve` learned the hard way and this inherits: said once, not every beat.
  */
 /**
- * Where a REMOTE viewer's HMR client should connect, given the host that will be proxying the page.
+ * Where a viewer's HMR client should connect when the page is ALSO reachable through the lagoon host.
  *
- * Vite bakes the socket address into its client from the dev server's own config, so by default it
- * tells every viewer to reach `127.0.0.1:<port>` — true for the person who started it and useless for
- * anyone arriving through the lagoon host. Pointing it at the host's own origin, under the member's
- * path, is what makes an edit push itself to someone else's browser.
+ * Vite bakes ONE socket address into its client, so this cannot be answered per-viewer with a pinned
+ * address — and pinning it at the host is what made a locally-opened lagoon unusable.
  *
- * Returns null when no host is configured, and the dev server then keeps Vite's local default — the
- * common case of iterating alone must not be made worse by a feature for sharing.
+ * WHAT THAT COST, because the symptom names nothing: the client is `__HMR_HOSTNAME__ ||
+ * location.hostname` and `__HMR_PORT__ || location.port`. Pinning both sent a browser on
+ * `localhost:5173` to `wss://<host>/…/__motu_hmr`; that handshake failed (502 — the host does not
+ * proxy this socket today), and because a PORT was pinned Vite skipped its direct-connection fallback
+ * and went to "server connection lost. Polling for restart…". That polls the page's OWN origin, which
+ * is up, so the ping succeeds and the client calls `location.reload()` — every ~1.5s, forever. The
+ * page reloaded under anyone looking at it, no motu output said anything, and the vite log stayed
+ * silent because a client-side reload is not a `page reload` the server logs. Reported as "the lagoon
+ * reloads every few seconds", debugged first as a file-watcher problem, which it was not.
+ *
+ * So pin only the PATH and let each viewer derive the rest from where they loaded the page: a local
+ * viewer gets `ws://localhost:<port>/…`, served by this very dev server, and a viewer arriving through
+ * the host gets exactly the address this function used to pin — the host's own origin, since that is
+ * where their page came from. Nothing is lost for the remote case and the local case stops looping.
+ *
+ * Returns null when no host is configured, and the dev server then keeps Vite's default in full.
  */
 export function hmrForHost({ slug, repo, base }) {
   if (!base) return null;
-  const u = new URL(base);
   return {
-    protocol: u.protocol === 'https:' ? 'wss' : 'ws',
-    host: u.hostname,
-    clientPort: Number(u.port || (u.protocol === 'https:' ? 443 : 80)),
     // RELATIVE TO `base`, which is already the member's prefix. Vite concatenates the two, so giving
     // the full path here produced `/<repo>/latest/<slug>/<repo>/latest/<slug>/__motu_hmr` — a doubled
     // prefix the host could not route and the socket never opened, while the page and its assets were

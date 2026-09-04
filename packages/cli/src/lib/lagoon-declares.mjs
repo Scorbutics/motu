@@ -307,6 +307,71 @@ export function nestedSlots(file) {
   return out;
 }
 
+/**
+ * The REGION's own `slots` — its root component's prop -> the slot that fills it — or null when the
+ * region declares no `root` (a page composed by hand fills nothing).
+ *
+ * SIBLING OF `nestedSlots`, and it should have been written next to it. `integrate check` read this
+ * with two alternating regexes whose comment records what they cost: an unanchored multi-line pattern
+ * "ran on to the next line beginning with `},` — swallowing the island entries below and reading
+ * their `bind` pairs as slot mappings. The page's own props then matched those invented names, and
+ * five props of one card were reported as slots the archipelago had never declared." The fix at the
+ * time was a second pattern for the one-line form and an anchor at two spaces of indent — which is a
+ * rule about formatting, not about the language.
+ */
+export function rootSlots(file) {
+  if (!existsSync(file)) return null;
+  let sf;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    sf = project.createSourceFile('archipelago.ts', readFileSync(file, 'utf8'));
+  } catch {
+    // Unparseable: null, which the caller already reads as "no answer" rather than "no slots". An
+    // EMPTY map would say this root fills nothing, and every prop the page passes would then be
+    // reported as a slot the archipelago never declared — the exact failure the regex had.
+    return null;
+  }
+  const config = configLiteral(sf);
+  if (!config || !config.getProperty('root')) return null;
+  const slots = propInit(config, 'slots')?.asKind(SyntaxKind.ObjectLiteralExpression);
+  const map = {};
+  for (const prop of slots?.getProperties() ?? []) {
+    const name = nameOf(prop);
+    const init = prop.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+    if (!name || !init) continue;
+    // `prop: 'slot-name'` and the exclusive form `prop: { slot: 'slot-name', when|unless: 'key' }`.
+    const slot = str(init) ?? str(propInit(init.asKind(SyntaxKind.ObjectLiteralExpression), 'slot'));
+    if (slot) map[name] = slot;
+  }
+  return map;
+}
+
+/**
+ * Every slot this region DECLARES — the `slot` of each island entry.
+ *
+ * Read from the island entries rather than from every `slot:` in the file. The regex it replaces took
+ * all of them, which quietly included the region-level `slots` map's own object form — so a slot
+ * NAMED there but declared by no island entry counted as declared, and the check that exists to catch
+ * exactly that could not.
+ */
+export function declaredSlotNames(file) {
+  const out = new Set();
+  if (!existsSync(file)) return out;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    const sf = project.createSourceFile('archipelago.ts', readFileSync(file, 'utf8'));
+    const islands = propInit(configLiteral(sf), 'islands')?.asKind(SyntaxKind.ArrayLiteralExpression);
+    for (const entry of islands?.getElements() ?? []) {
+      const slot = str(propInit(entry.asKind(SyntaxKind.ObjectLiteralExpression), 'slot'));
+      if (slot) out.add(slot);
+    }
+  } catch {
+    // Unparseable: an empty set, so a composition check reports every filled slot as undeclared
+    // rather than silently approving one. Loud is the safe direction for an error.
+  }
+  return out;
+}
+
 /** The object literal that declares `islands: [...]`, wherever it sits. */
 function configLiteral(sf) {
   return sf

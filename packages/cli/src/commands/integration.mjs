@@ -18,6 +18,7 @@ import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } fr
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
 import { declaredSourcesOf } from '../lib/declared-sources.mjs';
+import { rootSlots } from '../lib/lagoon-declares.mjs';
 import { slotNameOfElement } from '../lib/island-placement.mjs';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
@@ -89,32 +90,13 @@ function closingOf(text, from) {
  * a `root` is a component reference, so importing one would drag the application's UI into the CLI.
  */
 function rootSlotMap(id) {
-  const file = paths.archipelagoFile(id);
-  if (!existsSync(file)) return null;
-  const text = blankComments(readFileSync(file, 'utf8'));
-  if (!/^\s*root\s*:/m.test(text)) return null;
-  // Both shapes: `slots: { a: 'x' }` on one line, and the multi-line form closing with `},`. Matching
-  // only the second returned an EMPTY map for a small region, and an empty map reads as "this root
-  // fills no slots" — so every prop the page passed came back as a slot the archipelago never
-  // declared. Wrong, and loud, which is the only reason it was found.
-  const block =
-    // TOP-LEVEL ONLY (two spaces of indent), one-line form first. An island may declare its OWN
-    // `slots` for nesting — actions' week navigator does, on one line — so an unanchored match read a
-    // member's nested map as the region's. And the multi-line pattern is lazy but unanchored at its
-    // start, so on a one-line map it ran on to the next `},` and swallowed the island entries below,
-    // reading their `bind` pairs as slot mappings. The multi-line pattern is lazy but unanchored
-    // at its start, so on a one-line `slots: { card: 'x' },` it ran on to the next line beginning with
-    // `},` — swallowing the island entries below and reading their `bind` pairs as slot mappings. The
-    // page's own props then matched those invented names, and five props of one card were reported as
-    // slots the archipelago had never declared.
-    text.match(/^ {2}slots\s*:\s*\{([^}\n]*)\}/m) ?? text.match(/^ {2}slots\s*:\s*\{([\s\S]*?)^ {2}\},/m);
-  const map = {};
-  // Both value forms: `prop: 'slot'` and `prop: { slot: 'slot', when|unless: 'key' }`.
-  for (const [, prop, rest] of (block?.[1] ?? '').matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)) {
-    const slot = rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1);
-    if (slot) map[prop] = slot;
-  }
-  return map;
+  // PARSED, NOT MATCHED. This was two alternating regexes, anchored at two spaces of indent, and the
+  // comment they carried is the whole argument: the multi-line one "ran on to the next line beginning
+  // with `},` — swallowing the island entries below and reading their `bind` pairs as slot mappings.
+  // The page's own props then matched those invented names, and five props of one card were reported
+  // as slots the archipelago had never declared." The one-line pattern was added to fix a different
+  // shape of the same failure. `rootSlots` is a property lookup and has neither.
+  return rootSlots(paths.archipelagoFile(id));
 }
 
 function producedKeys(region) {
@@ -271,11 +253,13 @@ function checkRegion(region, sources) {
   // through the lagoon's frame and never the page.
   //
   // ts-morph is how every HOST-SOURCE question here is answered. This was the last regex standing in
-  // the middle of THAT — a claim that was read as "the last regex", which it never was: the
-  // ARCHIPELAGO side was still matched, in this file and in `verify.mjs`, and the two had drifted
-  // (see `lib/declared-sources.mjs`). `sources` is now parsed and shared. `slots` is not, in either
-  // file, and its comments already carry two bugs paid for in the usual currency — a lazy pattern
-  // swallowing the entries below it, and a terminator that depends on two spaces of indent.
+  // the middle of THAT — a claim that got read as "the last regex", which it never was: the
+  // ARCHIPELAGO side was still matched, in this file and in `verify.mjs`, and the two readers had
+  // drifted. Both are parsed now and shared — `sources` in `lib/declared-sources.mjs`, `slots` in
+  // `lib/lagoon-declares.mjs` beside `nestedSlots`, which this repo already had and used elsewhere.
+  //
+  // The lesson is the claim, not the regexes: "the last one" was true of the question in front of the
+  // author and false of the file, and it is why nobody looked again for a year.
   const placed = new Map();
   const order = [];
   for (const [file, text] of sources) {

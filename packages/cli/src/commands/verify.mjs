@@ -10,7 +10,7 @@
 //           Chromium) so layout/CSS/paint are exercised; `--fast` uses an in-process happy-dom mount.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
-import { conditionalSlots, frameModuleFor, nestedSlots } from '../lib/lagoon-declares.mjs';
+import { conditionalSlots, declaredSlotNames, frameModuleFor, nestedSlots } from '../lib/lagoon-declares.mjs';
 import { placementsIn } from '../lib/island-placement.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -2840,19 +2840,20 @@ function archipelagoConfigChecks(report, id) {
 
     // --- composition: a slot filled by another island must be one this region declares -------------
     {
-      const declaredSlots = new Set([...code.matchAll(/\bslot:\s*'([^']+)'/g)].map((m) => m[1]));
-      // Only the SLOT NAME out of each entry. A region-level `slots` may take the object form for an
-      // exclusive pair (`{ slot: 'auth-error', when: 'authError' }`), and taking every quoted string
-      // read `when`'s region key as a slot this region had never declared — an error about a shape
-      // that was correct.
-      // ISLAND-LEVEL ONLY. The region's own `slots` sits at two spaces of indent; a member's nested
-      // map is deeper inside an entry. Counting the region's made every root slot read as an island
-      // nested in another, which is a different claim entirely.
-      const filled = blocksAfter(code.replace(/^ {2}slots\s*:[\s\S]*?^ {2}\},/m, ''), 'slots:', '{').flatMap((b) =>
-        [...b.matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)].map(([, , rest]) =>
-          rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1),
-        ),
-      ).filter(Boolean);
+      // PARSED, NOT MATCHED — and by the reader this file ALREADY IMPORTS and uses 400 lines above
+      // (`nestedSlots`, for `render-coverage`). One question, two implementations, in one file.
+      //
+      // What the regexes had to encode, and no longer do: that the region's own `slots` sits at two
+      // spaces of indent while a member's nested map is deeper (counting the region's made every root
+      // slot read as an island nested in another), and that a slot entry may take the object form
+      // `{ slot: 'auth-error', when: 'authError' }` where taking every quoted string read `when`'s
+      // region key as an undeclared slot — an error about a shape that was correct.
+      //
+      // `declaredSlotNames` reads the ISLAND ENTRIES rather than every `slot:` in the file, which the
+      // regex could not distinguish: it also counted the names inside the region-level map, so a slot
+      // referenced there and declared by no island entry passed the very check that exists to catch it.
+      const declaredSlots = declaredSlotNames(paths.archipelagoFile(id));
+      const filled = [...nestedSlots(paths.archipelagoFile(id))];
       const missing = [...new Set(filled)].filter((slot) => !declaredSlots.has(slot));
       if (missing.length) {
         report.error(

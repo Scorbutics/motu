@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MemberService } from '@motu/contract';
 import { MotuError } from '@motu/runtime';
 import { firstString, type MemberCriteria, type MemberPage, type MemberRow } from '../../shared/member-types.js';
+import { ddmmyyyy } from '../../shared/member-draft.js';
 
 export interface MemberResultsProps {
   criteria?: MemberCriteria;
@@ -37,11 +38,22 @@ function rowId(row: MemberRow): string | undefined {
   return firstString(row, ['id', '_id', 'encryptedId']);
 }
 
+/**
+ * The date under the "Joined" column — which is the column it is under.
+ *
+ * IT USED TO READ `updated`, WITH THE HEADER STILL SAYING "JOINED". Both columns exist on the table,
+ * so nothing failed: the list showed Guido Bartik "Joined 04/01/2026" and his profile showed "JOINED
+ * 07/05/2024", one click apart, and each screen was internally consistent. That is the shape of a
+ * defect no mechanical check reaches — it was found by rendering the two screens and reading them.
+ *
+ * AND IT FORMATS THROUGH THE APP'S OWN FORMATTER rather than `toLocaleDateString`, for the second
+ * half of the same bug: the locale-dependent call rendered `01/24/2026` (month-first) beside the
+ * card's `24/01/2026` (day-first), so one screen carried two date orders and which one you got
+ * depended on the reader's browser. One date, one function, one order.
+ */
 function fmtDate(row: MemberRow): string {
-  const v = row['_updated'] ?? row['updated'] ?? row['dateUpdated'];
-  const d = typeof v === 'number' ? new Date(v) : typeof v === 'string' ? new Date(v) : null;
-  if (!d || Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const v = firstString(row, ['joined', 'dateJoined']);
+  return v ? ddmmyyyy(v) : '—';
 }
 
 /**

@@ -6,7 +6,10 @@
 -- Names are borrowed from people who have a claim on this field. Emails are @example.org, which is
 -- reserved and cannot be delivered to.
 
-truncate table public.members;
+-- CASCADE because `timeslots` references these rows. Without it a reset fails outright once the
+-- calendar migration exists, which is a better failure than the alternative: members re-seeded with
+-- fresh ids while availability still points at the old ones.
+truncate table public.members cascade;
 
 insert into public.members (firstname, surname, email, status, plan, chapter, member_no, joined, updated) values
   ('Priya', 'Kahn', 'priya.kahn@example.org', 'active', 'standard', 'University chapter', '702500', '2020-12-11', '2026-04-28T15:00:00.000Z'),

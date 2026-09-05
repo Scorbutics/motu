@@ -14,6 +14,7 @@ import { createRegion } from '@motu/react';
 import { membersArchipelago } from 'demo-app/archipelagos/members';
 import { MEMBER_SEARCH_CONFIG } from 'demo-app/search-config';
 import { ELEMENT_REGISTRY } from 'demo-app';
+import { useHostBridge } from '../lib/routing.js';
 
 // `searchConfig` is bound by the search island and written by NO island — a host-fed key. The page
 // establishes it, which is what `seed` is for.
@@ -24,6 +25,13 @@ import { ELEMENT_REGISTRY } from 'demo-app';
 // which is the only moment that is neither too early nor a render.
 export const Members = createRegion(membersArchipelago(), {
   elements: ELEMENT_REGISTRY,
+  // THE OUTWARD SEAM, and it was missing. The archipelago's `member-open` handler calls
+  // `host.navigate`, and with no `useHost` the bridge is undefined — so clicking a row threw
+  // `Cannot read properties of undefined (reading 'navigate')` and nothing happened. It went unseen
+  // because the path it navigated to (`/member/edit?id=…`) was a screen this app never had, so the
+  // only way to notice was to click a row and read the console. No motu check covers this: the
+  // handler body is code, `on` is for effects, and an effect that throws is the host's business.
+  useHost: useHostBridge,
   // BOTH host-fed keys, established here. `criteria` is read by three islands and written by the
   // search — until someone searches, every reader sees `undefined`. The lagoon cannot tell you that,
   // because the lagoon seeds the key itself; `integrate check` is what noticed.

@@ -28,3 +28,45 @@ body {
 .app__split { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
 @media (min-width: 900px) { .app__split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
 .app__stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* The profile page: the calendar column beside the card column. Same proportion as `app__split`,
+   because they are the same composition seen twice and two ratios drifting apart is what makes a
+   product look assembled rather than designed. */
+.app__profile { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+.app__profile-col { display: grid; gap: 20px; align-content: start; min-width: 0; }
+@media (min-width: 900px) { .app__profile { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
+
+/* WHAT STANDS WHERE A PLANNED ISLAND WILL GO. Deliberately drawn as a NOTE rather than as a
+   skeleton: a placeholder that looked like the real calendar would be a second description of an
+   island nobody has built, which is exactly the invention the perception check exists to catch. */
+.app__planned {
+  border: 1px dashed #c9c1b4;
+  border-radius: 16px;
+  padding: 22px 24px;
+  background: repeating-linear-gradient(135deg, #f7f4ee 0 12px, #f2eee6 12px 24px);
+  color: #6b6459;
+}
+.app__planned-tag {
+  margin: 0 0 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #9a9184;
+}
+.app__planned-copy { margin: 0; font-size: 14px; line-height: 1.6; }
+.app__planned code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  padding: 1px 5px; border-radius: 5px;
+  background: rgba(15, 118, 110, 0.09); color: #0c6153;
+}
+
+/* The two dead ends a profile URL can reach: a member who is not there, and a database that is not
+   answering. Different copy, same shape — and neither is a blank page. */
+.app__empty { align-items: flex-start; text-align: left; }
+.app__empty h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+.app__empty p { margin: 0; color: #6b6459; }
+.app__link {
+  align-self: flex-start;
+  padding: 8px 16px; border-radius: 999px;
+  background: #0f766e; color: #fff; text-decoration: none; font-weight: 600; font-size: 14px;
+}
+.app__link:hover { background: #0b544e; }

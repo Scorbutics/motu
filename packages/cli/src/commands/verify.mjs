@@ -29,6 +29,7 @@ import { readEffectEntries, isKinded, isDataKind, coversEffect } from '../lib/ef
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
+import { lostMarker, parseEvidence } from '../lib/evidence-json.mjs';
 import {
   runLagoon,
   runArchipelagoLagoon,
@@ -1022,11 +1023,10 @@ export function readScenarios(fixturesPath) {
   });
   if (res.status !== 0) return [];
   const jsonLine = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
-  try {
-    return JSON.parse(jsonLine).scenarios ?? [];
-  } catch {
-    return [];
-  }
+  // parseEvidence, not JSON.parse: the harness marks Dates on the way out so they arrive as Dates
+  // rather than ISO strings. Before that, any island formatting a date threw on mount and every
+  // seeded scenario reported "rendered NOTHING" — see lib/evidence-json.mjs.
+  return parseEvidence(jsonLine)?.scenarios ?? [];
 }
 
 async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast) {
@@ -1548,24 +1548,52 @@ async function a11yCheck(report, tag, kebab, port) {
 /**
  * Scenario seeds have to cross into the browser, and the crossing is JSON.
  *
- * A `Set`, a `Map`, a function or a Date in a seed arrives as `{}` — so the island renders against a
- * value of the wrong SHAPE. When that throws (`favoriteIds.has is not a function`), the mount dies and
- * EVERY scenario renders empty, which the differentiation check then reports as "scenarios rendered
+ * A `Set`, a `Map` or a function in a seed arrives as `{}` — so the island renders against a value of
+ * the wrong SHAPE. When that throws (`favoriteIds.has is not a function`), the mount dies and EVERY
+ * scenario renders empty, which the differentiation check then reports as "scenarios rendered
  * identically" and the responsive check as "renders nothing" — three misleading findings, none of them
  * naming the cause. Name it here instead, once, before those checks run.
  *
  * The fix is always at the component: take the ITERABLE, not the Set, and rebuild it inside.
+ *
+ * A `Date` USED TO BE ON THAT LIST and no longer is: the evidence hop marks and revives them
+ * (lib/evidence-json.mjs), because a seed describing anything scheduled is made of dates and telling
+ * an author to strip them is telling them not to seed their own domain.
+ *
+ * IT WALKS THE WHOLE SEED. Looking only at top-level values is what let this class through for as long
+ * as it did: nobody seeds a bare Set, they seed a ROW that contains one — and what the author sees
+ * instead of this message is the three misleading findings above. Found on a seeded session object
+ * whose dates were two levels down, in a project whose whole domain is meetings.
  */
 async function seedTransportCheck(report, kebab) {
   const scenarios = await islandScenarios(kebab);
   if (!scenarios.length) return;
+  // Either the real object (when the evidence was loaded in-process) or the marker the harness left
+  // where one used to be (when it came back through JSON). Both, because both loaders are live.
   const kind = (v) =>
-    v instanceof Set ? 'Set' : v instanceof Map ? 'Map' : typeof v === 'function' ? 'function' : v instanceof Date ? 'Date' : null;
+    v instanceof Set ? 'Set' : v instanceof Map ? 'Map' : typeof v === 'function' ? 'function' : lostMarker(v);
+  /** Every untransportable value inside `value`, as `path (Kind)`. Cycle-safe; arrays keep their index. */
+  const walk = (value, path, seen, out) => {
+    const k = kind(value);
+    if (k) {
+      out.push(`${path} (${k})`);
+      return;
+    }
+    if (!value || typeof value !== 'object' || value instanceof Date) return;
+    if (seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((v, i) => walk(v, `${path}[${i}]`, seen, out));
+      return;
+    }
+    for (const [key, v] of Object.entries(value)) walk(v, `${path}.${key}`, seen, out);
+  };
   const bad = [];
   for (const s of scenarios) {
     for (const [key, value] of Object.entries(s?.seed ?? {})) {
-      const k = kind(value);
-      if (k) bad.push(`${s.name ?? '(unnamed)'} → ${key} (${k})`);
+      const found = [];
+      walk(value, key, new Set(), found);
+      for (const f of found) bad.push(`${s.name ?? '(unnamed)'} → ${f}`);
     }
   }
   if (bad.length) {

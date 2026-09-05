@@ -56,6 +56,10 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+    devDependencies:
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
 
   demo-app/contract:
     dependencies:
@@ -214,7 +218,7 @@ importers:
         version: link:motu
       next:
         specifier: ^16.3.3
-        version: 16.3.3(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.3.3(@babel/core@7.29.7)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -281,7 +285,7 @@ importers:
         version: link:../../runtime
       next:
         specifier: '>=14'
-        version: 16.3.1(@types/node@26.2.0)(react-dom@19.2.8(react@18.3.1))(react@18.3.1)
+        version: 16.3.1(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@18.3.1))(react@18.3.1)
       react:
         specifier: '>=18'
         version: 18.3.1
@@ -3044,7 +3048,7 @@ snapshots:
 
   nanoid@3.3.18: {}
 
-  next@16.3.1(@types/node@26.2.0)(react-dom@19.2.8(react@18.3.1))(react@18.3.1):
+  next@16.3.1(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 16.3.1
       '@swc/helpers': 0.5.23
@@ -3053,7 +3057,7 @@ snapshots:
       postcss: 8.5.23
       react: 18.3.1
       react-dom: 19.2.8(react@18.3.1)
-      styled-jsx: 5.1.6(react@18.3.1)
+      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@18.3.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.3.1
       '@next/swc-darwin-x64': 16.3.1
@@ -3069,7 +3073,7 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  next@16.3.3(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  next@16.3.3(@babel/core@7.29.7)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@next/env': 16.3.3
       '@swc/helpers': 0.5.23
@@ -3078,7 +3082,7 @@ snapshots:
       postcss: 8.5.23
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
-      styled-jsx: 5.1.6(react@19.2.8)
+      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.8)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.3.3
       '@next/swc-darwin-x64': 16.3.3
@@ -3381,15 +3385,19 @@ snapshots:
 
   split2@4.2.0: {}
 
-  styled-jsx@5.1.6(react@18.3.1):
+  styled-jsx@5.1.6(@babel/core@7.29.7)(react@18.3.1):
     dependencies:
       client-only: 0.0.1
       react: 18.3.1
+    optionalDependencies:
+      '@babel/core': 7.29.7
 
-  styled-jsx@5.1.6(react@19.2.8):
+  styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.8):
     dependencies:
       client-only: 0.0.1
       react: 19.2.8
+    optionalDependencies:
+      '@babel/core': 7.29.7
 
   sucrase@3.35.1:
     dependencies:

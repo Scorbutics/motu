@@ -47,7 +47,10 @@ export function membersArchipelago(opts: MembersArchipelagoOptions = {}): Archip
         // from ANY island filter it — no host-specific driving needed.
         bind: { criteria: 'criteria' },
         on: {
-          'member-open': (id, { host }) => host.navigate('/member/edit?id=' + String(id)),
+          // A ROW OPENS THE PROFILE. The island emits "someone wants to open this member" and the
+          // REGION decides what that means — which is why the same island can sit on a page where it
+          // means "edit" without the island knowing either answer.
+          'member-open': (id, { host }) => host.navigate('/member/' + encodeURIComponent(String(id))),
           'member-selected': (detail, { store }) => store.set('selectedMember', detail),
           'member-count': (count, { store }) => store.set('resultCount', count),
         },

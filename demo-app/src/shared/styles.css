@@ -1002,3 +1002,146 @@
 @media (prefers-reduced-motion: reduce) { .mc, .mc-skel { transition: none; animation: none; } }
 
 /* The Users region's arrangement lives in its archipelago template — see users.archipelago.ts. */
+
+/* ---------------------------------------------------------------------------- profile hero ------
+   The profile page's identity band. It reuses the MemberCard palette (`--mc-*`, declared host-scoped
+   above) rather than introducing a second one: the card and the hero are the same person rendered at
+   two sizes, and two palettes drifting apart is what makes a product look assembled. */
+.ph {
+  width: 100%;
+  /* SIZED BY ITS OWN BOX, not the viewport's — it sits in a region column on the profile page and
+     full-width at its own island address, which a media query cannot tell apart. */
+  container-type: inline-size;
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--mc-cream);
+  color: var(--mc-ink);
+  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif);
+  box-shadow: 0 1px 2px rgba(18, 46, 40, 0.06), 0 12px 32px rgba(18, 46, 40, 0.09);
+}
+
+.ph__band {
+  position: relative;
+  padding: 18px 26px 40px;
+  background: radial-gradient(120% 150% at 78% 0%, var(--mc-teal-hi) 0%, var(--mc-teal-deep) 62%);
+}
+
+/* The back control sits ON the banner, so it is drawn in the banner's own contrast, not the page's. */
+.ph__back {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 13px 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff; font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.ph__back:hover { background: rgba(255, 255, 255, 0.19); border-color: rgba(255, 255, 255, 0.45); }
+.ph__back:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* THE AVATAR STRADDLES THE FOLD, as it does on the card — the overlap is what makes this read as a
+   profile rather than a header with a list under it. `flex-start` pins every text line below the
+   fold so a long name grows downward instead of up into the dark band. */
+.ph__identity { display: flex; align-items: flex-start; gap: 18px; margin-top: 16px; position: relative; z-index: 1; }
+.ph__avatar {
+  width: 92px; height: 92px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center; object-fit: cover;
+  margin-bottom: -46px;
+  font-size: 29px; font-weight: 800; letter-spacing: 0.02em;
+  border: 5px solid var(--mc-cream);
+  background: linear-gradient(150deg, var(--mc-teal-av) 0%, var(--mc-teal) 55%, var(--mc-teal-shade) 100%);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(10, 60, 50, 0.24);
+}
+.ph__avatar--blank { opacity: 0.72; }
+.ph__names { min-width: 0; padding-top: 6px; }
+/* A NAME WRAPS; IT DOES NOT GET CUT — two lines, then ellipsis, and `anywhere` so one unbroken word
+   shrinks the box rather than overflowing it. */
+.ph__name {
+  margin: 0; color: #fff;
+  font-size: clamp(21px, 5.4cqi, 30px); font-weight: 800; line-height: 1.16; letter-spacing: -0.015em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.ph__chapter {
+  margin: 5px 0 0; color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(12px, 3.2cqi, 14px);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.ph__pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.ph__pill {
+  display: inline-block; padding: 3px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.ph__pill--premium { background: var(--mc-coral); color: #fff; }
+.ph__pill--standard { background: rgba(255, 255, 255, 0.9); color: var(--mc-teal-ink); }
+.ph__pill--active { background: rgba(255, 255, 255, 0.16); color: #fff; border: 1px solid rgba(255, 255, 255, 0.34); }
+/* Suspended is the one state worth a colour of its own: it changes what the page MEANS. */
+.ph__pill--suspended { background: var(--mc-coral-soft); color: var(--mc-coral-ink); }
+
+/* Three facts, on one row while there is room and stacked when there is not. `auto-fit` rather than a
+   breakpoint, for the same reason the container query is here: the hero has several widths at one
+   viewport size. */
+.ph__facts {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  padding: 58px 26px 0;
+}
+.ph__fact {
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--mc-line); border-radius: 13px;
+  background: var(--mc-white);
+}
+.ph__fact-label {
+  display: block; color: var(--mc-muted);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.ph__fact-value {
+  display: block; margin-top: 3px; font-size: 14px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* An absent fact is a DASH in muted ink, never a blank cell: a blank reads as a layout bug. */
+.ph__fact-value--empty { color: var(--mc-muted); font-weight: 500; }
+
+.ph__avail {
+  display: flex; align-items: center; gap: 9px;
+  margin: 14px 0 0; padding: 13px 26px 20px;
+  font-size: 14px; font-weight: 600;
+}
+.ph__avail strong { font-weight: 800; }
+.ph__dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.ph__avail--open { color: var(--mc-teal-ink); }
+.ph__dot--open { background: var(--mc-teal-bright); box-shadow: 0 0 0 4px rgba(28, 181, 149, 0.16); }
+/* Fully booked and publishes-nothing are DIFFERENT screens and are coloured differently on purpose —
+   collapsing them into one grey line is the bug the pair of scenarios exists to keep visible. */
+.ph__avail--full { color: var(--mc-coral-ink); }
+.ph__dot--full { background: var(--mc-coral); box-shadow: 0 0 0 4px rgba(226, 113, 74, 0.16); }
+.ph__avail--none { color: var(--mc-muted); font-weight: 500; }
+.ph__dot--none { background: #cfc8bb; }
+
+/* The skeleton: the shape before the data, in the same boxes the loaded state uses. */
+.ph-skel { display: block; border-radius: 9px; background: linear-gradient(90deg, #e9e3d9 25%, #f3efe7 37%, #e9e3d9 63%); background-size: 400% 100%; animation: ph-shimmer 1.4s ease infinite; }
+.ph-skel--avatar { width: 92px; height: 92px; border-radius: 50%; margin-bottom: -46px; }
+.ph-skel--line { height: 13px; }
+.ph-skel--box { height: 62px; border-radius: 13px; }
+.ph--loading .ph__skel-lines { display: grid; gap: 9px; padding-top: 12px; flex: 1; min-width: 0; }
+.ph--loading .ph__band { display: flex; align-items: flex-start; gap: 18px; }
+@keyframes ph-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .ph-skel { animation: none; } }
+
+/* Narrow: the avatar stops straddling. At phone width the overlap costs more room than it buys, and
+   a 92px circle eating the name's first line is the failure it is supposed to prevent. */
+@container (max-width: 420px) {
+  .ph__identity { flex-direction: column; gap: 12px; }
+  /* MARGIN-BOTTOM BACK TO ZERO, and this is the whole reason the query exists. The negative margin
+     is what makes the avatar STRADDLE the fold in the row layout; stacked, there is no fold to
+     straddle and the same -36px pulls the name up THROUGH the circle — the first four characters of
+     every name rendered behind it, at every width from about 480px down. It passed the typecheck,
+     the flows and the snapshot; it was found by opening the page at 390px and reading it. */
+  .ph__avatar { width: 72px; height: 72px; font-size: 23px; margin-bottom: 0; }
+  .ph__names { padding-top: 0; }
+  .ph__facts { padding-top: 18px; }
+}

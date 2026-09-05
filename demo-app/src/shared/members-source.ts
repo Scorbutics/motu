@@ -29,6 +29,15 @@ export interface MembersQueryResult {
 export interface MembersPort {
   /** Rows matching `criteria`, ordered by surname, offset by `first`, at most `perPage` of them. */
   search(criteria: MemberCriteria, first: number, perPage: number): Promise<MembersQueryResult>;
+  /**
+   * One member by id, or `null` when there is no such row.
+   *
+   * NULL RATHER THAN A THROW, and the distinction is the whole reason this is on the port. "No such
+   * member" is a URL someone pasted wrongly and is a designed screen; "the database refused" is an
+   * outage and is a different one. A port that threw for both would make the profile page unable to
+   * tell them apart, and it would render the friendlier of the two.
+   */
+  byId(id: string): Promise<MemberRow | null>;
 }
 
 /** How many rows a page holds. The results island reads this back off the response, not from here. */
@@ -50,6 +59,17 @@ export function membersSource(port: MembersPort) {
       const first = safePage * PER_PAGE;
       const { rows, total } = await port.search(criteria ?? {}, first, PER_PAGE);
       return { list: rows, first, perPage: PER_PAGE, size: total };
+    },
+    /**
+     * One member, for the profile page.
+     *
+     * The guard is here rather than at the call site because every caller would otherwise repeat it:
+     * an empty id is a route that has not resolved, which is a question not worth asking the
+     * database — and asking it anyway returns a confusing "no such member" for a member nobody named.
+     */
+    async byId(id: string): Promise<MemberRow | null> {
+      if (!id) return null;
+      return port.byId(id);
     },
   };
 }

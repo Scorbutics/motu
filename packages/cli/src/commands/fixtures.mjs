@@ -5,6 +5,7 @@
 // (a self-consistency check of the pipeline). This closes the "fixtures are hand-written / can't
 // capture semantic fidelity" gap — the recorder replays real truth, keyed by request, without
 // reimplementing any backend logic.
+import { parseEvidence } from '../lib/evidence-json.mjs';
 import { existsSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -22,11 +23,8 @@ function readScenarios(fixturesPath) {
   const res = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: CLI_PKG });
   if (res.status !== 0) return [];
   const line = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
-  try {
-    return JSON.parse(line).scenarios ?? [];
-  } catch {
-    return [];
-  }
+  // See lib/evidence-json.mjs — the harness marks Dates so they survive this hop.
+  return parseEvidence(line)?.scenarios ?? [];
 }
 
 /** Stable JSON (sorted object keys) for dedup keys. */

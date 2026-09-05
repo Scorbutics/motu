@@ -10,25 +10,18 @@ import { configure } from '@motu/runtime';
 import { registerElements } from '@motu/react';
 import { ELEMENT_REGISTRY } from 'demo-app';
 import { setupAngularHost } from './lib/angular-host.js';
-import { membersClient, supabaseCompaniesPort, supabaseMembersPort } from './lib/supabase-port.js';
+import { supabaseCompaniesPort, supabaseMembersPort } from './lib/supabase-port.js';
+import { appClient } from './lib/app-data.js';
 import { membersTransport } from './lib/members-transport.js';
 import { App } from './App.js';
 import 'demo-app/styles.css';
 import './app.css';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-if (!url || !anonKey) {
-  // A blank page with a console warning is how a demo dies on camera. Say what is missing and where
-  // the answer comes from.
-  throw new Error(
-    'VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required.\n' +
-      'Run `pnpm db:start` in this directory and copy the printed values into roots/app/.env.local ' +
-      '(there is a .env.example beside it).',
-  );
-}
-
-const client = membersClient(url, anonKey);
+// ONE CLIENT FOR THE WHOLE APP, built in `lib/app-data.ts` and memoised there. The profile page
+// needs the same one for its two sources, and a second client would mean a second connection pool
+// and a second auth state for one anon key. That module also carries the "you forgot the env vars"
+// message, because a blank page with a console warning is how a demo dies on camera.
+const client = appClient();
 configure(membersTransport({ members: supabaseMembersPort(client), companies: supabaseCompaniesPort(client) }));
 
 // One island in this region is AngularJS. It needs a host to render into, exactly as it does in the

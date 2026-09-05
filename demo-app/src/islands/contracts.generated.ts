@@ -19,6 +19,7 @@ import type { OrgHeadcount as C_org_headcount } from '../ui/org-headcount/OrgHea
 import type { OrgPeople as C_org_people } from '../ui/org-people/OrgPeople.js';
 import type { OrgPerson as C_org_person } from '../ui/org-person/OrgPerson.js';
 import type { OrgTree as C_org_tree } from '../ui/org-tree/OrgTree.js';
+import type { ProfileHero as C_profile_hero } from '../ui/profile-hero/ProfileHero.js';
 import type { SelectedCompany as C_selected_company } from '../ui/selected-company/SelectedCompany.js';
 
 export const CONTRACTS = {
@@ -82,6 +83,11 @@ export const CONTRACTS = {
     output: { onDepartmentSelected: 'department-selected' },
     effects: [],
   },
+  'x-profile-hero': {
+    input: ['member', 'calendar', 'loading'],
+    output: { onBack: 'profile-back' },
+    effects: [],
+  },
   'x-selected-company': {
     input: ['company'],
     output: {  },
@@ -135,6 +141,8 @@ const _org_person: ContractFitsComponent<typeof C_org_person, 'x-org-person'> = 
 void _org_person;
 const _org_tree: ContractFitsComponent<typeof C_org_tree, 'x-org-tree'> = true;
 void _org_tree;
+const _profile_hero: ContractFitsComponent<typeof C_profile_hero, 'x-profile-hero'> = true;
+void _profile_hero;
 const _selected_company: ContractFitsComponent<typeof C_selected_company, 'x-selected-company'> = true;
 void _selected_company;
 

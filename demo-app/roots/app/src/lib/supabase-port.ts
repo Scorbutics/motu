@@ -9,6 +9,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { MemberCriteria } from 'demo-app';
 import type { MembersPort, MembersQueryResult } from 'demo-app';
 import type { CompaniesPort } from 'demo-app';
+import type { AvailabilityPort, TimeslotRow } from 'demo-app';
 
 /** Substring filters: what a person types into a search box is a fragment, not an identifier. */
 const CONTAINS: (keyof MemberCriteria)[] = ['email', 'firstname', 'surname'];
@@ -36,6 +37,14 @@ export function supabaseMembersPort(client: SupabaseClient): MembersPort {
       if (error) throw new Error(`members query failed: ${error.message}`);
       return { rows: data ?? [], total: count ?? 0 };
     },
+    async byId(id: string) {
+      // `maybeSingle`, NOT `single`. `single` makes "no rows" an ERROR, which would collapse the two
+      // outcomes the port exists to keep apart — a mistyped profile URL and a database that refused
+      // would arrive here as the same thing.
+      const { data, error } = await client.from('members').select('*').eq('id', id).maybeSingle();
+      if (error) throw new Error(`member lookup failed: ${error.message}`);
+      return data ?? null;
+    },
   };
 }
 
@@ -61,6 +70,38 @@ export function supabaseCompaniesPort(client: SupabaseClient): CompaniesPort {
       const { data, error, count } = await q.order('name').range(0, limit - 1);
       if (error) throw new Error(`companies query failed: ${error.message}`);
       return { rows: data ?? [], total: count ?? 0 };
+    },
+  };
+}
+
+/**
+ * The profile calendar's backend: a member's slots from an instant onward, in time order.
+ *
+ * SAME UNPROVEN INCH as the ports above, and the same mitigation — it is short. Everything the
+ * calendar actually decides (grouping into days, counting free against taken, which day opens
+ * first, the horizon) is in `availabilitySource`, where a unit test drives it over a hand-made port.
+ * What is left here is the vendor's shape, and the one thing no check in this project can tell you
+ * is that `gte('starts_at', …)` is the filter this app wants.
+ */
+export function supabaseAvailabilityPort(client: SupabaseClient): AvailabilityPort {
+  return {
+    async forMember(memberId: string, fromISO: string): Promise<TimeslotRow[]> {
+      const { data, error } = await client
+        .from('timeslots')
+        .select('id,starts_at,minutes,kind,taken')
+        .eq('member_id', memberId)
+        // Inclusive: a slot starting exactly at midnight belongs to today, and `gt` would drop it.
+        .gte('starts_at', fromISO)
+        .order('starts_at')
+        // A ceiling rather than a page. The source clamps to a HORIZON IN DAYS and cannot know how
+        // many rows that is, so the query asks for more than any plausible fortnight holds and lets
+        // the source do the clamping it can actually reason about.
+        .limit(400);
+      // THROW, don't return an empty list. "This member publishes no availability" is a designed
+      // screen with its own copy; "the database refused" is a different one, and returning [] here
+      // would render the first while meaning the second.
+      if (error) throw new Error(`availability query failed: ${error.message}`);
+      return (data ?? []) as TimeslotRow[];
     },
   };
 }

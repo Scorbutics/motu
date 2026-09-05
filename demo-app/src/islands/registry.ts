@@ -16,6 +16,7 @@ import { orgHeadcountElement } from './org-headcount/element';
 import { orgPeopleElement } from './org-people/element';
 import { orgPersonElement } from './org-person/element';
 import { orgTreeElement } from './org-tree/element';
+import { profileHeroElement } from './profile-hero/element';
 import { selectedCompanyElement } from './selected-company/element';
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
@@ -30,7 +31,7 @@ import { selectedCompanyElement } from './selected-company/element';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [companyLookupElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberResultsElement, memberSearchNgElement, orgHeadcountElement, orgPeopleElement, orgPersonElement, orgTreeElement, selectedCompanyElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [companyLookupElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberResultsElement, memberSearchNgElement, orgHeadcountElement, orgPeopleElement, orgPersonElement, orgTreeElement, profileHeroElement, selectedCompanyElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -50,5 +51,6 @@ export interface ElementTypes {
   'x-org-people': typeof orgPeopleElement;
   'x-org-person': typeof orgPersonElement;
   'x-org-tree': typeof orgTreeElement;
+  'x-profile-hero': typeof profileHeroElement;
   'x-selected-company': typeof selectedCompanyElement;
 }

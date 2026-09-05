@@ -21,7 +21,28 @@ setDefaultIsolation(__MOTU_ISOLATION__);
 // Give AngularJS islands (e.g. the extracted member-search) a host so they render offline.
 setupLagoonAngularHost();
 
+/**
+ * PER-ISLAND PROPS THE PAGE PASSES AND THE REGION DOES NOT CARRY.
+ *
+ * `loading` is the profile hero's own prop, not a region key: the page knows it is waiting on two
+ * requests, and no island owns that fact. Without a stand-in here the island would be previewed and
+ * approved in a state the application never shows it in — which is what `integrate check`'s
+ * `island-props` refuses, and it is right to.
+ *
+ * A STAND-IN, NOT THE REAL THING: `false` is the state the page spends almost all of its time in.
+ * The skeleton itself is still reachable — it is one of the island's own scenarios, at its own
+ * address — which is the right place for a state the region does not own.
+ *
+ * Declared as `const props`, the KIND-FIRST shape, because that is the one `integrate check` reads.
+ */
+const props = {
+  profile: {
+    'profile-hero': { loading: false },
+  },
+};
+
 bootstrapLagoon({
+  overrides: { props },
   elements: ELEMENT_REGISTRY,
   css,
   fixtures: ALL_FIXTURES,

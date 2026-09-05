@@ -11,7 +11,8 @@
     "./archipelagos/members": "./src/archipelagos/members/members.archipelago.ts",
     "./search-config": "./src/ui/member-search-ng/search.config.ts",
     "./archipelagos/users": "./src/archipelagos/users/users.archipelago.ts",
-    "./archipelagos/admin": "./src/archipelagos/admin/admin.archipelago.ts"
+    "./archipelagos/admin": "./src/archipelagos/admin/admin.archipelago.ts",
+    "./archipelagos/profile": "./src/archipelagos/profile/profile.archipelago.ts"
   },
   "dependencies": {
     "@motu/adapter-angularjs": "workspace:*",
@@ -23,5 +24,11 @@
   "peerDependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
+  },
+  "scripts": {
+    "test": "node --import tsx --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12"
   }
 }

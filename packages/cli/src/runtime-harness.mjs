@@ -5,6 +5,7 @@
 // declared `scenario` seed and report whether distinct inputs produced distinct output (data-flow).
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as React from 'react';
+import { stringifyEvidence } from './lib/evidence-json.mjs';
 
 /**
  * GENERATED IDS ARE MEANT TO DIFFER between mounts. React's `useId` counter is module state and Radix
@@ -35,7 +36,9 @@ async function main() {
         process.stderr.write(`harness: could not load scenarios ${fixturesPath}: ${err?.message}\n`);
       }
     }
-    process.stdout.write(JSON.stringify({ scenarios }) + '\n');
+    // stringifyEvidence, not JSON.stringify: a Date in a seed has to reach the CLI as a Date.
+    // See lib/evidence-json.mjs — this hop silently flattened them for as long as it existed.
+    process.stdout.write(stringifyEvidence({ scenarios }) + '\n');
     process.exit(0);
   }
 

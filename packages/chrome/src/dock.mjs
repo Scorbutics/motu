@@ -965,6 +965,9 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   }
   #tide .rail-open { flex-direction: row; gap: 10px; width: auto; grid-area: open; }
   #tide .rail-act { grid-area: pick; }
+  /* The pin is a desktop control: there is no width to reserve beside a bottom sheet. */
+  #tide .bay-pin { display: none; }
+
   #tide .rail-states {
     grid-area: states;
     display: flex;
@@ -1186,16 +1189,31 @@ function motuMountDock(opts) {
   var pinned = false;
   try { pinned = localStorage.getItem(PIN_KEY) === '1'; } catch (e) { pinned = false; }
   var pin = el('button', {
+    // Hidden in the phone layout by the stylesheet — a control that cannot do anything should not be
+    // there to press.
     class: 'bay-pin', type: 'button',
     title: 'Reserve space for the panel instead of covering the page',
     'aria-label': 'Pin the panel beside the page',
     'aria-pressed': pinned ? 'true' : 'false',
   }, ['\u25e8']);
+  /** The phone layout, where the dock is a bottom SHEET rather than a side panel. */
+  var isPhone = function () {
+    try {
+      return window.matchMedia('(max-width: 760px)').matches;
+    } catch (e) {
+      return false;
+    }
+  };
+
   var applyPin = function () {
     var root = document.documentElement;
     // Only meaningful while the panel is OPEN: a closed panel covers nothing, and reserving for it
     // would leave a hole beside a dock that is not there.
-    var on = pinned && tide.dataset.open === 'true';
+    // NEVER ON A PHONE. Pinning reserves horizontal space and makes the body a containing block, and
+    // neither means anything for a bottom sheet: there is no width to give up, and the transform
+    // reflowed the whole region around a panel that does not sit beside it. The preference is kept —
+    // rotating back to a wide viewport restores it — but it does not apply here.
+    var on = pinned && tide.dataset.open === 'true' && !isPhone();
     if (on) root.setAttribute('data-motu-dock-pin', '1');
     else root.removeAttribute('data-motu-dock-pin');
     pin.setAttribute('aria-pressed', pinned ? 'true' : 'false');
@@ -1817,6 +1835,9 @@ function motuMountDock(opts) {
           ]);
         }), 'No channels installed.');
 
+        // Read by the "Asked for" section below, which hands the wire door over to it.
+        var wire = seamData.wire || [];
+
         // ALL THREE DOORS IN ONE BLOCK. `asked` is the merged ledger — a contract call, a traced host
         // module, a wire reach — each row carrying which door it left by and WHO asked. `calls`/`traced`
         // is the two-door fallback for an overlay built before the ledger existed.
@@ -1824,7 +1845,17 @@ function motuMountDock(opts) {
           (seamData.calls || []).concat(seamData.traced || []).map(function (c) {
             return { via: 'host-module', label: c.label, detail: c.detail, owner: c.island, tone: 'ok' };
           });
-        listSection('Asked for', asked.length, asked.map(function (c) {
+        // THE WIRE DOOR MOVED OUT. Network shows the same calls with their payload, their order, their
+        // status and the gesture that caused them — strictly more, in a form you can open. Listing
+        // them here as well was pure duplication, and on a project where everything goes through the
+        // wire it made this section a worse copy of the one below it.
+        //
+        // KEPT for the other two doors, which Network cannot see: a CONTRACT call goes through the
+        // transport and a HOST-MODULE call through a stub, and neither is a fetch. On an ocean host,
+        // or a project still using module stubs, this section is the only signal there is — and it
+        // hides itself when it has nothing, rather than explaining an emptiness that is now normal.
+        var askedOffWire = asked.filter(function (c) { return c.via !== 'wire'; });
+        if (askedOffWire.length || !wire.length) listSection('Asked for', askedOffWire.length, askedOffWire.map(function (c) {
           return el('div', {
             class: 'seam-row',
             'data-tone': c.tone || 'ok',
@@ -1843,8 +1874,9 @@ function motuMountDock(opts) {
         // seed on a region whose source had fired forty-four times a second earlier — the calls were
         // there, the panel had filtered out everything a source asked for. It now names the doors it
         // actually looked at rather than explaining an emptiness it did not verify.
-        'Nothing was asked for through the contract, a traced host module or the wire. If the region '
-          + 'shows data anyway, it came from the seed or from a feed above.');
+        'Nothing was asked for through the contract or a traced host module. If the region shows data '
+          + 'anyway, it came from the seed, from a feed above, or over the wire — which is the Network '
+          + 'section below.');
 
         // ── NETWORK: the calls themselves ────────────────────────────────────────────────────────
         //
@@ -1858,7 +1890,6 @@ function motuMountDock(opts) {
         // refetch happened, the response was merged, or anything re-rendered. That is why this is a
         // log and not a check: it tells you the save fired and the read came back unchanged, which is
         // the difference between "the page is not wired" and "the stand-in did not record it".
-        var wire = seamData.wire || [];
         // GROUPED BY WHAT CAUSED THEM. The rows are newest first, so a run of calls sharing a gesture
         // gets one heading above it — "Enregistrer · 9 calls" — which is the answer to "what did my
         // click just do". Calls with no gesture (a load, a poll) simply have no heading.

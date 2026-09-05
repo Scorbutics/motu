@@ -238,6 +238,17 @@ export interface WireCall {
   method: string;
   /** `island:<tag>`, `source:<id>` or `unattributed` — the same attribution `data-reach` uses. */
   by: string;
+  /**
+   * WHAT THE PERSON DID, when a call can be traced to it — the accessible name of the control they
+   * pressed, and how many milliseconds earlier.
+   *
+   * `by` answers "which declaration should account for this", which is what a CHECK needs. It is
+   * also `unattributed` for most real calls, because a source fetches outside any island's window —
+   * so on the screen where you just pressed Enregistrer, every row says `unattributed` and none of
+   * them says WHY it happened. This is the other axis, and it is the one a person reads: the nine
+   * rows a save produced, grouped under the button that produced them.
+   */
+  gesture?: string;
   /** What was sent: an RPC's arguments, a write's row, a read's query string. Truncated. */
   request?: unknown;
   status?: number;
@@ -288,10 +299,39 @@ export function subscribeWireCalls(cb: () => void): () => void {
   return () => callListeners.delete(cb);
 }
 
+const gestureKey = '__motuGesture';
+/**
+ * How long after a click a request still counts as ITS request.
+ *
+ * Generous on purpose. A save is a write, a refetch and everything the refetch fans out into — on a
+ * real region that was 22 requests over most of a second — and cutting the tail off would split one
+ * action across two groups, which is worse than occasionally adopting a stray poll.
+ */
+const GESTURE_WINDOW_MS = 2500;
+
+/** The gesture in force, if one is recent enough to own what happens next. */
+function gestureNow(): string | undefined {
+  const g = (globalThis as unknown as Record<string, { label?: string; at?: number } | undefined>)[gestureKey];
+  if (!g || typeof g.label !== 'string' || typeof g.at !== 'number') return undefined;
+  return Date.now() - g.at <= GESTURE_WINDOW_MS ? g.label : undefined;
+}
+
+/**
+ * Say what the person just did, so the calls that follow can be grouped under it.
+ *
+ * Written through a global rather than an import because the DOCK sets it and the dock is a separate
+ * package that this one must not depend on — the same shape `reachOwner` and the request counter
+ * already use. Dev-only by construction: nothing sets it unless the overlay is mounted.
+ */
+export function noteGesture(label: string): void {
+  (globalThis as unknown as Record<string, unknown>)[gestureKey] = { label, at: Date.now() };
+}
+
 function recordCall(call: Omit<WireCall, 'seq' | 'at'>): void {
   const g = globalThis as unknown as Record<string, WireCall[] | undefined>;
   const calls = (g[callsKey] ??= []);
-  calls.push({ ...call, seq: ++callSeq, at: Date.now() });
+  const gesture = gestureNow();
+  calls.push({ ...call, ...(gesture ? { gesture } : {}), seq: ++callSeq, at: Date.now() });
   if (calls.length > MAX_CALLS) calls.splice(0, calls.length - MAX_CALLS);
   // A listener that throws is a panel's bug, not this module's: one bad subscriber must not stop the
   // fake from answering the request the application is waiting on.

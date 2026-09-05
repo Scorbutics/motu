@@ -107,9 +107,27 @@ html[data-motu-dock="left"][data-motu-dock-pin="1"] {
 }
 html[data-motu-dock="left"] { padding-left: var(--motu-dock-rail, 46px); }
 html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
-/* An application's own fixed furniture is positioned against the VIEWPORT, which no padding here can
- * move. Nothing inside a page can reach that — resizing the viewport is the host's job, and it does
- * it whenever the artifact is framed. Called out because it is the one case this does not cover. */
+/* AN APPLICATION'S OWN FIXED FURNITURE is positioned against the VIEWPORT, which no padding here can
+ * move — a dialog pinned to all four viewport edges covers the reserve as happily as the page. That
+ * used to be stated as a limit ("resizing the viewport is the host's job"), and it is right for the
+ * RAIL,
+ * which is 46px nobody is trying to interact around.
+ *
+ * PINNED it stops being acceptable: the whole point is to work in the region while watching the
+ * panel, and every modal the application opens landed under the dock. So while pinned, BODY becomes
+ * the containing block for fixed descendants — a transform is what does that — and a viewport-fixed
+ * dialog resolves against the page's own box instead. Portals included: they render into the body
+ * element, so they are inside it.
+ *
+ * The dock would be caught by the same rule, so it ESCAPES the subtree instead: while pinned its host
+ * is reparented onto the document element, outside the transform entirely. Compensating with an
+ * offset was the first attempt and it was wrong in the way that matters — the dock has several
+ * separately-positioned fixed parts (the panel, the scrim, the scope chip), each would have needed
+ * its own counter-offset, and the next one added would silently not.
+ *
+ * Only while pinned: this changes how the application's own layout resolves, so it happens when
+ * someone asks for it and not one moment before. */
+html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 
 /* The phone-only states strip. Declared OFF here, ABOVE the media queries, because a bare display
  * rule written after them wins on every width — which is how this stylesheet has twice shipped a
@@ -617,6 +635,19 @@ html[data-motu-dock="bottom"] { padding-bottom: var(--motu-dock-handle, 44px); }
 }
 #tide .seam-row--btn[aria-expanded="true"]::after { transform: rotate(90deg); }
 #tide .wire-call { display: grid; gap: 3px; }
+/* The gesture that caused the run below it. Quiet: it is a label on the log, not a row in it. */
+#tide .wire-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 2px 1px;
+  font: 600 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+#tide .wire-head__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tide .wire-head__n { margin-left: auto; flex: 0 0 auto; opacity: .75; }
 /* SELECTABLE AND WRAPPED, which is the whole reason this is not a title attribute: a payload you
    cannot copy is a payload you end up retyping. Capped so one large body cannot own the panel. */
 #tide .wire-detail {
@@ -1174,6 +1205,12 @@ function motuMountDock(opts) {
     // per-tab width needs no second edit here.
     if (on) root.style.setProperty('--motu-dock-panel', Math.round(panel.getBoundingClientRect().width) + 'px');
     else root.style.removeProperty('--motu-dock-panel');
+    // OUT OF THE TRANSFORMED SUBTREE while pinned, back where it was otherwise. A live subtree keeps
+    // its listeners and its state across a move, so this costs nothing but the reparent.
+    var host = tide.parentElement;
+    if (!host) return;
+    if (on && host.parentElement !== root) root.appendChild(host);
+    else if (!on && host.parentElement === root && mountEl && mountEl !== root) mountEl.appendChild(host);
   };
   pin.addEventListener('click', function () {
     pinned = !pinned;
@@ -1241,6 +1278,47 @@ function motuMountDock(opts) {
   tide.append(scrim, rail, panel, scopeChip);
   mountEl.appendChild(tide);
   tide.dataset.edge = 'right';
+
+  /**
+   * WHAT THE PERSON JUST DID, so the calls that follow can be grouped under it.
+   *
+   * `by` — the island or source a request is charged to — is what a CHECK needs, and it is
+   * `unattributed` for most real calls, because a source fetches outside any island's window. So on
+   * the screen where you just pressed Enregistrer every row says the same nothing, and none says WHY.
+   * A person reads the log the other way round: this is the nine requests that button produced.
+   *
+   * THE ACCESSIBLE NAME, not a selector — the same vocabulary `expectRender` reads from, so the label
+   * in the log is the one a person would use to describe what they pressed.
+   */
+  var nameOfTarget = function (node) {
+    var el2 = node && node.nodeType === 1 ? node : node && node.parentElement;
+    // The nearest thing that is actually a CONTROL: a click lands on the span inside the button.
+    var ctl = el2 && el2.closest ? el2.closest('button, a[href], [role="button"], summary, input, select, textarea, label') : null;
+    if (!ctl) return null;
+    var name = ctl.getAttribute('aria-label')
+      || (ctl.getAttribute('title') || '')
+      || (ctl.textContent || '').trim()
+      || ctl.getAttribute('placeholder')
+      || ctl.getAttribute('name')
+      || ctl.tagName.toLowerCase();
+    name = String(name).replace(/\s+/g, ' ').trim();
+    return name ? name.slice(0, 48) : null;
+  };
+  var noteGesture = function (ev) {
+    // The dock's own controls are not the region's story: pressing a tab or the pin must not adopt
+    // whatever the page happens to fetch next.
+    if (ev.target && ev.target.closest && ev.target.closest('#tide')) return;
+    var label = nameOfTarget(ev.target);
+    if (!label) return;
+    try {
+      globalThis.__motuGesture = { label: label, at: Date.now() };
+    } catch (e) { /* nothing reads it, which is the same as no grouping */ }
+  };
+  // CAPTURE, so the label is written before the application's own handler runs and fires the request.
+  document.addEventListener('pointerdown', noteGesture, true);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' || ev.key === ' ') noteGesture(ev);
+  }, true);
 
   var open = function (on) {
     tide.dataset.open = on ? 'true' : 'false';
@@ -1747,7 +1825,28 @@ function motuMountDock(opts) {
         // log and not a check: it tells you the save fired and the read came back unchanged, which is
         // the difference between "the page is not wired" and "the stand-in did not record it".
         var wire = seamData.wire || [];
-        listSection('Network', wire.length, wire.map(function (c) {
+        // GROUPED BY WHAT CAUSED THEM. The rows are newest first, so a run of calls sharing a gesture
+        // gets one heading above it — "Enregistrer · 9 calls" — which is the answer to "what did my
+        // click just do". Calls with no gesture (a load, a poll) simply have no heading.
+        var lastGesture = null;
+        var withHeads = [];
+        wire.forEach(function (c, i) {
+          if (c.gesture && c.gesture !== lastGesture) {
+            var run = 0;
+            for (var j = i; j < wire.length && wire[j].gesture === c.gesture; j++) run++;
+            withHeads.push({ head: c.gesture, count: run });
+          }
+          lastGesture = c.gesture || null;
+          withHeads.push(c);
+        });
+        listSection('Network', wire.length, withHeads.map(function (c) {
+          if (c.head) {
+            return el('div', { class: 'wire-head' }, [
+              el('span', { class: 'wire-head__t' }, ['\u21b3 ' + c.head]),
+              el('span', { class: 'wire-head__n' }, [c.count + (c.count === 1 ? ' call' : ' calls')]),
+            ]);
+          }
+          return (function (c) {
           // AN ACCORDION, because a title attribute was the wrong instrument: it cannot be selected,
           // cannot be copied, does not wrap, and never appears at all on a touch device. The payload
           // is the reason to look — a nested `p_sessions` is unreadable as one line and perfectly
@@ -1782,6 +1881,7 @@ function motuMountDock(opts) {
             else body.removeAttribute('hidden');
           });
           return el('div', { class: 'wire-call' }, [row, body]);
+          })(c);
         }),
         // The empty state is a real answer here, and a different one from "asked for" being empty:
         // no request AT ALL means the screen is rendering entirely from the seed.

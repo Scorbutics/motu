@@ -8,7 +8,7 @@
 // The bug this closes, three times over on one project: a write RPC answering `{ success: true }`
 // and recording nothing looks EXACTLY like a page that is not wired. One row — the call fired, with
 // the right payload, and the read came back unchanged — separates the two in a second.
-import { createPostgrestFetch, readWireCalls, clearWireCalls, readDataReach, subscribeWireCalls } from '../dist/postgrest-fetch.js';
+import { createPostgrestFetch, readWireCalls, clearWireCalls, readDataReach, subscribeWireCalls, noteGesture } from '../dist/postgrest-fetch.js';
 import { runWithIsland } from '@motu/core';
 
 let pass = 0, fail = 0;
@@ -126,6 +126,28 @@ await rpc('set_session_agenda', { p_sessions: Array.from({ length: 400 }, (_, i)
   const res = await rpc('set_session_agenda', { p: 3 });
   t('a throwing subscriber does not break the response', res.status === 200, String(res.status));
   offBad();
+}
+
+// ── what the person did ──────────────────────────────────────────────────────────────────────
+{
+  // `by` is what a CHECK needs and it is `unattributed` for most real calls — a source fetches
+  // outside any island's window. So the log said the same nothing on every row of the save you just
+  // made. This is the other axis: the button, and the run of calls it caused.
+  clearWireCalls();
+  noteGesture('Enregistrer');
+  await rpc('set_session_agenda', { p: 1 });
+  await rpc('get_team_sessions', { p: 2 });
+  const calls = readWireCalls();
+  t('tags the calls a gesture caused', calls.every((c) => c.gesture === 'Enregistrer'), String(calls[0]?.gesture));
+
+  // AND STOPS. A gesture owns what follows it, not the page's whole life — a poll arriving a minute
+  // later under the last button pressed is a lie that reads exactly like the truth.
+  const g = globalThis.__motuGesture;
+  globalThis.__motuGesture = { label: g.label, at: g.at - 10_000 };
+  clearWireCalls();
+  await rpc('set_session_agenda', { p: 3 });
+  t('...and stops owning them once the window passes', readWireCalls()[0]?.gesture === undefined, String(readWireCalls()[0]?.gesture));
+  globalThis.__motuGesture = undefined;
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

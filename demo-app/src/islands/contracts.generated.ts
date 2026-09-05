@@ -8,18 +8,18 @@
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
-import type { CompanyLookup as C_company_lookup } from '../../ui/company-lookup/CompanyLookup.js';
-import type { MemberActions as C_member_actions } from '../../ui/member-actions/MemberActions.js';
-import type { MemberCard as C_member_card } from '../../ui/member-card/MemberCard.js';
-import type { MemberFilterChips as C_member_filter_chips } from '../../ui/member-filter-chips/MemberFilterChips.js';
-import type { MemberForm as C_member_form } from '../../ui/member-form/MemberForm.js';
-import type { MemberHeader as C_member_header } from '../../ui/member-header/MemberHeader.js';
-import type { MemberResults as C_member_results } from '../../ui/member-results/MemberResults.js';
-import type { OrgHeadcount as C_org_headcount } from '../../ui/org-headcount/OrgHeadcount.js';
-import type { OrgPeople as C_org_people } from '../../ui/org-people/OrgPeople.js';
-import type { OrgPerson as C_org_person } from '../../ui/org-person/OrgPerson.js';
-import type { OrgTree as C_org_tree } from '../../ui/org-tree/OrgTree.js';
-import type { SelectedCompany as C_selected_company } from '../../ui/selected-company/SelectedCompany.js';
+import type { CompanyLookup as C_company_lookup } from '../ui/company-lookup/CompanyLookup.js';
+import type { MemberActions as C_member_actions } from '../ui/member-actions/MemberActions.js';
+import type { MemberCard as C_member_card } from '../ui/member-card/MemberCard.js';
+import type { MemberFilterChips as C_member_filter_chips } from '../ui/member-filter-chips/MemberFilterChips.js';
+import type { MemberForm as C_member_form } from '../ui/member-form/MemberForm.js';
+import type { MemberHeader as C_member_header } from '../ui/member-header/MemberHeader.js';
+import type { MemberResults as C_member_results } from '../ui/member-results/MemberResults.js';
+import type { OrgHeadcount as C_org_headcount } from '../ui/org-headcount/OrgHeadcount.js';
+import type { OrgPeople as C_org_people } from '../ui/org-people/OrgPeople.js';
+import type { OrgPerson as C_org_person } from '../ui/org-person/OrgPerson.js';
+import type { OrgTree as C_org_tree } from '../ui/org-tree/OrgTree.js';
+import type { SelectedCompany as C_selected_company } from '../ui/selected-company/SelectedCompany.js';
 
 export const CONTRACTS = {
   'x-company-lookup': {

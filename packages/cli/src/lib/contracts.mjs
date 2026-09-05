@@ -11,7 +11,7 @@
 // literal event names and `RegionWiringOk` still fails the build on a mistyped wire — the guarantees
 // are unchanged, the transcription is gone.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { readComponentContract } from './component-props.mjs';
 import { listIslands } from './islands.mjs';
 import { readEffectEntries, writeEffectEntry } from './effects.mjs';
@@ -80,6 +80,13 @@ function islandContractUncached(island, { islandComponentPath, islandComponentEx
     effects: contract?.effects ?? [],
     read: !!contract,
     component,
+    // WHERE THE SPECIFIER WAS AUTHORED. `component.from` is copied verbatim off the island's own
+    // import, and the island file is not where it lands: a `folder` island sits one directory
+    // deeper than `contracts.generated.ts`, so a RELATIVE specifier written there resolves one
+    // level too high once it is re-emitted here. Keeping the authoring directory is what lets
+    // `renderContracts` rebase it. Alias and bare specifiers are depth-independent and are why this
+    // went unseen — every consumer that used `@/…` was already correct.
+    elementDir: dirname(island.element),
   };
 }
 
@@ -89,7 +96,20 @@ export function projectContracts(islandsDir, util) {
 }
 
 /** Render `contracts.generated.ts`. */
-export function renderContracts(contracts) {
+/**
+ * The specifier as `contracts.generated.ts` must spell it.
+ *
+ * Relative specifiers are re-anchored from the island file's directory onto the generated file's;
+ * anything else (an alias like `@/…`, a bare package name) is depth-independent and passes through.
+ */
+function specifierFrom(component, elementDir, outDir) {
+  const spec = component.from;
+  if (!spec.startsWith('.') || !elementDir || !outDir) return spec;
+  const rebased = relative(outDir, resolve(elementDir, spec)).split(sep).join('/');
+  return rebased.startsWith('.') ? rebased : `./${rebased}`;
+}
+
+export function renderContracts(contracts, outDir) {
   const entry = (c) => {
     const input = c.input.map((p) => `'${p}'`).join(', ');
     const output = Object.entries(c.output).map(([prop, ev]) => `${prop}: '${ev}'`).join(', ');
@@ -107,7 +127,10 @@ export function renderContracts(contracts) {
   const withComponent = contracts.filter((c) => c.component);
   const local = (c) => `C_${c.kebab.replace(/-/g, '_')}`;
   const imports = withComponent
-    .map((c) => `import type { ${c.component.name} as ${local(c)} } from '${c.component.from}';`)
+    .map(
+      (c) =>
+        `import type { ${c.component.name} as ${local(c)} } from '${specifierFrom(c.component, c.elementDir, outDir)}';`,
+    )
     .join('\n');
   const assertions = withComponent
     .map(
@@ -180,7 +203,7 @@ export function island<T extends Tag>(
 /** Write the contracts file. Returns { path, count, changed }. */
 export function syncContracts(islandsDir, util) {
   const out = resolve(islandsDir, CONTRACTS_FILE);
-  const next = renderContracts(projectContracts(islandsDir, util));
+  const next = renderContracts(projectContracts(islandsDir, util), islandsDir);
   const changed = !existsSync(out) || readFileSync(out, 'utf8') !== next;
   if (changed) writeFileSync(out, next);
   return { path: out, count: listIslands(islandsDir).length, changed };
@@ -190,7 +213,7 @@ export function syncContracts(islandsDir, util) {
 export function contractsDrift(islandsDir, util) {
   const out = resolve(islandsDir, CONTRACTS_FILE);
   if (!existsSync(out)) return { missing: true, drifted: false };
-  const next = renderContracts(projectContracts(islandsDir, util));
+  const next = renderContracts(projectContracts(islandsDir, util), islandsDir);
   return { missing: false, drifted: readFileSync(out, 'utf8') !== next };
 }
 

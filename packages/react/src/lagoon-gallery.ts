@@ -21,6 +21,7 @@ import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
+import { lagoonHarness } from './lagoon-harness';
 import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
@@ -515,6 +516,44 @@ markSandbox();
     // 'region' renders the archipelago's own layout.
     if (view === 'mountpoints') el.setAttribute('view', 'mountpoints');
     root!.appendChild(el);
+
+    // THE SAME HARNESS `defineLagoon` INSTALLS, for the same reason — and this is the entry that
+    // needed it most.
+    //
+    // `defineLagoon` (the focused entry `motu island verify` drives) has installed this since region
+    // flows stopped being React-only. The GALLERY's element branch never did: it built
+    // <motu-archipelago> by hand, so `window.__motuLagoon` stayed absent and `replayFlow` — which
+    // asks for it by name — refused every flow with "this lagoon mounts islands as elements;
+    // replaying a flow needs the React mount path". On an ocean host that made region flows
+    // unreachable from the one entry a person actually opens, and from every check driven through it:
+    // `region-flow` reported each step's assertion against a region nothing had stimulated, so a
+    // REGION THAT COULD NOT BE DRIVEN LOOKED LIKE A REGION WHOSE COUPLINGS WERE BROKEN. That is the
+    // worst shape a failure can take — it names the application when the harness is what is missing.
+    //
+    // Per mount rather than once: the gallery switches stations, `lagoonHarness` closes over one
+    // config, and a stale handle would drive the region the viewer just left. Installed AFTER the
+    // element is in the DOM so `emit`'s mounted-island check sees this region's islands, and before
+    // `applyRequestedFlow` so a `?flow=` in the URL replays against a seam that exists.
+    //
+    // `emit` is the capability that cannot live on the element: <motu-archipelago> exposes `provide`
+    // and `reset`, and firing a declared output needs the config, the store and the mounted-island
+    // registry together. Nothing about that is React's — which is exactly why the harness is the
+    // right home for it and the mount path is not.
+    //
+    // NO `remount`, deliberately, as on the other element path: teardown here is re-inserting the
+    // <motu-island> markers, which `provideScenario` does by hand precisely while `remount` is
+    // absent. `provideScenario` also prefers the element's own seam when it has one, so scenarios
+    // keep the behaviour they have today and only flows gain a seam.
+    if (typeof window !== 'undefined') {
+      const mountedConfig = opts.archipelagos[id];
+      if (mountedConfig) {
+        window.__motuLagoon = lagoonHarness(mountedConfig, {
+          seed: regionOverrides(overrides, id).seed,
+          host,
+        });
+      }
+    }
+
     tide.setActive(current, view);
     tide.setFlows(flowsOf(id), activeFlowName(id));
     applyRequestedFlow(id);

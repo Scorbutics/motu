@@ -52,7 +52,17 @@ function Pills({ member }: { member: MemberRow | undefined }) {
  * believes, so the seed makes each of these navigable.
  */
 function Availability({ calendar }: { calendar: Calendar | undefined }) {
-  const days = calendar?.days.length ?? 0;
+  // PROBED, NOT TRUSTED. `calendar?.days.length` was the first version, and the optional chain guards
+  // only `calendar` — hand it anything else shaped differently and `.length` throws, React tears the
+  // whole region down, and every check sharing that page session afterwards reports a pristine screen
+  // it can no longer explain. `flow-mutation` found this by feeding the step a value the region cannot
+  // mistake for the real one, which is precisely the job it exists to do: nothing else in the set
+  // renders this island with a wrong-shaped key, because nothing else tries to.
+  //
+  // An island must render from defaults alone, and "the key holds something I do not recognise" is one
+  // of those defaults — the empty state is the honest answer, not a crash.
+  const dayList = Array.isArray(calendar?.days) ? calendar.days : [];
+  const days = dayList.length;
   if (days === 0) {
     return (
       <p className="ph__avail ph__avail--none">
@@ -61,7 +71,7 @@ function Availability({ calendar }: { calendar: Calendar | undefined }) {
       </p>
     );
   }
-  const free = calendar?.freeCount ?? 0;
+  const free = typeof calendar?.freeCount === 'number' && Number.isFinite(calendar.freeCount) ? calendar.freeCount : 0;
   if (free === 0) {
     return (
       <p className="ph__avail ph__avail--full">

@@ -72,7 +72,13 @@ export const scenarios: RegionScenario[] = [
       },
       {
         provide: { member: RASMUS, draft: draftFromMember(RASMUS), calendar: NO_CALENDAR },
-        expectRender: { 'profile-hero': 'Publishes no availability' },
+        // TWO SLOTS, AND THE SECOND ONE IS WHY. "Publishes no availability" is the DEGENERATE render
+        // — it is what the hero shows for an empty calendar and equally for a key holding something
+        // it does not recognise, so on its own this assertion holds however the step is driven and
+        // `flow-mutation` rejects it, correctly. Asserting the member number on the OTHER island in
+        // the same step ties the claim to the stimulus: null out what this step provides and the card
+        // falls back to its resting state, so the mutant fails and the real flow still passes.
+        expectRender: { 'profile-hero': 'Publishes no availability', 'member-card': '702511' },
       },
     ],
   },

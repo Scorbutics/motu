@@ -8,11 +8,12 @@
 //
 // So the React host's lagoon renders through the same `<ArchipelagoProvider>` / `<Island>` its pages
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
-import { Component, createElement, Fragment, type ReactNode } from 'react';
+import { Component, createElement, Fragment, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { lagoonHarness } from './lagoon-harness';
 import {
   applyOutput,
+  installChannels,
   getArchipelagoStore,
   getChannels,
   getMountedIslands,
@@ -38,6 +39,13 @@ import type { ElementSpec } from './bootstrap';
 
 /** One React root per container, so a re-mount replaces rather than stacks. */
 const roots = new Map<HTMLElement, ReturnType<typeof createRoot>>();
+/**
+ * The teardown for channels installed into a PAGE view's store.
+ *
+ * Kept beside the roots and undone with them: a channel left running after the view is replaced keeps
+ * writing to a store nobody reads, and on a source that polls it keeps fetching too.
+ */
+const pageChannels = new Map<HTMLElement, () => void>();
 
 export interface ReactLagoonOptions {
   elements: ElementSpec[];
@@ -228,6 +236,10 @@ export function mountReactLagoon(
   // Switching station or view re-mounts: drop the previous root first, or React warns about two roots
   // on one container and the old tree keeps its store subscription alive.
   roots.get(mountEl)?.unmount();
+  // And the channels that view installed, for the same reason one layer down: a channel left running
+  // writes to a store nobody reads, and one built on a polling source keeps fetching as well.
+  pageChannels.get(mountEl)?.();
+  pageChannels.delete(mountEl);
 
   // PER ISLAND, not once around the set: some of what an island needs is per-island (Twenty's widgets
   // read a `WidgetComponentInstanceContext` keyed by widget id), and a wrapper around the whole
@@ -274,23 +286,41 @@ export function mountReactLagoon(
   // exists to show. `providers` and the `wire` are installed for every view, so what renders here is
   // the page with its environment and its HTTP answered, and nothing else supplied.
   //
-  // The cost of skipping the provider is that CHANNELS do not fire here — they are installed by it.
-  // See `RegionOverrides.page` for what that means and why it is not fixed yet.
+  // CHANNELS DO FIRE HERE NOW, installed after the page's own region has mounted — see below.
   if (opts.view === 'page') {
     const root = createRoot(mountEl);
     roots.set(mountEl, root);
     root.render(
       opts.page ? (
-        // THE PROPS COME FROM THE ARCHIPELAGO, which is where the region declared it is a page. The
-        // lagoon supplies the component and nothing else: two places would be two answers to "what
-        // state is this page in", and the region already owns that question for its islands.
-        <PageErrorBoundary>
-          {(() => {
-            const page = opts.page as (props: unknown) => ReactNode;
-            const props = (config as { page?: { props?: unknown } }).page?.props ?? {};
-            return opts.providers ? opts.providers(page(props), '') : page(props);
-          })()}
-        </PageErrorBoundary>
+        // STRICT MODE, and only in this view.
+        //
+        // It double-invokes render and runs every effect mount → cleanup → mount, which is what React
+        // does in an application's own dev server and what no other lagoon view can reproduce: the
+        // region view mounts ISLANDS, so nothing there owns a page's lifecycle.
+        //
+        // The bug that earned it: a page created a source in `useMemo`, let it start loading, and
+        // disposed it in the effect's cleanup. StrictMode's simulated unmount therefore killed the
+        // instance the page then went on using — the first load's answers were dropped by its own
+        // generation guard, nothing restarted it, and the screen kept its spinner for ever. Every
+        // motu check was green, because the lagoon installs a source through a channel and no React
+        // component owns it. This view is the only place that can see it, so it may as well look.
+        <StrictMode>
+          {/* THE PROPS COME FROM THE ARCHIPELAGO, which is where the region declared it is a page.
+              The lagoon supplies the component and nothing else: two places would be two answers to
+              "what state is this page in", and the region already owns that question for its
+              islands. */}
+          <PageErrorBoundary>
+            {(() => {
+              // AS AN ELEMENT, never called directly. This was `page(props)` — invoking the component
+              // as a plain function, outside any render — so every hook in it threw "Invalid hook
+              // call". Which is every real page: the first one to declare `page` would have found
+              // this view unusable, and none had, so nothing did.
+              const props = (config as { page?: { props?: unknown } }).page?.props ?? {};
+              const node = createElement(opts.page as never, props as never);
+              return opts.providers ? opts.providers(node, '') : node;
+            })()}
+          </PageErrorBoundary>
+        </StrictMode>
       ) : (
         <div className="motu-empty" data-motu-page="absent">
           This region declares no <code>page</code>, so there is nothing to render here. Add{' '}
@@ -298,6 +328,35 @@ export function mountReactLagoon(
         </div>
       ),
     );
+
+    // CHANNELS, ONCE THE PAGE'S OWN REGION HAS MOUNTED.
+    //
+    // This view mounts no `ArchipelagoProvider` — the page brings its own — and a channel is normally
+    // installed by that provider, so a region fed by one used to render here with those keys unset
+    // and `page-render` could report a slot as unreached when the truth was that nothing fed it.
+    //
+    // The store is module state keyed by archipelago id, so the channels can be installed against it
+    // as soon as the page's `createRegion` has registered it. That is a render away, hence the
+    // microtask: at this point React has been asked to render but has not run yet.
+    //
+    // It was left undone on the honest grounds that the one project it was built against declared no
+    // channels, and a fix nobody can fail is not a fix. There is one now.
+    if (opts.channels?.length) {
+      queueMicrotask(() => {
+        const store = getArchipelagoStore(config.id);
+        if (!store) {
+          // Said, not swallowed: the alternative is a page that renders empty for a reason nothing
+          // reports, which is the failure this view exists to end.
+          console.warn(
+            `motu: ?view=page could not install ${opts.channels?.length} channel(s) for '${config.id}' — ` +
+              'the page has not composed the region (no store registered for that id), so the keys a ' +
+              'channel feeds will be unset.',
+          );
+          return;
+        }
+        pageChannels.set(mountEl, installChannels(store, opts.channels as Channel[]));
+      });
+    }
     return;
   }
 

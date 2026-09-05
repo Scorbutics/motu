@@ -1,0 +1,13 @@
+{
+  // The CLI ships as authored JavaScript and is never compiled — this exists for its `.tsx` TESTS,
+  // which import motu's React source and are run with tsx/bun straight from the checkout.
+  //
+  // WITHOUT IT THE JSX RUNTIME FALLS BACK TO CLASSIC, and every JSX expression inside an imported
+  // module becomes `React.createElement` against a module that imports React by NAMED exports only —
+  // "React is not defined", thrown from motu's source at the first element it renders. The existing
+  // test passed because the file it imports never reaches its own JSX; the first test that did render
+  // one fell straight into it.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "types": [] },
+  "include": ["test"]
+}

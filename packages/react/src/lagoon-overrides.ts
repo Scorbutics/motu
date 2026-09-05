@@ -56,13 +56,18 @@ export interface RegionOverrides {
    * own — the page brings its own region. So a page that crashes on load crashes here, and a slot the
    * page never reaches is a slot that never appears in the DOM.
    *
-   * `channels` DO NOT FIRE IN THIS VIEW, and that is a limitation rather than a decision. A channel is
-   * installed by motu's own `ArchipelagoProvider`, which this view deliberately does not mount — the
-   * page supplies its own. A region fed by a channel therefore renders here with those keys unset, and
-   * `page-render` may report a slot as unreached when the truth is that nothing fed it. Fixable: the
-   * store is module state keyed by archipelago id, so the channels could be installed against it once
-   * the page's own region has mounted. Not done, because the one project this was built against
-   * declares no channels and a fix nobody can fail is not a fix.
+   * `channels` FIRE HERE, installed against the store once the page's own region has registered it —
+   * the store is module state keyed by archipelago id, so this view can reach it without mounting a
+   * second provider. It was left undone on the honest grounds that the one project this was built
+   * against declared no channels, and a fix nobody can fail is not a fix; there is one now, and a
+   * region fed by a channel no longer renders here with its keys unset.
+   *
+   * RENDERED UNDER `StrictMode`, which no other view is. React double-invokes render and runs every
+   * effect mount → cleanup → mount there, exactly as an application's own dev server does — and a
+   * page's lifecycle is the one thing no region view owns, because those mount ISLANDS. The bug that
+   * earned it: a page created a source in `useMemo` and disposed it in the effect's cleanup, so the
+   * simulated unmount killed the instance the page then went on using and the screen kept its spinner
+   * for ever. Every other check was green.
    *
    * It is only renderable where the page module can be IMPORTED into a browser bundle. A React page
    * on a Vite or a plain-React host qualifies; a Next server component does not, and says so rather

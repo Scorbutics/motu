@@ -366,6 +366,7 @@ export function currentSeams() {
             : JSON.stringify(c.request, null, 2),
       at: c.at,
       gesture: c.gesture ?? '',
+      gestureId: c.gestureId ?? null,
       status: c.status ?? 0,
       response: c.response ?? '',
       // A 4xx/5xx is the row worth seeing: an RPC no fixture answers 404s here and the app's own

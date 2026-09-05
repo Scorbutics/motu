@@ -150,5 +150,21 @@ await rpc('set_session_agenda', { p_sessions: Array.from({ length: 400 }, (_, i)
   globalThis.__motuGesture = undefined;
 }
 
+// ── two presses of the same button ───────────────────────────────────────────────────────────
+{
+  // THE BUG THIS CLOSES. Every save on a real screen is called "Enregistrer" — the agenda, the
+  // commitment banner, the settings dialog — so grouping by the LABEL merged two separate actions
+  // into one run and reported the second one's calls as part of the first.
+  clearWireCalls();
+  noteGesture('session-tab · Enregistrer');
+  await rpc('set_session_agenda', { p: 1 });
+  noteGesture('session-tab · Enregistrer');
+  await rpc('set_session_agenda', { p: 2 });
+  const [first, second] = readWireCalls();
+  t('same label, two presses, two ids', first.gestureId !== second.gestureId, `${first.gestureId} vs ${second.gestureId}`);
+  t('...and the label is still carried', second.gesture === 'session-tab · Enregistrer', String(second.gesture));
+  globalThis.__motuGesture = undefined;
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

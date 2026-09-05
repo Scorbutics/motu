@@ -1304,14 +1304,48 @@ function motuMountDock(opts) {
     name = String(name).replace(/\s+/g, ' ').trim();
     return name ? name.slice(0, 48) : null;
   };
+  /**
+   * WHERE the control lives, because its name is not enough.
+   *
+   * Every save button on a real screen is called "Enregistrer" — the agenda, the commitment banner,
+   * the settings dialog — so the label alone named four different actions the same way.
+   *
+   * THE ISLAND SLOT FIRST, which is motu's own vocabulary and the most useful answer: the run reads
+   * "session-tab · Enregistrer" and you know which region piece did it. A DIALOG is the case that
+   * cannot work — it portals to the body element, outside every island's subtree — so its accessible
+   * name stands in, which is what a person calls it anyway.
+   */
+  var scopeOfTarget = function (node) {
+    var el2 = node && node.nodeType === 1 ? node : node && node.parentElement;
+    if (!el2 || !el2.closest) return null;
+    var slot = el2.closest('[data-motu-slot]');
+    if (slot) return slot.getAttribute('data-motu-slot');
+    var dialog = el2.closest('[role="dialog"], [role="alertdialog"], dialog');
+    if (!dialog) return null;
+    var named = dialog.getAttribute('aria-label');
+    if (!named) {
+      var by = dialog.getAttribute('aria-labelledby');
+      var head = (by && document.getElementById(by)) || dialog.querySelector('h1, h2, h3, [data-slot="dialog-title"]');
+      named = head && head.textContent;
+    }
+    named = String(named || '').replace(/\s+/g, ' ').trim();
+    return named ? named.slice(0, 32) : 'dialog';
+  };
   var noteGesture = function (ev) {
     // The dock's own controls are not the region's story: pressing a tab or the pin must not adopt
     // whatever the page happens to fetch next.
     if (ev.target && ev.target.closest && ev.target.closest('#tide')) return;
     var label = nameOfTarget(ev.target);
     if (!label) return;
+    var scope = scopeOfTarget(ev.target);
     try {
-      globalThis.__motuGesture = { label: label, at: Date.now() };
+      globalThis.__motuGesture = {
+        label: scope ? scope + ' \u00b7 ' + label : label,
+        at: Date.now(),
+        // A NEW ID PER PRESS. Grouping by the label merged two separate saves into one run, and the
+        // second one's calls were reported as part of the first.
+        id: (globalThis.__motuGestureSeq = (globalThis.__motuGestureSeq || 0) + 1),
+      };
     } catch (e) { /* nothing reads it, which is the same as no grouping */ }
   };
   // CAPTURE, so the label is written before the application's own handler runs and fires the request.
@@ -1828,15 +1862,17 @@ function motuMountDock(opts) {
         // GROUPED BY WHAT CAUSED THEM. The rows are newest first, so a run of calls sharing a gesture
         // gets one heading above it — "Enregistrer · 9 calls" — which is the answer to "what did my
         // click just do". Calls with no gesture (a load, a poll) simply have no heading.
-        var lastGesture = null;
+        // KEYED ON THE PRESS, not on the label: two saves in a row are two runs even though both
+        // buttons say Enregistrer, which is exactly the case that made this necessary.
+        var lastId = null;
         var withHeads = [];
         wire.forEach(function (c, i) {
-          if (c.gesture && c.gesture !== lastGesture) {
+          if (c.gesture && c.gestureId !== lastId) {
             var run = 0;
-            for (var j = i; j < wire.length && wire[j].gesture === c.gesture; j++) run++;
+            for (var j = i; j < wire.length && wire[j].gestureId === c.gestureId; j++) run++;
             withHeads.push({ head: c.gesture, count: run });
           }
-          lastGesture = c.gesture || null;
+          lastId = c.gestureId != null ? c.gestureId : null;
           withHeads.push(c);
         });
         listSection('Network', wire.length, withHeads.map(function (c) {

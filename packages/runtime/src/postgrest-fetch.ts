@@ -249,6 +249,12 @@ export interface WireCall {
    * rows a save produced, grouped under the button that produced them.
    */
   gesture?: string;
+  /**
+   * WHICH PRESS, not which label. Every button on this screen is called "Enregistrer" — the séance's
+   * agenda, the commitment banner, the settings dialog — so grouping by the label merged two separate
+   * actions into one run and reported the second as part of the first. An id per press cannot.
+   */
+  gestureId?: number;
   /** What was sent: an RPC's arguments, a write's row, a read's query string. Truncated. */
   request?: unknown;
   status?: number;
@@ -310,11 +316,14 @@ const gestureKey = '__motuGesture';
 const GESTURE_WINDOW_MS = 2500;
 
 /** The gesture in force, if one is recent enough to own what happens next. */
-function gestureNow(): string | undefined {
-  const g = (globalThis as unknown as Record<string, { label?: string; at?: number } | undefined>)[gestureKey];
+function gestureNow(): { label: string; id: number } | undefined {
+  const g = (globalThis as unknown as Record<string, { label?: string; at?: number; id?: number } | undefined>)[gestureKey];
   if (!g || typeof g.label !== 'string' || typeof g.at !== 'number') return undefined;
-  return Date.now() - g.at <= GESTURE_WINDOW_MS ? g.label : undefined;
+  if (Date.now() - g.at > GESTURE_WINDOW_MS) return undefined;
+  return { label: g.label, id: typeof g.id === 'number' ? g.id : 0 };
 }
+
+let gestureSeq = 0;
 
 /**
  * Say what the person just did, so the calls that follow can be grouped under it.
@@ -324,14 +333,19 @@ function gestureNow(): string | undefined {
  * already use. Dev-only by construction: nothing sets it unless the overlay is mounted.
  */
 export function noteGesture(label: string): void {
-  (globalThis as unknown as Record<string, unknown>)[gestureKey] = { label, at: Date.now() };
+  (globalThis as unknown as Record<string, unknown>)[gestureKey] = { label, at: Date.now(), id: ++gestureSeq };
 }
 
 function recordCall(call: Omit<WireCall, 'seq' | 'at'>): void {
   const g = globalThis as unknown as Record<string, WireCall[] | undefined>;
   const calls = (g[callsKey] ??= []);
   const gesture = gestureNow();
-  calls.push({ ...call, ...(gesture ? { gesture } : {}), seq: ++callSeq, at: Date.now() });
+  calls.push({
+    ...call,
+    ...(gesture ? { gesture: gesture.label, gestureId: gesture.id } : {}),
+    seq: ++callSeq,
+    at: Date.now(),
+  });
   if (calls.length > MAX_CALLS) calls.splice(0, calls.length - MAX_CALLS);
   // A listener that throws is a panel's bug, not this module's: one bad subscriber must not stop the
   // fake from answering the request the application is waiting on.

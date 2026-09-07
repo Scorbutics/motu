@@ -172,6 +172,18 @@ async function lagoonPage(server, target, view) {
       )
       .catch(() => false);
     if (aimed) return existing;
+    // A FULL LOAD IS COLD AGAIN, whatever the last check was.
+    //
+    // `paintTimeout` is latched to WARM by the first re-aim and was never put back, so every full
+    // load after it got a fifth of the deadline a first paint is budgeted. Not hypothetical in this
+    // lane: a VIEW change cannot be re-aimed, so it opens a fresh page and loads it cold, and the
+    // region checks change view three times per region — every one of those after the first re-aim
+    // was racing a 3s clock meant for a page that is already booted.
+    //
+    // Found while chasing something else (the target, below in `lagoon-bootstrap`) and fixed on its
+    // own merits: it is a flake waiting on a slow CI runner, and the failure it produces is
+    // "nothing mounted under that slot" — which names the region and not the clock.
+    paintTimeout = PAINT_TIMEOUT_COLD;
     pageView.set(server.key, view ?? 'region');
     await existing.goto(lagoonUrl(server, target, view), { waitUntil: 'load' });
     return existing;
@@ -179,6 +191,7 @@ async function lagoonPage(server, target, view) {
   const browser = await getBrowser();
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await setupPageDiagnostics(page, null);
+  paintTimeout = PAINT_TIMEOUT_COLD;
   pageView.set(server.key, view ?? 'region');
   await page.goto(lagoonUrl(server, target, view), { waitUntil: 'load' });
   pages.set(server.key, page);

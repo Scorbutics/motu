@@ -324,13 +324,34 @@ markSandbox();
   // failed with "the region rendered nothing after this step" — which is a true sentence about a page
   // that was never asked for the right view. Defaulted at BOOT and not inside `render`, because the
   // harness re-aims the same page and must be able to state what IT wants (see `render`).
+  //
+  // AND THE TARGET DOES IT NOW TOO, which the paragraph above claimed it already did.
+  //
+  // It did not — in the SCAFFOLDED entry, yes, which reads `?target=` and passes the result; in the
+  // framework, never. `resolveTarget` reads `opts.target` and nothing else, so a hand-written entry
+  // that passes `__MOTU_TARGET__` straight through pinned the whole page to whatever target the dev
+  // server was BOOTED with. The URL was accepted and ignored.
+  //
+  // What that costs: the runtime lane drives one server and navigates. Re-aims go through the
+  // harness, so they worked — but every VIEW change is a full load, and the region checks change view
+  // three times per region. So the second region onward loaded `?target=archipelago:members` and
+  // rendered `<motu-archipelago name="admin">`. `archipelago verify --all` failed three of four
+  // regions with "nothing mounted under that slot", each of which passed alone, and the message named
+  // the region while the DOM held its predecessor. demo-app's entry predates the scaffold's fix, so
+  // motu's own ocean example is the project that had it.
+  //
+  // URL FIRST, not `??`: a build-time target is a default, and the point of the param is that ONE
+  // server answers for every target. At BOOT only, like `view` — the harness re-aims by calling
+  // `render` directly and must be able to state what IT wants without the stale URL overruling it.
+  const urlParams = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
   opts = {
     ...opts,
+    target: urlParams?.get('target') || opts.target,
     view:
       opts.view ??
-      (typeof location !== 'undefined'
+      (urlParams
         ? (({ page: 'page', mountpoints: 'mountpoints', region: 'region' } as const)[
-            new URLSearchParams(location.search).get('view') ?? ''
+            urlParams.get('view') ?? ''
           ] ?? undefined)
         : undefined),
   };
@@ -501,12 +522,42 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
     view: opts.view === 'page' ? undefined : opts.view,
   });
 
+  const mount = document.getElementById(opts.mountId ?? 'lagoon');
+  // EMPTIED FIRST, because `render` is also the RE-AIM.
+  //
+  // This appended, and only appended. On boot that is invisible — the mount is empty — and the
+  // runtime lane re-aims ONE page across every target, so the second region's `<motu-archipelago>`
+  // landed BESIDE the first's rather than replacing it. Both then answered to
+  // `[data-motu-slot]`, and `lagoon-render` reported every region after the first as "declared but
+  // not placed by this arrangement" while looking at its predecessor's frames.
+  //
+  // The React branch above has always replaced — `mountReactLagoon` owns the root — so this was the
+  // element path's alone, which is to say the ocean host's alone.
+  mount?.replaceChildren();
   if (opts.view === 'page') {
     console.error(
       'motu: ?view=page renders the application\'s own page module and is React-only — this lagoon ' +
         'mounts islands as custom elements, so there is no page to render. The region view was shown instead.',
     );
+    // AND SAY IT IN THE DOM, not only in the console.
+    //
+    // The refusal above was invisible to the one reader that acts on it. `page-render` tells "this
+    // region declares no page" from "the page mounted and drew nothing" by the `data-motu-page`
+    // marker the React path emits — absence has two meanings, and with nothing here it read the
+    // second. So every ocean region failed with "reaches NONE of its declared slot(s)" printed two
+    // lines under a green `lagoon-render` that had just mounted every one of them, and the runtime
+    // tier went red on a host that has no page to check in the first place.
+    //
+    // It goes in BESIDE the region rather than instead of it, because the fallback above is
+    // deliberate: a person who typed the URL still sees the region, and the probe reads the truth.
+    const absent = document.createElement('div');
+    absent.className = 'motu-empty';
+    absent.setAttribute('data-motu-page', 'absent');
+    absent.textContent =
+      'This lagoon mounts islands as custom elements, so there is no application page module to ' +
+      'render here. Showing the region instead.';
+    mount?.appendChild(absent);
   }
-  document.getElementById(opts.mountId ?? 'lagoon')?.appendChild(el);
+  mount?.appendChild(el);
   return el;
 }

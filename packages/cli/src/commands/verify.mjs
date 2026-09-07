@@ -2258,7 +2258,17 @@ function declaredWrites(id) {
   if (!existsSync(file)) return [];
   return readRegions(paths.archipelagosDir)
     .find((r) => r.id === id)
-    ?.islands.filter((i) => Object.keys(i.writes ?? {}).length) ?? [];
+    // `planned` ISLANDS ARE NOT HERE YET, and both readers of this list ask a question only a built
+    // island can answer. `wiring-live` mounts the slot and fires the event — a slot nobody has
+    // written mounts nothing, so it reported "this region mounts no island under that slot" as an
+    // ERROR against a region that is behaving exactly as declared. `writes-covered` asks for a flow
+    // driving the write, and no flow can drive an island that does not exist.
+    //
+    // That is the whole point of the flag: ownership still counts a planned entry — a second claim on
+    // its keys fails as if it were built — while the checks that ask "does it exist, does it mount,
+    // is it placed" skip it. This list had never been told, so demo-app's surveyed booking region was
+    // red in the runtime tier for having a survey.
+    ?.islands.filter((i) => !i.planned && Object.keys(i.writes ?? {}).length) ?? [];
 }
 
 /** Pretty-print a report's findings + the PASS/FAIL summary line (shared by island + archipelago verify). */

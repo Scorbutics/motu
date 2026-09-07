@@ -31,6 +31,42 @@ function archConst(id) {
 }
 
 /**
+ * The source ids one host file installs with `channelFrom`, for a given region.
+ *
+ * PARSED, for the reason the rest of this file is: `args: [port, { now }]` ends in a brace, and a
+ * regex reaching for the call's closing `})` stops on the wrong one. Reading the call expression
+ * costs nothing here — the file is already in the project for the placement scan.
+ *
+ * FILTERED BY REGION, because a composition root may compose more than one: `to` names the
+ * archipelago const, so a channel for somebody else's region does not answer for this one. A `to`
+ * that is not a plain identifier (assembled, re-exported, aliased) is counted rather than dropped —
+ * this check exists to say the page installs SOMETHING for that id, and a false red here is what
+ * sent it looking for an import that does not exist.
+ */
+export function channelSourceIds(file, regionId) {
+  let sf;
+  try {
+    sf = sourceFileAt(file, { allowJs: true, jsx: 4 });
+  } catch {
+    return [];
+  }
+  const wanted = archConst(regionId);
+  const ids = [];
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getExpression().getText() !== 'channelFrom') continue;
+    const spec = call.getArguments()[0];
+    if (spec?.getKind() !== SyntaxKind.ObjectLiteralExpression) continue;
+    const to = spec.getProperty('to')?.getInitializer?.();
+    if (to && to.getKind() === SyntaxKind.Identifier && to.getText() !== wanted) continue;
+    const id = spec.getProperty('id')?.getInitializer?.();
+    if (!id) continue;
+    if (id.getKind() === SyntaxKind.StringLiteral || id.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral)
+      ids.push(id.getText().replace(/^['"`]|['"`]$/g, ''));
+  }
+  return ids;
+}
+
+/**
  * Every host source file, as text.
  *
  * The roots come from `hostSourceFiles` — the host's own tsconfig where it has one, so this and
@@ -671,19 +707,42 @@ function checkRegion(region, sources) {
   // `{ module, produces }` — so a region declaring `teams: teamsSource`, the STRONGER form the type
   // system checks, skipped this check entirely and nothing said so. Two readers of one declaration is
   // how the better shape ends up with less checking than the weaker one.
+  //
+  // TWO DECLARATION FORMS, TWO WAYS TO INSTALL ONE, and reading both as "the page imports the module"
+  // is what turned this into a permanent red. A source declared BY REFERENCE (`shots: shotsSource`)
+  // is already imported — by the ARCHIPELAGO, which is the point of the stronger form — and the page
+  // installs it by naming it: `channelFrom({ to: reviewArchipelago, id: 'shots', args: [port] })`.
+  // There is no import for the page to make, and adding one would be a second reference to a module
+  // the region already owns. `channelFrom` says so itself: handed a source declared by module name
+  // only, it throws "there is nothing to install" — so the two forms do not share an answer.
+  //
+  //   by reference          -> a `channelFrom` naming this source id (or the module, still imported)
+  //   { module, produces }  -> the module, imported by a host file that uses the region
   const declaredSrc = declaredSourcesOf(region.file);
   {
     const users = [...sources].filter(([, t]) => code(t).includes(`${binding}.`));
+    const channelled = new Set();
+    for (const [file] of users) for (const id of channelSourceIds(file, region.id)) channelled.add(id);
 
     for (const [name, src] of Object.entries(declaredSrc)) {
       const module = src.module;
       // Resolved, not compared as text: the page says `./directory-source`, the region says
       // `@/app/dashboard/directory/directory-source`, and they are the same file.
       const target = resolveAppImport(region.file, module);
-      const installed = users.some(([f, t]) =>
+      const imported = users.some(([f, t]) =>
         [...code(t).matchAll(/from\s*['"]([^'"]+)['"]/g)].some((i) => resolveAppImport(f, i[1]) === target),
       );
-      if (installed) add('ok', 'source', `source "${name}" installed from ${module}`);
+      if (imported) add('ok', 'source', `source "${name}" installed from ${module}`);
+      else if (src.byReference && channelled.has(name))
+        add('ok', 'source', `source "${name}" installed by channelFrom({ id: '${name}' })`);
+      else if (src.byReference)
+        add(
+          'error',
+          'source',
+          `no host file that uses ${binding} installs source "${name}" — the region declares it produces ` +
+            `its keys, so the page must install it with channelFrom({ to: ${archConst(region.id)}, id: '${name}', args: [...] }) ` +
+            `rather than feed them another way`,
+        );
       else
         add(
           'error',

@@ -5,12 +5,18 @@
 # and an adapter's only other consumer usually lives in somebody else's repository, so an in-tree
 # consumer is the one that cannot drift unnoticed.
 #
-# THREE PROJECTS, THREE CONFIGS. `motu check` locates a project by the `motu.config.json` in its cwd,
+# TWO PROJECTS, TWO CONFIGS. `motu check` locates a project by the `motu.config.json` in its cwd,
 # which is why every step below names a `working-directory`:
 #
 #   .                 demo-app, the AngularJS OCEAN     (motu.config.json at the repo root)
 #   host-app/motu     the Next host                     (islands package beside the app)
-#   review-console    the Vite console                  (non-blocking — see that job)
+#
+# There was a THIRD — `review-console`, the Vite console, run non-blocking because it declared no
+# `root`. It was folded into the Next host (ef4cdbd) and the directory deleted; the job outlived it by
+# months, failing every run on "no such file or directory" while its own comment promised it would be
+# deleted the day the console declared a `root`. It does now — `review.archipelago.ts` names
+# `ReviewLayout` — so the promise is kept here. A non-blocking job that cannot even start is not a
+# report, it is a red tick everyone has learned to scroll past.
 #
 # Split by TIER, as documented in docs/07-checks-and-verification.md:
 #   static   every push — no browser, seconds
@@ -226,41 +232,3 @@ jobs:
 
       - name: host-app — the Next host
         run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check --audit
-        working-directory: host-app/motu
-
-  # ---------------------------------------------------------------------------------------------
-  # REVIEW CONSOLE — REPORTED, NOT GATED, and the distinction is deliberate.
-  #
-  # It fails `region-root` today: a React host composing with neither a `root` nor a lagoon frame, so
-  # the page and the lagoon each describe the arrangement their own way and nothing compares the two.
-  # That is the check being RIGHT — the console is genuinely un-migrated (see
-  # docs/06-composition-and-adoption.md), and it is a real backlog item rather than a bug.
-  #
-  # Gating on it would make every unrelated PR red, and a permanently red gate teaches everyone to
-  # ignore the gate. Omitting it entirely would let it rot unseen. So: visible, annotated, non-blocking
-  # — and this job is deleted, not un-skipped, the day the console declares a `root`.
-  # ---------------------------------------------------------------------------------------------
-  review-console:
-    name: motu check (review-console, non-blocking)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    if: github.event_name != 'schedule'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build packages
-        run: node scripts/build-packages.mjs
-
-      - name: review-console — known `region-root` failure
-        run: node ${{ github.workspace }}/packages/cli/src/cli.mjs check
-        working-directory: review-console

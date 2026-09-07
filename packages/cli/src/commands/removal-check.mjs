@@ -301,6 +301,42 @@ function motuOnlySet(graph, hostRoot, motuDirs) {
 }
 
 /**
+ * Put back what an INTERRUPTED previous run took, before this one can destroy the evidence.
+ *
+ * Idempotent and cheap: with no manifest there is nothing to do, which is every normal run. It is
+ * deliberately loud when it does fire — silently repairing a repository is how you learn nothing
+ * about the crash that made it necessary.
+ */
+function recoverInterrupted(backupDir, manifestFile, hostRoot, quiet) {
+  if (!existsSync(manifestFile)) return;
+  let files = [];
+  try {
+    files = JSON.parse(readFileSync(manifestFile, 'utf8')).files ?? [];
+  } catch {
+    // An unreadable manifest still means a run was interrupted; restore everything the backup holds
+    // rather than nothing, since a partial repair is worse than a full one.
+    files = [];
+  }
+  const restored = [];
+  for (const rel of files) {
+    const src = resolve(backupDir, rel);
+    if (!existsSync(src)) continue;
+    const dest = resolve(hostRoot, rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest);
+    restored.push(rel);
+  }
+  rmSync(manifestFile, { force: true });
+  if (!quiet) {
+    console.log(
+      color.yellow('! removal-check') +
+        `  a previous run was INTERRUPTED mid-surgery — restored ${restored.length} file(s) before continuing`,
+    );
+    for (const rel of restored) console.log(color.dim(`    restored ${rel}`));
+  }
+}
+
+/**
  * The check as data, for `motu check` to aggregate. `quiet` suppresses the report; the surgery, the
  * typecheck and the ALWAYS-restore are identical either way.
  */
@@ -308,6 +344,22 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   const cfg = loadMotuConfig();
   const hostRoot = cfg.hostRoot;
   const backupDir = resolve(cfg.cacheDir, 'removal-check');
+  // The surgery's own crash log. Written after the backups are taken and before the first file is
+  // touched, so its mere EXISTENCE means "a previous run was interrupted between those two points".
+  const manifestFile = resolve(backupDir, 'interrupted.json');
+
+  // CRASH RECOVERY — BEFORE anything else, and in particular before the backup directory is cleared.
+  //
+  // The restore lives in a `finally`, which covers a throw and covers nothing else: a `finally` does
+  // not run on SIGTERM, SIGINT or SIGHUP. So `timeout`, Ctrl-C, a killed CI step or an OOM between
+  // the delete and the restore left the host repository stripped — composition roots gone, pages
+  // unwrapped — with no way back. The next run then made it PERMANENT, because it began by deleting
+  // the backup directory holding the only copy of the originals, and recomputed the surgery from a
+  // tree that was already missing files.
+  //
+  // Measured on peps: 13 `components/motu/*` deleted and six dashboard pages rewritten, recovered by
+  // hand from git. A check that proves motu is removable must not be the thing that removes it.
+  recoverInterrupted(backupDir, manifestFile, hostRoot, quiet);
 
   // A PROJECT THAT NEVER CLAIMED REMOVABILITY. See `removable` in the config loader for why motu's
   // own tools cannot answer this question. Said out loud rather than passed over, and reported as a
@@ -588,17 +640,53 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   }
 
   let result;
+  const surgical = [...deleted, ...stripped];
+  // ONE restore, reachable from three places: the `finally`, a signal, and an uncaught throw. Guarded
+  // so the common path (finally, after a clean run) does not redo what a signal handler already did.
+  let restored = false;
+  const restoreAll = () => {
+    if (restored) return;
+    restored = true;
+    for (const p of surgical) {
+      const src = resolve(backupDir, relative(hostRoot, p));
+      if (existsSync(src)) cpSync(src, p);
+    }
+    // The surgery is undone, so the crash log must not outlive it — otherwise the NEXT run reports an
+    // interruption that has already been repaired.
+    rmSync(manifestFile, { force: true });
+  };
+  // `finally` does not run on a signal, and this surgery deletes application files. Without these the
+  // host repository stays stripped after a `timeout`, a Ctrl-C or a killed CI step — see the recovery
+  // note at the top of this function. Exit codes are the conventional 128+n so callers still see a
+  // signal death rather than a clean exit.
+  const onSignal = (sig, code) => () => {
+    restoreAll();
+    if (!quiet) console.log(color.yellow(`\n! removal-check  ${sig} — restored ${surgical.length} file(s) before exiting`));
+    process.exit(code);
+  };
+  const handlers = [
+    ['SIGINT', onSignal('SIGINT', 130)],
+    ['SIGTERM', onSignal('SIGTERM', 143)],
+    ['SIGHUP', onSignal('SIGHUP', 129)],
+  ];
+  for (const [sig, fn] of handlers) process.on(sig, fn);
+  // Last resort for a throw that escapes the try (a handler above it, an async boundary): `exit` fires
+  // for every non-signal termination, and restoreAll is idempotent so a double call costs nothing.
+  const onExit = () => restoreAll();
+  process.on('exit', onExit);
   try {
-    for (const p of [...deleted, ...stripped]) backup(p);
+    for (const p of surgical) backup(p);
+    // AFTER the backups, BEFORE the first mutation — that ordering is what makes the manifest mean
+    // "everything listed here has a copy in the backup directory".
+    writeFileSync(manifestFile, JSON.stringify({ files: surgical.map((p) => relative(hostRoot, p)) }, null, 1));
     for (const p of deleted) rmSync(p);
     for (const p of stripped) writeFileSync(p, project.getSourceFile(p).getFullText());
 
     result = hostTypecheck(hostRoot);
   } finally {
-    for (const p of [...deleted, ...stripped]) {
-      const src = resolve(backupDir, relative(hostRoot, p));
-      if (existsSync(src)) cpSync(src, p);
-    }
+    restoreAll();
+    for (const [sig, fn] of handlers) process.off(sig, fn);
+    process.off('exit', onExit);
   }
 
   if (!quiet) {

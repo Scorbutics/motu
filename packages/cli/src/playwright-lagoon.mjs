@@ -743,9 +743,132 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
               }
               return parts.join(' ').replace(/\s+/g, ' ').trim();
             };
+            /**
+             * THE SLOT, PLUS WHAT IT OPENED THROUGH A PORTAL.
+             *
+             * `expectRender` is slot-scoped, and a dialog/popover/dropdown/select built on a portal
+             * renders as a SIBLING of the slot under `document.body` — so everything a member sees
+             * after clicking a control in that slot was invisible to the assertion. A flow could open
+             * the challenges catalogue, click an info trigger and watch the warning appear on screen,
+             * and still have nothing it was allowed to assert. motu already met the mirror of this on
+             * the CLICK side and fixed it there (`runInteractions` searches page-wide "because a
+             * dialog/popover/dropdown built on a portal renders as a SIBLING of the island"); this is
+             * the same fix on the assertion side.
+             *
+             * ARIA OWNERSHIP, NOT "everything under body". The relation is read from the accessibility
+             * tree — `aria-controls` / `aria-owns` / `aria-describedby`, which is precisely how a
+             * portal declares "that content over there is mine" and how a screen reader follows it.
+             * Radix (and every shadcn component on it) wires these already: a trigger carries
+             * `aria-controls` to its content's id, so nothing in the application has to be annotated
+             * for motu. Widening to "any portal" instead would have let ANOTHER island's open dialog
+             * satisfy this slot's assertion, which is the coupling `expectRender` exists to catch.
+             *
+             * TRANSITIVE, because overlays nest: the slot owns the dialog, and a trigger INSIDE the
+             * dialog owns the popover. One hop would have stopped at the dialog.
+             *
+             * Three guards keep it honest: content already inside the slot is not re-collected;
+             * content that sits inside ANOTHER slot belongs to that slot and is skipped, so this can
+             * never let one island's render answer for another's; and invisible targets are ignored
+             * (`forceMount` keeps a closed overlay in the DOM, and a closed overlay is not perceived).
+             */
+            const perceivableRoots = (slotEl) => {
+              const roots = [slotEl];
+              const seen = new Set([slotEl]);
+              const visible = (el) => el.getClientRects().length > 0 || el.offsetParent !== null;
+              // Never collect content that belongs to ANOTHER slot: one island's overlay must not be
+              // able to satisfy another island's assertion, which is the coupling this check exists
+              // to catch. And never re-collect what the slot already contains.
+              // Also never collect a node that a root ALREADY collected contains: a dialog's own
+              // `aria-describedby` points at its description, which is inside the dialog, and adding
+              // it again duplicated the whole overlay in the reported surface.
+              const claimable = (el) =>
+                el &&
+                !seen.has(el) &&
+                !slotEl.contains(el) &&
+                !el.closest('[data-motu-slot]') &&
+                visible(el) &&
+                !roots.some((r) => r.contains(el));
+
+              /**
+               * WHO RENDERED THIS NODE — read from React, which is the only place that still knows.
+               *
+               * A portal moves a node in the DOM and NOT in the React tree: the content is still a
+               * child of the component that rendered it, and the fiber's `return` chain says so. So
+               * walking up from a portalled node until a host fiber lands inside the slot answers
+               * "did this slot's island put this on screen?" exactly, with no annotation in the
+               * application and no guessing from position in the DOM.
+               *
+               * This is what ARIA alone could not do. `aria-controls` works for a Radix trigger, but
+               * a dialog opened from component state (`<ResponsiveDialog open={open}>`) has no
+               * trigger and therefore no ARIA relation to follow at all — measured on peps' own
+               * challenges panel, where the slot contained ZERO aria-owning elements while a dialog
+               * it had plainly rendered sat under `body`. Both paths are kept: fibers are exact but
+               * React-specific, ARIA is portable and covers a host motu cannot read fibers from.
+               */
+              // `Object.keys`, not `for...in`: React attaches the fiber as an OWN property, and
+              // `for...in` would walk the whole DOM prototype chain to find it.
+              const FIBER = (node) => {
+                for (const k of Object.keys(node)) {
+                  if (k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$')) return node[k];
+                }
+                return null;
+              };
+              const renderedInsideSlot = (node) => {
+                let f = FIBER(node);
+                // Bounded: a corrupted or cyclic chain must not turn an assertion into a hang.
+                for (let hops = 0; f && hops < 4000; hops++, f = f.return) {
+                  const sn = f.stateNode;
+                  if (sn && sn.nodeType === 1 && slotEl.contains(sn)) return true;
+                }
+                return false;
+              };
+
+              // A portal's DOM home is a container, normally `document.body`. Scanning its children
+              // (rather than the whole document) keeps this cheap and is where every portal lands.
+              for (const node of Array.from(document.body.children)) {
+                if (!claimable(node)) continue;
+                if (!renderedInsideSlot(node)) continue;
+                seen.add(node);
+                roots.push(node);
+              }
+
+              // ARIA OWNERSHIP, as the second path — `aria-controls` / `aria-owns` /
+              // `aria-describedby` is how a portal declares that content is its own and how a screen
+              // reader follows it. Transitive, because overlays nest: the slot owns the dialog, and a
+              // trigger INSIDE the dialog owns the popover.
+              for (let i = 0; i < roots.length && roots.length < 64; i++) {
+                const from = roots[i];
+                const holders = [from, ...from.querySelectorAll('[aria-controls], [aria-owns], [aria-describedby]')];
+                for (const holder of holders) {
+                  for (const attr of ['aria-controls', 'aria-owns', 'aria-describedby']) {
+                    const raw = holder.getAttribute?.(attr);
+                    if (!raw) continue;
+                    for (const id of raw.split(/\s+/)) {
+                      if (!id) continue;
+                      let target = null;
+                      try {
+                        target = document.getElementById(id);
+                      } catch {
+                        target = null;
+                      }
+                      if (!claimable(target)) continue;
+                      seen.add(target);
+                      roots.push(target);
+                    }
+                  }
+                }
+              }
+              return roots;
+            };
+            const perceivableWithPortals = (slotEl) =>
+              perceivableRoots(slotEl)
+                .map(perceivable)
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
             const renderText = (slot) => {
               const el = document.querySelector(`[data-motu-slot="${slot}"]`);
-              return el ? perceivable(el) : null;
+              return el ? perceivableWithPortals(el) : null;
             };
             /**
              * CASE-INSENSITIVE, because `innerText` reports what `text-transform` produced.
@@ -779,7 +902,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
                 renderMismatches.push({ key: `render:${slot}`, expected: want, actual: 'nothing mounted under that slot' });
                 continue;
               }
-              const text = perceivable(el);
+              const text = perceivableWithPortals(el);
               const wants = typeof want === 'string' ? { text: want } : want;
               if (wants.text != null && !contains(text, wants.text)) {
                 renderMismatches.push({ key: `render:${slot}`, expected: `text containing ${JSON.stringify(wants.text)}`, actual: text });

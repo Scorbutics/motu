@@ -197,6 +197,16 @@ export interface RegionStep {
    * `expect` names region keys, so a step whose `expect` names the key its `emit` targets is a
    * tautology: it cannot fail unless the wiring is broken. Ending on another island's rendered text
    * is the thing that fails when the store is right and the screen is wrong.
+   *
+   * THE SLOT INCLUDES WHAT IT OPENED. A dialog, popover, dropdown or select built on a portal renders
+   * as a SIBLING of the slot under `document.body`, so everything a member sees after clicking a
+   * control in that slot used to be unassertable — a flow could open an overlay, watch the right text
+   * appear, and have nothing it was allowed to name. The slot's surface therefore follows ARIA
+   * ownership (`aria-controls` / `aria-owns` / `aria-describedby`, transitively, since overlays nest),
+   * which is how a portal declares that content is its own and how a screen reader follows it. Radix —
+   * and every shadcn component on it — already wires those, so nothing in the application needs
+   * annotating. Content inside another slot is never collected: one island's overlay can never satisfy
+   * another island's assertion, which is the coupling this check exists to catch.
    */
   expectRender?: Record<string, string | { text?: string; notText?: string }>;
   /**

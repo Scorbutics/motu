@@ -453,11 +453,18 @@ values) and fails when it differs from `.assay/operations.json`. That is precise
 the port's assumption — the port says what the source expects, the ledger says what the operation
 sends.
 
-Know the one gap that leaves. A client that talks to the database or the auth service DIRECTLY —
-`supabase.auth.getUser()`, a PostgREST read in a service — is not an operation, so it has no
-declaration and neither tool pins its shape. That adapter is the last unproven inch of this design.
-It is a few lines by construction, which is the mitigation; routing the read through an operation is
-the fix when it stops being a few lines.
+Know the gap that leaves, and do not repeat the mistake this paragraph used to make. A client that
+talks to the database or the auth service DIRECTLY — `supabase.auth.getUser()`, a PostgREST read or
+an `rpc` in a repository — is not an operation, so it has no declaration and neither tool pins its
+shape. This text called that "a few lines by construction, which is the mitigation". It was wrong:
+counted on the project it was written for, the direct-from-browser path was ~40 modules naming 89
+Postgres functions — the app's DOMINANT data path, not an adapter. Nobody had counted it, and the
+guess became a rule.
+
+So: measure the gap in YOUR host before deciding it is small, and never read a green assay run as
+covering it. What guards that path is RLS alone, which makes the review surface the POLICY rather
+than a declaration. Routing the read through a backend operation is the fix where the read deserves
+one; where it does not, say plainly that the path is unpinned rather than describing it as narrow.
 
 ## Adoption is staged, and stage 1 does not touch the page
 

@@ -443,6 +443,8 @@ export function ejectFile(sf, regions, outputs) {
   // 1b. `const { a = 0, b } = useRegion<R>()` — every destructured key becomes state, and the
   //     statement goes: the declarations are re-inserted together at the top of the component.
   for (const call of regionReads) {
+    // See 1c for why this guard exists — it is the same array, walked three times.
+    if (call.wasForgotten()) continue;
     const decl = call.getParentIfKind(SyntaxKind.VariableDeclaration);
     const pattern = decl?.getNameNode();
     if (!pattern || pattern.getKind() !== SyntaxKind.ObjectBindingPattern) continue;
@@ -464,6 +466,19 @@ export function ejectFile(sf, regions, outputs) {
   //     `region.<key>` in the file becomes its own state, and the declaration becomes a plain object
   //     of those, which keeps every `region.key` read working untouched.
   for (const call of regionReads) {
+    // ONE CALL IS HANDLED ONCE, BY WHICHEVER SHAPE MATCHED IT FIRST.
+    //
+    // 1b and 1c walk the SAME `regionReads` array, and 1b ends with
+    // `decl.getVariableStatement()?.remove()` — which forgets the call node inside it. Reaching for
+    // `call.getParentIfKind(...)` here then threw "Attempted to get information from a node that was
+    // removed or forgotten", the surgery aborted, and the file was left untouched. `removal-check`
+    // reported the host as load-bearing on three pages whose only crime was to READ their region
+    // back with the destructured form — the shape motu's own docs recommend — and the TS errors it
+    // printed afterwards all named those same untouched files, so they looked like the finding.
+    //
+    // The function already knew about this hazard: the `anchor` above is captured before any rewrite
+    // "because replacing a node forgets it". The loops were simply never given the same care.
+    if (call.wasForgotten()) continue;
     const decl = call.getParentIfKind(SyntaxKind.VariableDeclaration);
     const nameNode = decl?.getNameNode();
     if (!nameNode || nameNode.getKind() !== SyntaxKind.Identifier) continue;

@@ -547,6 +547,10 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       if (isMotuSpec(spec) || (target && motuOnly.has(target))) imp.remove();
     }
     } catch (err) {
+      if (process.env.MOTU_DEBUG_SURGERY) {
+        console.error('\n=== SURGERY THREW in', relative(hostRoot, p), '===');
+        console.error(err?.stack || String(err));
+      }
       surgeryErrors.push(`${relative(hostRoot, p)}: ${String(err?.message || err).split('\n')[0]}`);
     }
     stripped.push(p);

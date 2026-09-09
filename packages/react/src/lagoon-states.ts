@@ -340,6 +340,48 @@ function findClickable(name: string): HTMLElement | null {
 }
 
 /**
+ * The control a `click` names, once it EXISTS — not once the DOM merely stopped moving.
+ *
+ * `waitForDomQuiet` answers "has rendering settled?", which is not the same question. A region whose
+ * source is still fetching is perfectly quiet between two awaits: the base hub loads its teams, then
+ * their details, then each next meeting, and publishes ONE state at the end. Resolve during that gap
+ * and the fold that lists the closed teams has not rendered yet — `ClosedTeamsSection` returns null
+ * while its list is empty — so the click failed with "nothing clickable is named" on a control that
+ * appeared 50ms later. Intermittent, machine-dependent, and it looked like a bad flow rather than a
+ * race.
+ *
+ * So: poll for the name until it shows up, and only then give up. Failing on the FIRST miss is what
+ * made a slow fetch indistinguishable from a control that does not exist.
+ */
+function clickableNames(): string[] {
+  const candidates = [...document.querySelectorAll<HTMLElement>(CLICKABLE)].filter(
+    (el) => el.offsetParent !== null || el.getClientRects().length > 0,
+  );
+  return [...new Set(candidates.map(accessibleName).filter(Boolean))].slice(0, 12);
+}
+
+/** "nothing clickable is named X" alone turns writing a flow into guessing at the names a component
+ *  happens to produce. The CLI side has printed them for a while; this side had not, so the same
+ *  failure was legible in one place and a dead end in the other. */
+function noClickableNamed(step: number, name: string): string {
+  const available = clickableNames();
+  return (
+    `step ${step}: nothing clickable is named "${name}" — clickable here: ` +
+    (available.length ? available.map((n) => `"${n}"`).join(', ') : '(nothing clickable is rendered)')
+  );
+}
+
+async function waitForClickable(name: string, budgetMs = 4000): Promise<HTMLElement | null> {
+  const until = Date.now() + budgetMs;
+  for (;;) {
+    const el = findClickable(name);
+    if (el) return el;
+    if (Date.now() >= until) return null;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+/**
  * Settle on the DOM, not the store — `waitForQuiet` watches region KEYS, and an island's own click
  * handler (a fetch, a catch block, a dialog opening) can move the whole screen without writing one.
  * Using the store version here would return after the first tick and click into a page still filling
@@ -370,9 +412,9 @@ export async function replayInteractions(scenario: Scenario, upTo: number | null
     // Each click can reveal the control the next one names, so settle between them rather than
     // resolving the whole list up front.
     await waitForDomQuiet();
-    const el = findClickable(click);
+    const el = await waitForClickable(click);
     if (!el) {
-      return { ...base, applied: i, error: `step ${i + 1}: nothing clickable is named "${click}"` };
+      return { ...base, applied: i, error: noClickableNamed(i + 1, click) };
     }
     el.click();
   }
@@ -449,9 +491,9 @@ export async function replayFlow(flow: RegionScenario, upTo: number | null): Pro
       // DOM is quiet finds the page mid-render. Same order `replayInteractions` uses, for the same
       // reason.
       await waitForDomQuiet();
-      const el = findClickable(step.click);
+      const el = await waitForClickable(step.click);
       if (!el) {
-        return { ...base, applied: i, error: `step ${i + 1}: nothing clickable is named "${step.click}"` };
+        return { ...base, applied: i, error: noClickableNamed(i + 1, step.click) };
       }
       el.click();
     }

@@ -354,6 +354,10 @@ export function currentSeams() {
       seq: c.seq,
       target: c.target,
       method: c.method,
+      // THE ADDRESS as well as the declaration's name for it. `table:shots(select)` is what a check
+      // compares; `/rest/v1/shots?select=*&club_id=eq.11` is what answers "it asked for the wrong
+      // club", which is the question somebody opens this list with.
+      url: c.url ?? '',
       by: c.by,
       // TWO SHAPES OF THE SAME PAYLOAD. The row shows as much as one line holds; the panel expands to
       // the pretty-printed whole, which is the only form in which a nested `p_sessions` is readable.

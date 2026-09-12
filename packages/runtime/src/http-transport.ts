@@ -44,10 +44,15 @@ export class HttpTransport implements Transport {
       });
   }
 
+  /** The dispatcher path this call goes to — what the dock shows when one lands. */
+  endpoint(service: string, method: string): string {
+    return `${this.base}/${service}/${method}`;
+  }
+
   async call<T>(service: string, method: string, args: unknown[]): Promise<T> {
     const xsrf = readCookie(this.xsrfCookieName);
 
-    const res = await fetch(`${this.base}/${service}/${method}`, {
+    const res = await fetch(this.endpoint(service, method), {
       method: 'POST',
       credentials: 'same-origin',
       headers: {

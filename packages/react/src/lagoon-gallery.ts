@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import { PAGE_SHELL_CSS } from '@motu/chrome/html';
 import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
@@ -892,6 +892,17 @@ markSandbox();
           pressed: b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-current') === 'true',
         }));
       },
+      /**
+       * THE CALLS THAT HAVE LANDED, and being TOLD when the next one does.
+       *
+       * Not part of the lens, and it must not be: everything else on this surface is something the
+       * dock reads when a person opens a tab, and this is what the dock shows when nobody has opened
+       * anything. It comes straight out of @motu/core's feed — both doors that have an address record
+       * into it — so a host mounting chrome outside the artifact can say a call landed without
+       * polling a document it does not own.
+       */
+      calls: () => liveCalls().map((c) => ({ ...c })),
+      onCall: (fn: (c: unknown) => void) => subscribeCalls(fn),
       /** What the lens has noticed about the region on screen, or null when there is no lens. */
       findings: () => (lens && lens.findings ? lens.findings() : null),
       /** The region sheet: the declaration, proved by the region that is running. */

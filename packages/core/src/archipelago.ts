@@ -812,6 +812,36 @@ const stores = new Map<string, Store>();
 const configs = new Map<string, AnyArchipelagoConfig>();
 const archSlots = new Map<string, string[]>();
 
+/**
+ * The channels installed for a region, kept so a SCENARIO lane can start them over.
+ *
+ * `installChannels` returns a disposer and this call site used to drop it, which made a region's
+ * inbound seam un-restartable — fine in production (nothing ever clears a live region) and wrong for
+ * the harness: `reset()` forgets the store, and a source that had already answered the seeded inputs
+ * has no reason to answer them again. The region then rendered its empty state for the rest of the
+ * run, and the flow that asserted on real rows failed for a reason that had nothing to do with it.
+ */
+const regionChannels = new Map<string, { store: Store; channels: Channel[]; dispose: () => void }>();
+
+/**
+ * Dispose and re-install a region's channels, so its sources produce from scratch.
+ *
+ * For SCENARIO lanes, beside `Store.clear` — a fresh region means both halves: the store forgets, and
+ * whatever feeds it starts again. A source keeps its own memory (the last inputs it answered, its
+ * generation counter), which no store reset can reach; disposing it is the only way to say "this
+ * question has not been asked yet".
+ *
+ * Returns false when the region has no channels, so a caller can tell "restarted" from "nothing to
+ * restart" rather than assuming.
+ */
+export function restartRegionChannels(id: string): boolean {
+  const entry = regionChannels.get(id);
+  if (!entry) return false;
+  entry.dispose();
+  entry.dispose = installChannels(entry.store, entry.channels);
+  return true;
+}
+
 /** The layout template registered for an archipelago id (used by <motu-archipelago>). */
 export function getArchipelagoLayout(id: string): string | undefined {
   return layouts.get(id);
@@ -1372,7 +1402,10 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
     layouts.set(config.id, config.layout);
   }
   if (opts.channels?.length) {
-    installChannels(store, opts.channels);
+    // KEPT, not dropped: see `restartRegionChannels` — a scenario lane needs to be able to start the
+    // region's inbound seam over, and the disposer is the only handle on it.
+    const channels = [...opts.channels];
+    regionChannels.set(config.id, { store, channels, dispose: installChannels(store, channels) });
   }
   // WHICH STATES THIS REGION ACTUALLY REACHES, when the project asked for it. Offered here because
   // this is where BOTH mount paths meet — the element route and the React one — so a host gets it

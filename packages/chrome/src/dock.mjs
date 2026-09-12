@@ -1069,6 +1069,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 /* THE SHELL'S SHEET WINS. Same origin, so the host sets this on the frame's own root when it opens
  * the lagoon switcher; the dock steps aside rather than stacking a second sheet on the same edge. */
 :root[data-motu-shell-sheet="open"] #tide,
+:root[data-motu-shell-sheet="open"] #tide-calls,
 #tide[data-shell-sheet="open"] { opacity: 0; pointer-events: none; }
 
 @keyframes tide-swim {
@@ -1077,6 +1078,143 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   #tide *, #tide *::before { animation: none !important; transition: none !important; }
+}
+
+/* ── THE CALL TOASTER: a call, the moment it lands ─────────────────────────────────────────── */
+/*
+ * WHY IT EXISTS AT ALL. The lagoon answers requests without touching the network, so the browser's
+ * own Network panel is empty by construction -- a screen can fire nine calls and look, to every
+ * instrument a person has, like a screen that did nothing. The Network list under Seams says what
+ * happened, and says it only to somebody who already suspected something and went looking. This is
+ * the same fact delivered unprompted: you pressed save, a card slid in saying POST /rest/v1/rpc/save
+ * -> 200, and the question never had to be asked.
+ *
+ * SMALL, AND ON THE DOCK'S OWN EDGE. It is chrome over an application it is only looking at, so it
+ * claims the strip the dock already claimed and nothing else. It never takes the pointer except on
+ * the cards themselves, and a card is a button: pressing it opens the panel on Seams, where the
+ * whole run is, with its payload.
+ */
+#tide-calls {
+  position: fixed;
+  bottom: 14px;
+  z-index: 2147483001;
+  display: flex;
+  /* NEWEST NEAREST THE DOCK. The stack is anchored to the bottom edge and grows upward, so appending
+   * puts the card that just landed where the eye already is and pushes the older ones away. */
+  flex-direction: column;
+  gap: 6px;
+  width: min(320px, 76vw);
+  /* THE STRIP IS THE RAIL'S, so the cards stand beside it rather than on it. */
+  margin-inline: 8px;
+  pointer-events: none;
+  font: 500 11px/1.4 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+#tide-calls[data-edge="right"] { right: 46px; }
+#tide-calls[data-edge="left"] { left: 46px; }
+/* On a phone the dock IS the bottom edge, so the cards rise above the bar instead of beside it. */
+@media (max-width: 760px) {
+  #tide-calls { left: 8px; right: 8px; width: auto; bottom: 74px; }
+}
+/* NOTHING TO SAY, NO SURFACE. An empty stack with padding is a permanent smudge on the page. */
+#tide-calls:empty { display: none; }
+/* ABOVE THE SCOPE CHIP when there is one. The chip is fixed to the same corner, so a card landing on
+ * an island-scoped lagoon sat on top of "x-member-results ×" -- the one control that says how to get
+ * back to the whole region. */
+#tide-calls[data-scoped="true"] { bottom: 54px; }
+/* AND NOTHING WHILE THE PANEL IS OPEN, which stands in the same strip and says all of this at
+ * length. See the open() handler for why that is a rule rather than an offset. */
+#tide-calls[data-open="true"] { display: none; }
+
+#tide-calls .call {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 9px;
+  width: 100%;
+  padding: 7px 9px 7px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-page);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--w-deep, #0b6f68) 18%, transparent);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  animation: tide-call-in 200ms cubic-bezier(.22,.9,.3,1) both;
+}
+#tide-calls .call:hover { background: var(--surface-row, var(--surface-page)); }
+#tide-calls .call:focus-visible { outline: 2px solid var(--motu-primary, #0f766e); outline-offset: 2px; }
+/* THE TONE IS A BAND DOWN THE EDGE, not a tinted card: the URL has to stay as readable at 500 as it
+ * is at 200, and a red wash behind monospace text is the first thing to go. */
+#tide-calls .call__tone {
+  grid-row: 1 / span 2;
+  align-self: stretch;
+  background: var(--motu-neutral, #8d8578);
+}
+#tide-calls .call[data-tone="ok"] .call__tone { background: var(--motu-ok, #0f766e); }
+#tide-calls .call[data-tone="warn"] .call__tone { background: var(--motu-caution, #b45309); }
+#tide-calls .call[data-tone="broken"] .call__tone { background: var(--motu-danger, #b91c1c); }
+/* THE ADDRESS, WHOLE OR NOT AT ALL UP TO TWO LINES. A query string is where the answer usually is
+ * ("it asked for the wrong club"), so this wraps rather than truncating at the query string. */
+#tide-calls .call__url {
+  grid-column: 2;
+  min-width: 0;
+  font: 600 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#tide-calls .call__verb {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--ink-muted);
+}
+/* THE STATUS, in the tone's own colour and in the corner the eye lands on. */
+#tide-calls .call__status {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--motu-neutral, #8d8578);
+}
+#tide-calls .call[data-tone="ok"] .call__status { color: var(--motu-ok, #0f766e); }
+#tide-calls .call[data-tone="warn"] .call__status { color: var(--motu-caution, #b45309); }
+#tide-calls .call[data-tone="broken"] .call__status { color: var(--motu-danger, #b91c1c); }
+#tide-calls .call__meta {
+  grid-column: 2 / span 2;
+  color: var(--ink-faint);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* REPEATS COUNT RATHER THAN STACK. A save fans out into a write and its refetches; nine cards for
+ * one press is a wall, and the ninth pushes the first off before it can be read. */
+#tide-calls .call__n {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+@keyframes tide-call-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tide-calls .call { animation: none; }
 }
 
 /* ── drag targets: two bands, one per edge ────────────────────────────────────────────────── */
@@ -1374,6 +1512,10 @@ function motuMountDock(opts) {
 
   var open = function (on) {
     tide.dataset.open = on ? 'true' : 'false';
+    // THE PANEL SUPERSEDES THE CARDS. It is 560px of the right-hand side on Seams, which is exactly
+    // where they stand: a card pressed to open the Network list then sits on top of the list it
+    // opened. The cards are the notice for when nothing is open; the panel is the whole log.
+    toasts.dataset.open = on ? 'true' : 'false';
     railOpen.setAttribute('aria-expanded', on ? 'true' : 'false');
     // The reserve follows the panel: a closed panel covers nothing, so holding 340px for it would
     // leave a gap beside a dock that is not there.
@@ -1807,7 +1949,10 @@ function motuMountDock(opts) {
       var seamData = ctl.seams ? ctl.seams() : null;
       if (seamData) {
         var listSection = function (cap, count, rows, emptyText) {
-          var head = el('div', { class: 'sect__head' }, [
+          // NAMED, so something outside can aim at it. A call card opens this panel AT the Network
+          // list; without a handle it could only open the tab and leave the reader to scroll for the
+          // row, which is most of the work the card exists to save.
+          var head = el('div', { class: 'sect__head', 'data-sect': cap.toLowerCase().replace(/ /g, '-') }, [
             el('span', { class: 'motu-cap' }, [cap]),
             el('span', { class: 'count' }, [String(count)]),
           ]);
@@ -1906,6 +2051,7 @@ function motuMountDock(opts) {
           lastId = c.gestureId != null ? c.gestureId : null;
           withHeads.push(c);
         });
+        var otherDoors = (seamData.asked || []).filter(function (a) { return a.via !== 'wire'; }).length;
         listSection('Network', wire.length, withHeads.map(function (c) {
           if (c.head) {
             return el('div', { class: 'wire-head' }, [
@@ -1920,7 +2066,8 @@ function motuMountDock(opts) {
           // clear pretty-printed — so it gets a surface rather than a tooltip.
           var id = 'wire-' + c.seq;
           var body = el('pre', { class: 'wire-detail', id: id, hidden: 'hidden' }, [
-            c.method + ' ' + c.target + '  \u2192  ' + c.status + (c.response ? '  ' + c.response : ''),
+            c.method + ' ' + (c.url || c.target) + '  \u2192  ' + c.status + (c.response ? '  ' + c.response : ''),
+            c.url ? '\n' + c.target : '',
             '\n' + (c.by || 'unattributed') + (c.at ? '  \u00b7  ' + new Date(c.at).toLocaleTimeString() : ''),
             '\n\n' + (c.detail || '(no payload)'),
           ]);
@@ -1952,8 +2099,17 @@ function motuMountDock(opts) {
         }),
         // The empty state is a real answer here, and a different one from "asked for" being empty:
         // no request AT ALL means the screen is rendering entirely from the seed.
-        'No backend call was intercepted. Everything on this screen came from the seed — which is what '
-          + 'a lagoon does, and worth a second look if you just pressed save.');
+        //
+        // ONLY WHEN EVERY DOOR WAS SILENT. This list is the WIRE's, and it printed "everything on this
+        // screen came from the seed" on a region whose islands talk exclusively through the contract —
+        // directly under an ASKED FOR row saying one call had gone out, and beside a card saying it had
+        // come back 500. An empty list is survivable; an empty list with a confident wrong explanation
+        // is what teaches people to stop reading the surface built to answer this.
+        otherDoors
+          ? 'Nothing was intercepted at the WIRE. ' + otherDoors + ' ask' + (otherDoors === 1 ? '' : 's')
+            + ' left by another door — see ASKED FOR above.'
+          : 'No backend call was intercepted. Everything on this screen came from the seed — which is what '
+            + 'a lagoon does, and worth a second look if you just pressed save.');
 
         listSection('Pushed back', seamData.intents.length, seamData.intents.map(function (i) {
           return el('div', { class: 'seam-row', 'data-tone': 'ok', title: i.label }, [
@@ -2164,16 +2320,168 @@ function motuMountDock(opts) {
       baySub.textContent = 'island only · ' + entries.length + (entries.length === 1 ? ' scenario' : ' scenarios');
       railLabel.textContent = scopedTag;
       scopeChip.hidden = false;
+      toasts.dataset.scoped = 'true';
       scopeName.textContent = scopedTag;
       // Rebound every paint: the tag it must let go of is whichever one is scoped now.
       scopeClose.onclick = drive(function (c) { c.openIsland(scopedTag); });
     } else {
       scopeChip.hidden = true;
+      toasts.dataset.scoped = 'false';
       scopeClose.onclick = null;
       bayTitle.textContent = now.region || '—';
       baySub.textContent = entries.length + (entries.length === 1 ? ' state' : ' states');
       railLabel.textContent = now.region || 'lagoon';
     }
+  };
+
+  // ── THE CALL TOASTER ─────────────────────────────────────────────────────────────────────────
+  //
+  // EVERY OTHER SURFACE HERE IS SOMETHING YOU OPEN. The Network list under Seams answers "what did
+  // this screen send" perfectly, and answers it only to somebody who already suspected there was
+  // something to ask -- which, in a lagoon, is the hard half: the fake fetch answers without touching
+  // the network, so a screen that fired nine requests and one that fired none look identical in every
+  // instrument a browser has. This says it unprompted, the moment a call lands, and then gets out of
+  // the way.
+  //
+  // WHAT IT SHOWS is the address and the status, because those are the two facts that decide what to
+  // do next: a 404 on a path nobody expected is a missing fixture, a 200 on a URL carrying the wrong
+  // filter is the bug you were hunting, and the declaration's own spelling (`table:shots(select)`)
+  // can tell you neither. Pressing a card opens the panel on Seams at the Network list, where the
+  // same call is waiting with its payload -- the card is the notice, not the report.
+  //
+  // HOST-MODULE CALLS ARE ABSENT by construction: a stubbed export has no URL and no status, and a
+  // card whose status column said "--" would be reporting an absence in the shape of a result.
+  var toasts = el('div', {
+    id: 'tide-calls',
+    // POLITE, and the whole point of saying so: a call landing is not an interruption, and a live
+    // region that spoke over whatever the person was reading would make the toaster the loudest
+    // thing on a screen it is only annotating.
+    role: 'log', 'aria-live': 'polite', 'aria-label': 'Calls that have landed',
+  });
+  toasts.dataset.edge = tide.dataset.edge || 'right';
+  mountEl.appendChild(toasts);
+
+  /**
+   * NOT WHILE THE CHECKS ARE DRIVING.
+   *
+   * `dockInset=off` is the harness saying it is measuring the APPLICATION -- responsive measures it
+   * at each declared viewport and the snapshots picture it -- and a card sliding in over the corner
+   * of that is a baseline that changes with the timing of a fetch. The same flag already takes the
+   * dock's strip back for exactly this reason; this is the other thing the dock does to the page.
+   *
+   * BOTH DOCUMENTS, because the dock is mounted in the lagoon's own document by `lagoon serve` and in
+   * the host's when a published artifact is framed. The flag rides on the lagoon's URL either way.
+   */
+  var harness = function () {
+    var off = function (w) {
+      try { return new URLSearchParams(w.location.search).get('dockInset') === 'off'; } catch (e) { return false; }
+    };
+    if (off(window)) return true;
+    try { return off(lagoonWindow()); } catch (e) { return false; }
+  };
+
+  // MUTED IS REMEMBERED, for the reason the pin is: somebody who does not want cards over their
+  // application does not want them again after the reload that is part of using this.
+  var MUTE_KEY = 'motu:dock:calls-muted';
+  var muted = false;
+  try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { muted = false; }
+  var setMuted = function (on) {
+    muted = on;
+    try { localStorage.setItem(MUTE_KEY, on ? '1' : '0'); } catch (e) { /* a page that cannot remember still obeys */ }
+    if (on) toasts.replaceChildren();
+  };
+
+  /** How long a card stays. A failure lingers: it is the one you were not watching for. */
+  var CALL_TTL_OK = 4200;
+  var CALL_TTL_BAD = 9000;
+  /** Four at once. The fifth pushes the first off before it can be read, which is a wall, not a feed. */
+  var MAX_CARDS = 4;
+
+  var toneOf = function (c) {
+    if (c.ok) return 'ok';
+    // 0 IS NOT A STATUS, it is the absence of one -- a throw, an abort, a transport that never
+    // answered. Amber rather than red: something went wrong, and "the server said no" is a different
+    // fact from "nothing came back", which the card must not merge.
+    return c.status >= 400 ? 'broken' : 'warn';
+  };
+
+  /**
+   * Open the panel on the Network list, where this call is waiting with its payload.
+   *
+   * SCROLLED TO, not just shown. Seams opens on the region sheet and the Network list is several
+   * sections down it, so a card that only opened the tab would hand somebody the right panel and
+   * leave them to find the row -- which is most of the work it was meant to save.
+   */
+  var showSeamsFor = function (c) {
+    open(true);
+    showTab('seams');
+    // THE DOOR DECIDES WHICH SECTION. Network is the WIRE's list -- a contract call is not in it, and
+    // landing somebody on "No backend call was intercepted" under a card that just said one came back
+    // 500 is the panel contradicting the notice that sent them there.
+    var sect = c.via === 'wire' ? 'network' : 'asked-for';
+    var head = seams.querySelector('[data-sect="' + sect + '"]');
+    if (head && head.scrollIntoView) head.scrollIntoView({ block: 'start' });
+  };
+
+  var card = function (c) {
+    var status = c.status ? String(c.status) : '\u2014';
+    // THE ADDRESS IF THERE IS ONE, and the declaration's name for the call when there is not: a
+    // contract call answered by a mock has no URL, and `POST shots.list` would dress a service method
+    // up as an endpoint. No address, no verb -- the card says what it knows.
+    var addr = c.url || c.label;
+    var meta = [c.ms + 'ms', c.owner, c.url ? c.label : ''].filter(Boolean).join(' \u00b7 ');
+    var n = el('span', { class: 'call__n', hidden: '' }, ['']);
+    var b = el('button', {
+      class: 'call', type: 'button', 'data-tone': toneOf(c),
+      title: (c.url ? c.method + ' ' : '') + addr + ' \u2192 ' + status
+        + (c.error ? '\n' + c.error : '') + '\nOpen the Network list under Seams',
+    }, [
+      el('i', { class: 'call__tone' }),
+      el('span', { class: 'call__url' }, c.url ? [el('span', { class: 'call__verb' }, [c.method]), addr] : [addr]),
+      el('span', { class: 'call__status' }, [status]),
+      // THE FAILURE IN WORDS when there is one, because a bare 404 does not say WHICH fixture is
+      // missing and the answer is usually in the message the fake wrote.
+      el('span', { class: 'call__meta' }, [c.error ? String(c.error).slice(0, 120) : meta]),
+      n,
+    ]);
+    b.addEventListener('click', function () { showSeamsFor(c); });
+    return { node: b, count: n, key: c.method + ' ' + (c.url || c.label) + ' ' + c.status, times: 1, timer: 0 };
+  };
+
+  var live = [];
+  var dropCard = function (entry) {
+    var at = live.indexOf(entry);
+    if (at >= 0) live.splice(at, 1);
+    clearTimeout(entry.timer);
+    entry.node.remove();
+  };
+  var keepFor = function (entry, ms) {
+    clearTimeout(entry.timer);
+    entry.timer = setTimeout(function () { dropCard(entry); }, ms);
+  };
+
+  var onCallLanded = function (c) {
+    if (muted || harness() || !c) return;
+    var ttl = c.ok ? CALL_TTL_OK : CALL_TTL_BAD;
+    // ONE CARD PER REPEAT, counted. A save is a write plus every refetch it fans out into -- 22 of
+    // them on a real region -- and a stack that grew per request would be unreadable for exactly the
+    // press a person most wants to read.
+    var key = c.method + ' ' + (c.url || c.label) + ' ' + c.status;
+    for (var i = 0; i < live.length; i++) {
+      if (live[i].key !== key) continue;
+      live[i].times++;
+      live[i].count.textContent = '×' + live[i].times;
+      live[i].count.removeAttribute('hidden');
+      keepFor(live[i], ttl);
+      return;
+    }
+    var entry = card(c);
+    live.push(entry);
+    // Newest nearest the bottom edge: the stack grows upward from there, so appending puts this card
+    // where the eye already is and rides the older ones up out of the way.
+    toasts.appendChild(entry.node);
+    keepFor(entry, ttl);
+    while (live.length > MAX_CARDS) dropCard(live[0]);
   };
 
   filter.addEventListener('input', paint);
@@ -2186,6 +2494,7 @@ function motuMountDock(opts) {
   // WHICH control object `stop` belongs to. Identity, not a boolean: the lagoon can be REPLACED under
   // this dock — it is a separate document when the host frames it — and the old control goes with it.
   var bound = null;
+  var stopCalls = null;
   var attach = function () {
     var ctl = control();
     if (!ctl || ctl === bound) return;
@@ -2195,8 +2504,22 @@ function motuMountDock(opts) {
     // with total confidence. Invisible until something made the frame navigate — opening an island
     // from the islands pane is the first control that does.
     if (stop) { try { stop(); } catch (e) { /* the page it belonged to is gone; nothing to release */ } }
+    if (stopCalls) { try { stopCalls(); } catch (e) { /* likewise: its document is gone */ } }
     bound = ctl;
     stop = ctl.subscribe(paint);
+    // THE CALL FEED, subscribed whatever tab is showing and whether or not the panel is open -- the
+    // toaster's whole value is being told something you were not looking for. `onCall` is absent on a
+    // lagoon built before the feed existed, which degrades to no cards rather than to a throw.
+    stopCalls = ctl.onCall ? ctl.onCall(onCallLanded) : null;
+    // THE ONES THAT LANDED WHILE THIS WAS ATTACHING. The dock polls for a lagoon that boots on its
+    // own clock, so the region's FIRST fetches — the ones that decide whether the page has any data
+    // at all — are usually already back before there is anything subscribed to hear them. A moment's
+    // worth, not the whole ring: a card for something that happened a minute ago is a card about a
+    // screen you have already stopped looking at.
+    if (ctl.calls) {
+      var justNow = Date.now() - 2000;
+      ctl.calls().forEach(function (c) { if (c && c.at >= justNow) onCallLanded(c); });
+    }
     paint();
   };
   attach();
@@ -2234,6 +2557,14 @@ function motuMountDock(opts) {
       out.push({ label: f.name, kind: 'state', run: drive(function (c) { c.runFlow(f.name); }) });
     });
     out.push({ label: 'As seeded', kind: 'state', run: drive(function (c) { c.runFlow(null); }) });
+    // THE WAY OUT OF THE CARDS, in the one place every other dock control is reachable from. A
+    // toaster with no off switch is a decision made for somebody about their own screen; putting it
+    // here rather than on each card keeps the cards themselves down to what they are for.
+    out.push({
+      label: muted ? 'Show call cards' : 'Mute call cards',
+      kind: 'chrome',
+      run: function () { setMuted(!muted); },
+    });
     out.push({ label: 'Region', kind: 'view', run: drive(function (c) { c.setView('region'); }) });
     out.push({ label: 'Mountpoints', kind: 'view', run: drive(function (c) { c.setView('mountpoints'); }) });
     // Same rule as the pills: offered only where the current region declares a page.
@@ -2285,6 +2616,9 @@ function motuMountDock(opts) {
     clearInterval(poll);
     if (unwatch) unwatch();
     if (stop) stop();
+    if (stopCalls) stopCalls();
+    live.forEach(function (entry) { clearTimeout(entry.timer); });
+    toasts.remove();
     palette.remove();
     tide.remove();
   };

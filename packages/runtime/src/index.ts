@@ -1,7 +1,7 @@
 // Stripped in production: the debug overlay's instrumentation is gated on this build-time constant,
 // so the whole block below dead-code-eliminates when it is false (and is safely `undefined` under
 // bare Node/tsc, where the typeof guard evaluates to false rather than throwing).
-import { runWithIsland as coreRunWithIsland, ambientIsland, recordOutbound } from '@motu/core';
+import { runWithIsland as coreRunWithIsland, ambientIsland, recordOutbound, beginCall } from '@motu/core';
 
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
@@ -12,6 +12,15 @@ const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
  */
 export interface Transport {
   call<T>(service: string, method: string, args: unknown[]): Promise<T>;
+  /**
+   * WHERE a call to `service.method` goes, for chrome that shows a person what just left.
+   *
+   * Optional, and it has to be: a transport is an injection seam, and the two that ship here are a
+   * fetch to a dispatcher (which has a URL) and a direct in-process dispatch (which has none). A
+   * readout that invented an address for the second would be a lie in the surface built to end
+   * guessing about where data came from, so the absence is reported as an absence.
+   */
+  endpoint?(service: string, method: string): string;
 }
 
 let current: Transport | null = null;
@@ -35,6 +44,8 @@ export interface CallEvent {
   args: unknown[];
   /** The island the call was attributed to (its custom-element tag), or null if outside any window. */
   island: string | null;
+  /** Where it went, when the transport can say — see `Transport.endpoint`. */
+  url?: string;
   phase: 'start' | 'success' | 'error';
   status?: number;
   durationMs?: number;
@@ -106,25 +117,37 @@ export function call<T>(service: string, method: string, args: unknown[]): Promi
   const id = ++callSeq;
   const island = currentIsland();
   const t0 = performance.now();
+  // WHERE it goes, asked of the transport rather than assumed: only the transport knows, and one of
+  // the two that ship here has no answer. `''` reads as "no address", which the dock shows as the
+  // method name — never as a URL somebody could go looking for.
+  const url = current.endpoint?.(service, method) ?? '';
+  // THE LIVE FEED, which is the other half of the ledger below: `recordOutbound` says an ask LEFT
+  // (that is when the owner window is open), this says how it came back.
+  const landed = beginCall({ via: 'contract', url, method: 'POST', label: `${service}.${method}` });
   // THE THIRD DOOR, in the same ledger as the other two. A contract call was observable only through
   // `observeCalls` — the debug overlay — so no check ever printed it, and a region whose islands talk
   // exclusively through the contract read as one that fetched nothing.
   recordOutbound('contract', `${service}.${method}`, args.map((a) => (typeof a === 'object' && a !== null ? '…' : String(a))).join(', '));
-  emitCall({ id, service, method, args, island, phase: 'start' });
+  emitCall({ id, service, method, args, island, url, phase: 'start' });
   return current.call<T>(service, method, args).then(
     (result) => {
-      emitCall({ id, service, method, args, island, phase: 'success', durationMs: performance.now() - t0 });
+      landed({ status: 200, ok: true });
+      emitCall({ id, service, method, args, island, url, phase: 'success', durationMs: performance.now() - t0 });
       if (recordingSink) recordingSink.push({ service, method, args, response: result });
       return result;
     },
     (err: unknown) => {
       const status = err instanceof MotuError ? err.status : undefined;
+      // A THROW THAT IS NOT A STATUS still landed, and 0 is how the feed spells "never got one" —
+      // dropping it would make a transport that rejected look like a call that is still in flight.
+      landed({ status: status ?? 0, ok: false, error: err instanceof Error ? err.message : String(err) });
       emitCall({
         id,
         service,
         method,
         args,
         island,
+        url,
         phase: 'error',
         status,
         durationMs: performance.now() - t0,

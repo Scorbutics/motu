@@ -610,11 +610,36 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
 
     const out = [];
     for (const scenario of scenarios) {
-      // A fresh mount per scenario. One flow CAN leave the region unrenderable — seed an index past the
-      // end of a list and the component that reads it throws, React tears the tree down, and every
-      // later flow reports "no island mounted under that slot", which is true and completely
-      // misleading. Isolation keeps each verdict about its own flow.
-      await page.evaluate(() => window.__motuLagoon?.remount?.());
+      // A fresh REGION per scenario: forget the store, THEN rebuild the tree. One flow CAN leave the
+      // region unrenderable — seed an index past the end of a list and the component that reads it
+      // throws, React tears the tree down, and every later flow reports "no island mounted under that
+      // slot", which is true and completely misleading. Isolation keeps each verdict about its own flow.
+      //
+      // `remount()` ALONE WAS NOT ISOLATION, and the gap silently broke flow-mutation. The store is
+      // registered per archipelago id and deliberately survives a remount, so whatever a scenario put
+      // in it was still there when the next one started. Mutants run after the real flows, so a mutant
+      // whose effect a REAL scenario had already produced asserted against that leftover state and
+      // "still held" — reported as "the assertion does not depend on what the step does" when in truth
+      // the step's own effect was already in the store. Measured on a region whose list island asks a
+      // source to open a detail: the real scenario selected a candidate, the mutant emitted `null`,
+      // nothing happened, and the assertion passed on the previous scenario's selection. That is the
+      // worst shape of failure this check can have — it accuses a correct flow of being a tautology.
+      //
+      // `reset()` is documented "for SCENARIO lanes only" for exactly this call site: it forgets the
+      // keys and re-applies the region's own seed. A flow's own STEPS still build on each other, which
+      // is why this sits outside the step loop.
+      // One `evaluate` each, like the pre-flow reset above: remounting tears down the React tree, and
+      // doing it in the same evaluate as the store reset destroyed the execution context mid-call
+      // ("Execution context was destroyed"), which took the whole flow lane down with it.
+      await page.evaluate(() => window.__motuLagoon?.reset?.()).catch(() => {});
+      // LET THE SOURCE LAND BEFORE THE SCENARIO SEEDS. Restarting the channels starts the region's
+      // first production again, and that write is ASYNC — so without this pause it arrived after the
+      // flow's own seed and overwrote it. Measured across three regions: a Conseil seeded "séance en
+      // cours" rendered the default next-séance fixture instead, and the flow failed on a state it had
+      // asked for and been given, then silently lost. A scenario's seed is the authoritative starting
+      // state; the source's initial answer belongs before it, not on top of it.
+      await sleep(400);
+      await page.evaluate(() => window.__motuLagoon?.remount?.()).catch(() => {});
       // WAIT FOR THE REGION, do not sleep at it. 250ms was enough for stand-in islands and is not
       // enough for an app's real component tree (Twenty's widgets mount a dozen providers, read a
       // metadata store and issue queries) — the assertions then ran against a region that had not

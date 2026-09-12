@@ -1,5 +1,5 @@
 import { MotuError } from './index';
-import { reachOwner, recordOutbound } from '@motu/core';
+import { beginCall, reachOwner, recordOutbound } from '@motu/core';
 import { MockTransport, type Fixture } from './mock';
 
 /**
@@ -236,6 +236,15 @@ export interface WireCall {
   target: string;
   /** The HTTP verb, for the table calls where it is the difference between a read and a write. */
   method: string;
+  /**
+   * THE ADDRESS, as it was actually written — `/rest/v1/shots?select=*&club_id=eq.11`.
+   *
+   * `target` is the DECLARATION's spelling of the same call, which is what a check compares against
+   * an `ambient` entry; it is deliberately lossy (`table:shots(select)`) and cannot answer the
+   * question a person asks when a screen is wrong, which is "what did it actually ask for". Origin
+   * stripped: every row here shares it, so it would be 40 characters of noise per line.
+   */
+  url?: string;
   /** `island:<tag>`, `source:<id>` or `unattributed` — the same attribution `data-reach` uses. */
   by: string;
   /**
@@ -627,14 +636,22 @@ export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeo
     // Attribution is read BEFORE awaiting — a fetch starts inside an island's window and resolves
     // long after it has closed, so asking afterwards credits everything to nobody.
     const by = ownerNow();
+    const target = targetOf(req, options.appRoutes ?? []);
+    const url = req.url.pathname + req.url.search;
+    // BEFORE the await, like everything else attributed here: the owner window is open now and shut
+    // by the time the answer comes back.
+    const landed = beginCall({ via: 'wire', url, method: req.method, label: target });
     const res = await dispatch(req);
+    const response = await responseOf(res);
+    landed({ status: res.status, ok: res.ok, ...(res.ok ? {} : { error: response ?? '' }) });
     recordCall({
-      target: targetOf(req, options.appRoutes ?? []),
+      target,
       method: req.method,
+      url,
       by,
       request: summarise(requestOf(req)),
       status: res.status,
-      response: await responseOf(res),
+      response,
     });
     return res;
   };

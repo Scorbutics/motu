@@ -665,6 +665,43 @@ Read it before reading the archipelago; it is the same declaration, proved by th
 running (`.github/host-rules.md:120-123`). `MOTU_DEBUG=0` strips the lens entirely
 (`packages/cli/src/lib/scaffold.mjs:458-459`).
 
+### A call that landed says so, without being asked
+
+Everything above is something you OPEN. The Network list answers "what did this screen send" perfectly
+and answers it only to somebody who already suspected there was something to ask — which in a lagoon
+is the hard half: the fake fetch replies without touching the network, so a screen that fired nine
+requests and one that fired none look identical in every instrument a browser has.
+
+So a call that LANDS draws a small card on the dock's edge: the address it went to, the verb, and the
+status in the colour of its verdict — teal for ok, amber for a call that never got a status at all (a
+throw, an abort), red for 4xx/5xx, with the failure's own words under it. Press the card and the panel
+opens on `Seams` at the section that door reports into — `Network` for a wire call, `Asked for` for a
+contract one — where the same call is waiting with its payload. The card is the notice; the panel is
+the log.
+
+    ┌─────────────────────────────────────────────┐
+    │ ▌ POST  /rest/v1/rpc/save_member        404 │
+    │   motu: no fixture for save_member/rpc      │
+    └─────────────────────────────────────────────┘
+
+Both doors that have an address record into one feed (`beginCall` in `@motu/core`), which the lagoon
+publishes on its control surface (`calls()`, `onCall()`) for chrome drawn outside the artifact. A
+TRACED HOST MODULE is deliberately absent: a stubbed export has no URL and no status, and a card whose
+status column said `—` would report an absence in the shape of a result. It stays in `Asked for`,
+which can describe it honestly.
+
+Where a contract call's address comes from is the transport's business — `Transport.endpoint?()`,
+which `HttpTransport` answers and an in-process transport does not. No address, no verb: the card
+falls back to the declaration's own name for the call (`MemberService.search`) rather than dressing a
+service method up as an endpoint.
+
+Cards repeat by COUNTING (`×3`), never by stacking — a save fans out into a write and every refetch it
+causes, and nine cards for one press is a wall. Four at a time, ~4s each and ~9s for a failure, and
+they are gone while the panel is open, which stands in the same strip and says all of it at length.
+`Mute call cards` in the palette turns them off for good; `dockInset=off` — the flag the checks
+already set to take the dock's strip back — suppresses them, so no baseline moves with the timing of
+a fetch.
+
 ---
 
 ## An island that cannot be bundled does not take the lagoon with it

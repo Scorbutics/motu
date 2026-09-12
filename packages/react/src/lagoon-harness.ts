@@ -21,6 +21,7 @@ import {
   islandOutputs,
   resetIslandOutputs,
   provideToArchipelago,
+  restartRegionChannels,
   runWithWriteSource,
   seedArchipelago,
 } from '@motu/core';
@@ -94,6 +95,12 @@ export function lagoonHarness(
       // the store is built — so forgetting a key the page seeded and stopping there would measure every
       // later scenario against a state the application never produces.
       for (const [key, value] of Object.entries(opts.seed ?? {})) seedArchipelago(config.id, key, value);
+      // AND START THE INBOUND SEAM OVER. Clearing the store is only half of a fresh region: a source
+      // remembers the last inputs it answered, so after a reset it has no reason to answer them again —
+      // the region then sits on its empty state, and the next scenario's flow fails on rows that
+      // nothing was ever going to produce. Disposing and re-installing the channels is what makes
+      // "this question has not been asked yet" true.
+      restartRegionChannels(config.id);
     },
   };
 }

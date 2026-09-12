@@ -293,3 +293,120 @@ export function outboundLabel(o: Pick<Outbound, 'name' | 'args'>): string {
 export const outboundCalls = (): readonly Outbound[] => outbound;
 
 export const resetOutbound = (): void => void outbound.splice(0, outbound.length);
+
+// --- THE LIVE FEED: a call that has LANDED ------------------------------------------------------
+//
+// `outbound` above records an ask at REQUEST time, because that is when the owner window is open —
+// which makes it the right ledger for "what does this region reach" and the wrong one for "what just
+// happened". A person watching a screen wants the other half: the answer, the moment it arrives.
+//
+// The lagoon owes them that half more than an ordinary page does. It intercepts `fetch`, so the
+// browser's own Network panel is empty by construction — the same argument `traced` makes one layer
+// up: motu removed the standard instrument, so motu owes the replacement. `readWireCalls` in
+// @motu/runtime already answers it for the wire door, but only for that door, and only to a panel
+// somebody has opened. This is the ONE feed both doors that have a URL record into, pushed to
+// whoever is watching, so chrome outside the artifact can say a call landed without polling.
+//
+// HOST-MODULE CALLS ARE NOT IN IT, deliberately. A stubbed export has no URL and no status: showing
+// `formatWeek()` beside `POST /rest/v1/rpc/save → 500` would be two different facts wearing one
+// shape, and the readout is a status code. They stay in `outbound`, which is the ledger that can
+// describe them honestly.
+
+/** One call that went out and came back, as chrome shows it. */
+export interface LiveCall {
+  /** Monotonic, so a reader can de-duplicate and order without trusting the clock. */
+  seq: number;
+  /** Which door it left by. Only the two that have an address record here. */
+  via: Extract<OutboundVia, 'contract' | 'wire'>;
+  /** WHERE it went, as a person reads it: `/rest/v1/rpc/set_agenda?x=1`. Never the origin. */
+  url: string;
+  method: string;
+  /** The declaration's own name for it — `shots.list`, `table:shots(select)`. */
+  label: string;
+  /** `island:<tag>` / `source:<id>` / `unattributed` — `reachOwner()` when the request left. */
+  owner: string;
+  at: number;
+  status: number;
+  ok: boolean;
+  ms: number;
+  /** The failure in words, when there is one. A summary, never a body. */
+  error?: string;
+}
+
+/** What a caller knows when the request LEAVES. The rest is filled in when it lands. */
+export interface LiveCallStart {
+  via: LiveCall['via'];
+  url: string;
+  method: string;
+  label: string;
+}
+
+/** How it ENDED. `status` 0 means it never got one — a throw rather than a response. */
+export interface LiveCallEnd {
+  status: number;
+  ok: boolean;
+  error?: string;
+}
+
+const live: LiveCall[] = [];
+/** A ring: a lagoon left open re-fetches forever, and an unbounded log is a leak. */
+const MAX_LIVE = 60;
+let liveSeq = 0;
+const liveListeners = new Set<(c: LiveCall) => void>();
+
+/**
+ * Say a call has left, and get back the function that says how it ended.
+ *
+ * The OWNER is read here rather than at settlement, for the reason every other attribution in this
+ * file is: the window is open when the request starts and long closed when it answers.
+ *
+ * In a production build it is a no-op returning a no-op, like everything else here.
+ */
+export function beginCall(start: LiveCallStart): (end: LiveCallEnd) => void {
+  if (!DEBUG) return () => {};
+  const owner = reachOwner() ?? 'unattributed';
+  const t0 = Date.now();
+  return (end: LiveCallEnd) => {
+    const call: LiveCall = {
+      seq: ++liveSeq,
+      via: start.via,
+      url: start.url,
+      method: start.method,
+      label: start.label,
+      owner,
+      at: Date.now(),
+      status: end.status,
+      ok: end.ok,
+      ms: Date.now() - t0,
+      ...(end.error ? { error: end.error } : {}),
+    };
+    live.push(call);
+    if (live.length > MAX_LIVE) live.splice(0, live.length - MAX_LIVE);
+    // A listener that throws is that reader's bug: one bad subscriber must not break the next one,
+    // and must never reach the application whose call this is.
+    for (const l of liveListeners) {
+      try {
+        l(call);
+      } catch {
+        /* the reader's problem */
+      }
+    }
+  };
+}
+
+/**
+ * Told when a call LANDS — not when it leaves.
+ *
+ * Push rather than poll because the consumer is chrome in another document: the dock reads the
+ * lagoon's control surface across a frame boundary, and a 400ms poll for something whose whole value
+ * is immediacy would be both late and permanently busy.
+ */
+export function subscribeCalls(fn: (c: LiveCall) => void): () => void {
+  liveListeners.add(fn);
+  return () => void liveListeners.delete(fn);
+}
+
+/** The calls this run has seen land, oldest first — for chrome that attached after the first one. */
+export const liveCalls = (): readonly LiveCall[] => live;
+
+export const resetLiveCalls = (): void => void live.splice(0, live.length);

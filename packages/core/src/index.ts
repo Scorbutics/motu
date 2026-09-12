@@ -30,11 +30,11 @@ export {
   resetTransport,
 } from './foreign-transport';
 export type { TransportAdapter, TransportOperation, TransportCall } from './foreign-transport';
-export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls, runWithIsland, ambientIsland, runWithSource, ambientSource, reachOwner, recordOutbound, outboundCalls, outboundLabel, resetOutbound, openIslandWindow, closeIslandWindow } from './provenance';
-export type { HostCall, Outbound, OutboundVia } from './provenance';
+export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedExports, subscribeHostCalls, runWithIsland, ambientIsland, runWithSource, ambientSource, reachOwner, recordOutbound, outboundCalls, outboundLabel, resetOutbound, openIslandWindow, closeIslandWindow, beginCall, subscribeCalls, liveCalls, resetLiveCalls } from './provenance';
+export type { HostCall, Outbound, OutboundVia, LiveCall, LiveCallStart, LiveCallEnd } from './provenance';
 export { checkCatalogue } from './catalogue';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue';
-export { pageOf, channelFrom, rawChannel, channelRegionId, slotNameOf, slotShows, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago } from './archipelago';
+export { pageOf, channelFrom, rawChannel, channelRegionId, slotNameOf, slotShows, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago, restartRegionChannels } from './archipelago';
 export type {
   HostBridge,
   IslandContext,

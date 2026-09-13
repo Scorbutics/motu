@@ -77,6 +77,12 @@ restart and the site goes dark for no visible reason.
 
 ## 4. A hostname, free
 
+**If you already own a domain**, see [`CUTOVER.md`](CUTOVER.md) — it covers pointing a
+subdomain at this box, and moving an existing duckdns host onto a real name without a window
+where neither works. Read its step 0 before writing the A record: on Always Free the risk
+that matters is Oracle's idle reclamation, not stop/start, and reserving the IP (free, two
+minutes) is what makes a plain A record safe.
+
 Caddy needs a real name to get a certificate. If you do not own a domain:
 
 - **DuckDNS** — <https://www.duckdns.org>, sign in with GitHub, claim

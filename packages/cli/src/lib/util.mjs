@@ -53,6 +53,9 @@ export const paths = {
    * layer down and never read up here is whitelisted into a dead end.
    */
   regionRoot: cfg.regionRoot,
+  // Resolved here, because a value whitelisted in the config loader but never surfaced through
+  // `paths` is whitelisted into a dead end — see the four keys above that shipped as no-ops.
+  operations: cfg.operations ? resolve(cfg.root, cfg.operations) : undefined,
   /** Who this project is on a lagoon host, when the git repository is the wrong answer. */
   publishAs: cfg.publishAs,
   /**

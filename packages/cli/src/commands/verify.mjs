@@ -26,6 +26,7 @@ import { stubParity } from '../lib/stubs.mjs';
 import { hostSources, conditionallyPlaced } from './integration.mjs';
 import { islandContract, contractsDrift, readGeneratedContracts } from '../lib/contracts.mjs';
 import { readEffectEntries, isKinded, isDataKind, coversEffect } from '../lib/effects.mjs';
+import { readOperationNames, indexOperations, resolveOperation, askKind } from '../lib/operations.mjs';
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
@@ -40,6 +41,7 @@ import {
   probeWiring,
   runRegionFlows,
   auditRegionLagoon,
+  browserOverrideNote,
 } from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -1397,6 +1399,8 @@ export async function runIslandVerify(argv, name) {
     // Reading the evidence costs a tsx spawn, so this rides with the tiers that already load it rather
     // than slowing the static sweep. It needs no browser and runs under `--fast` too.
     if (fixturesPath) inputCoverageCheck(report, readScenarios(fixturesPath));
+    // The island lane drives a browser too, unless --fast put it under happy-dom.
+    if (!argv.fast) reportBrowserOverride(report);
     // 'legacy' fit re-mounts the island under the host's legacy skin. Skip it where there is no
     // legacy skin — it would verify the same thing twice and double the wall clock.
     for (const fit of LEGACY_FIT ? ['native', 'legacy'] : ['native']) {
@@ -1795,6 +1799,139 @@ function provenanceCheck(report, id, region, calls, outbound = []) {
 }
 
 /**
+ * Say it when the browser was not the one motu pinned.
+ *
+ * A WARNING rather than a note in passing: a build motu did not pin can render and behave differently
+ * from the one it did, so every runtime verdict below is worth slightly less than it looks and the
+ * run should say so where the findings are read. Warnings do not fail `motu check`, which is the
+ * right weight — using the browser a machine already has is a legitimate way to run, not a fault.
+ */
+function reportBrowserOverride(report) {
+  const note = browserOverrideNote();
+  if (note) {
+    report.warn(
+      'browser',
+      `${note} — the runtime findings below hold for THAT build; a pinned run can still differ`,
+    );
+  }
+}
+
+/**
+ * The backend's list of operations, or null when the project has not pointed at one.
+ *
+ * Read once per verify run. An unreadable or empty file is an ERROR OBJECT rather than an empty
+ * list: an empty universe would make every ask unreachable, which is a wall of red that says the
+ * opposite of what happened and is exactly the failure this check exists to be the opposite of.
+ */
+function operationUniverse() {
+  if (!paths.operations) return null;
+  const rel = paths.operations.replace(`${REPO_ROOT}/`, '');
+  if (!existsSync(paths.operations)) return { error: `\`operations\` names ${rel}, which does not exist` };
+  const { names, error } = readOperationNames(readFileSync(paths.operations, 'utf8'));
+  if (error) return { error: `${rel} ${error}` };
+  if (!names.length) return { error: `${rel} holds no operation names` };
+  return { names, index: indexOperations(names), rel };
+}
+
+/**
+ * DOES THE THING THIS REGION ASKED FOR EXIST?
+ *
+ * `provenance` above records every ask and validates none of them — it cannot, because motu has no
+ * view of a backend. Given a list of the backend's own operations it can: the wire door records
+ * `route:<METHOD> <path>` and `fn:<name>`, which is an identifier an operation is keyed by, so an
+ * ask resolving to nothing is a region asking for something that is not there.
+ *
+ * ## Two directions, and only one of them is an error
+ *
+ * UNREACHABLE — an ask that resolves to no operation. An error: either the path is wrong, or an
+ * operation exists that the backend's own declarations have never covered. Both are real, and both
+ * are silent today.
+ *
+ * UNCOVERED — an operation this region DECLARES IT REACHES that no flow ever asked for. A warning,
+ * and narrowed hard: the universe is the whole backend, and a login region will never ask for an
+ * admin route, so reporting the universe per region would be wrong dozens of times on day one —
+ * which is how a check teaches people to ignore it. The narrowing uses motu's OWN existing
+ * declaration (`reaches` / `contract.effects`, via `declaredReach`), so both sides are artifacts the
+ * project already maintains and there is no third list to rot.
+ *
+ * ## What it says nothing about
+ *
+ * A contract call is `service.method` and a traced host module is a bare function name; neither says
+ * which backend thing answered, and a table or an rpc is a PostgREST identifier rather than an
+ * operation. Those are COUNTED AND NAMED rather than dropped — quietly ignoring the doors that
+ * cannot be checked is how this check would come to claim more than it examined.
+ */
+export function operationReachCheck(report, outbound, universe, declared) {
+  if (!universe) {
+    report.skip(
+      'operation-reach',
+      'no `operations` in motu.config.json — set it to the backend\'s own list of operations (a path, ' +
+        'e.g. ".assay/operations.json") and every ask this region makes is checked against it',
+    );
+    return;
+  }
+  if (universe.error) {
+    // COULD NOT RUN, not a finding: exit 2, retry, do not repair.
+    report.inconclusive('operation-reach', `${universe.error} — nothing was compared`);
+    return;
+  }
+
+  const asks = (outbound ?? []).filter((o) => o.via === 'wire');
+  const resolvable = asks.filter((o) => askKind(o.name));
+  const unresolvable = (outbound ?? []).length - resolvable.length;
+
+  const reached = new Set();
+  const unreachable = new Map();
+  for (const ask of resolvable) {
+    const hit = resolveOperation(ask.name, universe.index);
+    if (hit) reached.add(hit);
+    else unreachable.set(ask.name, (unreachable.get(ask.name) ?? new Set()).add(ask.owner));
+  }
+
+  for (const [name, owners] of unreachable) {
+    report.error(
+      'operation-reach',
+      `${[...owners].sort().join(', ')} asked for \`${name}\`, which names no operation in ` +
+        `${universe.rel} — either the path is wrong, or the backend has an operation nothing declares`,
+    );
+  }
+
+  // NARROWED to what this region says it reaches. Everything else in the universe is out of scope
+  // for this region by construction, and saying so is what keeps the number believable.
+  //
+  // Taken as a PARAMETER rather than read in here, the way `reportReachDrift` takes its declarations:
+  // a check that goes to the filesystem for half its input cannot be driven by a test without a
+  // fixture project, and the half that decides whether a finding is reported is exactly the half
+  // worth driving.
+  const declaredOps = new Set();
+  for (const entries of Object.values(declared ?? {})) {
+    for (const entry of entries) {
+      if (!askKind(entry)) continue;
+      const hit = resolveOperation(entry, universe.index);
+      if (hit) declaredOps.add(hit);
+    }
+  }
+  const uncovered = [...declaredOps].filter((op) => !reached.has(op)).sort();
+  if (uncovered.length) {
+    report.warn(
+      'operation-reach',
+      `declared as reached and never asked for: ${uncovered.join(', ')} — the declaration is a claim ` +
+        'no flow has exercised, so either a flow is missing or the declaration is stale',
+    );
+  }
+
+  const aside = [
+    `${universe.names.length} operation(s) declared`,
+    unresolvable ? `${unresolvable} ask(s) name no operation (contract, host module, table or rpc)` : '',
+  ].filter(Boolean).join(' · ');
+  report.ok(
+    'operation-reach',
+    `${reached.size}/${resolvable.length} ask(s) resolve to a declared operation — ${aside}`,
+    { n: resolvable.length, of: 'operation ask(s)' },
+  );
+}
+
+/**
  * A CATALOGUE region's declared members are the members the data actually produces.
  *
  * Static by design and it needs no browser: the two inputs are the app's captured payloads and the
@@ -2170,6 +2307,9 @@ async function regionFlowCheck(report, id, port, region) {
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
     provenanceCheck(report, id, region, run.provenance ?? [], run.outbound ?? []);
+  // Beside provenance because it reads the SAME ledger: provenance says what was asked for, this
+  // says whether it exists. No extra page, no navigation — the lane reuses one.
+  operationReachCheck(report, run.outbound ?? [], operationUniverse(), declaredReach({ regionId: id }));
     sourcesLiveCheck(report, id, run.channels, region, run.held ?? []);
     emittedLiveCheck(report, id, run.renderOutputs);
   } catch (err) {
@@ -3555,6 +3695,7 @@ export async function runArchipelagoVerify(argv, id) {
       'flows, mutation and the region render need a browser — re-run without --fast before handing over',
     );
   } else if (argv.runtime === true || argv.audit === true) {
+    reportBrowserOverride(report);
     // FIRST, before anything that drives the mountpoints view. The lane reuses one page and a warm
     // re-aim keeps whatever view it already had, so running this after the wiring probe measured a
     // DIAGNOSTIC layout and reported a page that overflows by 197px as fitting every viewport. The

@@ -186,6 +186,7 @@ Skipped under `--fast`, which says so via `region-runtime`. Gated at `verify.mjs
 | `store-guard` | motu's own runtime ownership guard ("key X is produced by island A, but written by B") did not complain while the region was driven. Surfaced here because the guard fires into a console nobody reads. | error | `verify.mjs:2635` |
 | `laundering` | The host did not write a key shortly after an island emitted — a value derived from what an island did, fed back through the page instead of declared as an output. | warn | `verify.mjs:1810` |
 | `provenance` | What the region actually **asked for**, through all three doors — a `contract` call, a `traced(...)` host module, a `wire` reach — grouped by door, counted, and followed by WHO asked (`island:<tag>` / `source:<id>`), from one ledger in `@motu/core` (`recordOutbound`/`outboundCalls`). Same grouping the lens shows, deliberately. It used to read the traced-stub list alone, so a region talking only through the contract reported as one that fetched nothing. Warns on an ask attributed to nobody. Skips when nothing was observed. | ok, warn, skip | `verify.mjs:1404`, `:1417` |
+| `operation-reach` | Whether the thing the region asked for **exists**. `provenance` above records every ask and validates none; given the backend's own list of operations (`operations` in `motu.config.json` — a path, read for its NAMES only) this resolves the two doors that carry an identifier — the wire's `route:<METHOD> <path>` and `fn:<name>` — against it. An ask resolving to no operation is an **error**: either the path is wrong, or the backend has an operation nothing declares. An operation the region *declares it reaches* (`reaches` / `contract.effects`) that no flow asked for is a warning, narrowed that way on purpose — the universe is the whole backend, and reporting it per region would be wrong dozens of times on day one. Asks that name no operation (contract, host module, table, rpc) are counted and named, never dropped. Skips when unconfigured; `inconclusive` when the file is missing, malformed or empty. | ok, warn, error, skip, inconclusive | `verify.mjs` `operationReachCheck`, `lib/operations.mjs` |
 | `sources-live` | The runtime half of `sources`. A channel writing a key no declared source claims is an **error**. A declared source that produced nothing is a warning, split by whether its keys hold anything: *seeded, not installed* (the page's own derivation is never exercised) versus *fed by neither channel nor seed*. | ok, warn, error | `verify.mjs:2957`, `:2983`, `:2991`, `:2999` |
 | `region-responsive` | The **composed page** fits every declared viewport. Every island fits alone and the arrangement still overflows — a fixed-rail grid fits nothing on a phone and no island is at fault. Reports `inconclusive` when the region rendered **without the island stylesheet**, because an unstyled page cannot overflow by construction. | ok, error, inconclusive | `verify.mjs:2892`, `:2901`, `:2911`, `:2918` |
 | `region-a11y` | axe over the composed page, in the states the flows establish. Serious/critical violations warn; a page with only minor findings is reported as such. | ok, warn | `verify.mjs:2928`, `:2930`, `:2931` |
@@ -320,6 +321,24 @@ So: `--changed` is worth passing, and it is **not a substitute for naming the re
 `--audit` is a gate, not a loop: `responsive` and `a11y` are the two most expensive per-island checks, and their answer changes when the **rendering** changes, not when a key moves.
 
 The runtime lane opens the lagoon **once** — one dev server, one browser, one page — and re-aims it. In a real project the first island pays the Vite boot (~15s) and every island after it is under a second per check. Chromium is a one-time install: `cd packages/cli && npx playwright install chromium`.
+
+**Where that install cannot reach the CDN**, point motu at a browser the machine already has:
+
+```bash
+MOTU_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome motu check --runtime
+```
+
+A hardened CI image, a distro- or nix-packaged chromium, an air-gapped build box and a sandbox whose
+egress policy does not list `cdn.playwright.dev` all HAVE a browser; `chromium.launch()` insists on
+the exact build the pinned Playwright expects and ignores it. The override is opt-in and **never
+silent** — a run that used one carries a `browser` warning, because a build motu did not pin can
+render and behave differently from the one it did, and a green `--runtime` that used one is claiming
+slightly more than it checked:
+
+```
+! browser  not the pinned Chromium — launched `…/chrome` via MOTU_CHROMIUM_PATH —
+           the runtime findings below hold for THAT build; a pinned run can still differ
+```
 
 ---
 

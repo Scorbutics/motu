@@ -272,6 +272,22 @@ export function loadMotuConfig() {
      */
     hostSources: Array.isArray(cfg.hostSources) ? cfg.hostSources : undefined,
     /**
+     * THE BACKEND'S OWN LIST OF OPERATIONS — a path, relative to the project root.
+     *
+     * Read by `operation-reach`, which asks whether the thing a region asked for EXISTS. motu cannot
+     * know that on its own: an operation is a fact about the backend and motu has no view of one. So
+     * the list comes from a file the project already maintains — in practice assay's
+     * `.assay/operations.json`, though only its KEYS are read.
+     *
+     * Deliberately a path and not a dependency. The moment this reads a declaration's contents motu
+     * has married one backend tool, and an OpenAPI document or a hand-written array can fill the same
+     * slot. See `lib/operations.mjs`.
+     *
+     * Absent, the check skips and says which key would switch it on — a project that has not pointed
+     * at a universe has not failed anything.
+     */
+    operations: typeof cfg.operations === 'string' && cfg.operations.trim() ? cfg.operations.trim() : undefined,
+    /**
      * HOW HARD `root` IS PUSHED — 'encouraged' (the default) or 'required'.
      *
      * A region composes either from its archipelago's `root`, which is safe by construction, or from

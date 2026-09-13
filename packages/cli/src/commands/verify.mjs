@@ -41,6 +41,7 @@ import {
   probeWiring,
   runRegionFlows,
   auditRegionLagoon,
+  browserOverrideNote,
 } from '../playwright-lagoon.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -1398,6 +1399,8 @@ export async function runIslandVerify(argv, name) {
     // Reading the evidence costs a tsx spawn, so this rides with the tiers that already load it rather
     // than slowing the static sweep. It needs no browser and runs under `--fast` too.
     if (fixturesPath) inputCoverageCheck(report, readScenarios(fixturesPath));
+    // The island lane drives a browser too, unless --fast put it under happy-dom.
+    if (!argv.fast) reportBrowserOverride(report);
     // 'legacy' fit re-mounts the island under the host's legacy skin. Skip it where there is no
     // legacy skin — it would verify the same thing twice and double the wall clock.
     for (const fit of LEGACY_FIT ? ['native', 'legacy'] : ['native']) {
@@ -1791,6 +1794,24 @@ function provenanceCheck(report, id, region, calls, outbound = []) {
       'provenance',
       `${unowned} ask(s) attributed to nobody — the request left while no island's and no source's ` +
         `window was open, so nothing can say which declaration should account for it`,
+    );
+  }
+}
+
+/**
+ * Say it when the browser was not the one motu pinned.
+ *
+ * A WARNING rather than a note in passing: a build motu did not pin can render and behave differently
+ * from the one it did, so every runtime verdict below is worth slightly less than it looks and the
+ * run should say so where the findings are read. Warnings do not fail `motu check`, which is the
+ * right weight — using the browser a machine already has is a legitimate way to run, not a fault.
+ */
+function reportBrowserOverride(report) {
+  const note = browserOverrideNote();
+  if (note) {
+    report.warn(
+      'browser',
+      `${note} — the runtime findings below hold for THAT build; a pinned run can still differ`,
     );
   }
 }
@@ -3674,6 +3695,7 @@ export async function runArchipelagoVerify(argv, id) {
       'flows, mutation and the region render need a browser — re-run without --fast before handing over',
     );
   } else if (argv.runtime === true || argv.audit === true) {
+    reportBrowserOverride(report);
     // FIRST, before anything that drives the mountpoints view. The lane reuses one page and a warm
     // re-aim keeps whatever view it already had, so running this after the wiring probe measured a
     // DIAGNOSTIC layout and reported a page that overflows by 197px as fitting every viewport. The

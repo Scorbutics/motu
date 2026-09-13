@@ -102,10 +102,39 @@ export async function closeLagoonPool() {
   poolClosing = false;
 }
 
+/**
+ * A CHROMIUM THIS MACHINE ALREADY HAS, when it has one motu did not install.
+ *
+ * `chromium.launch()` insists on the exact build the pinned Playwright expects and ignores a working
+ * browser sitting on disk. That is right on a developer machine, where `npx playwright install` is
+ * one command — and it makes the whole runtime tier unrunnable everywhere that command cannot reach
+ * the CDN: a hardened CI image, a distro- or nix-packaged chromium, an air-gapped build box, a
+ * sandbox whose egress policy does not list `cdn.playwright.dev`. All of them HAVE a browser.
+ *
+ * Opt-in, and never silent — see `browserOverrideNote`. A build motu did not pin can render and
+ * behave differently from the one it did, so a green `--runtime` that used one is claiming slightly
+ * more than it checked unless it says so.
+ */
+export const chromiumOverride = () => process.env.MOTU_CHROMIUM_PATH || null;
+
+/**
+ * What to SAY about the browser, or '' when it is the pinned one.
+ *
+ * Returned rather than printed: this module drives checks, and a check's report is where a caveat
+ * belongs — a line on stdout is read by whoever is watching and lost by everyone else.
+ */
+export function browserOverrideNote() {
+  const exe = chromiumOverride();
+  return exe ? `not the pinned Chromium — launched \`${exe}\` via MOTU_CHROMIUM_PATH` : '';
+}
+
 /** The one Chromium every check drives. */
 async function getBrowser() {
   const { chromium } = await import('playwright');
-  if (!sharedBrowser || !sharedBrowser.isConnected()) sharedBrowser = await chromium.launch();
+  const exe = chromiumOverride();
+  if (!sharedBrowser || !sharedBrowser.isConnected()) {
+    sharedBrowser = await chromium.launch(exe ? { executablePath: exe } : {});
+  }
   return sharedBrowser;
 }
 
@@ -1783,7 +1812,9 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
  */
 export async function recordFrames({ url, headed = true, userDataDir, timeoutMs = 180000 }) {
   const { chromium } = await import('playwright');
+  const exe = chromiumOverride();
   const context = await chromium.launchPersistentContext(userDataDir, {
+    ...(exe ? { executablePath: exe } : {}),
     headless: !headed,
     viewport: { width: 1440, height: 900 },
     ignoreHTTPSErrors: true, // the console dev cert is self-signed

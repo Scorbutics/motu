@@ -322,6 +322,24 @@ So: `--changed` is worth passing, and it is **not a substitute for naming the re
 
 The runtime lane opens the lagoon **once** — one dev server, one browser, one page — and re-aims it. In a real project the first island pays the Vite boot (~15s) and every island after it is under a second per check. Chromium is a one-time install: `cd packages/cli && npx playwright install chromium`.
 
+**Where that install cannot reach the CDN**, point motu at a browser the machine already has:
+
+```bash
+MOTU_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome motu check --runtime
+```
+
+A hardened CI image, a distro- or nix-packaged chromium, an air-gapped build box and a sandbox whose
+egress policy does not list `cdn.playwright.dev` all HAVE a browser; `chromium.launch()` insists on
+the exact build the pinned Playwright expects and ignores it. The override is opt-in and **never
+silent** — a run that used one carries a `browser` warning, because a build motu did not pin can
+render and behave differently from the one it did, and a green `--runtime` that used one is claiming
+slightly more than it checked:
+
+```
+! browser  not the pinned Chromium — launched `…/chrome` via MOTU_CHROMIUM_PATH —
+           the runtime findings below hold for THAT build; a pinned run can still differ
+```
+
 ---
 
 ## 7. Escape hatches

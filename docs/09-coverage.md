@@ -689,7 +689,7 @@ The worked example is acme (`acme:motu/motu.config.json`).
   "coverage": {
     "enabled": true,
     "regions": ["*"],
-    "corpusUrl": "https://motu.tail77d0a9.ts.net/api/coverage?repo=acme/example-app&region=actions"
+    "corpusUrl": "https://motu-lagoon.duckdns.org/api/coverage?repo=acme/example-app&region=actions"
   }
 }
 ```

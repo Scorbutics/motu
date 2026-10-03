@@ -5,9 +5,19 @@
 #
 #   sudo ./provision.sh lagoon.example.com [git-url]
 #
+# SEVERAL NAMES, comma-separated, is how you move to a real domain without downtime.
+# Caddy serves all of them and gets a certificate for each, so the old name keeps
+# working while DNS for the new one propagates. Drop the old one on a later run.
+#
+#   sudo ./provision.sh lagoon.example.com,me.duckdns.org
+#
+# The FIRST name is the canonical one: it is what gets printed and what belongs in
+# ~/.config/motu/host.json.
+#
 # Optional, and note it goes AFTER sudo — sudo strips the environment, so exporting it
-# in your own shell reaches nothing. A *.duckdns.org domain then gets a systemd timer
-# that keeps the record pointed here, so rebuilding the box needs no DNS edit.
+# in your own shell reaches nothing. A *.duckdns.org name among the list then gets a
+# systemd timer that keeps its record pointed here, so rebuilding the box needs no
+# DNS edit for that name.
 #
 #   sudo DUCKDNS_TOKEN=xxxxxxxx ./provision.sh me.duckdns.org
 #
@@ -19,13 +29,27 @@
 #   caddy.service          TLS termination, ACME, no buffering
 set -euo pipefail
 
-DOMAIN="${1:-}"
+DOMAINS_RAW="${1:-}"
 REPO="${2:-https://github.com/Scorbutics/motu.git}"
+
+# Comma- or space-separated. DOMAIN stays the canonical (first) name so every later
+# reference — the printed URL, host.json, the health check — keeps meaning one thing.
+IFS=', ' read -r -a DOMAINS <<< "$DOMAINS_RAW"
+DOMAIN="${DOMAINS[0]:-}"
 STORE=/var/lib/motu-host
 APP=/opt/motu
 ENVFILE=/etc/motu-host.env
 
-[ -n "$DOMAIN" ] || { echo "usage: $0 <domain> [git-url]" >&2; exit 2; }
+[ -n "$DOMAIN" ] || { echo "usage: $0 <domain>[,<domain>...] [git-url]" >&2; exit 2; }
+
+# A name that does not resolve here cannot get a certificate, and Caddy's failure for
+# that arrives minutes later in a log nobody is reading. Say it now instead.
+for d in "${DOMAINS[@]}"; do
+  resolved="$(getent ahostsv4 "$d" 2>/dev/null | awk 'NR==1{print $1}')" || true
+  if [ -z "$resolved" ]; then
+    echo "WARNING: $d does not resolve. Caddy will retry ACME but cannot succeed until it does." >&2
+  fi
+done
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 2; }
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
@@ -142,7 +166,7 @@ cat > /etc/caddy/Caddyfile <<CADDY
 # has no read timeout to trip, which is what the __motu_reload SSE stream needs.
 # (The nginx equivalent needs proxy_buffering off AND a long proxy_read_timeout,
 # and getting either wrong gives you a live lagoon that stops reloading silently.)
-$DOMAIN {
+$(printf '%s, ' "${DOMAINS[@]}" | sed 's/, $//') {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:8818
 }
@@ -161,11 +185,28 @@ systemctl reload caddy || systemctl restart caddy
 # you remembering that Caddy cannot get a certificate because the name still points
 # at a machine that no longer exists.
 #
+# WHICH MATTERS MORE ONCE YOU MOVE TO A DOMAIN YOU OWN, not less. The one path to a
+# terminate you did not ask for is Oracle's Always Free IDLE RECLAMATION, and a
+# lagoon host is idle by their definition almost all the time — it serves a page when
+# someone opens it and does nothing in between. Nothing here prevents that; what it
+# decides is whether a rebuild costs five minutes or a DNS edit you have to remember.
+#
+# So on a custom domain, pick one deliberately:
+#   RESERVE THE IP (free, two minutes, OCI console) and point an A record at it. A
+#     reserved IP can be re-attached to the replacement instance, so the name keeps
+#     working and duckdns stops being needed at all. This is the one to pick.
+#   OR CNAME the pretty name at the duckdns one and keep this timer. Zero effort,
+#     keeps the self-repair, costs a lookup and a dependency on duckdns staying up.
+# What you should NOT do is drop duckdns for a hand-written A record on an EPHEMERAL
+# IP: that removes the insurance and adds nothing.
+#
 # The `ip=` parameter is left EMPTY on purpose: duckdns then uses the source address
 # of the request, so the box never has to discover its own public IP.
-if [ -n "${DUCKDNS_TOKEN:-}" ] && [[ "$DOMAIN" == *.duckdns.org ]]; then
+duck=""
+for d in "${DOMAINS[@]}"; do [[ "$d" == *.duckdns.org ]] && duck="$d"; done
+if [ -n "${DUCKDNS_TOKEN:-}" ] && [ -n "$duck" ]; then
   say "duckdns updater"
-  sub="${DOMAIN%.duckdns.org}"
+  sub="${duck%.duckdns.org}"
   umask 077
   printf 'DUCKDNS_SUB=%s\nDUCKDNS_TOKEN=%s\n' "$sub" "$DUCKDNS_TOKEN" > /etc/duckdns.env
   chmod 600 /etc/duckdns.env
@@ -211,6 +252,10 @@ netfilter-persistent save >/dev/null
 say "done"
 echo
 echo "  host:   https://$DOMAIN"
+if [ "${#DOMAINS[@]}" -gt 1 ]; then
+  echo "  also:   $(for d in "${DOMAINS[@]:1}"; do printf 'https://%s ' "$d"; done)"
+  echo "          (certificates are issued per name; drop the old one from a later run)"
+fi
 echo "  token:  $(grep MOTU_HOST_TOKEN "$ENVFILE" | cut -d= -f2)"
 echo
 echo "  On your laptop, write ~/.config/motu/host.json:"

@@ -159,6 +159,8 @@ const pages = new Map();
 const PAINT_TIMEOUT_COLD = 15000;
 const PAINT_TIMEOUT_WARM = 3000;
 let paintTimeout = PAINT_TIMEOUT_COLD;
+/** How long a mounted island may stay empty before its empty default is taken as its answer. */
+const EMPTY_DEFAULT_SETTLE_MS = 2000;
 /** Diagnostics of the CHECK currently running — console/pageerror listeners are per page, not per check. */
 let diagnosticSink = [];
 /**
@@ -1648,8 +1650,13 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
   const diagnostics = [];
   return onLagoonPage({ target: `island:${tag}`, fit, port, viewport: { width: 900, height: 720 }, diagnostics }, async (page, server) => {
 
-    // Wait for the island to upgrade and paint.
+    // Wait for the island to upgrade and paint — or to settle EMPTY. An island whose correct answer
+    // with no input is nothing (a card with no member, a list with no rows) never paints from its
+    // defaults, and waiting for paint used to end this check with `differentiates: null`, which the
+    // caller dropped without a word: the scenarios were never driven and nothing said so. Mounted is
+    // the element existing; an empty default is a state, not a failure, so its seeds are driven too.
     let mounted = false;
+    let presentSince = null;
     const deadline = Date.now() + paintTimeout;
     while (Date.now() < deadline) {
       try {
@@ -1660,6 +1667,15 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
         if (r.mounted && r.len > 0) {
           mounted = true;
           break;
+        }
+        if (r.mounted) {
+          presentSince ??= Date.now();
+          if (Date.now() - presentSince >= EMPTY_DEFAULT_SETTLE_MS) {
+            mounted = true;
+            break;
+          }
+        } else {
+          presentSince = null;
         }
       } catch {
         // context replaced by HMR — retry

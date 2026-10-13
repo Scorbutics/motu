@@ -222,6 +222,23 @@ function islandBind(elements: ElementSpec[], tag: string, seed: Record<string, u
   return Object.fromEntries([...names].map((k) => [k, k]));
 }
 
+let loneMounts = 0;
+
+/**
+ * A FRESH archipelago id for every lone-island mount.
+ *
+ * It was the constant `'lagoon'`, and a store is reused by id — so when the checks re-aim one shared
+ * page from island to island, every island inherited the keys the previous one's scenarios left
+ * behind. Six islands in one project bind a `members` key, each with its own row shape; once their
+ * scenarios were actually driven, `member-results` mounted on another island's rows (no `id`) and
+ * `mission-view` on `member-results`' rows (no `memberId`), and both logged React's duplicate-key
+ * error — reported against islands that are correct, in a run where they pass alone.
+ */
+function loneIslandId(tag: string): string {
+  loneMounts += 1;
+  return `lagoon:${tag}#${loneMounts}`;
+}
+
 /**
  * The lagoon: mount ONE target in isolation against whatever transport the caller already configured
  * (Mock in verify / offline preview). For an island target it synthesises a one-island archipelago so
@@ -236,7 +253,7 @@ export function lagoonArchipelagoConfig(target: LagoonTarget, opts: Pick<DefineL
   return target.kind === 'archipelago'
     ? target.config
     : {
-        id: 'lagoon',
+        id: loneIslandId(target.tag),
         islands: [{ slot: 'lagoon', element: target.tag, bind: islandBind(opts.elements, target.tag, opts.seed) }],
         layout: `<motu-island slot="lagoon"${target.fit ? ` fit="${target.fit}"` : ''}></motu-island>`,
       };
@@ -247,7 +264,7 @@ export function defineLagoon(target: LagoonTarget, opts: DefineLagoonOptions): H
     target.kind === 'archipelago'
       ? target.config
       : {
-          id: 'lagoon',
+          id: loneIslandId(target.tag),
           // Bind the island's declared inputs (and any seeded key) to same-named store keys, so
           // writing the store actually DRIVES the island — otherwise a lone island can't be exercised
           // by input and its props stay at their defaults. This is what lets verify's differentiation

@@ -143,13 +143,17 @@ async function main() {
         await new Promise((r) => setTimeout(r, 80));
         outputs.push(rendered(findIsland()));
       }
-      // All rendered something AND not every output is identical.
-      result.differentiates = outputs.every((o) => o.trim().length > 0) && new Set(outputs).size > 1;
+      // An empty render is an output like any other; which scenarios were empty travels in `empty`.
+      result.differentiates = new Set(outputs).size > 1;
       // WHICH scenarios collide, not just whether any two do. `size > 1` passes a set where two of
       // three render identically, while the report says "distinct inputs produce distinct output" —
       // claiming more than it tested, and leaving one scenario that is fake evidence by the project's
       // own definition. Named here so the caller can say so.
       result.distinctOutputs = new Set(outputs).size;
+      // Which scenarios rendered nothing — named by the caller, the same as the browser lane does.
+      result.empty = outputs
+        .map((o, i) => (o.trim().length ? null : (scenarios[i]?.name ?? `#${i + 1}`)))
+        .filter(Boolean);
     }
     console.error = realConsoleError;
     process.stdout.write(JSON.stringify(result) + '\n');

@@ -1733,7 +1733,8 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     // bind gap when the actual answer was an empty state the island renders on purpose.
     const empty = outputs.map((o, i) => (o.trim().length ? null : (scenarios[i]?.name ?? `#${i + 1}`))).filter(Boolean);
     const distinctOutputs = new Set(outputs).size;
-    const differentiates = empty.length === 0 && distinctOutputs > 1;
+    // An empty render is an output like any other; which scenarios were empty travels in `empty`.
+    const differentiates = distinctOutputs > 1;
     return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics, fixtureCoverage, inertInteractions, networkEscapes };
   });
 }

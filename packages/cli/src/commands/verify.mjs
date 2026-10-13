@@ -30,6 +30,7 @@ import { readOperationNames, indexOperations, resolveOperation, askKind } from '
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { undrivenWrites } from '../lib/writes-coverage.mjs';
+import { dataFlowFindings } from '../lib/data-flow-verdict.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
 import { lostMarker, parseEvidence } from '../lib/evidence-json.mjs';
 import {
@@ -1115,38 +1116,9 @@ function reportDifferentiation(report, r) {
     return;
   }
   reportInteractions(report, r);
-  if (r.differentiates) {
-    // Duplicates are not a failure — two seeds may legitimately normalise to one output — but they are
-    // not evidence either, and the ok line used to cover for them.
-    if (r.distinctOutputs != null && r.distinctOutputs < r.scenarioCount) {
-      report.warn(
-        'data-flow',
-        `${r.scenarioCount} scenarios produced only ${r.distinctOutputs} distinct render(s) — ` +
-          `${r.scenarioCount - r.distinctOutputs} of them show nothing the others do not`,
-      );
-    }
-    report.ok(
-      'data-flow',
-      `distinct inputs produce distinct output (${r.scenarioCount} scenarios) — data flows past the seam`,
-      { n: r.distinctOutputs ?? r.scenarioCount, of: 'distinct render(s)' },
-    );
-  } else if (r.empty?.length) {
-    // AN EMPTY SCENARIO IS NOT AN IDENTICAL ONE. The comparison needs every scenario to have rendered
-    // something, so one that renders nothing sinks the check — and saying "rendered identically" then
-    // points at the wrong thing entirely. Name the scenarios, because an island whose empty state IS
-    // its correct answer (a summary of nothing, a bar with nothing to act on) cannot take part in this
-    // check at all, and the author needs to know that rather than hunt a bind gap.
-    report.error(
-      'data-flow',
-      `${r.empty.length} of ${r.scenarioCount} scenario(s) rendered NOTHING — ${r.empty.join(', ')}. ` +
-        `Distinct output cannot be compared against a blank one. Either the island is not receiving that ` +
-        `seed, or its empty state is deliberate — in which case that scenario does not belong here`,
-    );
-  } else {
-    report.error(
-      'data-flow',
-      `${r.scenarioCount} scenarios rendered identically — inputs don't reach the output: the seam is wired but data doesn't flow (bind gap, or fixtures aren't request-keyed with \`match\`)`,
-    );
+  for (const f of dataFlowFindings(r)) {
+    if (f.level === 'ok') report.ok('data-flow', f.msg, f.seen);
+    else report[f.level]('data-flow', f.msg);
   }
 }
 

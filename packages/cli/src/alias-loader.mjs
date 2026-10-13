@@ -11,7 +11,8 @@
 //
 // The aliases here are the ones motu already gives Vite, so the browser path and the node path resolve
 // the same specifier to the same file by construction rather than by two lists someone keeps in sync.
-import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ASSET, ASSET_STUB, aliasEntries, mapSpecifier } from './lib/alias-core.mjs';
 
 const entries = aliasEntries();
@@ -24,11 +25,39 @@ export async function resolve(specifier, context, nextResolve) {
   const file = mapSpecifier(specifier, entries);
   if (file) {
     try {
-      return await nextResolve(pathToFileURL(file).href, context);
+      return asModuleSource(await nextResolve(pathToFileURL(file).href, context));
     } catch {
       // An alias that resolves to nothing loadable is not fatal — fall through, so one stale entry
       // cannot make every import fail, and node reports the original specifier honestly.
     }
   }
-  return nextResolve(specifier, context);
+  return asModuleSource(await nextResolve(specifier, context));
+}
+
+const SOURCE = /\.(ts|tsx|jsx)$/;
+const ESM_SYNTAX = /^\s*(import|export)\b/m;
+
+/**
+ * An application's own TypeScript is ESM, whatever its `package.json` says.
+ *
+ * A Next or Vite app is written in `import`/`export` and compiled by a bundler, so its package.json
+ * routinely has no `"type": "module"`. Plain node then classifies every `.tsx` in it as CommonJS, tsx
+ * compiles it that way, and the island's named import of it fails — "does not provide an export
+ * named 'ActionsGuide'" — because node cannot see esbuild's CJS exports. The registry imports every
+ * island, so ONE such file made `--fast` die for every island in the project, under an error naming
+ * an unrelated one. Bundlers never ask this question; this lane has to answer it the way they do.
+ *
+ * Narrow on purpose: only a TS/JSX source outside node_modules that node would load as CommonJS and
+ * that is written in ESM syntax. A genuinely CommonJS file keeps its format.
+ */
+function asModuleSource(result) {
+  if (!result?.url?.startsWith('file:') || result.format === 'module') return result;
+  if (!SOURCE.test(result.url) || result.url.includes('/node_modules/')) return result;
+  if (result.format && result.format !== 'commonjs') return result;
+  try {
+    if (!ESM_SYNTAX.test(readFileSync(fileURLToPath(result.url), 'utf8'))) return result;
+  } catch {
+    return result;
+  }
+  return { ...result, format: 'module' };
 }

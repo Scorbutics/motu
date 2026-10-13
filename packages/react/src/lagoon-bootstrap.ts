@@ -236,6 +236,19 @@ function propsFor(
 }
 
 /**
+ * A lone island's starting state: the page's props for its slot, underneath whatever seed applies.
+ *
+ * Exported for the test that pins the precedence: page props are the default, the seed (a scenario,
+ * the region's seed, or nothing under `?seed=off`) wins key by key.
+ */
+export function loneIslandSeed(
+  seed: Record<string, unknown> | undefined,
+  pageProps: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  return pageProps ? { ...pageProps, ...(seed ?? {}) } : seed;
+}
+
+/**
  * The SEED a requested scenario means, or the refusal that stops the mount.
  *
  * Not translated through `translateRegionSeed`: a scenario is authored against the island's own prop
@@ -476,12 +489,22 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
       ? forRegion.hostProps({ ...regionSeed, ...wantedFlow?.seed })
       : forRegion.hostProps;
 
+  // A LONE ISLAND'S PAGE PROPS ARE ITS STARTING STATE, not overrides. The region's per-slot `props`
+  // (what the page passes on the element) used to reach a lone island as static props, which
+  // `<Island>` applies AFTER its store binds — so a scenario seeding the same input changed the store
+  // and nothing on screen. A panel whose page passes `view="identity"` rendered its identity face for
+  // a scenario asking for `view: 'social'`, in every check driven through this entry, while the
+  // gallery (which passes no props) showed the right face. Seeded underneath instead: what the page
+  // passes still renders by default, and a scenario's own value wins.
+  const pageProps = target.kind === 'island' ? propsFor(target, regionId, opts)?.lagoon : undefined;
+  const mountSeed = loneIslandSeed(seed, pageProps);
+
   if (opts.mount === 'react') {
-    const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed });
+    const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: mountSeed });
     mountReactLagoon(mountEl, config, {
       elements: opts.elements,
       host,
-      seed: seed ?? { criteria: {} },
+      seed: mountSeed ?? { criteria: {} },
       channels,
       // Only for a whole-region target: a single-island target is mounted through a synthesised
       // one-slot config, and the app's layout would place slots that mount does not have.
@@ -493,8 +516,9 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
       // without, so a single-slot mount needs them exactly as much as the region does.
       providers: forRegion.providers,
       hostProps,
-      // Per-slot props the page supplies and the region does not carry — re-keyed for a lone island.
-      props: propsFor(target, regionId, opts),
+      // Per-slot props the page supplies and the region does not carry. A lone island takes them as
+      // its seed instead (above), so a scenario can still move them.
+      props: target.kind === 'archipelago' ? propsFor(target, regionId, opts) : undefined,
       fit: target.kind === 'island' ? target.fit : undefined,
       // The harness drives DECLARED wires in 'mountpoints', where every slot the archipelago names is
       // framed on its own. In 'region' the app's arrangement decides what exists — an island behind a

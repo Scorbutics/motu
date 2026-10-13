@@ -272,9 +272,14 @@ export function resolveModuleSpecifier(spec, fromDir) {
  */
 /** The identifier an island file mounts, in either declaration form. */
 export function islandComponentIdentifier(text) {
+  // Code only: comments and string CONTENTS are blanked first (quotes kept, so the short form's tag
+  // still parses). Matching the raw text read a comment saying "the app's OWN component: the admin
+  // dialog…" as `component: the`, and every check that follows the identifier to its import then
+  // reported the wrapped component missing.
+  const code = blankComments(text).replace(/(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g, (m, q) => q + ' '.repeat(m.length - 2) + q);
   return (
-    text.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1] ??
-    text.match(/\bisland\(\s*'[^']+'\s*,\s*([A-Za-z_$][\w$]*)/)?.[1] ??
+    code.match(/\bcomponent\s*:\s*([A-Za-z_$][\w$]*)/)?.[1] ??
+    code.match(/\bisland\(\s*(['"`])[^'"`]*\1\s*,\s*([A-Za-z_$][\w$]*)/)?.[2] ??
     null
   );
 }

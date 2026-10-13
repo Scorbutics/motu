@@ -29,6 +29,7 @@ import { readEffectEntries, isKinded, isDataKind, coversEffect } from '../lib/ef
 import { readOperationNames, indexOperations, resolveOperation, askKind } from '../lib/operations.mjs';
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
+import { undrivenWrites } from '../lib/writes-coverage.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
 import { lostMarker, parseEvidence } from '../lib/evidence-json.mjs';
 import {
@@ -352,7 +353,7 @@ function configChecks(report, kebab, pascal, expectedTag, standalone, componentP
       break;
     }
   }
-  const shortForm = !row && /\bisland\(\s*'[^']+'/.test(elementText);
+  const shortForm = !row && /\bisland\(\s*['"`]/.test(elementText);
   if (!row && !shortForm) {
     report.error('registered', `${pascal} has no island declaration in ${paths.rel(elementPath)}`);
     return null;
@@ -1101,7 +1102,18 @@ function reportInteractions(report, r) {
 }
 
 function reportDifferentiation(report, r) {
-  if (!r || r.differentiates == null) return;
+  if (!r) return;
+  // Never silent: a comparison that did not happen is a skip with its reason, not an absent line —
+  // an absent line reads exactly like a check this island does not have.
+  if (r.differentiates == null) {
+    report.skip(
+      'data-flow',
+      r.mounted === false
+        ? 'the island never mounted in the lagoon, so no scenario was driven — see lagoon-render'
+        : 'no comparison was made, so distinct output is not proved',
+    );
+    return;
+  }
   reportInteractions(report, r);
   if (r.differentiates) {
     // Duplicates are not a failure — two seeds may legitimately normalise to one output — but they are
@@ -2079,15 +2091,10 @@ function writesCoveredCheck(report, id) {
   }
   if (!declared.length) return;
 
-  const driven = new Set();
-  for (const scenario of readScenariosFor(id)) {
-    for (const st of scenario.steps ?? []) {
-      if (st.emit?.slot && st.emit?.event) driven.add(`${st.emit.slot}\u0000${st.emit.event}`);
-    }
-  }
-  const undriven = declared.filter((d) => !driven.has(`${d.slot}\u0000${d.event}`));
+  // Driven by an `emit`, or asserted where only its producer could have put it — see `undrivenWrites`.
+  const undriven = undrivenWrites(declared, readScenariosFor(id));
   if (!undriven.length) {
-    report.ok('writes-covered', 'every declared write is driven by a flow', {
+    report.ok('writes-covered', 'every declared write is driven or asserted from its producer by a flow', {
       n: declared.length,
       of: 'declared write(s)',
     });
@@ -2098,7 +2105,8 @@ function writesCoveredCheck(report, id) {
     `${undriven.length}/${declared.length} declared write(s) no flow drives: ` +
       `${undriven.map((d) => `${d.slot} → ${d.key} (on "${d.event}")`).join(', ')} — the coupling is declared and ` +
       `never exercised, so the component could stop emitting it and nothing here would change. Add a step with ` +
-      `\`emit: { slot: '<slot>', event: '<event>' }\` and an \`expect\` on what ANOTHER island then shows`,
+      `\`emit: { slot: '<slot>', event: '<event>' }\` and an \`expect\` on what ANOTHER island then shows — or ` +
+      `drive the island's own act and \`expect\` the key, with no seed or \`provide\` handing it a value`,
   );
 }
 

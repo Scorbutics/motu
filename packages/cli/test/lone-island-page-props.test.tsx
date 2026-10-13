@@ -57,14 +57,17 @@ check('the page prop renders by default', el.textContent === 'face:identity', `g
 act(() => provideToArchipelago(config.id, 'view', 'social'));
 check('a scenario value reaches the render', el.textContent === 'face:social', `got "${el.textContent}"`);
 
-// Re-aiming to ANOTHER lone island must not inherit this one's keys. The id used to be the constant
-// 'lagoon', a store is reused by id, and an island mounted after another read that island's rows.
+// Re-aiming to ANOTHER lone island must not inherit this one's keys. Every lone island shares the
+// 'lagoon' store (the channel registry relies on reuse by id), so it is emptied and re-seeded on each
+// mount instead; without that, an island mounted after another read that island's rows.
 const { getArchipelagoStore } = await import('@motu/core');
-const next = lagoonArchipelagoConfig({ kind: 'island', tag: 'x-other' } as const, { elements, seed: {} });
-check('each lone mount gets its own archipelago id', next.id !== config.id, `${next.id} vs ${config.id}`);
-act(() => mountReactLagoon(el, next, { elements, seed: {} }));
-check('the next lone mount starts with an empty store', getArchipelagoStore(next.id)?.get('view') === undefined,
+const { freshLoneStore } = await import('../../react/src/lagoon-bootstrap');
+const next = lagoonArchipelagoConfig({ kind: 'island', tag: 'x-other' } as const, { elements, seed: { other: 1 } });
+check('lone islands share one archipelago id', next.id === config.id);
+freshLoneStore(next.id, { other: 1 });
+check('the previous island\'s keys are gone', getArchipelagoStore(next.id)?.get('view') === undefined,
   String(getArchipelagoStore(next.id)?.get('view')));
+check('the new island\'s seed is in', getArchipelagoStore(next.id)?.get('other') === 1);
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL — ' + failures + ' assertion(s)'}\n`);
 process.exit(failures === 0 ? 0 : 1);

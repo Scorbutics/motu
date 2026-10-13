@@ -5,7 +5,7 @@
 import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
-import { applyMotuChrome, bindEntries, markSandbox } from '@motu/core';
+import { applyMotuChrome, bindEntries, getArchipelagoStore, markSandbox, seedArchipelago } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import type { DeclaredChannel } from '@motu/core';
 import type { ReactNode } from 'react';
@@ -233,6 +233,25 @@ function propsFor(
   const slot = opts.archipelagos?.[regionId!]?.islands?.find((i) => i.element === target.tag)?.slot;
   const own = slot ? bySlot[slot] : undefined;
   return own ? { lagoon: own } : undefined;
+}
+
+/**
+ * Start a lone-island mount from ITS OWN state, not the previous island's.
+ *
+ * Every lone island mounts through one synthesised archipelago (`'lagoon'`), and a store is reused
+ * by id — the channel registry relies on that to replace, rather than pile up, a region's sources.
+ * So the store must be emptied instead: when the checks re-aim one shared page from island to
+ * island, each one inherited the keys the previous one's scenarios left. Six islands in one project
+ * bind a `members` key with different row shapes; `member-results` mounted on another island's rows
+ * (no `id`) and `mission-view` on `member-results`' (no `memberId`), and both failed on React's
+ * duplicate-key error — in a run where each passes alone. The seed is applied again by hand because
+ * a reused store never re-applies one.
+ */
+export function freshLoneStore(id: string, seed: Record<string, unknown> | undefined): void {
+  const store = getArchipelagoStore(id);
+  if (!store) return;
+  store.clear();
+  for (const [key, value] of Object.entries(seed ?? {})) seedArchipelago(id, key, value);
 }
 
 /**
@@ -501,6 +520,7 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
 
   if (opts.mount === 'react') {
     const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: mountSeed });
+    if (target.kind === 'island') freshLoneStore(config.id, mountSeed);
     mountReactLagoon(mountEl, config, {
       elements: opts.elements,
       host,

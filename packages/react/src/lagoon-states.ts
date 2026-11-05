@@ -422,11 +422,32 @@ export async function replayInteractions(scenario: Scenario, upTo: number | null
   return { ...base, ok: true, applied: limit };
 }
 
+/**
+ * Has the region mounted anything yet?
+ *
+ * TWO VIEWS, TWO SHAPES, and this used to know only one. The `mountpoints` view — the one every
+ * check opens — frames each slot in a `[data-motu-slot]` cell. The `region` view — the one a PERSON
+ * opens, and the gallery's default — renders the archipelago's own layout, whose slots are bare
+ * `<motu-island slot>` markers with no cell around them. Looking only for the cell meant every flow
+ * address opened in the gallery waited out the full timeout over a region that had mounted at once,
+ * then refused with "the region never mounted" beneath a screen showing it mounted. The checks stayed
+ * green throughout because they never open that view.
+ *
+ * A marker counts once it holds something: an empty marker is a slot whose island has not rendered
+ * (or is `planned`), and a region whose every marker is empty has not mounted.
+ */
+function regionMounted(): boolean {
+  if (document.querySelector('[data-motu-slot]')) return true;
+  return Array.from(document.querySelectorAll('motu-island[slot]')).some(
+    (el) => el.childElementCount > 0 || (el.shadowRoot?.childElementCount ?? 0) > 0,
+  );
+}
+
 /** Wait until the region has mounted something, so step 1 does not fire into an empty page. */
 async function waitForRegion(timeoutMs = 10_000): Promise<boolean> {
   const until = Date.now() + timeoutMs;
   for (;;) {
-    if (document.querySelectorAll('[data-motu-slot]').length > 0) return true;
+    if (regionMounted()) return true;
     if (Date.now() >= until) return false;
     await settle(50);
   }

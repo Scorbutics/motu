@@ -523,6 +523,11 @@ function savedCorpora(paths) {
 function motuDevDock() {
   return {
     name: 'motu:dev-dock',
+    // THE DEV SERVER ONLY. `transformIndexHtml` also runs in `vite build`, so without this every BUILT
+    // artifact carried a dock already — and `lagoon serve` and the host then injected theirs on top.
+    // Two docks, both marked hosted, stacked on the same edge: a gallery with two identical "profile"
+    // tabs, one of which swallows the other's clicks.
+    apply: 'serve',
     // `post` so the app's own transforms have finished. The dock appends to the document and reads
     // the page's published control surface at runtime, so it does not care what else is in there.
     transformIndexHtml: {

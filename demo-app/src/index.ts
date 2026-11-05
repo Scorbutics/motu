@@ -22,6 +22,8 @@ export type { MemberDraft, MemberTier } from './shared/member-draft.js';
 export { membersSource, PER_PAGE } from './shared/members-source.js';
 export { MEMBER_SEARCH_CONFIG } from './ui/member-search-ng/search.config.js';
 export type { MembersPort, MembersQueryResult, MembersSource } from './shared/members-source.js';
+export { seedMembersPort, matchSeedMembers } from './shared/seed-members-port.js';
+export { SEED_MEMBERS } from './shared/seed-members.generated.js';
 export { availabilitySource, calendarFrom, utcDate, HORIZON_DAYS } from './shared/availability-source.js';
 export type { AvailabilityPort, AvailabilitySource, TimeslotRow } from './shared/availability-source.js';
 export { SLOT_KIND_LABELS, emptyCalendar } from './shared/availability-types.js';

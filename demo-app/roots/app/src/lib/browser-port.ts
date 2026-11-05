@@ -10,41 +10,22 @@
 // else: the filters (`ilike` substrings on email/names, exact on status/plan), the order (surname
 // then firstname), the paging (`range` inclusive), `byId` answering null for a missing row, and the
 // timeslot rules in `supabase/seeds/timeslots.sql`. If one of those changes, change it here too.
-import type { AvailabilityPort, MemberCriteria, MembersPort, TimeslotRow } from 'demo-app';
-import data from './sandbox-data.generated.json';
+import type { AvailabilityPort, MembersPort, TimeslotRow } from 'demo-app';
+import { SEED_MEMBERS, seedMembersPort } from 'demo-app';
 
-type Row = Record<string, string | null>;
-const MEMBERS = data.members as Row[];
-
-const CONTAINS: (keyof MemberCriteria)[] = ['email', 'firstname', 'surname'];
-const EXACT: (keyof MemberCriteria)[] = ['status', 'plan'];
+type Row = Record<string, unknown>;
 
 /** A tick of latency, so loading states render as they do against a real backend. */
-const settle = <T,>(value: T): Promise<T> => new Promise((r) => setTimeout(() => r(value), 120));
+const LATENCY_MS = 120;
+const settle = <T,>(value: T): Promise<T> => new Promise((r) => setTimeout(() => r(value), LATENCY_MS));
 
-const bySurname = (a: Row, b: Row) =>
-  String(a.surname).localeCompare(String(b.surname)) || String(a.firstname).localeCompare(String(b.firstname));
-
+/**
+ * The members half lives in `demo-app` (`seed-members-port.ts`), because the lagoon answers the
+ * members region with the same rows and the same filter — one implementation, so the sandbox and the
+ * preview cannot disagree about who is in the directory.
+ */
 export function browserMembersPort(): MembersPort {
-  return {
-    async search(criteria, first, perPage) {
-      const rows = MEMBERS.filter((m) => {
-        for (const key of CONTAINS) {
-          const v = criteria[key];
-          if (typeof v === 'string' && v.trim() !== '' && !String(m[key] ?? '').toLowerCase().includes(v.trim().toLowerCase())) return false;
-        }
-        for (const key of EXACT) {
-          const v = criteria[key];
-          if (typeof v === 'string' && v !== '' && m[key] !== v) return false;
-        }
-        return true;
-      }).sort(bySurname);
-      return settle({ rows: rows.slice(first, first + perPage), total: rows.length });
-    },
-    async byId(id) {
-      return settle(MEMBERS.find((m) => m.id === id) ?? null);
-    },
-  };
+  return seedMembersPort(SEED_MEMBERS, LATENCY_MS);
 }
 
 const HOURS = [9, 11, 14, 16] as const;
@@ -82,7 +63,7 @@ function timeslotsFor(member: Row): TimeslotRow[] {
 export function browserAvailabilityPort(): AvailabilityPort {
   return {
     async forMember(memberId, fromISO) {
-      const member = MEMBERS.find((m) => m.id === memberId);
+      const member = SEED_MEMBERS.find((m) => m.id === memberId) as Row | undefined;
       return settle(member ? timeslotsFor(member).filter((s) => s.starts_at >= fromISO).slice(0, 400) : []);
     },
   };

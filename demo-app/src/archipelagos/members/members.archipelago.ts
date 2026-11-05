@@ -63,7 +63,6 @@ export function membersArchipelago(opts: MembersArchipelagoOptions = {}): Archip
           // PROFILE whose id is "edit" — so the button opened "No such member". `/add` is the users
           // page, where the form that creates a member already lives.
           'member-new': (_detail, { host }) => host.navigate('/add'),
-          'member-paste': (_detail, { host }) => host.navigate('/member/paste'),
         },
       },
     ],

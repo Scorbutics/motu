@@ -36,7 +36,8 @@
   --_grad-soft: linear-gradient(135deg,
       color-mix(in srgb, var(--_primary) 10%, #fff) 0%,
       color-mix(in srgb, var(--_accent) 14%, #fff) 100%);
-  --_font: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  /* Bundled with the app — see `fonts.ts`. "Inter" was named here and never loaded. */
+  --_font: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
   --_radius: 14px;
   --_radius-sm: 9px;
   --_bg: #f6f4f0;
@@ -561,8 +562,13 @@
     scrollbar-width: none;
   }
   .gm-arch__toolbar > .gm-arch__grow::-webkit-scrollbar { display: none; }
-  .gm-chips { flex-wrap: nowrap; }
-  .gm-chip { flex: 0 0 auto; }
+  /* ONE ROW ONLY WHERE THERE IS A ROW THAT SCROLLS. This used to apply to every chip row under
+     720px — but only the region layout wraps the chips in a scrolling `.gm-arch__grow`. The page's own
+     toolbar does not, nor does the island alone, so three chips on a phone pushed the whole page 163px
+     sideways. Found by the first scenario that ever showed more than one chip at 390px. */
+  .gm-arch__grow .gm-chips { flex-wrap: nowrap; }
+  .gm-arch__grow .gm-chip { flex: 0 0 auto; }
+  .gm-chip { max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
   /* Actions ride the bar as compact buttons — no floating FAB stack over the list. */
   .gm-actions { margin-left: auto; gap: 8px; }
   .gm-actions .gm-btn { flex: 0 0 auto; padding: 8px 12px; font-size: 13px; }
@@ -708,7 +714,7 @@
      the same viewport size, which a media query cannot tell apart. */
   container-type: inline-size;
   border-radius: 24px;
-  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif);
+  font-family: var(--_font, "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif);
   color: var(--mc-ink);
   box-shadow: 0 2px 6px rgba(14, 40, 34, 0.06), 0 18px 42px rgba(14, 40, 34, 0.12);
   transition: box-shadow 220ms ease, transform 220ms ease;
@@ -849,7 +855,7 @@
   overflow-wrap: anywhere; text-align: right;
 }
 .mc__value--link { color: var(--mc-teal-ink); font-weight: 700; }
-.mc__value--strong { font-size: clamp(16px, 4.6cqi, 19px); font-weight: 800; color: var(--mc-ink); }
+.mc__value--strong { font-size: clamp(16px, 4.6cqi, 19px); font-weight: 800; color: var(--mc-ink); font-variant-numeric: tabular-nums; }
 .mc__value--number { font-size: clamp(16px, 4.6cqi, 19px); font-weight: 800; color: var(--mc-coral-ink); letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
 .mc__value--empty { color: var(--mc-muted); font-weight: 600; letter-spacing: normal; }
 
@@ -887,7 +893,7 @@
 .mc-row {
   display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-height: 68px;
   background: var(--mc-white); border: 1px solid var(--mc-line); border-radius: 16px;
-  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif); color: var(--mc-ink);
+  font-family: var(--_font, "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif); color: var(--mc-ink);
 }
 .mc-row .mc__avatar { width: 44px; height: 44px; font-size: 15px; border-width: 3px; box-shadow: none; }
 .mc-row--premium .mc__avatar { background: linear-gradient(150deg, var(--mc-teal-av), var(--mc-teal-shade)); color: #fff; }
@@ -956,7 +962,6 @@
   font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
 }
 .mc--premium .ph__pill--active { background: var(--mc-mint); color: var(--mc-teal-ink); }
-.mc--standard .ph__pill--active { background: var(--mc-teal-ink); color: #fff; }
 .ph__pill--suspended { background: var(--mc-coral-soft); color: var(--mc-coral-ink); }
 
 /* THE FACTS: the card's fields, stacked label-over-value as the card's pair is, and on ONE row once
@@ -995,13 +1000,18 @@
 .ph__dot--full { background: var(--mc-coral); box-shadow: 0 0 0 4px rgba(226, 113, 74, 0.16); }
 .ph__avail--none { color: var(--mc-muted); font-weight: 500; }
 .ph__dot--none { background: var(--mc-line); box-shadow: inset 0 0 0 1px var(--mc-muted); }
-/* On standard the whole header is bright teal, and white on bright teal is under 3:1 for anything
-   smaller than the name. The page header carries more small text than the card does, so its small
-   lines are drawn in the card's deep teal ink instead — the same ink the frosted panel already uses. */
-.mc--standard .ph__avail, .mc--standard.ph .mc__chapter { color: var(--mc-teal-deep); }
-.mc--standard.ph .mc__chapter { font-weight: 600; }
-/* The availability line sits at the bottom of standard's gradient, where it is darkest — so it gets
-   the frosted panel's surface rather than ink on the field. */
+/* STANDARD'S FIELD, TURNED FOR A HEADER. The card is bright teal all over, and white on that bright
+   teal is under 3:1 — tolerable on a card's large name, not on a page header's chapter line, status
+   pill and availability, all small. So the header runs the card's own ramp sideways: deep teal ink
+   where the text sits on the left, the card's bright teal on the right where the veil circles are.
+   Same three tokens, same character, and the text goes back to the card's white. */
+.mc--standard.ph {
+  background: linear-gradient(100deg, var(--mc-teal-ink) 0%, var(--mc-teal) 42%, var(--mc-teal-bright) 78%, var(--mc-teal-glow) 100%);
+}
+.mc--standard.ph .mc__chapter { color: #fff; font-weight: 600; }
+.mc--standard .ph__pill--active { background: rgba(255, 255, 255, 0.16); color: #fff; border: 1px solid rgba(255, 255, 255, 0.5); }
+.mc--standard .ph__avail { color: var(--mc-teal-deep); }
+/* The availability line sits at the bottom of the header — so it gets the frosted panel's surface. */
 .mc--standard .ph__avail { width: fit-content; padding: 8px 14px; border-radius: 999px; background: var(--mc-frost); }
 .mc--standard .ph__dot--open { background: var(--mc-teal-deep); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35); }
 
@@ -1033,7 +1043,7 @@
   position: relative; overflow: hidden;
   background: radial-gradient(140% 260% at 82% 0%, var(--mc-teal-hi) 0%, var(--mc-teal-deep) 58%);
   color: #fff;
-  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif);
+  font-family: var(--_font, "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 10px 30px rgba(10, 60, 50, 0.18);
   container-type: inline-size;
 }

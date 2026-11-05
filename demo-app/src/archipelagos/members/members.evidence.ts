@@ -6,9 +6,15 @@
 // through the wire fake or a channel, so until this file existed the contract door was exercised by a
 // unit test and by nothing that renders. A door with no flow behind it is a door nobody has opened.
 //
-// The rows and the filter these steps rely on are the ISLAND's own fixtures
-// (`src/islands/member-results/fixtures.mock.ts`) — a functional stub that really filters, which is
-// what lets a flow drive a search and assert on the answer rather than on a recorded constant.
+// The rows these steps rely on are the app's own: the island's fixture answers through `membersSource`
+// over `seedMembersPort`, over the 240 rows of `supabase/seed.sql` — the same rows, filter and order
+// the sandbox build serves. Every name and count asserted below was read off that data, so a step
+// here describes a screen a person can reach by typing the same filter into the app.
+//
+// THE PAGE HOLDS 20 ROWS, sorted by surname then first name. Unfiltered (or active-only) page one runs
+// Edsger Allen … Tariq Boulos, so a name further down the alphabet can only appear if a filter
+// genuinely reached the fetch — which is what makes each narrowing step below survive
+// `flow-mutation` rather than assert a constant.
 import type { RegionScenario } from '@motu/runtime/mock';
 import { MEMBER_SEARCH_CONFIG } from '../../ui/member-search-ng/search.config.js';
 
@@ -37,7 +43,7 @@ export const scenarios: RegionScenario[] = [
     name: 'each slot renders its own island',
     seed: SEED,
     steps: [
-      { expectRender: { 'member-header': 'Browse and add community members', 'member-actions': 'Paste' } },
+      { expectRender: { 'member-header': 'Browse and add community members', 'member-actions': 'New member' } },
       // The chip's own vocabulary: `CRITERIA_LABELS.status` plus the display value the chips island
       // maps it to. The store holds `'active'`; only the chip prints `Active`.
       //
@@ -46,7 +52,7 @@ export const scenarios: RegionScenario[] = [
       // name, which `expectRender` reads as part of what a person can perceive; asserting `Email`
       // asserted a screen this island only shows once clicked.
       { expectRender: { 'member-chips': 'Status', 'member-search-ng': 'Member filters' } },
-      { expectRender: { 'member-results': 'Lovelace' } },
+      { expectRender: { 'member-results': 'Allen' } },
     ],
   },
   {
@@ -58,21 +64,20 @@ export const scenarios: RegionScenario[] = [
      * alone: `member-chips` proves it emitted, `member-results` proves it can render rows, and only
      * the region proves the first causes the second.
      *
-     * `Chien-Shiung` is the assertion on purpose. Fifteen rows, eight per page — Wu is row 11, so she
-     * is NOT on the unfiltered first page and can only appear if the emitted criteria genuinely
-     * reached the fetch. Any other stimulus lands on page one (no Wu) or on an empty list, which is
-     * what makes this survive `flow-mutation` rather than assert a constant.
+     * `Amira` is the assertion on purpose. There are three Wirths, all far past page one, so Amira
+     * Wirth can only appear if the emitted criteria genuinely reached the fetch. Any other stimulus
+     * lands on page one (no Wirth) or on an empty list.
      */
     name: 'filtering in one island is what the results are for',
     seed: SEED,
     steps: [
-      { expectRender: { 'member-results': { text: 'Lovelace', notText: 'Chien-Shiung' } } },
+      { expectRender: { 'member-results': { text: 'Allen', notText: 'Wirth' } } },
       {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { surname: 'Wu' } },
-        expectRender: { 'member-results': 'Chien-Shiung' },
+        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { surname: 'Wirth' } },
+        expectRender: { 'member-results': 'Amira' },
         // The count is produced by `member-results`, not by the island that emitted — a region key
         // that only moves if the whole loop ran.
-        expect: { resultCount: 1 },
+        expect: { resultCount: 3 },
       },
     ],
   },
@@ -104,6 +109,71 @@ export const scenarios: RegionScenario[] = [
       {
         emit: { slot: 'member-chips', event: 'criteria-changed', detail: { surname: 'unreachable-backend' } },
         expectRender: { 'member-results': 'Something went wrong' },
+      },
+    ],
+  },
+  {
+    // THE SUSPENDED MEMBERS — twenty of them, and the list a coordinator actually opens this page for.
+    // Guido Clarke is suspended and far past page one; the chip prints the status in its own words.
+    name: 'filtering to suspended members',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { status: 'suspended' } },
+        expectRender: { 'member-results': 'Clarke', 'member-chips': 'Suspended' },
+        expect: { resultCount: 20 },
+      },
+    ],
+  },
+  {
+    // THE PLAN FILTER. 76 premium members; Bjarne Cerf is one of them and is not on page one.
+    name: 'filtering to the premium plan',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { plan: 'premium' } },
+        expectRender: { 'member-results': 'Bjarne', 'member-chips': 'Premium' },
+        expect: { resultCount: 76 },
+      },
+    ],
+  },
+  {
+    // TWO FILTERS AT ONCE, and the `notText` is what proves BOTH reached the fetch. Suspended alone
+    // would list Guido Clarke; he is on the standard plan, so with premium applied as well he must be
+    // gone — 11 rows, Nadia Kowalska among them.
+    name: 'two filters narrow together',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { status: 'suspended', plan: 'premium' } },
+        expectRender: { 'member-results': { text: 'Kowalska', notText: 'Clarke' } },
+        expect: { resultCount: 11 },
+      },
+    ],
+  },
+  {
+    // THE SEARCH ISLAND DRIVING THE OTHER TWO. Every flow above emits from the chips; this one starts
+    // where a person starts — the search — and asserts on BOTH islands it does not own: the chip that
+    // appears for the new filter, and the list it narrows. Grace Salazar is past page one.
+    name: 'a search reaches the chips and the list',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-search-ng', event: 'criteria-changed', detail: { firstname: 'Grace' } },
+        expectRender: { 'member-results': 'Salazar', 'member-chips': 'Grace' },
+        expect: { resultCount: 3 },
+      },
+    ],
+  },
+  {
+    // A SEARCH BY EMAIL, the field people paste. Five addresses contain "salazar".
+    name: 'searching by email',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-search-ng', event: 'criteria-changed', detail: { email: 'salazar' } },
+        expectRender: { 'member-results': 'Elena', 'member-chips': 'salazar' },
+        expect: { resultCount: 5 },
       },
     ],
   },

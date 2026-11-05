@@ -13,6 +13,7 @@ import { setupAngularHost } from './lib/angular-host.js';
 import { appPorts } from './lib/app-data.js';
 import { membersTransport } from './lib/members-transport.js';
 import { App } from './App.js';
+import 'demo-app/fonts';
 import 'demo-app/styles.css';
 import './app.css';
 

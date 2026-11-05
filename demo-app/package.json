@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/shared/styles.css",
+    "./fonts": "./src/shared/fonts.ts",
     "./archipelagos/members": "./src/archipelagos/members/members.archipelago.ts",
     "./search-config": "./src/ui/member-search-ng/search.config.ts",
     "./archipelagos/users": "./src/archipelagos/users/users.archipelago.ts",
@@ -16,6 +17,7 @@
     "./evidence/profile": "./src/shared/profile-evidence.ts"
   },
   "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@motu/adapter-angularjs": "workspace:*",
     "@motu/contract": "workspace:*",
     "@motu/core": "workspace:*",

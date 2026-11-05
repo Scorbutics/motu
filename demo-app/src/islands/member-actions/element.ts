@@ -8,7 +8,7 @@ export const memberActionsElement: ElementSpec = {
   options: {
     contract: {
       input: [] as (keyof MemberActionsProps & string)[],
-      output: { onNew: 'member-new', onImport: 'member-import', onPaste: 'member-paste', onExport: 'member-export' },
+      output: { onNew: 'member-new', onImport: 'member-import', onExport: 'member-export' },
     },
     legacy: 'inline',
   },

@@ -25,7 +25,7 @@ export const CONTRACTS = {
   },
   'x-member-actions': {
     input: [],
-    output: { onNew: 'new', onPaste: 'paste' },
+    output: { onNew: 'new' },
     effects: [],
   },
   'x-member-card': {

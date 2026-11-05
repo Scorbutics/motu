@@ -5,6 +5,7 @@ import { bootstrapLagoon } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
 import { angularHostScopeChannel } from '@motu/adapter-angularjs';
 import { ELEMENT_REGISTRY, getArchipelago, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
+import 'demo-app/fonts';
 import css from 'demo-app/styles.css?inline';
 import { setupLagoonAngularHost } from './angular-host.js';
 

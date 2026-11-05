@@ -1,87 +1,28 @@
 // Lagoon fixtures for the member islands (x-member-results / search): replayed by MockTransport so the
-// islands render offline with no backend and no login. Shape mirrors @motu/contract's search return.
+// islands render offline with no backend and no login.
+//
+// THE APP'S OWN SOURCE OVER THE APP'S OWN ROWS. This used to be fifteen invented people with a
+// `coordinator` column the app does not have, filtered by a stub written here — so the members region
+// previewed a directory that does not exist, in a vocabulary the app does not use. It now answers
+// `MemberService.search` exactly as the page does: `membersSource` (the paging arithmetic, the clamp)
+// over `seedMembersPort` (the filter and the order the sandbox build runs), over the 240 rows of
+// `supabase/seed.sql`. Relative imports only — this module is read by plain node.
 import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { MemberCriteria } from '../../shared/member-types.js';
+import { membersSource } from '../../shared/members-source.js';
+import { seedMembersPort } from '../../shared/seed-members-port.js';
+import { SEED_MEMBERS } from '../../shared/seed-members.generated.js';
 
-function row(
-  i: number,
-  email: string,
-  surname: string,
-  firstname: string,
-  daysAgo: number,
-  plan: 'premium' | 'standard',
-  status: 'active' | 'suspended' = 'active',
-) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return {
-    id: 'm' + i,
-    email,
-    surname,
-    firstname,
-    coordinator: i % 2 ? 'North chapter' : 'South chapter',
-    _updated: d.getTime(),
-    status,
-    plan,
-  };
-}
-
-const rows = [
-  row(1, 'ada.lovelace@example.com', 'Lovelace', 'Ada', 1, 'premium'),
-  row(2, 'grace.hopper@example.com', 'Hopper', 'Grace', 1, 'standard'),
-  row(3, 'alan.turing@example.com', 'Turing', 'Alan', 2, 'premium'),
-  row(4, 'katherine.j@example.com', 'Johnson', 'Katherine', 4, 'standard'),
-  row(5, 'linus.p@example.org', 'Pauling', 'Linus', 7, 'standard', 'suspended'),
-  row(6, 'rosalind.f@example.org', 'Franklin', 'Rosalind', 10, 'premium'),
-  row(7, 'mae.jemison@example.com', 'Jemison', 'Mae', 16, 'standard'),
-  row(8, 'nikola.t@example.org', 'Tesla', 'Nikola', 18, 'standard', 'suspended'),
-  row(9, 'hedy.lamarr@example.com', 'Lamarr', 'Hedy', 22, 'premium'),
-  row(10, 'george.w@example.com', 'Washington Carver', 'George', 31, 'standard'),
-  row(11, 'chien.wu@example.org', 'Wu', 'Chien-Shiung', 36, 'premium'),
-  row(12, 'barbara.m@example.com', 'McClintock', 'Barbara', 43, 'standard'),
-  row(13, 'jane.goodall@example.org', 'Goodall', 'Jane', 43, 'standard'),
-  row(14, 'tim.b@example.com', 'Berners-Lee', 'Tim', 44, 'premium'),
-  row(15, 'anna.mani@example.org', 'Mani', 'Anna', 44, 'standard', 'suspended'),
-];
-
-/** Client-side stub filter mirroring the backend's member-search criteria (email/surname/firstname
- *  substring, status/plan exact) — so the lagoon narrows results for ANY typed input, making the
- *  reactive search->results loop verifiable offline. A STUB for island wiring, NOT backend fidelity. */
-function matchesCriteria(r: (typeof rows)[number], criteria: Record<string, unknown>): boolean {
-  const contains = (field: 'email' | 'surname' | 'firstname', val: unknown) =>
-    !val || String(r[field] ?? '').toLowerCase().includes(String(val).toLowerCase());
-  const equals = (field: 'status' | 'plan', val: unknown) => !val || r[field] === val;
-  return (
-    contains('email', criteria.email) &&
-    contains('surname', criteria.surname) &&
-    contains('firstname', criteria.firstname) &&
-    equals('status', criteria.status) &&
-    equals('plan', criteria.plan)
-  );
-}
+const source = membersSource(seedMembersPort(SEED_MEMBERS));
 
 export const fixtures: Fixture[] = [
   {
     service: 'MemberService',
     method: 'search',
     roles: ['MEMBER_READ'],
-    // Functional stub: FILTER the dataset by the search criteria, so typing a filter narrows the list
-    // live (search-ng -> store.criteria -> member-results re-fetch -> filtered). Any input works, not
-    // just pre-recorded ones — which is what makes reactive behaviour verifiable in the lagoon.
-    // PAGED on purpose: a small page size means the lagoon exercises the real paging paths offline —
-    // Prev/Next on the desktop table and "Load more" on the phone card list.
-    response: (args: unknown[]) => {
-      const page = Number(args[0]) || 0;
-      const criteria = (args[1] as Record<string, unknown>) ?? {};
-      const matched = rows.filter((r) => matchesCriteria(r, criteria));
-      const perPage = 8;
-      const first = page * perPage;
-      return {
-        list: matched.slice(first, first + perPage),
-        first: String(first),
-        perPage: String(perPage),
-        size: String(matched.length),
-      };
-    },
+    // The page's own answer: the source pages, the port filters and orders. Any input works, so typing
+    // a filter in the lagoon narrows the list the way it does in the app.
+    response: (args: unknown[]) => source.search(Number(args[0]) || 0, (args[1] as MemberCriteria) ?? {}),
   },
   // THE BACKEND IS DOWN, for one request shape.
   //
@@ -106,8 +47,11 @@ export const roles: string[] = ['MEMBER_READ'];
 /** Two input cases whose distinct output proves data flows past the seam (checked by `motu island verify`). */
 export const scenarios: Scenario[] = [
   { name: 'no criteria', seed: { criteria: {} } },
-  { name: 'email filter', seed: { criteria: { email: 'ada.lovelace@example.com' } } },
+  { name: 'email filter', seed: { criteria: { email: 'grace.allen@example.org' } } },
   // A search that finds nothing. Cheap to write, and it is the state a list spends real time in.
+  // The two filters a coordinator uses most, each a different list from the seed.
+  { name: 'suspended members', seed: { criteria: { status: 'suspended' } } },
+  { name: 'premium and suspended', seed: { criteria: { status: 'suspended', plan: 'premium' } } },
   { name: 'no matches', seed: { criteria: { surname: 'nobody-by-that-name' } } },
   // THE FAILURE, as an ordinary scenario: it renders in the lagoon, takes a snapshot baseline, and is
   // measured by `responsive` and `a11y` like any other. Whether what it shows is GOOD — whether there

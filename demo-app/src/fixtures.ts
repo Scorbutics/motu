@@ -14,7 +14,9 @@ import { scenarios as usersFlows } from './archipelagos/users/users.evidence.js'
 import { scenarios as profileHeroScenarios } from './islands/profile-hero/fixtures.mock.js';
 import { scenarios as profileFlows } from './archipelagos/profile/profile.evidence.js';
 import { scenarios as appNavScenarios } from './islands/app-nav/fixtures.mock.js';
+import { scenarios as memberChipsScenarios } from './islands/member-filter-chips/fixtures.mock.js';
 import { scenarios as shellFlows } from './archipelagos/shell/shell.evidence.js';
+import { scenarios as membersFlows } from './archipelagos/members/members.evidence.js';
 
 export const ALL_FIXTURES: Fixture[] = [...memberResults];
 
@@ -38,6 +40,7 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
   'x-member-form': memberFormScenarios,
   'x-profile-hero': profileHeroScenarios,
   'x-app-nav': appNavScenarios,
+  'x-member-filter-chips': memberChipsScenarios,
 };
 
 /**
@@ -49,6 +52,10 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
  * which reads as "the flow is broken" rather than "the list is stale".
  */
 export const ALL_FLOWS: Record<string, RegionScenario[]> = {
+  // THE MEMBERS REGION WAS MISSING HERE from the day its flows were written — the drift the comment
+  // above describes, a second time: `lagoon states` printed eight members addresses and every one of
+  // them refused in the gallery.
+  members: membersFlows,
   users: usersFlows,
   profile: profileFlows,
   shell: shellFlows,

@@ -5,21 +5,18 @@ export interface MemberActionsProps {
   /** Injected footprint. In 'legacy' fit the cluster becomes a titled "Member" panel. */
   fit?: MotuFit;
   onNew?: () => void;
-  onPaste?: () => void;
 }
 
 /**
- * The action cluster. It emits host intents only — New/Paste — which the archipelago maps onto the
+ * The action cluster. It emits one host intent — New — which the archipelago maps onto the
  * host's existing routes/handlers via the HostBridge. A compact toolbar cluster in the native
  * footprint; in legacy fit it reshapes into the host's titled "Member" rail panel.
  */
 export function MemberActions({
   fit = 'native',
   onNew: fireNew,
-  onPaste: firePaste,
 }: MemberActionsProps) {
   const onNew = () => fireNew?.();
-  const onPaste = () => firePaste?.();
 
   // Legacy fit: match the host's "Member" rail — a titled panel with a short intro and the actions
   // as a stacked button grid — instead of a compact inline toolbar. Same intents, same handlers.
@@ -35,9 +32,6 @@ export function MemberActions({
             <button type="button" className="gm-btn gm-btn--primary" onClick={onNew}>
               New
             </button>
-            <button type="button" className="gm-btn" onClick={onPaste}>
-              Paste
-            </button>
           </div>
         </div>
       </div>
@@ -49,9 +43,8 @@ export function MemberActions({
       <button type="button" className="gm-btn gm-btn--primary" onClick={onNew}>
         + New member
       </button>
-      <button type="button" className="gm-btn" onClick={onPaste}>
-        Paste
-      </button>
+      {/* NO PASTE. It navigated to a paste screen this app never had, and landed on "No such
+          member" — a control that only ever led to an error is worse than no control. */}
     </div>
   );
 }

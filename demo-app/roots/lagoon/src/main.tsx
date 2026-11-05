@@ -43,6 +43,7 @@ import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, p
 // The profile region's own evidence rows — the member and calendar its flows already speak — rather
 // than a fourth copy of the vocabulary written for the gallery.
 import { DENNIS, OPEN_CALENDAR } from 'demo-app/evidence/profile';
+import 'demo-app/fonts';
 import css from 'demo-app/styles.css?inline';
 import config from '../lagoon.config.json';
 import { setupLagoonAngularHost } from './angular-host.js';

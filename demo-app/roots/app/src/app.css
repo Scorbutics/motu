@@ -3,13 +3,14 @@
    the arrangement has begun to own its islands' appearance, which is the coupling the region
    declaration exists to make visible. */
 :root { color-scheme: light dark; }
-@media (prefers-color-scheme: dark) { body { background: #0E0C10; color: #EEE5D3; } }
 body {
   margin: 0;
   background: #E9DFC7;
   font-family: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
   color: #14201c;
 }
+/* AFTER the body rule, or it loses to it: the dark page showed a light strip under the sheet. */
+@media (prefers-color-scheme: dark) { body { background: #0E0C10; color: #EEE5D3; } }
 .app__page { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; display: flex; flex-direction: column; gap: 20px; }
 .app__toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
 .app__footer {

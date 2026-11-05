@@ -2,8 +2,12 @@
 // which is this region's stage-one shape (see MembersPage.tsx). Kept to the page's own classes
 // (`.cl-members*`, `.cl-card*`, in the shared stylesheet) and the page's own order, so the two can be
 // read side by side: header, tiles, then the members card beside the side column.
+//
+// `motu-root` ON THE ROOT, as the page's own container has it. The club palette (`--cl-*`) is
+// defined on that marker; without it this container and the card sections in it resolved every
+// colour to nothing, and in a dark scheme the member names took the lagoon's own ink — 1.2:1.
 export const MEMBERS_LAYOUT = `
-<div class="cl-members cl-scope">
+<div class="cl-members cl-scope motu-root">
   <motu-island slot="member-header" theme="motu" fit="native"></motu-island>
   <motu-island slot="member-highlights" theme="motu" fit="native"></motu-island>
   <div class="cl-members__body">

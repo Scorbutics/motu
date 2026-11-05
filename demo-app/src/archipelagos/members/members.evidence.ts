@@ -11,7 +11,7 @@
 // the fetch — which is what makes each step below survive `flow-mutation` rather than assert a
 // constant.
 import type { RegionScenario } from '@motu/runtime/mock';
-import { CLUB, EVIDENCE_DAY, FIRST_YEAR } from '../../shared/club-evidence.js';
+import { CLUB, EVIDENCE_DAY, NEXT_WEEK } from '../../shared/club-evidence.js';
 
 // EVERY KEY THE REGION CARRIES — the same list the page seeds (`members-region.ts`), which is what
 // `flow-shape` compares. A flow run against a region shaped differently from the one users get is
@@ -131,25 +131,25 @@ export const scenarios: RegionScenario[] = [
     ],
   },
   {
-    // ONE HOST-FED KEY, SEVEN READERS. The page hands the region the club's game state; the header,
-    // the tiles, the tabs, the quest, the podium, the Cup and the feed all draw from it. This step
-    // swaps it for the club as it stood at the end of its first year and asserts a DIFFERENT field in
-    // each island — forty members, all forty new that year, 29 on standard, a quest towards fifty, Lynn H. on the
-    // podium, North at 383 points, James Borg in the feed — so an island reading the wrong key, or a
-    // stale one, fails here rather than looking a little out of date.
+    // ONE HOST-FED KEY, SIX READERS ASSERTED. The page hands the region the club's game state; the
+    // header, the tiles, the quest, the podium, the Cup and the feed all draw from it. This step moves
+    // the day a week on — `overview` AND `asOf` together, as the page does, so the table beside them
+    // stays the same club — and asserts a DIFFERENT field in each island: 1,236 club XP, 122 streaks,
+    // a premium quest, Grace S. on the podium, North at 3,248, Ruth Gosling's anniversary. An island
+    // reading the wrong key, or a stale one, fails here rather than looking a week out of date.
+    // (The plan tabs' counts do not move in a week; the coverage step above is their check.)
     name: "the club's state reaches every island that shows it",
     seed: SEED,
     steps: [
       {
-        provide: { overview: FIRST_YEAR },
+        provide: { overview: NEXT_WEEK, asOf: '2026-09-14' },
         expectRender: {
-          'member-header': '40 members',
-          'member-highlights': '+40',
-          'member-plan-tabs': '29',
-          'weekly-quest': 'Grow the club to 50 members',
-          'high-scores': 'Lynn H.',
-          'chapter-cup': '383',
-          'fresh-unlocks': 'James Borg',
+          'member-header': '1,236',
+          'member-highlights': '122',
+          'weekly-quest': 'Bring premium to 80 members',
+          'high-scores': 'Grace S.',
+          'chapter-cup': '3,248',
+          'fresh-unlocks': 'Ruth Gosling',
         },
       },
     ],

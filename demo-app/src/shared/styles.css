@@ -1242,17 +1242,25 @@
 .cl-newbtn { font-size: 20px; min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---- the members table (x-member-results) ---- */
+/* THE TABLE STATES ITS OWN INK. Every other club island sets its colour; this one inherited it from
+   the card — which works on the page and not in the lagoon, where each island mounts inside its own
+   skin root that resets `color` to the skin's text colour. In a dark scheme that was #22302C on
+   #201C25: the names and levels at 1.2:1. */
+.cl-results { color: var(--cl-ink); }
 .cl-grid { display: grid; grid-template-columns: 2.6fr 96px 1.2fr 80px 1.4fr 96px 44px; gap: 10px; align-items: center; }
 .cl-bulk { background: var(--cl-ox); color: var(--cl-onblk); padding: 6px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; }
 .cl-bulk__btn { font-size: 17px; min-height: 36px; padding: 0 12px; background: rgba(251, 243, 226, .14); color: var(--cl-onblk); display: inline-flex; align-items: center; }
 .cl-bulk__btn:hover { background: rgba(251, 243, 226, .24); }
+/* The Message action is a mailto LINK, so the page's link colour (`.cl-scope a`) outranked the button's
+   cream — blue on oxblood, 1.2:1. Same specificity as that rule, later, wins. */
+.cl-scope a.cl-bulk__btn, .cl-scope a.cl-bulk__btn:hover { color: var(--cl-onblk); }
 .cl-bulk__btn:disabled { opacity: .6; cursor: not-allowed; }
 .cl-bulk__clear { background: none; color: #E2CA8A; text-decoration: underline; margin-left: auto; }
 .cl-bulk__clear:hover { background: none; color: #FBF3E2; }
 .cl-table { overflow-x: auto; }
 .cl-table__inner { min-width: 840px; }
 .cl-table__head { padding: 4px 12px; font-size: 16px; letter-spacing: 1px; color: var(--cl-onblk); background: var(--cl-teal); }
-.cl-sticky { position: sticky; left: 0; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cl-sticky { position: sticky; left: 0; z-index: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .cl-table__head .cl-sticky { background: var(--cl-teal); }
 .cl-hd { cursor: pointer; background: none; border: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
   display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
@@ -1267,11 +1275,12 @@
 .cl-ava { flex: none; width: 34px; height: 34px; border-radius: 3px; background: var(--cl-well); color: var(--cl-ink); font-weight: bold; font-size: 12px;
   display: flex; align-items: center; justify-content: center; }
 .cl-who { min-width: 0; }
-.cl-who__name { font: inherit; font-size: 13px; color: inherit; background: none; border: none; padding: 0; cursor: pointer; text-align: left; max-width: 100%;
+.cl-who__line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cl-who__name { font: inherit; font-size: 13px; color: inherit; background: none; border: none; padding: 0; cursor: pointer; text-align: left; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .cl-who__name:hover { text-decoration: underline; }
 .cl-who__mail { font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cl-who__sus { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;
+.cl-who__sus { flex: none; display: inline-block; font-size: 9px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;
   padding: 1px 5px; border-radius: 2px; background: var(--cl-well); color: var(--cl-kicker); vertical-align: 1px; }
 .cl-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 15px; padding: 3px 8px 1px; border-radius: 2px; }
 .cl-pill--premium { background: var(--cl-gold); color: var(--cl-goldink); }

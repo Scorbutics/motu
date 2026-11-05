@@ -364,21 +364,25 @@ export function MemberResults({ criteria, members, asOf, onCount, onPage, onSele
                     {initials(first, last)}
                   </span>
                   <span className="cl-who">
-                    <button
-                      type="button"
-                      className="cl-who__name"
-                      title={name}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        open(row);
-                      }}
-                    >
-                      {first} <strong>{last}</strong>
-                    </button>
+                    {/* THE TAG BESIDE THE NAME, not after the email: the email is the line that gets
+                        cut with an ellipsis, and the tag went with it — never visible at desktop width. */}
+                    <span className="cl-who__line">
+                      <button
+                        type="button"
+                        className="cl-who__name"
+                        title={name}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          open(row);
+                        }}
+                      >
+                        {first} <strong>{last}</strong>
+                      </button>
+                      {row['status'] === 'suspended' ? <span className="cl-who__sus">Suspended</span> : null}
+                    </span>
                     {email ? (
                       <a className="cl-who__mail" href={`mailto:${email}`} title={email} onClick={(e) => e.stopPropagation()}>
                         {email}
-                        {row['status'] === 'suspended' ? <span className="cl-who__sus">Suspended</span> : null}
                       </a>
                     ) : null}
                   </span>

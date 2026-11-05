@@ -10,8 +10,10 @@ export interface MemberHighlightsProps {
  * Four tiles under the header: who joined, who is premium, whose streak is burning, and which chapter
  * leads the Cup. Every number is the club's own, from `overview`.
  *
- * "THIS YEAR", where the design says "this week": the seed's newest member joined in November 2025,
- * so a weekly count would read +0 on every day anyone looks — true, and useless as a highlight.
+ * "PAST 12 MONTHS", where the design says "this week": the seed's newest member joined in December
+ * 2025, so a weekly count would read +0 on every day anyone looks. And not "this year" either — the
+ * rule counts the 365 days up to `asOf`, and a label naming the calendar year promised a count of 2026
+ * joiners that was really a count of late-2025 ones.
  */
 export function MemberHighlights({ overview }: MemberHighlightsProps) {
   return (
@@ -21,7 +23,7 @@ export function MemberHighlights({ overview }: MemberHighlightsProps) {
         <div className="cl-tile__label">
           New members
           <br />
-          this year
+          past 12 months
         </div>
       </div>
       <div className="cl-tile cl-tile--gold cl-block">

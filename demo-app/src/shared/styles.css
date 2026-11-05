@@ -919,111 +919,70 @@
 /* The Users region's arrangement lives in its archipelago template — see users.archipelago.ts. */
 
 /* ---------------------------------------------------------------------------- profile hero ------
-   The profile page's identity band. It reuses the MemberCard palette (`--mc-*`, declared host-scoped
-   above) rather than introducing a second one: the card and the hero are the same person rendered at
-   two sizes, and two palettes drifting apart is what makes a product look assembled. */
-.ph {
-  width: 100%;
-  /* SIZED BY ITS OWN BOX, not the viewport's — it sits in a region column on the profile page and
-     full-width at its own island address, which a media query cannot tell apart. */
-  container-type: inline-size;
-  border-radius: 24px;
-  overflow: hidden;
-  background: var(--mc-cream);
-  color: var(--mc-ink);
-  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif);
-  box-shadow: 0 1px 2px rgba(18, 46, 40, 0.06), 0 12px 32px rgba(18, 46, 40, 0.09);
-}
+   The profile page's header IS the member card, at header width. The component renders the card's
+   own classes (`mc mc--premium` / `mc mc--standard`), so the banner, the veils, the coral haze, the
+   avatar crossing the fold, the coral member number and standard's frosted panel all come from the
+   rules above and cannot drift from them. Everything below is what a PAGE HEADER adds to a card:
+   no width cap, no hover lift, the facts on one row when there is room, a back control on the
+   banner, the membership state and the availability line. */
+.mc.ph { max-width: none; }
+.mc.ph:hover { transform: none; box-shadow: 0 2px 6px rgba(14, 40, 34, 0.06), 0 18px 42px rgba(14, 40, 34, 0.12); }
+/* A header, not a hero image: the card's banner is a third of a portrait card, which at page width
+   is a wall of teal. Premium keeps enough of it for the avatar to cross. */
+.mc--premium.ph .mc__banner { min-height: 124px; }
+.mc--standard.ph .mc__banner { min-height: 72px; padding-bottom: 14px; }
+.ph .mc__name { font-size: clamp(22px, 4.4cqi, 32px); }
+.ph .mc__body { padding-bottom: 22px; }
 
-.ph__band {
-  position: relative;
-  padding: 18px 26px 40px;
-  background: radial-gradient(120% 150% at 78% 0%, var(--mc-teal-hi) 0%, var(--mc-teal-deep) 62%);
-}
-
-/* The back control sits ON the banner, so it is drawn in the banner's own contrast, not the page's. */
+/* The back control sits ON the banner, in the banner's contrast — where the card has its brand mark. */
 .ph__back {
+  position: relative; z-index: 1;
   display: inline-flex; align-items: center; gap: 7px;
   padding: 6px 13px 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff; font: inherit; font-size: 13px; font-weight: 600;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.ph__back:hover { background: rgba(255, 255, 255, 0.19); border-color: rgba(255, 255, 255, 0.45); }
+.ph__back:hover { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.5); }
 .ph__back:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-/* THE AVATAR STRADDLES THE FOLD, as it does on the card — the overlap is what makes this read as a
-   profile rather than a header with a list under it. `flex-start` pins every text line below the
-   fold so a long name grows downward instead of up into the dark band. */
-.ph__identity { display: flex; align-items: flex-start; gap: 18px; margin-top: 16px; position: relative; z-index: 1; }
-.ph__avatar {
-  width: 92px; height: 92px; flex: 0 0 auto; border-radius: 50%;
-  display: grid; place-items: center; object-fit: cover;
-  margin-bottom: -46px;
-  font-size: 29px; font-weight: 800; letter-spacing: 0.02em;
-  border: 5px solid var(--mc-cream);
-  background: linear-gradient(150deg, var(--mc-teal-av) 0%, var(--mc-teal) 55%, var(--mc-teal-shade) 100%);
-  color: #fff;
-  box-shadow: 0 8px 22px rgba(10, 60, 50, 0.24);
-}
-.ph__avatar--blank { opacity: 0.72; }
-.ph__names { min-width: 0; padding-top: 6px; }
-/* A NAME WRAPS; IT DOES NOT GET CUT — two lines, then ellipsis, and `anywhere` so one unbroken word
-   shrinks the box rather than overflowing it. */
-.ph__name {
-  margin: 0; color: #fff;
-  font-size: clamp(21px, 5.4cqi, 30px); font-weight: 800; line-height: 1.16; letter-spacing: -0.015em;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  overflow-wrap: anywhere;
-}
-.ph__chapter {
-  margin: 5px 0 0; color: rgba(255, 255, 255, 0.82);
-  font-size: clamp(12px, 3.2cqi, 14px);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-
-.ph__pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+/* The membership state, under the chapter. Suspended is the one worth a colour of its own: it
+   changes what the page MEANS. */
 .ph__pill {
-  display: inline-block; padding: 3px 11px; border-radius: 999px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  display: inline-block; margin-top: 10px; padding: 4px 11px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
 }
-.ph__pill--premium { background: var(--mc-coral); color: #fff; }
-.ph__pill--standard { background: rgba(255, 255, 255, 0.9); color: var(--mc-teal-ink); }
-.ph__pill--active { background: rgba(255, 255, 255, 0.16); color: #fff; border: 1px solid rgba(255, 255, 255, 0.34); }
-/* Suspended is the one state worth a colour of its own: it changes what the page MEANS. */
+.mc--premium .ph__pill--active { background: var(--mc-mint); color: var(--mc-teal-ink); }
+.mc--standard .ph__pill--active { background: var(--mc-teal-ink); color: #fff; }
 .ph__pill--suspended { background: var(--mc-coral-soft); color: var(--mc-coral-ink); }
 
-/* Three facts, on one row while there is room and stacked when there is not. `auto-fit` rather than a
-   breakpoint, for the same reason the container query is here: the hero has several widths at one
-   viewport size. */
-.ph__facts {
-  display: grid; gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  padding: 58px 26px 0;
+/* THE FACTS: the card's fields, stacked label-over-value as the card's pair is, and on ONE row once
+   the header is wide enough — at page width, a card's two-row layout leaves half the header empty. */
+.ph__details { display: grid; gap: 14px; margin-top: 22px; grid-template-columns: 1fr 1fr; }
+/* Email over the pair, as the card lays them out — until the header is wide enough for one row. */
+.ph__details > .mc__field--email { grid-column: 1 / -1; }
+.ph .mc__field { flex-direction: column; align-items: flex-start; gap: 4px; }
+.ph .mc__value { text-align: left; }
+.ph .mc__field--email { margin-top: 0; }
+.ph .mc__panel.ph__details { gap: 0; padding: 4px 18px; grid-template-columns: 1fr; }
+.ph .mc__panel .mc__field { flex-direction: column; align-items: flex-start; }
+@container (min-width: 620px) {
+  .ph__details { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .ph__details > .mc__field--email { grid-column: auto; }
+  .ph .mc__panel.ph__details { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .ph .mc__panel .mc__field { border-bottom: 0; }
+  .ph .mc__panel .mc__field + .mc__field { border-left: 1px solid rgba(12, 97, 83, 0.12); padding-left: 18px; }
 }
-.ph__fact {
-  min-width: 0;
-  padding: 11px 14px;
-  border: 1px solid var(--mc-line); border-radius: 13px;
-  background: var(--mc-white);
-}
-.ph__fact-label {
-  display: block; color: var(--mc-muted);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-}
-.ph__fact-value {
-  display: block; margin-top: 3px; font-size: 14px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* An absent fact is a DASH in muted ink, never a blank cell: a blank reads as a layout bug. */
-.ph__fact-value--empty { color: var(--mc-muted); font-weight: 500; }
+.ph .mc-skel--box { margin-top: 0; }
 
+/* THE AVAILABILITY LINE, under the facts. */
 .ph__avail {
+  position: relative; z-index: 1;
   display: flex; align-items: center; gap: 9px;
-  margin: 14px 0 0; padding: 13px 26px 20px;
+  margin: 18px 0 0;
   font-size: 14px; font-weight: 600;
 }
 .ph__avail strong { font-weight: 800; }
@@ -1035,28 +994,107 @@
 .ph__avail--full { color: var(--mc-coral-ink); }
 .ph__dot--full { background: var(--mc-coral); box-shadow: 0 0 0 4px rgba(226, 113, 74, 0.16); }
 .ph__avail--none { color: var(--mc-muted); font-weight: 500; }
-.ph__dot--none { background: #cfc8bb; }
+.ph__dot--none { background: var(--mc-line); box-shadow: inset 0 0 0 1px var(--mc-muted); }
+/* On standard the whole header is bright teal, and white on bright teal is under 3:1 for anything
+   smaller than the name. The page header carries more small text than the card does, so its small
+   lines are drawn in the card's deep teal ink instead — the same ink the frosted panel already uses. */
+.mc--standard .ph__avail, .mc--standard.ph .mc__chapter { color: var(--mc-teal-deep); }
+.mc--standard.ph .mc__chapter { font-weight: 600; }
+/* The availability line sits at the bottom of standard's gradient, where it is darkest — so it gets
+   the frosted panel's surface rather than ink on the field. */
+.mc--standard .ph__avail { width: fit-content; padding: 8px 14px; border-radius: 999px; background: var(--mc-frost); }
+.mc--standard .ph__dot--open { background: var(--mc-teal-deep); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35); }
 
-/* The skeleton: the shape before the data, in the same boxes the loaded state uses. */
-.ph-skel { display: block; border-radius: 9px; background: linear-gradient(90deg, #e9e3d9 25%, #f3efe7 37%, #e9e3d9 63%); background-size: 400% 100%; animation: ph-shimmer 1.4s ease infinite; }
-.ph-skel--avatar { width: 92px; height: 92px; border-radius: 50%; margin-bottom: -46px; }
-.ph-skel--line { height: 13px; }
-.ph-skel--box { height: 62px; border-radius: 13px; }
-.ph--loading .ph__skel-lines { display: grid; gap: 9px; padding-top: 12px; flex: 1; min-width: 0; }
-.ph--loading .ph__band { display: flex; align-items: flex-start; gap: 18px; }
-@keyframes ph-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
-@media (prefers-reduced-motion: reduce) { .ph-skel { animation: none; } }
-
-/* Narrow: the avatar stops straddling. At phone width the overlap costs more room than it buys, and
-   a 92px circle eating the name's first line is the failure it is supposed to prevent. */
+/* Narrow: the avatar stops straddling. At phone width the overlap costs more room than it buys —
+   and the margin has to go back to ZERO when the row stacks: the negative margin that makes the
+   avatar cross the fold in a row pulls the name up THROUGH the circle once stacked. Found once
+   already by opening the page at 390px and reading it. */
 @container (max-width: 420px) {
-  .ph__identity { flex-direction: column; gap: 12px; }
-  /* MARGIN-BOTTOM BACK TO ZERO, and this is the whole reason the query exists. The negative margin
-     is what makes the avatar STRADDLE the fold in the row layout; stacked, there is no fold to
-     straddle and the same -36px pulls the name up THROUGH the circle — the first four characters of
-     every name rendered behind it, at every width from about 480px down. It passed the typecheck,
-     the flows and the snapshot; it was found by opening the page at 390px and reading it. */
-  .ph__avatar { width: 72px; height: 72px; font-size: 23px; margin-bottom: 0; }
-  .ph__names { padding-top: 0; }
-  .ph__facts { padding-top: 18px; }
+  .ph .mc__identity { flex-direction: column; gap: 10px; }
+  .mc--premium.ph .mc__avatar { margin-top: -42px; }
+  /* Stacked, the skeleton's lines have no flex row to grow in, and their percentage widths resolve
+     against nothing — the loading header drew an avatar and no name at all. */
+  .ph .mc__skel-lines { width: 100%; }
+}
+/* Too narrow for the pair: one fact per row. */
+@container (max-width: 300px) {
+  .ph__details { grid-template-columns: 1fr; }
+}
+/* The skeleton boxes follow the facts: the first one is the email. */
+.ph__details > .mc-skel--box:first-child { grid-column: 1 / -1; }
+@container (min-width: 620px) { .ph__details > .mc-skel--box:first-child { grid-column: auto; } }
+
+/* ---------------------------------------------------------------------------- app navigation ----
+   The site's bar, shared by every page. Drawn in the member card's palette (`--mc-*`): the bar, the
+   profile header and the card are one product, and a navbar in a third palette is what makes a demo
+   look assembled. The banner's own decoration — the pale disc and the warm haze — is echoed here at
+   bar height, so the top of every page and the top of every card are recognisably the same surface. */
+.an {
+  position: relative; overflow: hidden;
+  background: radial-gradient(140% 260% at 82% 0%, var(--mc-teal-hi) 0%, var(--mc-teal-deep) 58%);
+  color: #fff;
+  font-family: var(--_font, "Inter", ui-sans-serif, system-ui, sans-serif);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 10px 30px rgba(10, 60, 50, 0.18);
+  container-type: inline-size;
+}
+.an::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(circle 220px at 88% -60%, var(--mc-veil) 0%, var(--mc-veil) 96%, transparent 97%),
+    radial-gradient(40% 160% at 100% 100%, var(--mc-warm) 0%, transparent 70%);
+  opacity: 0.85;
+}
+.an__inner {
+  position: relative; z-index: 1;
+  max-width: 1120px; margin: 0 auto; padding: 12px 24px;
+  display: flex; align-items: center; gap: 20px;
+}
+
+.an__brand {
+  display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto;
+  color: #fff; text-decoration: none; border-radius: 12px; padding: 4px 6px 4px 2px;
+}
+.an__brand:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.an__mark {
+  width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.34);
+}
+.an__name { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.an__name-soft { font-weight: 600; opacity: 0.78; }
+
+.an__links { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.an__link {
+  font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap;
+  padding: 8px 15px; border-radius: 999px; cursor: pointer;
+  border: 1px solid transparent; background: transparent; color: rgba(255, 255, 255, 0.86);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.an__link:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.an__link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* The section you are in is a frosted chip in the card's ink — the same object as standard's panel. */
+.an__link--on, .an__link--on:hover { background: var(--mc-frost); color: var(--mc-teal-ink); border-color: rgba(255, 255, 255, 0.6); }
+
+.an__source {
+  display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+}
+.an__source-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.an__source--sandbox { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.34); color: #fff; }
+.an__source--sandbox .an__source-dot { background: rgba(255, 255, 255, 0.75); }
+/* LIVE is the coral of the premium badge: the one warm thing in the bar, because it is the one claim
+   in it that is about the world rather than the page. */
+.an__source--live { background: linear-gradient(135deg, var(--mc-coral-hi) 0%, var(--mc-coral) 100%); color: #fff; box-shadow: 0 4px 12px rgba(226, 113, 74, 0.35); }
+.an__source--live .an__source-dot { background: #fff; animation: an-pulse 1.8s ease-in-out infinite; }
+@keyframes an-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); } 50% { box-shadow: 0 0 0 5px rgba(255, 255, 255, 0); } }
+@media (prefers-reduced-motion: reduce) { .an__source--live .an__source-dot { animation: none; } }
+
+/* NARROW: brand and badge share the first row, the sections take the second and scroll sideways if
+   they must — never wrap into a second line of pills that reads as a broken toolbar. */
+@container (max-width: 560px) {
+  .an__inner { flex-wrap: wrap; row-gap: 8px; padding: 10px 16px; }
+  .an__links { order: 3; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; margin: 0 -4px; padding: 0 4px 2px; }
+  .an__links::-webkit-scrollbar { display: none; }
+  .an__source { margin-left: auto; }
+  .an__name-soft { display: none; }
 }

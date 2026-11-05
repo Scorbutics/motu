@@ -12,6 +12,7 @@
     "./search-config": "./src/ui/member-search-ng/search.config.ts",
     "./archipelagos/users": "./src/archipelagos/users/users.archipelago.ts",
     "./archipelagos/profile": "./src/archipelagos/profile/profile.archipelago.ts",
+    "./archipelagos/shell": "./src/archipelagos/shell/shell.archipelago.ts",
     "./evidence/profile": "./src/shared/profile-evidence.ts"
   },
   "dependencies": {

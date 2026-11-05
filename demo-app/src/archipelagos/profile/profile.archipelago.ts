@@ -1,7 +1,7 @@
 // The profile page: who this member is, and when you can get time with them.
 //
-// THE WHOLE REGION IS DECLARED HERE BEFORE MOST OF IT EXISTS. Five slots, five owners, two shared
-// keys — and three of the five islands are `planned: true`: surveyed, owned, and not yet built. That
+// THE WHOLE REGION IS DECLARED HERE BEFORE MOST OF IT EXISTS. Four slots, four owners, two shared
+// keys — and three of the four islands are `planned: true`: surveyed, owned, and not yet built. That
 // is not a placeholder convention, it is what makes the ownership below CHECKABLE today: a second
 // island claiming `selectedDay` fails statically whether or not the island that owns it has been
 // written. Whoever builds the calendar branches from an archipelago that already contains everyone
@@ -14,8 +14,6 @@
 //   member        HOST-FED. The page resolves it from the URL. No island produces it, so no island
 //                 declares it — a derived key listed as an output is a claim nobody can honour.
 //   calendar      HOST-FED, from `availabilitySource` over a port. Same reason.
-//   draft         HOST-FED. The member, mapped into the shape the member CARD already speaks, so the
-//                 card island can be reused here exactly as the users page uses it.
 //   selectedDay   PRODUCED by `calendar-days`. One producer, declared.
 //   selectedSlot  PRODUCED by `calendar-slots`. One producer, declared.
 //
@@ -45,14 +43,6 @@ export const profileArchipelago: ArchipelagoConfig = {
         // unmaterialisable when motu is ejected.
         'profile-back': (_detail, { host }) => host.navigate('/'),
       },
-    },
-    {
-      // THE SAME ISLAND THE USERS PAGE USES, in a second region, unchanged. An island is a component
-      // behind a declared boundary — not a page fragment — so appearing twice costs nothing and
-      // proves the boundary is real. It reads `draft`, which the page feeds from the member row.
-      slot: 'member-card',
-      element: 'x-member-card',
-      bind: { draft: 'draft' },
     },
     {
       slot: 'calendar-days',

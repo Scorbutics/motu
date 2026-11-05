@@ -21,7 +21,7 @@ export const Profile = createRegion(profileArchipelago, {
   useHost: useHostBridge,
   // THE RESTING STATE OF EVERY KEY, established before the first paint.
   //
-  // All five matter, and two of them are the ones an island OWNS: `selectedDay` and `selectedSlot`
+  // All four matter, and two of them are the ones an island OWNS: `selectedDay` and `selectedSlot`
   // are produced by the calendar islands, which means the page may not `provide` them — the region's
   // host-side type omits a produced key, so assigning one is a compile error. `seed` is the
   // sanctioned way to establish such a key, and establishing it is not optional: before anyone picks
@@ -30,7 +30,6 @@ export const Profile = createRegion(profileArchipelago, {
   // preview seeds its own keys; the page is the only place the empty screen actually happens.
   seed: {
     member: null,
-    draft: {},
     calendar: null,
     selectedDay: null,
     selectedSlot: null,

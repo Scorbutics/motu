@@ -1,9 +1,13 @@
 -- Availability for the profile calendar, generated from `current_date` (see the migration for why).
 --
 -- WHAT THE SHAPE GUARANTEES, because the demo depends on all four:
---   * Every member with an EVEN member_no has availability; odd ones have none. So the "this member
---     publishes no availability" state is reachable by clicking a real row rather than by editing
---     a fixture — an empty state nobody can navigate to is an empty state nobody believes.
+--   * Every ACTIVE member with an EVEN member_no has availability; odd ones have none, and neither
+--     has a SUSPENDED member — a suspended membership cannot be booked, so it publishes nothing. So
+--     the "publishes no availability" state is reachable by clicking a real row rather than by
+--     editing a fixture — an empty state nobody can navigate to is an empty state nobody believes.
+--   * Every active member whose member_no ends in 6 is FULLY BOOKED: every slot taken. The `taken`
+--     rule below never fills a whole day on its own (hours 9/11/14/16 land in three different
+--     residues mod 3), so without this the "fully booked" screen existed only in a fixture.
 --   * Availability runs over the next 21 days, weekdays only. A calendar with a weekend column that
 --     is always empty looks broken; one that skips weekends looks like a calendar.
 --   * Some days are FULL and some are EMPTY inside the range, so "pick a day" is a real choice
@@ -25,13 +29,15 @@ select
   case h.hour_of_day when 9 then 30 when 11 then 60 when 14 then 30 else 45 end,
   case h.hour_of_day when 9 then 'intro' when 11 then 'workshop' when 14 then 'intro' else 'mentoring' end,
   -- Taken-ness is a pure function of who, when and what hour, so it is stable across resets.
-  ((m.member_no::bigint + d.offset_days * 7 + h.hour_of_day) % 3) = 0
+  ((m.member_no::bigint % 10) = 6) or ((m.member_no::bigint + d.offset_days * 7 + h.hour_of_day) % 3) = 0
 from public.members m
   cross join generate_series(0, 20) as d (offset_days)
   cross join unnest(array[9, 11, 14, 16]) as h (hour_of_day)
 where
   -- Half the directory publishes availability; the other half is the empty state.
   (m.member_no::bigint % 2) = 0
+  -- A suspended membership cannot be booked.
+  and m.status = 'active'
   -- Weekdays only: 0 = Sunday, 6 = Saturday.
   and extract(dow from (current_date + d.offset_days)) between 1 and 5
   -- Punch holes in the range so days differ from one another: this member is away on some days,

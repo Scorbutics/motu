@@ -4,6 +4,7 @@
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
 import type { ElementSpec } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
+import { appNavElement } from './app-nav/element';
 import { memberActionsElement } from './member-actions/element';
 import { memberCardElement } from './member-card/element';
 import { memberFilterChipsElement } from './member-filter-chips/element';
@@ -25,7 +26,7 @@ import { profileHeroElement } from './profile-hero/element';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberResultsElement, memberSearchNgElement, profileHeroElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberResultsElement, memberSearchNgElement, profileHeroElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -33,6 +34,7 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [memberActionsElement, memberCard
  * the same information in a form the compiler can look up by tag.
  */
 export interface ElementTypes {
+  'x-app-nav': typeof appNavElement;
   'x-member-actions': typeof memberActionsElement;
   'x-member-card': typeof memberCardElement;
   'x-member-filter-chips': typeof memberFilterChipsElement;

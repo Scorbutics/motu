@@ -5,6 +5,10 @@
     "/api": "https://localhost:8443"
   },
   "stations": {
+    "shell": {
+      "label": "Shell",
+      "order": 0
+    },
     "members": {
       "label": "Members",
       "order": 1

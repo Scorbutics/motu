@@ -17,30 +17,51 @@ import type { Calendar, DayAvailability, Timeslot } from './availability-types.j
 import type { MemberRow } from './member-types.js';
 import { calendarFrom, type TimeslotRow } from './availability-source.js';
 
-/** The member every piece of profile evidence is about. Columns as the `members` table spells them. */
-export const ADA: MemberRow = {
-  id: '11111111-1111-4111-8111-111111111111',
-  firstname: 'Ada',
-  surname: 'Berners-Lee',
-  email: 'ada.bernerslee@example.org',
+// THREE REAL ROWS, COPIED WHOLE FROM `supabase/seed.sql`, one per availability state the seed can
+// produce for them. The first version of this file built each member from pieces of several rows —
+// one person's name and email with another's number and joining date, and a status the real person
+// did not have — so the lagoon showed a member who exists nowhere and a flow asserted on someone
+// else's membership number. Each row below is the seed's own, and each calendar below is one the
+// seed's rules (`supabase/seeds/timeslots.sql`) actually give that member. The ids are the sandbox's
+// (`idFor('8000', member_no)` in `roots/app/scripts/sandbox-data.mjs`).
+
+/** Active, even number: publishes availability. seed.sql line 79. */
+export const DENNIS: MemberRow = {
+  id: '00000000-0000-4000-8000-000000702564',
+  firstname: 'Dennis',
+  surname: 'Shaw',
+  email: 'dennis.shaw@example.org',
   status: 'active',
   plan: 'premium',
   chapter: 'Northwest coastal chapter',
-  member_no: '702508',
-  joined: '2025-10-27',
+  member_no: '702564',
+  joined: '2022-10-15',
 };
 
-/** A second member, so a scenario set has something to differ BY. */
-export const RASMUS: MemberRow = {
-  id: '22222222-2222-4222-8222-222222222222',
-  firstname: 'Rasmus',
-  surname: 'Allen',
-  email: 'rasmus.allen@example.org',
+/** Active, member_no ending in 6: every slot taken — the fully-booked state. seed.sql line 21. */
+export const RICH: MemberRow = {
+  id: '00000000-0000-4000-8000-000000702506',
+  firstname: 'Rich',
+  surname: 'Stroustrup',
+  email: 'rich.stroustrup@example.org',
+  status: 'active',
+  plan: 'standard',
+  chapter: 'South chapter',
+  member_no: '702506',
+  joined: '2025-03-08',
+};
+
+/** Suspended: publishes nothing, whatever the number. seed.sql line 85. */
+export const GUIDO: MemberRow = {
+  id: '00000000-0000-4000-8000-000000702570',
+  firstname: 'Guido',
+  surname: 'Clarke',
+  email: 'guido.clarke@example.org',
   status: 'suspended',
   plan: 'standard',
-  chapter: 'North chapter',
-  member_no: '702511',
-  joined: '2019-02-19',
+  chapter: 'Northwest coastal chapter',
+  member_no: '702570',
+  joined: '2023-03-04',
 };
 
 /**
@@ -62,32 +83,111 @@ function rows(spec: [day: string, hour: number, kind: Timeslot['kind'], taken: b
   }));
 }
 
-/** Three days, mixed free and taken — the ordinary calendar, and the one most states start from. */
+/**
+ * DENNIS'S CALENDAR, exactly as `supabase/seeds/timeslots.sql` lays it out with `current_date` =
+ * Monday 2026-09-07: the seed's full 21 days, weekdays only, his away days removed, the far
+ * afternoons thinned, a third of the slots taken. The same shape the page gets — a hand-cut single
+ * week was a calendar the app never serves.
+ */
 export const OPEN_CALENDAR: Calendar = calendarFrom(
-  String(ADA.id),
+  String(DENNIS.id),
   rows([
     ['2026-09-07', 9, 'intro', true],
     ['2026-09-07', 11, 'workshop', false],
     ['2026-09-07', 14, 'intro', false],
+    ['2026-09-07', 16, 'mentoring', false],
     ['2026-09-08', 9, 'intro', false],
+    ['2026-09-08', 11, 'workshop', true],
+    ['2026-09-08', 14, 'intro', true],
     ['2026-09-08', 16, 'mentoring', false],
+    ['2026-09-10', 9, 'intro', true],
     ['2026-09-10', 11, 'workshop', false],
-    ['2026-09-10', 14, 'intro', true],
+    ['2026-09-10', 14, 'intro', false],
+    ['2026-09-10', 16, 'mentoring', false],
+    ['2026-09-11', 9, 'intro', false],
+    ['2026-09-11', 11, 'workshop', true],
+    ['2026-09-11', 14, 'intro', true],
+    ['2026-09-11', 16, 'mentoring', false],
+    ['2026-09-14', 9, 'intro', false],
+    ['2026-09-14', 11, 'workshop', true],
+    ['2026-09-14', 14, 'intro', true],
+    ['2026-09-14', 16, 'mentoring', false],
+    ['2026-09-15', 9, 'intro', false],
+    ['2026-09-15', 11, 'workshop', false],
+    ['2026-09-15', 14, 'intro', false],
+    ['2026-09-15', 16, 'mentoring', true],
+    ['2026-09-16', 9, 'intro', true],
+    ['2026-09-16', 11, 'workshop', false],
+    ['2026-09-16', 14, 'intro', false],
+    ['2026-09-16', 16, 'mentoring', false],
+    ['2026-09-18', 9, 'intro', false],
+    ['2026-09-18', 11, 'workshop', false],
+    ['2026-09-18', 14, 'intro', false],
+    ['2026-09-18', 16, 'mentoring', true],
+    ['2026-09-22', 9, 'intro', true],
+    ['2026-09-22', 11, 'workshop', false],
+    ['2026-09-22', 14, 'intro', false],
+    ['2026-09-22', 16, 'mentoring', false],
+    ['2026-09-23', 9, 'intro', false],
+    ['2026-09-23', 11, 'workshop', true],
+    ['2026-09-24', 9, 'intro', false],
+    ['2026-09-24', 11, 'workshop', false],
+    ['2026-09-24', 14, 'intro', false],
+    ['2026-09-24', 16, 'mentoring', true],
   ]),
 );
 
-/** Days exist and every slot is gone. Distinct from "publishes nothing" — a different screen. */
+/**
+ * RICH'S CALENDAR under the same rules: his number ends in 6, so every slot is taken. Days exist and
+ * nothing is free — a different screen from "publishes nothing", and distinguishing the two is what
+ * the hero's scenarios are for.
+ */
 export const FULL_CALENDAR: Calendar = calendarFrom(
-  String(RASMUS.id),
+  String(RICH.id),
   rows([
     ['2026-09-07', 9, 'intro', true],
     ['2026-09-07', 11, 'workshop', true],
+    ['2026-09-07', 14, 'intro', true],
+    ['2026-09-07', 16, 'mentoring', true],
+    ['2026-09-08', 9, 'intro', true],
+    ['2026-09-08', 11, 'workshop', true],
     ['2026-09-08', 14, 'intro', true],
+    ['2026-09-08', 16, 'mentoring', true],
+    ['2026-09-09', 9, 'intro', true],
+    ['2026-09-09', 11, 'workshop', true],
+    ['2026-09-09', 14, 'intro', true],
+    ['2026-09-09', 16, 'mentoring', true],
+    ['2026-09-11', 9, 'intro', true],
+    ['2026-09-11', 11, 'workshop', true],
+    ['2026-09-11', 14, 'intro', true],
+    ['2026-09-11', 16, 'mentoring', true],
+    ['2026-09-15', 9, 'intro', true],
+    ['2026-09-15', 11, 'workshop', true],
+    ['2026-09-15', 14, 'intro', true],
+    ['2026-09-15', 16, 'mentoring', true],
+    ['2026-09-16', 9, 'intro', true],
+    ['2026-09-16', 11, 'workshop', true],
+    ['2026-09-16', 14, 'intro', true],
+    ['2026-09-16', 16, 'mentoring', true],
+    ['2026-09-17', 9, 'intro', true],
+    ['2026-09-17', 11, 'workshop', true],
+    ['2026-09-17', 14, 'intro', true],
+    ['2026-09-17', 16, 'mentoring', true],
+    ['2026-09-21', 9, 'intro', true],
+    ['2026-09-21', 11, 'workshop', true],
+    ['2026-09-23', 9, 'intro', true],
+    ['2026-09-23', 11, 'workshop', true],
+    ['2026-09-24', 9, 'intro', true],
+    ['2026-09-24', 11, 'workshop', true],
+    ['2026-09-24', 14, 'intro', true],
+    ['2026-09-24', 16, 'mentoring', true],
+    ['2026-09-25', 9, 'intro', true],
+    ['2026-09-25', 11, 'workshop', true],
   ]),
 );
 
-/** Publishes nothing at all. Half the seeded directory is in this state, so it is navigable. */
-export const NO_CALENDAR: Calendar = calendarFrom(String(RASMUS.id), []);
+/** Publishes nothing at all — every odd number and every suspended member, so it is navigable. */
+export const NO_CALENDAR: Calendar = calendarFrom(String(GUIDO.id), []);
 
 /** The first day of `OPEN_CALENDAR` that has anything free — what the region opens on. */
 export const FIRST_OPEN_DAY: string = OPEN_CALENDAR.firstOpenDate ?? '';

@@ -8,6 +8,7 @@
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
+import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
 import type { MemberActions as C_member_actions } from '../ui/member-actions/MemberActions.js';
 import type { MemberCard as C_member_card } from '../ui/member-card/MemberCard.js';
 import type { MemberFilterChips as C_member_filter_chips } from '../ui/member-filter-chips/MemberFilterChips.js';
@@ -17,6 +18,11 @@ import type { MemberResults as C_member_results } from '../ui/member-results/Mem
 import type { ProfileHero as C_profile_hero } from '../ui/profile-hero/ProfileHero.js';
 
 export const CONTRACTS = {
+  'x-app-nav': {
+    input: ['section', 'dataSource'],
+    output: { onNavigate: 'app-navigate' },
+    effects: [],
+  },
   'x-member-actions': {
     input: [],
     output: { onNew: 'new', onPaste: 'paste' },
@@ -83,6 +89,8 @@ type ContractFitsComponent<C, T extends Tag> = [
       keyof PropsOf<C>
     >];
 
+const _app_nav: ContractFitsComponent<typeof C_app_nav, 'x-app-nav'> = true;
+void _app_nav;
 const _member_actions: ContractFitsComponent<typeof C_member_actions, 'x-member-actions'> = true;
 void _member_actions;
 const _member_card: ContractFitsComponent<typeof C_member_card, 'x-member-card'> = true;

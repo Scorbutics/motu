@@ -39,10 +39,10 @@ import {
   setCoupling,
   couplingOn,
 } from '@motu/debug-overlay';
-import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, draftFromMember, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
+import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, shellArchipelago, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
 // The profile region's own evidence rows — the member and calendar its flows already speak — rather
 // than a fourth copy of the vocabulary written for the gallery.
-import { ADA, OPEN_CALENDAR } from 'demo-app/evidence/profile';
+import { DENNIS, OPEN_CALENDAR } from 'demo-app/evidence/profile';
 import css from 'demo-app/styles.css?inline';
 import config from '../lagoon.config.json';
 import { setupLagoonAngularHost } from './angular-host.js';
@@ -133,6 +133,8 @@ startLagoon({
         channels: [angularHostScopeChannel({ key: 'hostSearchConfig', into: 'searchConfig' })],
       }),
       overridesFor(usersArchipelago, { seed: { criteria: {} } }),
+      // THE SHELL, as the sandbox build opens it: in the directory, on the committed seed.
+      overridesFor(shellArchipelago, { seed: { section: 'directory', dataSource: 'sandbox' } }),
       // THE PROFILE, opened on a member who has been resolved.
       //
       // The page's resting state (`member: null`) is the hero's "Select a member" and has its own
@@ -142,8 +144,7 @@ startLagoon({
       // them would claim a choice no island has made.
       overridesFor(profileArchipelago, {
         seed: {
-          member: ADA,
-          draft: draftFromMember(ADA),
+          member: DENNIS,
           calendar: OPEN_CALENDAR,
           selectedDay: null,
           selectedSlot: null,

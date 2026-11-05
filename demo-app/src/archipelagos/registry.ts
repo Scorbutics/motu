@@ -4,11 +4,13 @@
 import type { ArchipelagoConfig } from '@motu/core';
 import { membersArchipelago } from './members/members.archipelago.js';
 import { profileArchipelago } from './profile/profile.archipelago.js';
+import { shellArchipelago } from './shell/shell.archipelago.js';
 import { usersArchipelago } from './users/users.archipelago.js';
 
 export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   members: membersArchipelago(),
   [profileArchipelago.id]: profileArchipelago,
+  [shellArchipelago.id]: shellArchipelago,
   [usersArchipelago.id]: usersArchipelago,
 };
 

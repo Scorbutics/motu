@@ -13,6 +13,8 @@ import { scenarios as memberFormScenarios } from './islands/member-form/fixtures
 import { scenarios as usersFlows } from './archipelagos/users/users.evidence.js';
 import { scenarios as profileHeroScenarios } from './islands/profile-hero/fixtures.mock.js';
 import { scenarios as profileFlows } from './archipelagos/profile/profile.evidence.js';
+import { scenarios as appNavScenarios } from './islands/app-nav/fixtures.mock.js';
+import { scenarios as shellFlows } from './archipelagos/shell/shell.evidence.js';
 
 export const ALL_FIXTURES: Fixture[] = [...memberResults];
 
@@ -35,6 +37,7 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
   'x-member-card': memberCardScenarios,
   'x-member-form': memberFormScenarios,
   'x-profile-hero': profileHeroScenarios,
+  'x-app-nav': appNavScenarios,
 };
 
 /**
@@ -48,4 +51,5 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
 export const ALL_FLOWS: Record<string, RegionScenario[]> = {
   users: usersFlows,
   profile: profileFlows,
+  shell: shellFlows,
 };

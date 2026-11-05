@@ -7,7 +7,7 @@
 // — the first version of the users region put its two-column grid there and rendered as a narrow
 // stacked column at 1400px wide, with nothing on screen to say why.
 //
-// THE SLOTS FOR THE CALENDAR ARE HERE BEFORE THE CALENDAR IS. Three of the five islands below are
+// THE SLOTS FOR THE CALENDAR ARE HERE BEFORE THE CALENDAR IS. Three of the four islands below are
 // `planned: true` in the archipelago — surveyed, owned, not yet built. Their `<motu-island>` holders
 // sit in the arrangement so the shape of the page is settled before anyone writes a component into
 // it, which is the whole point of surveying a region up front.
@@ -39,7 +39,6 @@ export const PROFILE_LAYOUT = `
     <motu-island slot="calendar-slots" theme="motu" fit="native"></motu-island>
   </div>
   <div class="gm-profile__col">
-    <motu-island slot="member-card" theme="motu" fit="native"></motu-island>
     <motu-island slot="booking-summary" theme="motu" fit="native"></motu-island>
   </div>
 </div>`;

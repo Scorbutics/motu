@@ -1,20 +1,19 @@
 // Declared FLOWS for the profile region — the coupling, as something that runs.
 //
-// WHAT IS ASSERTED HERE AND WHAT IS NOT. Three of this region's five islands are `planned: true`:
+// WHAT IS ASSERTED HERE AND WHAT IS NOT. Three of this region's four islands are `planned: true`:
 // the calendar is surveyed and owned but not yet built, so there is nothing of it to drive. The
-// flows below cover the two islands that DO exist, and whoever builds a calendar island adds a step
+// flows below cover the one island that DOES exist, and whoever builds a calendar island adds a step
 // asserting what THAT island renders — not a step reusing these. A slot no flow looks at is a slot
 // that can be wired to its neighbour's data and pass every other check, which is what
 // `render-coverage` names.
 //
-// EVERY STEP USES `provide`, NOT `emit`, AND ENDS ON `expectRender`. Both built islands only READ:
-// the hero and the card are projections of host-fed keys, so there is no declared output to fire.
+// EVERY STEP USES `provide`, NOT `emit`, AND ENDS ON `expectRender`. The built island only READS:
+// the hero is a projection of host-fed keys, so there is no declared output to fire.
 // `provide` is the application moving its own state — the page resolving a member id from the URL —
 // and the assertion has to be on what RENDERED, because a step whose `expect` names the key its own
 // `provide` targets asserts that the lagoon stored what it was handed, which cannot fail.
 import type { RegionScenario } from '@motu/runtime/mock';
-import { draftFromMember } from '../../shared/member-draft.js';
-import { ADA, RASMUS, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
+import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
 
 /**
  * The resting state: a route that has not resolved yet.
@@ -25,36 +24,29 @@ import { ADA, RASMUS, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../sh
  * same thing to a component that distinguishes them, and the difference only ever shows up on the
  * real first paint, which is the one place the lagoon is not.
  */
-const EMPTY_SEED = { member: null, draft: {}, calendar: null, selectedDay: null, selectedSlot: null };
+const EMPTY_SEED = { member: null, calendar: null, selectedDay: null, selectedSlot: null };
 
 /** A resolved member with published availability — what the page looks like most of the time. */
-const ADA_SEED = { member: ADA, draft: draftFromMember(ADA), calendar: OPEN_CALENDAR };
+const DENNIS_SEED = { member: DENNIS, calendar: OPEN_CALENDAR };
 
 export const scenarios: RegionScenario[] = [
   {
-    // COVERAGE: each BUILT slot renders its own island, in text that island alone produces.
+    // COVERAGE: the built slot renders its own island, in text that island alone produces. No
+    // stimulus at all: the claim is "this slot renders THIS island", which is not a data flow and is
+    // still worth making. Providing something merely to have a stimulus would produce a constant,
+    // and `flow-mutation` would correctly reject it.
     name: 'each built slot renders its own island',
     seed: EMPTY_SEED,
-    steps: [
-      // The hero's empty state. No stimulus at all: the claim is "this slot renders THIS island",
-      // which is not a data flow and is still worth making. Providing something merely to have a
-      // stimulus would produce a constant, and `flow-mutation` would correctly reject it.
-      { expectRender: { 'profile-hero': 'Select a member' } },
-      { expectRender: { 'member-card': 'Their name appears here' } },
-    ],
+    steps: [{ expectRender: { 'profile-hero': 'Select a member' } }],
   },
   {
-    // ONE KEY, TWO ISLANDS, AND THE ASSERTIONS ARE ON DIFFERENT FIELDS OF IT. The page resolves one
-    // member; the hero draws their chapter and the card draws their membership number. Asserting the
-    // same name in both places would pass even if one island were reading the other's slot.
-    name: 'resolving a member fills the hero and the card',
+    // ONE KEY, TWO FIELDS OF IT, ASSERTED IN TWO STEPS. The chapter and the membership number come
+    // from different columns of the same row; a header that dropped either would fail one of these.
+    name: 'resolving a member fills the header',
     seed: EMPTY_SEED,
     steps: [
-      {
-        provide: ADA_SEED,
-        expectRender: { 'profile-hero': 'Northwest coastal chapter' },
-      },
-      { expectRender: { 'member-card': '702508' } },
+      { provide: DENNIS_SEED, expectRender: { 'profile-hero': 'Northwest coastal chapter' } },
+      { provide: DENNIS_SEED, expectRender: { 'profile-hero': '702564' } },
     ],
   },
   {
@@ -62,23 +54,24 @@ export const scenarios: RegionScenario[] = [
     // of them collapse into one. "Fully booked" and "publishes nothing" are the pair that gets
     // written as a single grey line by whoever comes next; the counts differ, the copy differs, the
     // colour differs, and one step here fails when they stop differing.
+    //
+    // THE EMPTY STATES ARE ASSERTED WITH THE MEMBER'S NAME IN THEM. "Publishes no availability" alone
+    // is the DEGENERATE render — the hero says it for an empty calendar and equally for a key holding
+    // something it does not recognise — so on its own it holds however the step is driven, and
+    // `flow-mutation` rejects it. This used to be tied to the stimulus by asserting the member number
+    // on the card in the same step; the card has left this page, so the hero's own sentence now names
+    // whose calendar it is, and a mutated stimulus loses the name.
     name: 'the hero tells the three availability states apart',
     seed: EMPTY_SEED,
     steps: [
-      { provide: ADA_SEED, expectRender: { 'profile-hero': 'free times across' } },
+      { provide: DENNIS_SEED, expectRender: { 'profile-hero': 'free times across' } },
       {
-        provide: { member: RASMUS, draft: draftFromMember(RASMUS), calendar: FULL_CALENDAR },
-        expectRender: { 'profile-hero': 'Fully booked for the next two weeks' },
+        provide: { member: RICH, calendar: FULL_CALENDAR },
+        expectRender: { 'profile-hero': 'Rich is fully booked for the next two weeks' },
       },
       {
-        provide: { member: RASMUS, draft: draftFromMember(RASMUS), calendar: NO_CALENDAR },
-        // TWO SLOTS, AND THE SECOND ONE IS WHY. "Publishes no availability" is the DEGENERATE render
-        // — it is what the hero shows for an empty calendar and equally for a key holding something
-        // it does not recognise, so on its own this assertion holds however the step is driven and
-        // `flow-mutation` rejects it, correctly. Asserting the member number on the OTHER island in
-        // the same step ties the claim to the stimulus: null out what this step provides and the card
-        // falls back to its resting state, so the mutant fails and the real flow still passes.
-        expectRender: { 'profile-hero': 'Publishes no availability', 'member-card': '702511' },
+        provide: { member: GUIDO, calendar: NO_CALENDAR },
+        expectRender: { 'profile-hero': 'Guido publishes no availability' },
       },
     ],
   },
@@ -90,7 +83,7 @@ export const scenarios: RegionScenario[] = [
     seed: EMPTY_SEED,
     steps: [
       {
-        provide: { member: RASMUS, draft: draftFromMember(RASMUS), calendar: NO_CALENDAR },
+        provide: { member: GUIDO, calendar: NO_CALENDAR },
         expectRender: { 'profile-hero': 'Suspended' },
       },
     ],

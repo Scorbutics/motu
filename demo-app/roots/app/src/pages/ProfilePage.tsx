@@ -11,7 +11,7 @@
 // That is the property worth watching while the calendar gets built: the page below does not change.
 import { useEffect, useState } from 'react';
 import type { Calendar, MemberRow } from 'demo-app';
-import { draftFromMember, emptyCalendar } from 'demo-app';
+import { emptyCalendar } from 'demo-app';
 import { Profile } from '../motu/profile-region.js';
 import { appSources } from '../lib/app-data.js';
 
@@ -69,7 +69,6 @@ function ProfileScreen({ memberId }: { memberId: string }) {
   // is the point rather than an inconvenience.
   useEffect(() => {
     Profile.provide('member', member);
-    Profile.provide('draft', draftFromMember(member ?? undefined));
     Profile.provide('calendar', calendar);
   }, [member, calendar]);
 
@@ -116,12 +115,13 @@ function ProfileScreen({ memberId }: { memberId: string }) {
         in the same change that registers them.
       */}
       <Profile.Island slot="profile-hero" props={{ loading: state === 'loading' }} />
+      {/*
+        NO MEMBER CARD HERE ANY MORE. The header above is drawn in the card's design, and a card
+        beside it repeated the same name, email, number and date — one row rendered twice.
+      */}
       <div className="app__profile">
         <div className="app__profile-col">
           <ProfileCalendarPlaceholder />
-        </div>
-        <div className="app__profile-col">
-          <Profile.Island slot="member-card" />
         </div>
       </div>
       <ProfileFooter />

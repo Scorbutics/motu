@@ -7,6 +7,8 @@ export { membersArchipelago } from './archipelagos/members/members.archipelago.j
 export type { MembersArchipelagoOptions } from './archipelagos/members/members.archipelago.js';
 export { usersArchipelago } from './archipelagos/users/users.archipelago.js';
 export { profileArchipelago } from './archipelagos/profile/profile.archipelago.js';
+export { shellArchipelago } from './archipelagos/shell/shell.archipelago.js';
+export type { AppSection, DataSource } from './ui/app-nav/AppNav.js';
 export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry.js';
 
 export { ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from './fixtures.js';

@@ -7,6 +7,8 @@ Everything below has been run; the numbers are what it actually printed.
     Add a member   the form and the card, one key between them
     Profile        one member and their availability, reached from a directory row
 
+All three sit under one navigation bar, the `shell` region, which outlives every page.
+
 ## Start it (two terminals, ~40 seconds)
 
 ```
@@ -39,10 +41,10 @@ motu lagoon states                       # every state, as URLs
 
 | command | takes | says |
 |---|---|---|
-| `motu check` | ~2s | PASS · 8 island(s), 3 region(s), removable |
-| `motu integrate check` | ~2s | PASS · 3 region(s) integrated · 0 warning(s) |
+| `motu check` | ~2s | PASS · 9 island(s), 4 region(s), removable |
+| `motu integrate check` | ~2s | PASS · 4 region(s) integrated · 0 warning(s) |
 | `motu removal-check --force` | ~30s | PASS · 66 host file(s) scanned, 57 deleted, 3 unwrapped |
-| `motu lagoon states` | instant | 20 island scenarios + 12 flows (21 steps, each a `&step=` stop) |
+| `motu lagoon states` | instant | 24 island scenarios + 14 flows (22 steps, each a `&step=` stop) |
 | `motu check --runtime` | ~100s | **never run this live** — run it before you record |
 
 ## The deliberate failure (scene 5)

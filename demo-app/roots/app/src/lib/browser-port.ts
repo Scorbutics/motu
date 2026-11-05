@@ -59,7 +59,10 @@ const DAY_MS = 86_400_000;
  */
 function timeslotsFor(member: Row): TimeslotRow[] {
   const no = Number(member.member_no);
-  if (no % 2 !== 0) return [];
+  // Same rules as the SQL seed: even numbers publish, suspended members do not, and a member_no
+  // ending in 6 is fully booked.
+  if (no % 2 !== 0 || member.status !== 'active') return [];
+  const booked = no % 10 === 6;
   const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
   const out: TimeslotRow[] = [];
   for (let d = 0; d <= 20; d++) {
@@ -70,7 +73,7 @@ function timeslotsFor(member: Row): TimeslotRow[] {
     for (const h of HOURS) {
       if (d > 10 && h >= 14 && (no + d) % 2 === 0) continue;
       const startsAt = new Date(day + h * 3_600_000).toISOString();
-      out.push({ id: `${member.id}@${startsAt}`, starts_at: startsAt, minutes: MINUTES[h]!, kind: KIND[h]!, taken: (no + d * 7 + h) % 3 === 0 });
+      out.push({ id: `${member.id}@${startsAt}`, starts_at: startsAt, minutes: MINUTES[h]!, kind: KIND[h]!, taken: booked || (no + d * 7 + h) % 3 === 0 });
     }
   }
   return out;

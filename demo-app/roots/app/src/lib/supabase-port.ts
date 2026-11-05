@@ -6,7 +6,8 @@
 // that it is SHORT by construction: everything that could be reasoned about lives in
 // `membersSource`, and what is left here is the vendor's shape.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { MemberCriteria } from 'demo-app';
+import type { MemberCriteria, MemberOrder } from 'demo-app';
+import { orderMembers } from 'demo-app';
 import type { MembersPort, MembersQueryResult } from 'demo-app';
 import type { AvailabilityPort, TimeslotRow } from 'demo-app';
 
@@ -17,7 +18,7 @@ const EXACT: (keyof MemberCriteria)[] = ['status', 'plan'];
 
 export function supabaseMembersPort(client: SupabaseClient): MembersPort {
   return {
-    async search(criteria: MemberCriteria, first: number, perPage: number): Promise<MembersQueryResult> {
+    async search(criteria: MemberCriteria, first: number, perPage: number, order?: MemberOrder): Promise<MembersQueryResult> {
       let q = client.from('members').select('*', { count: 'exact' });
       for (const key of CONTAINS) {
         const value = criteria[key];
@@ -27,10 +28,33 @@ export function supabaseMembersPort(client: SupabaseClient): MembersPort {
         const value = criteria[key];
         if (typeof value === 'string' && value !== '') q = q.eq(key, value);
       }
+      // Name OR email. PostgREST's `or` takes a filter list in its own syntax, where `,` `(` `)` and
+      // `%`-wildcards are structure — so the term is stripped of them rather than trusted to be safe.
+      // A full name ("grace allen") is split: every word must hit one of the three columns.
+      const term = typeof criteria.q === 'string' ? criteria.q.trim() : '';
+      if (term !== '') {
+        for (const word of term.split(/\s+/)) {
+          const w = word.replace(/[,()%*\\]/g, '');
+          if (w) q = q.or(`firstname.ilike.%${w}%,surname.ilike.%${w}%,email.ilike.%${w}%`);
+        }
+      }
       // `range` is inclusive at both ends, which is the off-by-one this line exists to get right
       // once: asking for rows 0..20 returns twenty-ONE members and the pager then disagrees with
       // itself about how many pages there are.
-      const { data, error, count } = await q.order('surname').order('firstname').range(first, first + perPage - 1);
+      // LEVEL AND STREAK ARE NOT COLUMNS. They are the club's rules over each row (`gamification.ts`),
+      // so the database cannot order by them: fetch every matching row and let the same function the
+      // sandbox uses order and page them. The stored columns sort here, in Postgres, as before.
+      if (order && (order.key === 'level' || order.key === 'streak')) {
+        const { data, error } = await q;
+        if (error) throw new Error(`members query failed: ${error.message}`);
+        const all = orderMembers(data ?? [], order);
+        return { rows: all.slice(first, first + perPage), total: all.length };
+      }
+      const asc = order?.dir !== 'desc';
+      const column = order && order.key !== 'name' ? order.key : null;
+      if (column) q = q.order(column, { ascending: asc });
+      q = q.order('surname', { ascending: column ? true : asc }).order('firstname', { ascending: column ? true : asc });
+      const { data, error, count } = await q.range(first, first + perPage - 1);
       // THROW, don't return an empty page. "No members" and "the database refused" look identical
       // on screen, and the results island already has a designed error state for the second one.
       if (error) throw new Error(`members query failed: ${error.message}`);

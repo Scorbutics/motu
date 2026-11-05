@@ -1,13 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MemberService } from '@motu/contract';
 import { MotuError } from '@motu/runtime';
-import { firstString, type MemberCriteria, type MemberPage, type MemberRow } from '../../shared/member-types.js';
+import {
+  DEFAULT_ORDER,
+  firstString,
+  type MemberCriteria,
+  type MemberOrder,
+  type MemberPage,
+  type MemberRow,
+  type MemberSortKey,
+} from '../../shared/member-types.js';
 import { ddmmyyyy } from '../../shared/member-draft.js';
+import { memberStats, todayIso } from '../../shared/gamification.js';
+import { chapterColor, GemIcon, HotFlame, initials, WarmFlame } from '../club/club-bits.js';
 
 export interface MemberResultsProps {
   criteria?: MemberCriteria;
   /** When provided (e.g. fed by a host channel), the island renders this page instead of fetching. */
   members?: MemberPage;
+  /** The day the game columns are computed for (`YYYY-MM-DD`). Absent means today. */
+  asOf?: string;
   onCount?: (count: number) => void;
   onPage?: (page: number) => void;
   onSelected?: (row: MemberRow) => void;
@@ -41,85 +53,163 @@ function rowId(row: MemberRow): string | undefined {
 /**
  * The date under the "Joined" column — which is the column it is under.
  *
- * IT USED TO READ `updated`, WITH THE HEADER STILL SAYING "JOINED". Both columns exist on the table,
- * so nothing failed: the list showed Guido Bartik "Joined 04/01/2026" and his profile showed "JOINED
- * 07/05/2024", one click apart, and each screen was internally consistent. That is the shape of a
- * defect no mechanical check reaches — it was found by rendering the two screens and reading them.
- *
- * AND IT FORMATS THROUGH THE APP'S OWN FORMATTER rather than `toLocaleDateString`, for the second
- * half of the same bug: the locale-dependent call rendered `01/24/2026` (month-first) beside the
- * card's `24/01/2026` (day-first), so one screen carried two date orders and which one you got
- * depended on the reader's browser. One date, one function, one order.
+ * IT USED TO READ `updated`, WITH THE HEADER STILL SAYING "JOINED", and it formats through the app's
+ * own formatter rather than `toLocaleDateString`, which rendered month-first beside the card's
+ * day-first. One date, one function, one order.
  */
 function fmtDate(row: MemberRow): string {
   const v = firstString(row, ['joined', 'dateJoined']);
   return v ? ddmmyyyy(v) : '—';
 }
 
-/**
- * Narrow-viewport flag. The phone layout is a CARD LIST, not a squeezed table — that is a markup
- * difference, not a styling one, so it branches here rather than in CSS (the same way the island
- * branches on `fit`). Falls back to "wide" when matchMedia is unavailable (SSR / happy-dom mounts).
- */
-function useNarrow(query = '(max-width: 720px)'): boolean {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mq = window.matchMedia(query);
-    const sync = () => setNarrow(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, [query]);
-  return narrow;
-}
-
-/** Card title: the human name, falling back to the email when a row carries no name at all. */
-function displayName(row: MemberRow): string {
-  const name = [firstString(row, ['firstname']), firstString(row, ['surname'])].filter(Boolean).join(' ').trim();
-  return name || firstString(row, ['email']) || '—';
-}
-
 function PlanPill({ row }: { row: MemberRow }) {
-  const plan = String(row['plan'] ?? '');
-  if (!plan) return <span className="gm-pill gm-pill--none">—</span>;
-  if (plan === 'premium') return <span className="gm-pill gm-pill--premium" title="Premium plan">Premium</span>;
-  return <span className="gm-pill gm-pill--standard" title="Standard plan">Standard</span>;
+  if (row['plan'] === 'premium') {
+    return (
+      <span className="cl-lg cl-pill cl-pill--premium">
+        <GemIcon />
+        Premium
+      </span>
+    );
+  }
+  if (row['plan'] === 'standard') return <span className="cl-lg cl-pill cl-pill--standard">Standard</span>;
+  return <span style={{ color: 'var(--cl-muted)' }}>—</span>;
 }
 
 /**
- * The results island. Two modes:
+ * The page numbers the pager shows: the first, the last, and the current one with its neighbours,
+ * with `null` where a run is skipped — "1 2 3 … 12".
+ */
+export function pageWindow(current: number, total: number): (number | null)[] {
+  const keep = new Set([0, total - 1, current - 1, current, current + 1]);
+  if (current <= 1) keep.add(2);
+  if (current >= total - 2) keep.add(total - 3);
+  const pages = [...keep].filter((p) => p >= 0 && p < total).sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  pages.forEach((p, i) => {
+    if (i > 0 && p - pages[i - 1]! > 1) out.push(null);
+    out.push(p);
+  });
+  return out;
+}
+
+const SORTABLE: [MemberSortKey, string][] = [
+  ['plan', 'Plan'],
+  ['level', 'Level'],
+  ['streak', 'Streak'],
+  ['chapter', 'Chapter'],
+  ['joined', 'Joined'],
+];
+
+/** The selected members as a CSV a spreadsheet opens: the columns the table shows, and the game's. */
+function toCsv(rows: MemberRow[], asOf: string): string {
+  const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['First name', 'Last name', 'Email', 'Plan', 'Status', 'Chapter', 'Joined', 'Level', 'XP', 'Streak (days)'];
+  const lines = rows.map((r) => {
+    const s = memberStats(r, asOf);
+    return [r.firstname, r.surname, r.email, r.plan, r.status, r.chapter, r.joined, s.level, s.xp, s.streak].map(cell).join(',');
+  });
+  return [head.map(cell).join(','), ...lines].join('\r\n');
+}
+
+function download(name: string, text: string) {
+  if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return;
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** The ⋯ menu at the end of a row: the two things a person does with one member. */
+function RowMenu({ row, name, onOpen }: { row: MemberRow; name: string; onOpen: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [open]);
+  const email = firstString(row, ['email']);
+  return (
+    <div className="cl-more" ref={ref} onClick={(e) => e.stopPropagation()}>
+      <button type="button" className="cl-btn cl-more__btn" aria-label={`Actions for ${name}`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((o) => !o)}>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="19" cy="12" r="2" />
+        </svg>
+      </button>
+      {open ? (
+        <div className="cl-more__menu" role="menu" aria-label={`Actions for ${name}`}>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onOpen(); }}>
+            View profile
+          </button>
+          {email ? (
+            <a role="menuitem" href={`mailto:${email}`} onClick={() => setOpen(false)}>
+              Send an email
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The members table. Two modes:
  *  - self-fetch: calls MemberService.search by `criteria` (standalone / independent use);
  *  - data-in: when `members` is provided (fed by a host channel), it renders that page and does not
  *    fetch, so the host's own search owns the data and there is a single fetch.
+ *
+ * THE GAME COLUMNS ARE COMPUTED HERE, from each row and `asOf`, by the club's own rules
+ * (`gamification.ts`). The backend knows nothing of levels or streaks; the row and the date are all
+ * the rules need, so the table and the podium beside it cannot disagree about a member.
+ *
+ * SORTING ASKS THE BACKEND. A header click changes the ORDER the search is made in — the port sorts
+ * the whole result, level and streak included — so "Level ▼" puts the club's highest level on page
+ * one, not the highest level that happened to be on screen.
+ *
+ * SELECTION IS THE ISLAND'S OWN. Ticked members are kept across pages and searches until cleared;
+ * nothing else on the page reads them, so they are not region state. The bulk bar acts on them:
+ * Message opens one email to all of them, Export downloads them as a CSV. Change plan has no backend
+ * to write to, and says so.
+ *
+ * At phone width the table keeps its columns and scrolls sideways inside its card, the member column
+ * pinned — a level bar and a streak are only legible beside the name they belong to.
  */
-export function MemberResults({ criteria, members, onCount, onPage, onSelected, onOpen }: MemberResultsProps) {
+export function MemberResults({ criteria, members, asOf, onCount, onPage, onSelected, onOpen }: MemberResultsProps) {
   const dataIn = members != null;
   const [page, setPage] = useState(0);
+  const [order, setOrder] = useState<MemberOrder>(DEFAULT_ORDER);
   const [fetched, setFetched] = useState<Page>(EMPTY_PAGE);
-  // Rows accumulated across pages — the phone list APPENDS via "Load more" instead of paging.
-  const [stacked, setStacked] = useState<MemberRow[]>([]);
   const [status, setStatus] = useState<Status>(dataIn ? 'idle' : 'loading');
-  const [selected, setSelected] = useState<string | undefined>();
+  const [selected, setSelected] = useState<Map<string, MemberRow>>(() => new Map());
   const seq = useRef(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const criteriaJson = JSON.stringify(criteria ?? {});
-  const narrow = useNarrow();
+  const day = asOf || todayIso();
+  const orderJson = JSON.stringify(order);
 
   useEffect(() => {
     if (!dataIn) setPage(0);
-  }, [criteriaJson, dataIn]);
+  }, [criteriaJson, orderJson, dataIn]);
 
   useEffect(() => {
     if (dataIn) return; // a channel feeds us; don't fetch
     const mine = ++seq.current;
     setStatus('loading');
-    MemberService.search(page, (criteria ?? {}) as Record<string, unknown>)
+    MemberService.search(page, { ...(criteria ?? {}), order: { ...order, asOf: day } } as Record<string, unknown>)
       .then((res) => {
         if (mine !== seq.current) return;
         const next = toPage(res as MemberPage);
         setFetched(next);
-        setStacked((prev) => (page === 0 ? next.rows : [...prev, ...next.rows]));
         setStatus('idle');
         onCount?.(next.size);
       })
@@ -128,229 +218,251 @@ export function MemberResults({ criteria, members, onCount, onPage, onSelected, 
         if (err instanceof MotuError && err.status === 403) setStatus('forbidden');
         else setStatus('error');
       });
-  }, [criteriaJson, page, dataIn]);
+  }, [criteriaJson, orderJson, page, dataIn, day]);
 
-  const base = dataIn ? toPage(members as MemberPage) : fetched;
-  // The phone list shows everything loaded so far; the host owns paging in data-in mode, so there we
-  // keep rendering exactly the page we were handed.
-  const stackMode = narrow && !dataIn;
-  const view: Page = stackMode ? { ...base, rows: stacked } : base;
+  const view = dataIn ? toPage(members as MemberPage) : fetched;
   const effectiveStatus: Status = dataIn ? 'idle' : status;
   const perPage = view.perPage || 20;
   const currentPage = dataIn ? Math.floor(view.first / perPage) : page;
   const totalPages = Math.max(1, Math.ceil(view.size / perPage));
-  const canPrev = currentPage > 0;
-  const canNext = currentPage + 1 < totalPages;
+  const go = (p: number) => {
+    if (p < 0 || p >= totalPages || p === currentPage) return;
+    if (dataIn) onPage?.(p);
+    else setPage(p);
+  };
 
-  // In data-in mode paging is owned by the host: emit an intent the host translates to its own paging.
-  const goPrev = () =>
-    dataIn ? onPage?.(currentPage - 1) : setPage((p) => Math.max(0, p - 1));
-  const goNext = () => (dataIn ? onPage?.(currentPage + 1) : setPage((p) => p + 1));
+  const sortBy = (key: MemberSortKey) =>
+    setOrder((o) => (o.key === key ? { key, dir: o.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'level' || key === 'streak' ? 'desc' : 'asc' }));
+  const arrow = (key: MemberSortKey) => (order.key === key ? (order.dir === 'asc' ? '▲' : '▼') : '');
+  const ariaSort = (key: MemberSortKey) => (order.key === key ? (order.dir === 'asc' ? 'ascending' : 'descending') : undefined);
 
   const open = (row: MemberRow) => {
-    const id = rowId(row);
-    setSelected(id);
     onSelected?.(row);
+    const id = rowId(row);
     if (id) onOpen?.(id);
   };
 
-  // Auto-fit: when the host opts in (--gm-scroll-fit, set by the legacy skin and the embedded
-  // preview), size the list to fill from wherever it actually starts down to the viewport bottom, so
-  // it never overflows the legacy fixed layout — no magic offset. Standalone leaves it unset (grows).
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (!getComputedStyle(el).getPropertyValue('--gm-scroll-fit').trim()) {
-      el.style.maxHeight = '';
-      return;
-    }
-    const RESERVE = 40; // footer + breathing room below the list
-    const fit = () => {
-      const top = el.getBoundingClientRect().top;
-      el.style.maxHeight = `${Math.max(160, window.innerHeight - top - RESERVE)}px`;
-    };
-    fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, [effectiveStatus, view.rows.length]);
+  const shown = effectiveStatus === 'idle' ? view.rows : [];
+  const allShownSelected = shown.length > 0 && shown.every((r) => selected.has(rowId(r) ?? ''));
+  const toggle = (row: MemberRow) =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      const id = rowId(row) ?? '';
+      if (next.has(id)) next.delete(id);
+      else next.set(id, row);
+      return next;
+    });
+  const toggleShown = () =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      for (const r of shown) {
+        const id = rowId(r) ?? '';
+        if (allShownSelected) next.delete(id);
+        else next.set(id, r);
+      }
+      return next;
+    });
+  const picked = [...selected.values()];
+  const emails = picked.map((r) => firstString(r, ['email'])).filter(Boolean) as string[];
+
+  const failed = effectiveStatus === 'forbidden' || effectiveStatus === 'error';
+  const searched = criteria?.q?.trim();
 
   return (
-    <div className="gm-panel">
-      <div className="gm-panel__head">
-        <h2>Members</h2>
-        <span className="gm-sub">{effectiveStatus === 'idle' ? `${view.size} total` : ' '}</span>
+    <div className="cl-results cl-text">
+      {picked.length > 0 ? (
+        <div className="cl-bulk" role="region" aria-label="Bulk actions">
+          <strong>{picked.length} selected</strong>
+          <a className="cl-btn cl-lg cl-bulk__btn" href={`mailto:?bcc=${emails.map(encodeURIComponent).join(',')}`} style={{ textDecoration: 'none' }}>
+            Message
+          </a>
+          <button type="button" className="cl-btn cl-lg cl-bulk__btn" disabled title="Plans cannot be changed in this demo: there is no backend to write to">
+            Change plan
+          </button>
+          <button type="button" className="cl-btn cl-lg cl-bulk__btn" onClick={() => download(`members-${day}.csv`, toCsv(picked, day))}>
+            Export
+          </button>
+          <button type="button" className="cl-btn cl-lg cl-bulk__btn cl-bulk__clear" onClick={() => setSelected(new Map())}>
+            Clear
+          </button>
+        </div>
+      ) : null}
+
+      <div className="cl-table">
+        <div className="cl-table__inner" role="table" aria-label="Members" aria-rowcount={view.size + 1}>
+          <div className="cl-lg cl-grid cl-table__head" role="row">
+            <div className="cl-sticky" role="columnheader" aria-sort={ariaSort('name')}>
+              <input type="checkbox" className="cl-check" checked={allShownSelected} onChange={toggleShown} aria-label="Select all shown members" disabled={shown.length === 0} />
+              <button type="button" className="cl-hd" onClick={() => sortBy('name')}>
+                Member <span aria-hidden="true">{arrow('name')}</span>
+              </button>
+            </div>
+            {SORTABLE.map(([key, label]) => (
+              <div key={key} role="columnheader" aria-sort={ariaSort(key)}>
+                <button type="button" className="cl-hd" onClick={() => sortBy(key)}>
+                  {label} <span aria-hidden="true">{arrow(key)}</span>
+                </button>
+              </div>
+            ))}
+            <span className="cl-sr" role="columnheader">
+              Actions
+            </span>
+          </div>
+
+          {effectiveStatus === 'forbidden' && (
+            <div className="cl-state">
+              <strong>No access</strong>
+              You don't have permission to view members.
+            </div>
+          )}
+          {effectiveStatus === 'error' && (
+            <div className="cl-state">
+              <strong>Something went wrong</strong>
+              Please try again.
+            </div>
+          )}
+
+          {effectiveStatus === 'loading' &&
+            Array.from({ length: 8 }).map((_, i) => (
+              <div key={`s${i}`} className={`cl-grid cl-row${i % 2 ? ' cl-row--odd' : ''}`} aria-hidden="true" style={{ cursor: 'default' }}>
+                {Array.from({ length: 6 }).map((__, j) => (
+                  <div key={j} className="cl-skel" style={{ width: `${55 + ((i + j) % 4) * 12}%` }} />
+                ))}
+                <span />
+              </div>
+            ))}
+
+          {effectiveStatus === 'idle' && view.rows.length === 0 && (
+            <div className="cl-state">
+              <strong>No members found</strong>
+              {searched ? `No members match “${searched}”.` : 'Try adjusting your filters.'}
+            </div>
+          )}
+
+          {shown.map((row, i) => {
+            const id = rowId(row) ?? String(i);
+            const first = firstString(row, ['firstname']) ?? '';
+            const last = firstString(row, ['surname']) ?? '';
+            const name = [first, last].filter(Boolean).join(' ') || firstString(row, ['email']) || '—';
+            const stats = memberStats(row, day);
+            const email = firstString(row, ['email']);
+            const chapter = firstString(row, ['chapter', 'coordinator']);
+            return (
+              // The whole row opens the member for a pointer; the NAME is the button a keyboard and a
+              // screen reader reach — a row cannot be a button and also hold a checkbox and a link.
+              <div key={id} role="row" className={`cl-grid cl-row${i % 2 ? ' cl-row--odd' : ''}`} onClick={() => open(row)}>
+                <div className="cl-sticky" role="cell">
+                  <input
+                    type="checkbox"
+                    className="cl-check"
+                    checked={selected.has(id)}
+                    onChange={() => toggle(row)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select ${name}`}
+                  />
+                  <span className="cl-ava" aria-hidden="true">
+                    {initials(first, last)}
+                  </span>
+                  <span className="cl-who">
+                    <button
+                      type="button"
+                      className="cl-who__name"
+                      title={name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        open(row);
+                      }}
+                    >
+                      {first} <strong>{last}</strong>
+                    </button>
+                    {email ? (
+                      <a className="cl-who__mail" href={`mailto:${email}`} title={email} onClick={(e) => e.stopPropagation()}>
+                        {email}
+                        {row['status'] === 'suspended' ? <span className="cl-who__sus">Suspended</span> : null}
+                      </a>
+                    ) : null}
+                  </span>
+                </div>
+                <div role="cell">
+                  <PlanPill row={row} />
+                </div>
+                <div className="cl-level" role="cell">
+                  <span className="cl-lg">Lv {stats.level}</span>
+                  <div className="cl-bar" title={`${stats.progress}% to next level`} role="progressbar" aria-label={`Level ${stats.level}, ${stats.progress}% to level ${stats.level + 1}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={stats.progress}>
+                    <span style={{ width: `${stats.progress}%` }} />
+                  </div>
+                </div>
+                <div
+                  className="cl-streak"
+                  role="cell"
+                  style={{ fontWeight: stats.hot ? 'bold' : 'normal', color: stats.streak > 0 ? 'var(--cl-ink)' : 'var(--cl-muted)' }}
+                >
+                  {stats.hot ? <HotFlame /> : stats.streak > 0 ? <WarmFlame /> : null}
+                  {stats.streak > 0 ? `${stats.streak} day${stats.streak === 1 ? '' : 's'}` : '—'}
+                </div>
+                <div className="cl-chap" role="cell">
+                  <span className="cl-chap__dot" aria-hidden="true" style={{ background: chapterColor(chapter) }} />
+                  <span className="cl-chap__name" title={chapter}>
+                    {chapter ?? '—'}
+                  </span>
+                </div>
+                <span className="cl-date" role="cell">
+                  {fmtDate(row)}
+                </span>
+                <div role="cell">
+                  <RowMenu row={row} name={name} onOpen={() => open(row)} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
-      <div className="gm-panel__body">
-        <div className="gm-toolbar">
-          <span className="gm-count">
-            {effectiveStatus === 'idle' && (
+
+      {!failed && (
+        <nav className="cl-pages" aria-label="Pagination">
+          <span>
+            {effectiveStatus === 'idle' ? (
               <>
-                Showing <b>{view.rows.length}</b> of <b>{view.size}</b>
+                Showing{' '}
+                <strong>
+                  {view.rows.length ? `${view.first + 1}–${view.first + view.rows.length}` : '0'}
+                </strong>{' '}
+                of <strong>{view.size}</strong>
               </>
+            ) : (
+              'Loading the directory…'
             )}
           </span>
-          {/* Prev/Next is a poor touch target at the top of a scrolled list — the phone list appends
-              with "Load more" under the cards instead (see below). */}
-          {!stackMode && (
-          <div className="gm-pager">
-            <button type="button" className="gm-btn" disabled={!canPrev} onClick={goPrev}>
-              ‹ Prev
-            </button>
-            <span className="gm-pager__info">
-              Page {currentPage + 1} / {totalPages}
-            </span>
-            <button type="button" className="gm-btn" disabled={!canNext} onClick={goNext}>
-              Next ›
-            </button>
-          </div>
-          )}
-        </div>
-
-        {effectiveStatus === 'forbidden' && (
-          <div className="gm-state">
-            <strong>No access</strong>
-            You don't have permission to view members.
-          </div>
-        )}
-        {effectiveStatus === 'error' && (
-          <div className="gm-state">
-            <strong>Something went wrong</strong>
-            Please try again.
-          </div>
-        )}
-
-        {effectiveStatus !== 'forbidden' && effectiveStatus !== 'error' && narrow && (
-          <>
-            <ul className="gm-cards">
-              {effectiveStatus === 'loading' &&
-                view.rows.length === 0 &&
-                Array.from({ length: 5 }).map((_, i) => (
-                  <li key={`sc${i}`} className="gm-card gm-card--skel">
-                    <div className="gm-skel" style={{ width: '52%' }} />
-                    <div className="gm-skel" style={{ width: '78%' }} />
-                    <div className="gm-skel" style={{ width: '40%' }} />
-                  </li>
-                ))}
-
-              {effectiveStatus === 'idle' && view.rows.length === 0 && (
-                <li className="gm-state">
-                  <strong>No members found</strong>
-                  Try adjusting your filters.
-                </li>
-              )}
-
-              {view.rows.map((row, i) => {
-                const id = rowId(row);
-                const suspended = row['status'] === 'suspended';
-                return (
-                  <li
-                    key={id ?? i}
-                    className={[
-                      'gm-card',
-                      id && id === selected ? 'is-selected' : '',
-                      suspended ? 'is-suspended' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    {/* One button = one tap target for the whole card (≥44px), same intent as a row click. */}
-                    <button type="button" className="gm-card__hit" onClick={() => open(row)}>
-                      <span className="gm-card__top">
-                        <span className="gm-card__name">{displayName(row)}</span>
-                        {suspended && <span className="gm-tag">suspended</span>}
-                        <PlanPill row={row} />
-                      </span>
-                      <span className="gm-card__email">{firstString(row, ['email']) ?? '—'}</span>
-                      <span className="gm-card__meta">
-                        {firstString(row, ['chapter', 'coordinator']) ?? '—'} · Joined {fmtDate(row)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {stackMode && canNext && (
-              <button type="button" className="gm-btn gm-btn--block gm-more" onClick={goNext}>
-                {effectiveStatus === 'loading' ? 'Loading…' : `Load more (${view.size - view.rows.length} left)`}
+          {totalPages > 1 && (
+            <div className="cl-pages__nav">
+              <button type="button" className="cl-pages__step" disabled={currentPage === 0} onClick={() => go(currentPage - 1)}>
+                ‹ Prev
               </button>
-            )}
-          </>
-        )}
-
-        {effectiveStatus !== 'forbidden' && effectiveStatus !== 'error' && !narrow && (
-          <div className="gm-scroll" ref={scrollRef}>
-            <table className="gm-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '12%' }}>Plan</th>
-                  <th style={{ width: '28%' }}>Email</th>
-                  <th style={{ width: '16%' }}>Last name</th>
-                  <th style={{ width: '15%' }}>First name</th>
-                  <th style={{ width: '14%' }}>Joined</th>
-                  <th style={{ width: '15%' }}>Chapter</th>
-                </tr>
-              </thead>
-              <tbody>
-                {effectiveStatus === 'loading' &&
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={`s${i}`} className="gm-skel-row">
-                      {Array.from({ length: 6 }).map((__, j) => (
-                        <td key={j}>
-                          <div className="gm-skel" style={{ width: `${60 + ((i + j) % 4) * 10}%` }} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-
-                {effectiveStatus === 'idle' && view.rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6}>
-                      <div className="gm-state">
-                        <strong>No members found</strong>
-                        Try adjusting your filters.
-                      </div>
-                    </td>
-                  </tr>
-                )}
-
-                {effectiveStatus === 'idle' &&
-                  view.rows.map((row, i) => {
-                    const id = rowId(row);
-                    return (
-                      <tr
-                        key={id ?? i}
-                        className={id && id === selected ? 'is-selected' : undefined}
-                        onClick={() => open(row)}
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            open(row);
-                          }
-                        }}
-                      >
-                        <td>
-                          <PlanPill row={row} />
-                        </td>
-                        <td className="gm-primary-cell" title={firstString(row, ['email'])}>
-                          {firstString(row, ['email']) ?? '—'}
-                          {row['status'] === 'suspended' && <span className="gm-tag">suspended</span>}
-                        </td>
-                        <td>{firstString(row, ['surname']) ?? '—'}</td>
-                        <td>{firstString(row, ['firstname']) ?? '—'}</td>
-                        <td className="gm-muted">{fmtDate(row)}</td>
-                        <td className="gm-muted" title={firstString(row, ['chapter', 'coordinator'])}>
-                          {firstString(row, ['chapter', 'coordinator']) ?? '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              {pageWindow(currentPage, totalPages).map((p, i) =>
+                p === null ? (
+                  <span key={`gap${i}`} className="cl-pages__gap" aria-hidden="true">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    type="button"
+                    className="cl-pages__n"
+                    aria-current={p === currentPage ? 'page' : undefined}
+                    aria-label={`Page ${p + 1}`}
+                    onClick={() => go(p)}
+                  >
+                    {p + 1}
+                  </button>
+                ),
+              )}
+              <button type="button" className="cl-pages__step" disabled={currentPage + 1 >= totalPages} onClick={() => go(currentPage + 1)}>
+                Next ›
+              </button>
+            </div>
+          )}
+        </nav>
+      )}
     </div>
   );
 }

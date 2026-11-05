@@ -13,6 +13,12 @@ export interface MemberPage {
 }
 
 export interface MemberCriteria {
+  /**
+   * Name OR email, one box — the sidebar's "Find a member". Matches a first name, a surname, the full
+   * name or the email, as a substring. The other text fields narrow ONE column each and combine with
+   * AND; this one is the "I only know roughly who" search.
+   */
+  q?: string;
   email?: string;
   firstname?: string;
   surname?: string;
@@ -23,7 +29,25 @@ export interface MemberCriteria {
 }
 
 /** Human labels for the criteria keys, used by the filter chips. */
+/** The columns the members table sorts by. Level and streak are the club's game, computed per row. */
+export type MemberSortKey = 'name' | 'plan' | 'level' | 'streak' | 'chapter' | 'joined';
+
+/**
+ * How a search is ordered. It travels WITH the search, to the port, because a sort only means
+ * something over the whole result: sorting the twenty rows on screen would put "the highest level on
+ * this page" at the top and call it the leader. `asOf` is the day the game columns are computed for.
+ */
+export interface MemberOrder {
+  key: MemberSortKey;
+  dir: 'asc' | 'desc';
+  asOf?: string;
+}
+
+/** The order every list starts in: surname, then first name. */
+export const DEFAULT_ORDER: MemberOrder = { key: 'name', dir: 'asc' };
+
 export const CRITERIA_LABELS: Record<keyof MemberCriteria, string> = {
+  q: 'Name or email',
   email: 'Email',
   firstname: 'First name',
   surname: 'Last name',

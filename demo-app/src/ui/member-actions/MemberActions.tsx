@@ -40,8 +40,11 @@ export function MemberActions({
 
   return (
     <div className="gm-actions">
-      <button type="button" className="gm-btn gm-btn--primary" onClick={onNew}>
-        + New member
+      <button type="button" className="cl-btn cl-btn--red cl-lg cl-newbtn" onClick={onNew}>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round">
+          <path d="M12 4v16M4 12h16" />
+        </svg>
+        New member
       </button>
       {/* NO PASTE. It navigated to a paste screen this app never had, and landed on "No such
           member" — a control that only ever led to an error is worse than no control. */}

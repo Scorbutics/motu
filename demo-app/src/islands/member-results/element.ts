@@ -6,7 +6,7 @@ export const memberResultsElement: ElementSpec = {
   component: MemberResults,
   options: {
     contract: {
-      input: [{ name: 'criteria', default: {} }, 'members'],
+      input: [{ name: 'criteria', default: {} }, 'members', 'asOf'],
       output: { onCount: 'member-count', onPage: 'member-page', onSelected: 'member-selected', onOpen: 'member-open' },
     },
     legacy: 'fill',

@@ -38,6 +38,9 @@ importers:
       '@fontsource-variable/bricolage-grotesque':
         specifier: ^5.3.0
         version: 5.3.0
+      '@fontsource/league-gothic':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@motu/adapter-angularjs':
         specifier: workspace:*
         version: link:../packages/adapters/angularjs
@@ -827,6 +830,9 @@ packages:
 
   '@fontsource-variable/bricolage-grotesque@5.3.0':
     resolution: {integrity: sha512-TLi9Q4hJjS2UvoTMRSS2nHu6c4R56lAw60NR9QYtVRCHn0XtsFpiEhNffZ8Glsoxu6wEEwLKBP8lb94J52PNBA==}
+
+  '@fontsource/league-gothic@5.3.0':
+    resolution: {integrity: sha512-gqedetX+UlaiJgLiPnOzWGB1sY3OtNhS8YMjTy2D73AcsagIqpdIizssr1MStcUYf3D/zzanECuXawIgMGZxDg==}
 
   '@happy-dom/global-registrator@20.11.2':
     resolution: {integrity: sha512-7fkpoXZWzyxaBkzRtlD0wRU5ckxbNT4j6BywzpSYh+SFPsGxEVmNR9KHaMwM2xkHB0pADQLl4Z8DSrztECJ7Ww==}
@@ -2353,6 +2359,8 @@ snapshots:
     optional: true
 
   '@fontsource-variable/bricolage-grotesque@5.3.0': {}
+
+  '@fontsource/league-gothic@5.3.0': {}
 
   '@happy-dom/global-registrator@20.11.2':
     dependencies:

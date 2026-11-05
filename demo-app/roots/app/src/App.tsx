@@ -1,4 +1,4 @@
-// Three screens under one navigation bar, over the app's own URL.
+// Three screens beside one sidebar, on the club's paper, over the app's own URL.
 //
 // WHAT MATTERS HERE IS THAT NO PAGE KNOWS ABOUT ANOTHER, and none of them holds any region state.
 // Each mounts its own region; changing route unmounts one and mounts the next. The profile is the
@@ -57,10 +57,14 @@ export function App() {
     <Shell.Region>
       <ShellFeed route={route} />
       <ShellTitle />
-      {/* The bar carries the skin marker the island tokens resolve against — see MembersPage. */}
-      <div className="motu-root app__shell" data-motu-theme="motu">
-        <Shell.Island slot="app-nav" />
-      </div>
+      {/* THE CLUB'S SHEET: aged paper, the sidebar beside every page. The frame carries the skin marker
+          the island tokens resolve against (`--cl-*`, `--mc-*`), so every page inherits them. */}
+      <div className="app__frame cl-paper motu-root" data-motu-theme="motu">
+        <div className="app__sheet cl-sheet cl-aged">
+          <div className="app__side">
+            <Shell.Island slot="app-nav" />
+          </div>
+          <div className="app__main">
       {route.name === 'profile' ? (
         // KEYED BY THE MEMBER ID. Without this, clicking a second member reuses the mounted page and
         // its region keeps the first member's store — the hero swaps and the calendar does not,
@@ -71,6 +75,9 @@ export function App() {
       ) : (
         <MembersPage />
       )}
+          </div>
+        </div>
+      </div>
     </Shell.Region>
   );
 }

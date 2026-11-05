@@ -1,14 +1,25 @@
-// The shared "new design" layout for the members archipelago: hero + toolbar + results. Rendered
-// natively by <motu-archipelago name="members"> in the standalone app, and swapped in as a whole
-// region when previewing inside the legacy app. Islands are pinned to the motu skin and the native
-// footprint (the modern shape); legacy fit is only used when islands are embedded individually.
+// The members region's arrangement as the LAGOON renders it — the second description of the page,
+// which is this region's stage-one shape (see MembersPage.tsx). Kept to the page's own classes
+// (`.cl-members*`, `.cl-card*`, in the shared stylesheet) and the page's own order, so the two can be
+// read side by side: header, tiles, then the members card beside the side column.
 export const MEMBERS_LAYOUT = `
-<div class="gm-arch">
+<div class="cl-members cl-scope">
   <motu-island slot="member-header" theme="motu" fit="native"></motu-island>
-  <div class="gm-arch__toolbar">
-    <motu-island slot="member-search-ng" theme="motu" fit="native"></motu-island>
-    <motu-island slot="member-chips" theme="motu" fit="native" class="gm-arch__grow"></motu-island>
-    <motu-island slot="member-actions" theme="motu" fit="native"></motu-island>
+  <motu-island slot="member-highlights" theme="motu" fit="native"></motu-island>
+  <div class="cl-members__body">
+    <section class="cl-members__main cl-card" aria-label="All members">
+      <div class="cl-card__tools">
+        <motu-island class="cl-card__search" slot="member-quick-search" theme="motu" fit="native"></motu-island>
+        <motu-island slot="member-plan-tabs" theme="motu" fit="native"></motu-island>
+        <motu-island class="cl-card__new" slot="member-actions" theme="motu" fit="native"></motu-island>
+      </div>
+      <motu-island slot="member-results" theme="motu" fit="native"></motu-island>
+    </section>
+    <aside class="cl-members__aside">
+      <motu-island slot="weekly-quest" theme="motu" fit="native"></motu-island>
+      <motu-island slot="high-scores" theme="motu" fit="native"></motu-island>
+      <motu-island slot="chapter-cup" theme="motu" fit="native"></motu-island>
+      <motu-island slot="fresh-unlocks" theme="motu" fit="native"></motu-island>
+    </aside>
   </div>
-  <motu-island slot="member-results" theme="motu" fit="native"></motu-island>
 </div>`;

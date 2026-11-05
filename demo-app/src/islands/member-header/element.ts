@@ -5,7 +5,7 @@ export const memberHeaderElement: ElementSpec = {
   tag: 'x-member-header',
   component: MemberHeader,
   options: {
-    contract: { input: ['heading', 'subtitle', 'badge'] as (keyof MemberHeaderProps & string)[] },
+    contract: { input: ['heading', 'subtitle', 'badge', 'overview', 'dataSource'] as (keyof MemberHeaderProps & string)[] },
     legacy: 'fill',
   },
 };

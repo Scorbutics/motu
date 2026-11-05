@@ -14,10 +14,12 @@
     "./archipelagos/users": "./src/archipelagos/users/users.archipelago.ts",
     "./archipelagos/profile": "./src/archipelagos/profile/profile.archipelago.ts",
     "./archipelagos/shell": "./src/archipelagos/shell/shell.archipelago.ts",
-    "./evidence/profile": "./src/shared/profile-evidence.ts"
+    "./evidence/profile": "./src/shared/profile-evidence.ts",
+    "./evidence/club": "./src/shared/club-evidence.ts"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/league-gothic": "^5.3.0",
     "@motu/adapter-angularjs": "workspace:*",
     "@motu/contract": "workspace:*",
     "@motu/core": "workspace:*",

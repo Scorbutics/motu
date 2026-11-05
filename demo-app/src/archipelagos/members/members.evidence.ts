@@ -1,191 +1,166 @@
 // Declared FLOWS for the members region — the couplings, as something that runs.
 //
-// WHY THIS REGION AND WHY NOW. The members page is the only surface in this repository whose islands
-// fetch through the CONTRACT: `member-results` calls `MemberService.search(page, criteria)` itself,
-// answered by `MockTransport` from the island's own fixtures. Every other region here reads its data
-// through the wire fake or a channel, so until this file existed the contract door was exercised by a
-// unit test and by nothing that renders. A door with no flow behind it is a door nobody has opened.
+// THE DATA IS THE APP'S OWN, END TO END. The table's fixture answers through `membersSource` over
+// `seedMembersPort`, over the 240 rows of `supabase/seed.sql`; the club's game state is `clubOverview`
+// over the same rows on a pinned day (`shared/club-evidence.ts`). Every name, count and level asserted
+// below was read off that data, so each step describes a screen a person reaches by doing the same
+// thing in the app.
 //
-// The rows these steps rely on are the app's own: the island's fixture answers through `membersSource`
-// over `seedMembersPort`, over the 240 rows of `supabase/seed.sql` — the same rows, filter and order
-// the sandbox build serves. Every name and count asserted below was read off that data, so a step
-// here describes a screen a person can reach by typing the same filter into the app.
-//
-// THE PAGE HOLDS 20 ROWS, sorted by surname then first name. Unfiltered (or active-only) page one runs
-// Edsger Allen … Tariq Boulos, so a name further down the alphabet can only appear if a filter
-// genuinely reached the fetch — which is what makes each narrowing step below survive
-// `flow-mutation` rather than assert a constant.
+// THE PAGE HOLDS 20 ROWS, sorted by surname then first name: page one runs Edsger Allen … Tariq
+// Boulos. A name further down the alphabet can only appear if a filter or a sort genuinely reached
+// the fetch — which is what makes each step below survive `flow-mutation` rather than assert a
+// constant.
 import type { RegionScenario } from '@motu/runtime/mock';
-import { MEMBER_SEARCH_CONFIG } from '../../ui/member-search-ng/search.config.js';
+import { CLUB, EVIDENCE_DAY, FIRST_YEAR } from '../../shared/club-evidence.js';
 
-// EVERY KEY THE REGION CARRIES, not just the interesting ones — a flow run against a region shaped
-// differently from the one users get is internally consistent on both sides, so nothing notices.
-//
-// `status: 'active'` rather than `{}` for a reason each flow below depends on: the chips island
-// renders NOTHING when no filter is set (`entries.length === 0` -> null), so a region seeded empty
-// has a slot that cannot be asserted on and an island that cannot be emitted from.
-// THE SAME KEYS A REAL PAGE LOAD ESTABLISHES. `integrate check`'s `flow-shape` compares this list
-// against what the page seeds, and it caught `searchConfig` missing here: the page hands the search
-// island its field schema on every load, and every flow previewed a region that had never been
-// given one. A preview shaped differently from the page is a preview of a page nobody visits.
+// EVERY KEY THE REGION CARRIES — the same list the page seeds (`members-region.ts`), which is what
+// `flow-shape` compares. A flow run against a region shaped differently from the one users get is
+// internally consistent on both sides, so nothing would notice.
 const SEED = {
-  criteria: { status: 'active' as const },
-  searchConfig: MEMBER_SEARCH_CONFIG,
+  criteria: {},
+  overview: CLUB,
+  asOf: EVIDENCE_DAY,
+  dataSource: 'sandbox',
   selectedMember: null,
-  resultCount: 0,
+  resultCount: null,
 };
 
 export const scenarios: RegionScenario[] = [
   {
     // COVERAGE: each slot renders its OWN island, in text that island alone produces. Without this a
     // slot wired to a neighbour's data passes every other check — `render-coverage` names the slots
-    // no flow looks at, and it named all five of these.
+    // no flow looks at.
     name: 'each slot renders its own island',
     seed: SEED,
     steps: [
-      { expectRender: { 'member-header': 'Browse and add community members', 'member-actions': 'New member' } },
-      // The chip's own vocabulary: `CRITERIA_LABELS.status` plus the display value the chips island
-      // maps it to. The store holds `'active'`; only the chip prints `Active`.
-      //
-      // The search island is COLLAPSED here — it renders a `Filters` trigger with a count, and the
-      // field labels live in a popover nobody has opened. `Member filters` is the dialog's accessible
-      // name, which `expectRender` reads as part of what a person can perceive; asserting `Email`
-      // asserted a screen this island only shows once clicked.
-      { expectRender: { 'member-chips': 'Status', 'member-search-ng': 'Member filters' } },
-      { expectRender: { 'member-results': 'Allen' } },
-    ],
-  },
-  {
-    /**
-     * THE COUPLING THE PAGE EXISTS FOR, and the one that crosses the contract.
-     *
-     * A filter changes in one island, the region carries it, and ANOTHER island re-fetches through
-     * `MemberService.search` and renders the answer. Nothing about that is visible from either island
-     * alone: `member-chips` proves it emitted, `member-results` proves it can render rows, and only
-     * the region proves the first causes the second.
-     *
-     * `Amira` is the assertion on purpose. There are three Wirths, all far past page one, so Amira
-     * Wirth can only appear if the emitted criteria genuinely reached the fetch. Any other stimulus
-     * lands on page one (no Wirth) or on an empty list.
-     */
-    name: 'filtering in one island is what the results are for',
-    seed: SEED,
-    steps: [
-      { expectRender: { 'member-results': { text: 'Allen', notText: 'Wirth' } } },
       {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { surname: 'Wirth' } },
-        expectRender: { 'member-results': 'Amira' },
-        // The count is produced by `member-results`, not by the island that emitted — a region key
-        // that only moves if the whole loop ran.
-        expect: { resultCount: 3 },
+        expectRender: {
+          'member-header': 'Club level 7',
+          'member-highlights': 'Leads the',
+          'member-quick-search': 'Search members',
+          'member-plan-tabs': 'Standard',
+          'member-actions': 'New member',
+        },
+      },
+      {
+        expectRender: {
+          'member-results': 'Allen',
+          'weekly-quest': 'Weekly quest',
+          'high-scores': 'High scores',
+          'chapter-cup': 'Chapter Cup',
+          'fresh-unlocks': 'Fresh unlocks',
+        },
       },
     ],
   },
   {
-    // A SEARCH THAT FINDS NOTHING — the state a list spends real time in, and the one that looks
-    // identical to a broken fetch from outside the region.
-    name: 'a filter that matches nobody says so',
+    // THE PLAN TABS DRIVE THE TABLE. A tab writes `criteria`, the region carries it, and the TABLE —
+    // another island — re-fetches through `MemberService.search`. 76 premium members; Bjarne Cerf is
+    // one, and is not on the unfiltered page one.
+    name: 'a plan tab filters the table',
     seed: SEED,
     steps: [
       {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { surname: 'nobody-by-that-name' } },
-        expectRender: { 'member-results': 'No members found' },
-        expect: { resultCount: 0 },
-      },
-    ],
-  },
-  {
-    /**
-     * THE BACKEND FAILING, driven through the region.
-     *
-     * The island's fixtures answer `{ surname: 'unreachable-backend' }` with a 500, so this drives the
-     * component's own `.catch` — `MotuError` in, `status: 'error'` out — rather than a state a seed
-     * asserted into place. The island's scenario set already pictures this; what it could not show is
-     * that a FILTER ARRIVING FROM ANOTHER ISLAND reaches the failure, which is how a user meets it.
-     */
-    name: 'a failing search reaches the error state through the region',
-    seed: SEED,
-    steps: [
-      {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { surname: 'unreachable-backend' } },
-        expectRender: { 'member-results': 'Something went wrong' },
-      },
-    ],
-  },
-  {
-    // THE SUSPENDED MEMBERS — twenty of them, and the list a coordinator actually opens this page for.
-    // Guido Clarke is suspended and far past page one; the chip prints the status in its own words.
-    name: 'filtering to suspended members',
-    seed: SEED,
-    steps: [
-      {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { status: 'suspended' } },
-        expectRender: { 'member-results': 'Clarke', 'member-chips': 'Suspended' },
-        expect: { resultCount: 20 },
-      },
-    ],
-  },
-  {
-    // THE PLAN FILTER. 76 premium members; Bjarne Cerf is one of them and is not on page one.
-    name: 'filtering to the premium plan',
-    seed: SEED,
-    steps: [
-      {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { plan: 'premium' } },
-        expectRender: { 'member-results': 'Bjarne', 'member-chips': 'Premium' },
+        emit: { slot: 'member-plan-tabs', event: 'criteria-changed', detail: { plan: 'premium' } },
+        expectRender: { 'member-results': 'Bjarne' },
+        // Produced by the table, not by the island that emitted — it only moves if the loop ran.
         expect: { resultCount: 76 },
       },
     ],
   },
   {
-    // TWO FILTERS AT ONCE, and the `notText` is what proves BOTH reached the fetch. Suspended alone
-    // would list Guido Clarke; he is on the standard plan, so with premium applied as well he must be
-    // gone — 11 rows, Nadia Kowalska among them.
-    name: 'two filters narrow together',
+    // THE SEARCH BOX DRIVES THE TABLE. Three members are called Grace; Grace Salazar is past page one.
+    name: 'a search filters the table',
     seed: SEED,
     steps: [
       {
-        emit: { slot: 'member-chips', event: 'criteria-changed', detail: { status: 'suspended', plan: 'premium' } },
-        expectRender: { 'member-results': { text: 'Kowalska', notText: 'Clarke' } },
-        expect: { resultCount: 11 },
-      },
-    ],
-  },
-  {
-    // THE SEARCH ISLAND DRIVING THE OTHER TWO. Every flow above emits from the chips; this one starts
-    // where a person starts — the search — and asserts on BOTH islands it does not own: the chip that
-    // appears for the new filter, and the list it narrows. Grace Salazar is past page one.
-    name: 'a search reaches the chips and the list',
-    seed: SEED,
-    steps: [
-      {
-        emit: { slot: 'member-search-ng', event: 'criteria-changed', detail: { firstname: 'Grace' } },
-        expectRender: { 'member-results': 'Salazar', 'member-chips': 'Grace' },
+        emit: { slot: 'member-quick-search', event: 'criteria-changed', detail: { q: 'grace' } },
+        expectRender: { 'member-results': 'Salazar' },
         expect: { resultCount: 3 },
       },
     ],
   },
   {
-    // A SEARCH BY EMAIL, the field people paste. Five addresses contain "salazar".
+    // A SEARCH AND A PLAN AT ONCE, and the `notText` proves both reached the fetch: of the three
+    // Graces only Grace Salazar is premium, so Grace Allen must be gone.
+    name: 'a search and a plan narrow together',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-quick-search', event: 'criteria-changed', detail: { q: 'grace', plan: 'premium' } },
+        expectRender: { 'member-results': { text: 'Salazar', notText: 'Allen' } },
+        expect: { resultCount: 1 },
+      },
+    ],
+  },
+  {
+    // AN EMAIL, the thing people paste. Five addresses contain "salazar".
     name: 'searching by email',
     seed: SEED,
     steps: [
       {
-        emit: { slot: 'member-search-ng', event: 'criteria-changed', detail: { email: 'salazar' } },
-        expectRender: { 'member-results': 'Elena', 'member-chips': 'salazar' },
+        emit: { slot: 'member-quick-search', event: 'criteria-changed', detail: { q: 'salazar' } },
+        expectRender: { 'member-results': 'Elena' },
         expect: { resultCount: 5 },
       },
     ],
   },
-  // NO FLOW FOR CLEARING THE FILTERS, and `flow-mutation` is the reason.
-  //
-  // One was written — seed `{ surname: 'Wu' }`, emit `criteria-changed` with `{}`, expect `Hopper`
-  // back — and the check refused it: the assertion still held when the stimulus was changed, so it was
-  // asserting a constant. It is right, and the flow cannot be repaired. The fixture's filter ignores
-  // any criteria field it does not recognise, so EVERY stimulus that is not a valid narrowing filter
-  // produces the same full list — "cleared" and "garbage" are indistinguishable by what renders, which
-  // is exactly what "this step could not have failed" means.
-  //
-  // Left as a note rather than as a weakened step: the narrowing flow above already proves the region
-  // carries `criteria` to the fetch, and a step that cannot fail would only make the set look larger.
+  {
+    // A SEARCH THAT FINDS NOTHING — the state a list spends real time in, and the one that looks
+    // identical to a broken fetch from outside the region. The table names the term back.
+    name: 'a search that matches nobody says so',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-quick-search', event: 'criteria-changed', detail: { q: 'nobody-by-that-name' } },
+        expectRender: { 'member-results': 'nobody-by-that-name' },
+        expect: { resultCount: 0 },
+      },
+    ],
+  },
+  {
+    // THE BACKEND FAILING, driven through the region: the table's fixtures answer this criteria with
+    // a 500, so the component's own `.catch` runs — the path a user meets on a bad afternoon.
+    name: 'a failing search reaches the error state through the region',
+    seed: SEED,
+    steps: [
+      {
+        emit: { slot: 'member-quick-search', event: 'criteria-changed', detail: { surname: 'unreachable-backend' } },
+        expectRender: { 'member-results': 'Something went wrong' },
+      },
+    ],
+  },
+  {
+    // ONE HOST-FED KEY, SEVEN READERS. The page hands the region the club's game state; the header,
+    // the tiles, the tabs, the quest, the podium, the Cup and the feed all draw from it. This step
+    // swaps it for the club as it stood at the end of its first year and asserts a DIFFERENT field in
+    // each island — forty members, all forty new that year, 29 on standard, a quest towards fifty, Lynn H. on the
+    // podium, North at 383 points, James Borg in the feed — so an island reading the wrong key, or a
+    // stale one, fails here rather than looking a little out of date.
+    name: "the club's state reaches every island that shows it",
+    seed: SEED,
+    steps: [
+      {
+        provide: { overview: FIRST_YEAR },
+        expectRender: {
+          'member-header': '40 members',
+          'member-highlights': '+40',
+          'member-plan-tabs': '29',
+          'weekly-quest': 'Grow the club to 50 members',
+          'high-scores': 'Lynn H.',
+          'chapter-cup': '383',
+          'fresh-unlocks': 'James Borg',
+        },
+      },
+    ],
+  },
+  {
+    // SORTING ASKS THE BACKEND. A click on the Level header orders the SEARCH, so the club's highest
+    // level — Bjarne Perlman, level 14 on the evidence day, far down the alphabet — comes to page one.
+    // Sorting only the twenty rows on screen would never show him: this step is the difference.
+    name: 'sorting by level ranks the whole club',
+    seed: SEED,
+    // The header's accessible name is its rendered text, and the display face sets it in capitals.
+    steps: [{ click: 'LEVEL', expectRender: { 'member-results': 'Perlman' } }],
+  },
 ];

@@ -13,7 +13,7 @@ export const scenarios: RegionScenario[] = [
     // COVERAGE: the slot renders the bar, in text only the bar produces.
     name: 'the bar renders in its slot',
     seed: SEED,
-    steps: [{ expectRender: { 'app-nav': 'motu demo-app' } }],
+    steps: [{ expectRender: { 'app-nav': 'Signed in as' } }],
   },
   {
     // THE BADGE FOLLOWS THE BUILD. Swap the backend and the claim in the chrome must change with it —
@@ -21,6 +21,6 @@ export const scenarios: RegionScenario[] = [
     // back to the sandbox wording, so this step fails if the bar stops reading the key.
     name: 'the bar says which backend answers',
     seed: SEED,
-    steps: [{ provide: { dataSource: 'live' }, expectRender: { 'app-nav': 'Live data' } }],
+    steps: [{ provide: { dataSource: 'live' }, expectRender: { 'app-nav': 'live database' } }],
   },
 ];

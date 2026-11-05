@@ -18,7 +18,6 @@
 import { HttpTransport } from '@motu/runtime';
 import { setDefaultIsolation, type HostBridge } from '@motu/core';
 import { startLagoon, overridesFor, type TransportMode } from '@motu/react';
-import { angularHostScopeChannel } from '@motu/adapter-angularjs';
 import {
   mountDebugOverlay,
   toggleDebugOverlay,
@@ -43,6 +42,7 @@ import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, p
 // The profile region's own evidence rows — the member and calendar its flows already speak — rather
 // than a fourth copy of the vocabulary written for the gallery.
 import { DENNIS, OPEN_CALENDAR } from 'demo-app/evidence/profile';
+import { CLUB, EVIDENCE_DAY } from 'demo-app/evidence/club';
 import 'demo-app/fonts';
 import css from 'demo-app/styles.css?inline';
 import config from '../lagoon.config.json';
@@ -127,11 +127,11 @@ startLagoon({
     // `searchConfig`, so only it gets that channel — wiring it to the others would show up in the
     // lens as channels nothing reads, which is a finding rather than a configuration.
     regions: [
+      // THE CLUB ON THE EVIDENCE DAY: the app's own rules over the seed (`club-evidence.ts`), not a
+      // drawing of a leaderboard. The Filters popover that read `searchConfig` left this region with
+      // the redesign, and its channel with it.
       overridesFor(membersArchipelago(), {
-        seed: { criteria: {} },
-        // Mirror the host's field schema into the store so the search island receives its `config`
-        // prop. The lagoon seeds a stub (no widgetBuilder), so the island uses its own config.
-        channels: [angularHostScopeChannel({ key: 'hostSearchConfig', into: 'searchConfig' })],
+        seed: { criteria: {}, overview: CLUB, asOf: EVIDENCE_DAY, dataSource: 'sandbox', selectedMember: null, resultCount: null },
       }),
       overridesFor(usersArchipelago, { seed: { criteria: {} } }),
       // THE SHELL, as the sandbox build opens it: in the directory, on the committed seed.

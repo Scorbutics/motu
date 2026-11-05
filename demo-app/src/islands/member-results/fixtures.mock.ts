@@ -12,6 +12,7 @@ import type { MemberCriteria } from '../../shared/member-types.js';
 import { membersSource } from '../../shared/members-source.js';
 import { seedMembersPort } from '../../shared/seed-members-port.js';
 import { SEED_MEMBERS } from '../../shared/seed-members.generated.js';
+import { EVIDENCE_DAY } from '../../shared/club-evidence.js';
 
 const source = membersSource(seedMembersPort(SEED_MEMBERS));
 
@@ -46,15 +47,15 @@ export const roles: string[] = ['MEMBER_READ'];
 
 /** Two input cases whose distinct output proves data flows past the seam (checked by `motu island verify`). */
 export const scenarios: Scenario[] = [
-  { name: 'no criteria', seed: { criteria: {} } },
-  { name: 'email filter', seed: { criteria: { email: 'grace.allen@example.org' } } },
+  { name: 'no criteria', seed: { criteria: {}, asOf: EVIDENCE_DAY } },
+  { name: 'email filter', seed: { criteria: { email: 'grace.allen@example.org' }, asOf: EVIDENCE_DAY } },
   // A search that finds nothing. Cheap to write, and it is the state a list spends real time in.
   // The two filters a coordinator uses most, each a different list from the seed.
-  { name: 'suspended members', seed: { criteria: { status: 'suspended' } } },
-  { name: 'premium and suspended', seed: { criteria: { status: 'suspended', plan: 'premium' } } },
-  { name: 'no matches', seed: { criteria: { surname: 'nobody-by-that-name' } } },
+  { name: 'suspended members', seed: { criteria: { status: 'suspended' }, asOf: EVIDENCE_DAY } },
+  { name: 'premium and suspended', seed: { criteria: { status: 'suspended', plan: 'premium' }, asOf: EVIDENCE_DAY } },
+  { name: 'no matches', seed: { criteria: { surname: 'nobody-by-that-name' }, asOf: EVIDENCE_DAY } },
   // THE FAILURE, as an ordinary scenario: it renders in the lagoon, takes a snapshot baseline, and is
   // measured by `responsive` and `a11y` like any other. Whether what it shows is GOOD — whether there
   // is a way to retry — is now a question someone can answer by looking, which it was not before.
-  { name: 'the backend fails', seed: { criteria: { surname: 'unreachable-backend' } } },
+  { name: 'the backend fails', seed: { criteria: { surname: 'unreachable-backend' }, asOf: EVIDENCE_DAY } },
 ];

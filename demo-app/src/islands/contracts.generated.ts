@@ -9,18 +9,40 @@
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
 import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
+import type { ChapterCup as C_chapter_cup } from '../ui/chapter-cup/ChapterCup.js';
+import type { FreshUnlocks as C_fresh_unlocks } from '../ui/fresh-unlocks/FreshUnlocks.js';
+import type { HighScores as C_high_scores } from '../ui/high-scores/HighScores.js';
 import type { MemberActions as C_member_actions } from '../ui/member-actions/MemberActions.js';
 import type { MemberCard as C_member_card } from '../ui/member-card/MemberCard.js';
 import type { MemberFilterChips as C_member_filter_chips } from '../ui/member-filter-chips/MemberFilterChips.js';
 import type { MemberForm as C_member_form } from '../ui/member-form/MemberForm.js';
 import type { MemberHeader as C_member_header } from '../ui/member-header/MemberHeader.js';
+import type { MemberHighlights as C_member_highlights } from '../ui/member-highlights/MemberHighlights.js';
+import type { MemberPlanTabs as C_member_plan_tabs } from '../ui/member-plan-tabs/MemberPlanTabs.js';
+import type { MemberQuickSearch as C_member_quick_search } from '../ui/member-quick-search/MemberQuickSearch.js';
 import type { MemberResults as C_member_results } from '../ui/member-results/MemberResults.js';
 import type { ProfileHero as C_profile_hero } from '../ui/profile-hero/ProfileHero.js';
+import type { WeeklyQuest as C_weekly_quest } from '../ui/weekly-quest/WeeklyQuest.js';
 
 export const CONTRACTS = {
   'x-app-nav': {
     input: ['section', 'dataSource'],
     output: { onNavigate: 'app-navigate' },
+    effects: [],
+  },
+  'x-chapter-cup': {
+    input: ['overview'],
+    output: {  },
+    effects: [],
+  },
+  'x-fresh-unlocks': {
+    input: ['overview'],
+    output: { onOpen: 'member-open' },
+    effects: [],
+  },
+  'x-high-scores': {
+    input: ['overview'],
+    output: { onOpen: 'member-open' },
     effects: [],
   },
   'x-member-actions': {
@@ -44,12 +66,27 @@ export const CONTRACTS = {
     effects: [],
   },
   'x-member-header': {
-    input: ['heading', 'subtitle', 'badge'],
+    input: ['heading', 'subtitle', 'badge', 'overview', 'dataSource'],
     output: {  },
     effects: [],
   },
+  'x-member-highlights': {
+    input: ['overview'],
+    output: {  },
+    effects: [],
+  },
+  'x-member-plan-tabs': {
+    input: ['criteria', 'overview'],
+    output: { onCriteriaChanged: 'criteria-changed' },
+    effects: [],
+  },
+  'x-member-quick-search': {
+    input: ['criteria'],
+    output: { onCriteriaChanged: 'criteria-changed' },
+    effects: [],
+  },
   'x-member-results': {
-    input: ['criteria', 'members'],
+    input: ['criteria', 'members', 'asOf'],
     output: { onCount: 'count', onPage: 'page', onSelected: 'selected', onOpen: 'open' },
     effects: [],
   },
@@ -61,6 +98,11 @@ export const CONTRACTS = {
   'x-profile-hero': {
     input: ['member', 'calendar', 'loading'],
     output: { onBack: 'profile-back' },
+    effects: [],
+  },
+  'x-weekly-quest': {
+    input: ['overview'],
+    output: {  },
     effects: [],
   },
 } as const;
@@ -91,6 +133,12 @@ type ContractFitsComponent<C, T extends Tag> = [
 
 const _app_nav: ContractFitsComponent<typeof C_app_nav, 'x-app-nav'> = true;
 void _app_nav;
+const _chapter_cup: ContractFitsComponent<typeof C_chapter_cup, 'x-chapter-cup'> = true;
+void _chapter_cup;
+const _fresh_unlocks: ContractFitsComponent<typeof C_fresh_unlocks, 'x-fresh-unlocks'> = true;
+void _fresh_unlocks;
+const _high_scores: ContractFitsComponent<typeof C_high_scores, 'x-high-scores'> = true;
+void _high_scores;
 const _member_actions: ContractFitsComponent<typeof C_member_actions, 'x-member-actions'> = true;
 void _member_actions;
 const _member_card: ContractFitsComponent<typeof C_member_card, 'x-member-card'> = true;
@@ -101,10 +149,18 @@ const _member_form: ContractFitsComponent<typeof C_member_form, 'x-member-form'>
 void _member_form;
 const _member_header: ContractFitsComponent<typeof C_member_header, 'x-member-header'> = true;
 void _member_header;
+const _member_highlights: ContractFitsComponent<typeof C_member_highlights, 'x-member-highlights'> = true;
+void _member_highlights;
+const _member_plan_tabs: ContractFitsComponent<typeof C_member_plan_tabs, 'x-member-plan-tabs'> = true;
+void _member_plan_tabs;
+const _member_quick_search: ContractFitsComponent<typeof C_member_quick_search, 'x-member-quick-search'> = true;
+void _member_quick_search;
 const _member_results: ContractFitsComponent<typeof C_member_results, 'x-member-results'> = true;
 void _member_results;
 const _profile_hero: ContractFitsComponent<typeof C_profile_hero, 'x-profile-hero'> = true;
 void _profile_hero;
+const _weekly_quest: ContractFitsComponent<typeof C_weekly_quest, 'x-weekly-quest'> = true;
+void _weekly_quest;
 
 /**
  * Declare an island: its tag, the component it mounts, and nothing that can be derived.

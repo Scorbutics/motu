@@ -2,10 +2,11 @@
    Kept deliberately thin: if this stylesheet starts describing what a card or a row looks like,
    the arrangement has begun to own its islands' appearance, which is the coupling the region
    declaration exists to make visible. */
-:root { color-scheme: light; }
+:root { color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { body { background: #0E0C10; color: #EEE5D3; } }
 body {
   margin: 0;
-  background: #f2f0ea;
+  background: #E9DFC7;
   font-family: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
   color: #14201c;
 }
@@ -17,7 +18,17 @@ body {
 }
 
 /* The shell: the bar is the `x-app-nav` island; this only pins it to the top of the viewport. */
-.app__shell { position: sticky; top: 0; z-index: 20; }
+/* THE FRAME: the club design's paper, one aged sheet, the sidebar beside the page. The sidebar is the
+   `x-app-nav` island; this only places it. On a phone the sheet wraps and the sidebar runs across the
+   top, as the design's own breakpoint does. */
+.app__frame { min-height: 100vh; padding: 20px 12px 48px; box-sizing: border-box; }
+.app__sheet { max-width: 1360px; margin: 0 auto; padding: 12px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+.app__side { flex: 1 1 180px; display: flex; }
+.app__side > * { flex: 1; }
+.app__main { flex: 999 1 760px; min-width: 0; display: flex; flex-direction: column; }
+/* The profile and add pages keep their own card design inside the sheet; the sheet is their margin. */
+.app__main .app__page { max-width: none; margin: 0; padding: 0; }
+@media (max-width: 720px) { .app__frame { padding: 8px 4px 32px; } }
 .app__split { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
 @media (min-width: 900px) { .app__split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
 

@@ -13,3 +13,8 @@
 // this package because the dependency does: the roots resolve `demo-app/fonts`, and pnpm's strict
 // layout would not let them resolve the font package directly.
 import '@fontsource-variable/bricolage-grotesque/opsz.css';
+
+// THE CLUB'S DISPLAY FACE: League Gothic, the condensed capitals of the gamified members design —
+// titles, numbers, buttons, tabs. Body text in that design is Verdana, a system face that is not ours
+// to bundle; the stack falls back to Tahoma and Geneva where it is missing.
+import '@fontsource/league-gothic/400.css';

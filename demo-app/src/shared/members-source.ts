@@ -12,7 +12,7 @@
 //
 // What it deliberately does NOT do is know about motu. Nothing here imports a store, an island or
 // an archipelago — it is the application's own data code, and it would survive motu being deleted.
-import type { MemberCriteria, MemberPage, MemberRow } from './member-types.js';
+import type { MemberCriteria, MemberOrder, MemberPage, MemberRow } from './member-types.js';
 
 /** One page of rows plus the total the query would have returned unpaged. */
 export interface MembersQueryResult {
@@ -28,7 +28,7 @@ export interface MembersQueryResult {
  */
 export interface MembersPort {
   /** Rows matching `criteria`, ordered by surname, offset by `first`, at most `perPage` of them. */
-  search(criteria: MemberCriteria, first: number, perPage: number): Promise<MembersQueryResult>;
+  search(criteria: MemberCriteria, first: number, perPage: number, order?: MemberOrder): Promise<MembersQueryResult>;
   /**
    * One member by id, or `null` when there is no such row.
    *
@@ -52,12 +52,17 @@ export const PER_PAGE = 20;
  */
 export function membersSource(port: MembersPort) {
   return {
-    async search(page: number, criteria: MemberCriteria): Promise<MemberPage> {
+    /**
+     * `criteria` may carry the ORDER beside the filters (`{ ...filters, order }`): the contract call
+     * the results island makes has one parameters object, and the order is part of the question.
+     */
+    async search(page: number, criteria: MemberCriteria & { order?: MemberOrder }): Promise<MemberPage> {
       // A page number below the first page is a caller bug, not a reason to fail: clamping keeps a
       // stale `page` in the store (a filter that shrank the result set) from throwing at the user.
       const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 0;
       const first = safePage * PER_PAGE;
-      const { rows, total } = await port.search(criteria ?? {}, first, PER_PAGE);
+      const { order, ...filters } = criteria ?? {};
+      const { rows, total } = await port.search(filters, first, PER_PAGE, order);
       return { list: rows, first, perPage: PER_PAGE, size: total };
     },
     /**

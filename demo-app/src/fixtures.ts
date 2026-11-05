@@ -15,6 +15,14 @@ import { scenarios as profileHeroScenarios } from './islands/profile-hero/fixtur
 import { scenarios as profileFlows } from './archipelagos/profile/profile.evidence.js';
 import { scenarios as appNavScenarios } from './islands/app-nav/fixtures.mock.js';
 import { scenarios as memberChipsScenarios } from './islands/member-filter-chips/fixtures.mock.js';
+import { scenarios as memberQuickSearchScenarios } from './islands/member-quick-search/fixtures.mock.js';
+import { scenarios as memberHeaderScenarios } from './islands/member-header/fixtures.mock.js';
+import { scenarios as memberHighlightsScenarios } from './islands/member-highlights/fixtures.mock.js';
+import { scenarios as weeklyQuestScenarios } from './islands/weekly-quest/fixtures.mock.js';
+import { scenarios as memberPlanTabsScenarios } from './islands/member-plan-tabs/fixtures.mock.js';
+import { scenarios as highScoresScenarios } from './islands/high-scores/fixtures.mock.js';
+import { scenarios as chapterCupScenarios } from './islands/chapter-cup/fixtures.mock.js';
+import { scenarios as freshUnlocksScenarios } from './islands/fresh-unlocks/fixtures.mock.js';
 import { scenarios as shellFlows } from './archipelagos/shell/shell.evidence.js';
 import { scenarios as membersFlows } from './archipelagos/members/members.evidence.js';
 
@@ -41,6 +49,14 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
   'x-profile-hero': profileHeroScenarios,
   'x-app-nav': appNavScenarios,
   'x-member-filter-chips': memberChipsScenarios,
+  'x-member-header': memberHeaderScenarios,
+  'x-member-quick-search': memberQuickSearchScenarios,
+  'x-member-highlights': memberHighlightsScenarios,
+  'x-weekly-quest': weeklyQuestScenarios,
+  'x-member-plan-tabs': memberPlanTabsScenarios,
+  'x-high-scores': highScoresScenarios,
+  'x-chapter-cup': chapterCupScenarios,
+  'x-fresh-unlocks': freshUnlocksScenarios,
 };
 
 /**

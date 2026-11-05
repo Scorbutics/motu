@@ -1,0 +1,20 @@
+// Lagoon scenarios for x-member-plan-tabs.
+//
+// Every state is the club's own rules over the seed on a pinned day (`shared/club-evidence.ts`) —
+// none of these numbers is typed here. The empty one is the island rendering from defaults alone,
+// which is what the page shows before the club's numbers arrive.
+//
+// No fixtures: this island calls nothing.
+import type { Fixture, Scenario } from '@motu/runtime/mock';
+import { CLUB, FIRST_YEAR, NEXT_WEEK } from '../../shared/club-evidence.js';
+
+void FIRST_YEAR;
+void NEXT_WEEK;
+
+export const fixtures: Fixture[] = [];
+
+export const scenarios: Scenario[] = [
+  { name: 'before the counts', seed: {} },
+  { name: 'all plans', seed: { overview: CLUB, criteria: {} } },
+  { name: 'premium picked', seed: { overview: CLUB, criteria: { plan: 'premium' } } },
+];

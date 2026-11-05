@@ -5,6 +5,18 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
+
+// THE RULE AND REACHABILITY ARE TWO REFUSALS NOW. 400 is the address rule ("this host will not fetch
+// that"); 422 is the probe ("it would, and nothing answered"). A name the rule ALLOWS but nothing can
+// resolve in a test therefore comes back 422 — passed the rule, refused as unreachable — which is
+// what these assertions say. Loopback gets a real listener, so allowed-and-answering is 200.
+const ALLOWED_BUT_UNREACHABLE = 422;
+async function listener(port) {
+  const s = createServer((_q, r) => r.end('ok'));
+  await new Promise((r) => s.listen(port, '127.0.0.1', r));
+  return s;
+}
 
 const TOKEN = 'test-token';
 function startHost(env) {
@@ -34,12 +46,13 @@ const announce = async (url) => {
 
 test('the allowlist widens the rule without opening it', async (t) => {
   const child = startHost({ MOTU_LIVE_ALLOW: '.tailnet.ts.net,laptop.lan' });
-  t.after(() => child.kill());
+  const dev = await listener(8901);
+  t.after(() => { child.kill(); dev.close(); });
   await new Promise((r) => setTimeout(r, 900));
 
   assert.equal(await announce('http://127.0.0.1:8901'), 200, 'loopback is always allowed');
-  assert.equal(await announce('https://box.tailnet.ts.net:8901'), 200, 'a suffix on the list');
-  assert.equal(await announce('http://laptop.lan:8901'), 200, 'an exact name on the list');
+  assert.equal(await announce('https://box.tailnet.ts.net:8901'), ALLOWED_BUT_UNREACHABLE, 'a suffix on the list');
+  assert.equal(await announce('http://laptop.lan:8901'), ALLOWED_BUT_UNREACHABLE, 'an exact name on the list');
 
   assert.equal(await announce('http://192.168.20.8:8901'), 400, 'a LAN address nobody named');
   assert.equal(await announce('http://evil.example.com/'), 400, 'anything not on the list');
@@ -52,9 +65,17 @@ test('the allowlist widens the rule without opening it', async (t) => {
 
 test('with no allowlist the rule is exactly what it was', async (t) => {
   const child = startHost({});
-  t.after(() => child.kill());
+  const dev = await listener(8901);
+  t.after(() => { child.kill(); dev.close(); });
   await new Promise((r) => setTimeout(r, 900));
   assert.equal(await announce('http://127.0.0.1:8901'), 200);
+  // AND LOOPBACK THAT NOTHING ANSWERS IS REFUSED: the host's own 127.0.0.1, announced by a laptop.
+  const res = await fetch('http://127.0.0.1:8931/api/live?repo=a/b&slug=other', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ url: 'http://127.0.0.1:1' }),
+  });
+  assert.equal(res.status, 422, 'an address nothing answers is not taken');
   assert.equal(await announce('https://box.tailnet.ts.net:8901'), 400, 'unset means loopback only');
 });
 

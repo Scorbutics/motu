@@ -318,12 +318,14 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     try {
       upstream = await fetch(target, { headers: { accept: req.headers.accept ?? '*/*' } });
     } catch {
-      // The dev server went away between resolving and asking. Fall back to what it last published,
-      // rather than showing an error for a frame that has perfectly good bytes in the store.
+      // The dev server is unreachable — it went away, or it announced an address this host cannot
+      // dial (`127.0.0.1` from a remote machine). Forget it and tell the caller, which serves the
+      // request the STORED way: the composed page for the canonical URL, the bare fragment for a
+      // frame. Answering here used to send the fragment for both, so the canonical URL lost its rail
+      // and its dock — no region switcher, no lens — for as long as the dead server kept re-announcing,
+      // and nothing on the page said why.
       live.clear(member.repo, member.slug);
-      const bytes = member.hash ? store.readHash(member.hash) : null;
-      if (bytes) return void html(res, 200, withRepoMeta(wrapFragment(bytes, { title: member.title }), member.repo), NO_STORE);
-      return void html(res, 502, errorPage(502, 'the live lagoon for this member stopped answering'), NO_STORE);
+      return false;
     }
     const type = upstream.headers.get('content-type') ?? 'text/html; charset=utf-8';
     // A LIVE PAGE NEEDS THE SAME STAMP A STORED ONE GETS. `withRepoMeta` is what tells a lagoon which
@@ -601,7 +603,32 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
               ? 'url must be loopback or a host named in MOTU_LIVE_ALLOW'
               : 'url must be http://127.0.0.1:<port> — set MOTU_LIVE_ALLOW to permit named hosts',
           });
-        live.set(repo, slug, where.replace(/\/+$/, ''));
+        const endpoint = where.replace(/\/+$/, '');
+        // PROVE IT ANSWERS, ONCE, before taking it. Loopback passes the rule above, but loopback is
+        // THIS machine: a dev server on a laptop announcing its own `127.0.0.1` names an address that
+        // only works here through an `ssh -R` tunnel — which is legitimate, so the address alone cannot
+        // decide. Fetching can. Without this the host stored a URL it could never reach, every viewer
+        // fell back to the last publish, and the dev server kept re-announcing it every thirty
+        // seconds, so the fallback never ended. Probed only when the URL is NEW for this member: a
+        // heartbeat for an address already proven is not asked again.
+        if (live.endpointFor(repo, slug) !== endpoint) {
+          // A plain GET whose body is thrown away and whose connection is not kept: the probe must
+          // leave nothing behind in the pool that a later request — the reload stream above all,
+          // which never ends — could be handed.
+          const answered = await fetch(endpoint, { signal: AbortSignal.timeout(3000), headers: { connection: 'close' } })
+            .then(async (r) => {
+              await r.body?.cancel().catch(() => {});
+              return true;
+            })
+            .catch(() => false);
+          if (!answered) {
+            return json(res, 422, {
+              error: `this host could not reach ${endpoint}${/^https?:\/\/(127\.|localhost|\[?::1)/.test(endpoint) ? " — that is the host's own loopback, not the dev machine's" : ''}`,
+              hint: 'push builds instead (`motu lagoon serve --watch --live-push`), or announce an address this host can reach (`--live-url`)',
+            });
+          }
+        }
+        live.set(repo, slug, endpoint);
         return json(res, 200, { ok: true, member: `${repo}/${slug}`, url: where, ttlMs: 90_000 });
       }
       return json(res, 404, { error: `no route for POST ${path}` });
@@ -659,7 +686,11 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
         // shell renders fine and only its iframe 404s. It appears exactly when a member is LIVE, which
         // is why a published lagoon looked healthy and starting a dev server "broke" it.
         const tail = rest[rest.length - 1];
-        if (endpoint && tail !== '__motu_hmr' && !rest.includes('__motu_frame')) {
+        //
+        // `__motu_reload` IS THE THIRD EXCEPTION. This branch BUFFERS (`arrayBuffer()`), and a reload
+        // stream never ends — so a viewer's EventSource was held open with no headers, forever, and a
+        // live lagoon never reloaded through this host. The member route below streams it.
+        if (endpoint && tail !== '__motu_hmr' && tail !== '__motu_reload' && !rest.includes('__motu_frame')) {
           // THE RAW TAIL, not the decoded segments re-encoded. `segments` is decoded, so rebuilding
           // the path with `encodeURIComponent` turned `@vite/client` into `%40vite/client` and the
           // dev server answered 404 — a bug introduced by being careful in the wrong direction.
@@ -754,14 +785,16 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
           return html(res, 200, withRepoMeta(wrapFragment(draft, { title: slug }), repo), NO_STORE);
         }
 
-        const liveUrl = ref === 'latest' ? live.endpointFor(repo, slug) : null;
+        let liveUrl = ref === 'latest' ? live.endpointFor(repo, slug) : null;
         if (liveUrl) {
           const rec = store.resolveRef(repo, ref, slug);
           // The stored record travels with it so `proxyLive` can fall back to the last published
           // bytes if the dev server has gone away between resolving and asking.
           const member = { repo, slug, hash: rec?.hash ?? null, title: rec?.title ?? slug };
           const sub = isReload ? '/__motu_reload' : `/${url.search}`;
-          return void (await proxyLive(liveUrl, sub, req, res, member));
+          // `false` = the dev server did not answer; fall through to the stored path below.
+          if ((await proxyLive(liveUrl, sub, req, res, member)) !== false) return;
+          liveUrl = null; // it did not answer: the stored page below must not call itself live
         }
         if (isReload) return html(res, 404, errorPage(404, 'nothing is serving this page live'), NO_STORE);
 

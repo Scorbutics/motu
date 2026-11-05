@@ -751,6 +751,9 @@ export function lagoonServeCommand(argv) {
         const why = await res.json().catch(() => null);
         console.error(color.red(`  ✗ the host refused this as a live member: ${why?.error ?? res.status}`));
         console.error(color.dim(`    announced: ${announceUrl}`));
+        // THE WAY OUT, which the host now names: an address it cannot reach has two fixes, and which
+        // one depends on whether this machine can be reached at all.
+        if (why?.hint) console.error(color.dim(`    ${why.hint}`));
       }
       if (res?.ok && !announced) {
         announced = true;
@@ -990,6 +993,7 @@ function announceDevServer({ slug, port, liveUrl, protocol = 'http' }) {
       const why = await res.json().catch(() => null);
       console.error(color.red(`  ✗ the host refused this as a live member: ${why?.error ?? res.status}`));
       console.error(color.dim(`    announced: ${announceUrl}`));
+      if (why?.hint) console.error(color.dim(`    ${why.hint}`));
     }
     if (res?.ok) {
       // REWRITTEN EVERY BEAT, so the file's own mtime says how long ago this was true. A URL left on

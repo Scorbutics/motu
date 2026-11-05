@@ -282,8 +282,28 @@ console.log('\nhost access — a lagoon served live\n');
     ? !(await (await get(immutable)).text()).includes('LIVE DEV SERVER') : false, immutable ?? 'no immutable url found');
 
   dev.close();
+  dev.closeAllConnections?.();
   await new Promise((r) => setTimeout(r, 50));
-  t('a dead dev server falls back to the last publish', !(await (await get('/acme/open/latest/all')).text()).includes('LIVE DEV SERVER'));
+  const fallback = await (await get('/acme/open/latest/all')).text();
+  t('a dead dev server falls back to the last publish', !fallback.includes('LIVE DEV SERVER'));
+  // ...AS THE COMPOSED PAGE. The fallback used to answer the canonical URL with the bare fragment, so
+  // the rail and the dock — the region switcher, the lens — vanished for as long as a dead dev server
+  // kept re-announcing itself, and nothing on the page said why.
+  t('...still composed: the shell, its frame and its dock', fallback.includes('id="stage"') && fallback.includes('/acme/open/latest/all/__motu_frame') && fallback.includes('motuMountDock'));
+  t('...and the dead server is forgotten', !(await (await get('/api/live')).text()).includes('acme/open'));
+}
+
+// AN ADDRESS THIS HOST CANNOT REACH IS REFUSED AT THE DOOR. A laptop announcing its own 127.0.0.1 to
+// a remote host names the HOST's loopback; it passes the address rule and can never answer. Taken,
+// it made `latest` fall back on every visit while the laptop re-announced it every thirty seconds.
+{
+  const unreachable = await post(`/api/live?repo=acme/open&slug=all`, JSON.stringify({ url: 'http://127.0.0.1:1' }),
+    { authorization: 'Bearer ADMIN', 'content-type': 'application/json' });
+  const why = await unreachable.json().catch(() => ({}));
+  t('an unreachable live URL is refused', unreachable.status === 422, String(unreachable.status));
+  t('...saying it is this host\'s own loopback', /own loopback/.test(why.error ?? ''), why.error);
+  t('...and naming the way out', /--live-push/.test(why.hint ?? ''), why.hint);
+  t('...and nothing was registered', !(await (await get('/api/live')).text()).includes('acme/open'));
 }
 
 

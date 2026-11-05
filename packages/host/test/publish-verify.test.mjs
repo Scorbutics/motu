@@ -55,10 +55,14 @@ t('no live server registered means live:false', one.live === false);
 
 // The endpoint takes the URL in the BODY, not the query — a dev server on loopback, which is the
 // only thing this host will fetch by default.
+// A REAL LISTENER: the host probes a live URL once before taking it, so an address nothing answers
+// is refused (422) rather than registered.
+const devServer = (await import('node:http')).createServer((_q, r) => r.end('ok'));
+await new Promise((r) => devServer.listen(0, '127.0.0.1', r));
 const registered = await fetch(`${base}/api/live?repo=acme/one&slug=all`, {
   method: 'POST',
   headers: { authorization: 'Bearer T', 'content-type': 'application/json' },
-  body: JSON.stringify({ url: 'http://127.0.0.1:1/' }),
+  body: JSON.stringify({ url: `http://127.0.0.1:${devServer.address().port}/` }),
 });
 t('a live member can be registered', registered.ok, `HTTP ${registered.status}`);
 
@@ -67,6 +71,7 @@ t('a publish made while a dev server is live says so', shadowed.live === true);
 t('…and still names the bytes it stored', shadowed.hash === sha256('<h1>PUBLISHED WHILE LIVE</h1>'));
 
 await fetch(`${base}/api/live/off?repo=acme/one&slug=all`, { method: 'POST', headers: { authorization: 'Bearer T' } });
+devServer.close();
 const after = await pub('acme/one', 'all', '<h1>AFTER THE DEV SERVER STOPPED</h1>');
 t('live:false again once the dev server deregisters', after.live === false);
 

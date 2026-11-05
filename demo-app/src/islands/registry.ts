@@ -4,7 +4,6 @@
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
 import type { ElementSpec } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
-import { companyLookupElement } from './company-lookup/element';
 import { memberActionsElement } from './member-actions/element';
 import { memberCardElement } from './member-card/element';
 import { memberFilterChipsElement } from './member-filter-chips/element';
@@ -12,12 +11,7 @@ import { memberFormElement } from './member-form/element';
 import { memberHeaderElement } from './member-header/element';
 import { memberResultsElement } from './member-results/element';
 import { memberSearchNgElement } from './member-search-ng/element';
-import { orgHeadcountElement } from './org-headcount/element';
-import { orgPeopleElement } from './org-people/element';
-import { orgPersonElement } from './org-person/element';
-import { orgTreeElement } from './org-tree/element';
 import { profileHeroElement } from './profile-hero/element';
-import { selectedCompanyElement } from './selected-company/element';
 
 // ISOLATION, from motu.config.json, applied by IMPORTING this file.
 //
@@ -31,7 +25,7 @@ import { selectedCompanyElement } from './selected-company/element';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [companyLookupElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberResultsElement, memberSearchNgElement, orgHeadcountElement, orgPeopleElement, orgPersonElement, orgTreeElement, profileHeroElement, selectedCompanyElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberResultsElement, memberSearchNgElement, profileHeroElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -39,7 +33,6 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [companyLookupElement, memberActi
  * the same information in a form the compiler can look up by tag.
  */
 export interface ElementTypes {
-  'x-company-lookup': typeof companyLookupElement;
   'x-member-actions': typeof memberActionsElement;
   'x-member-card': typeof memberCardElement;
   'x-member-filter-chips': typeof memberFilterChipsElement;
@@ -47,10 +40,5 @@ export interface ElementTypes {
   'x-member-header': typeof memberHeaderElement;
   'x-member-results': typeof memberResultsElement;
   'x-member-search-ng': typeof memberSearchNgElement;
-  'x-org-headcount': typeof orgHeadcountElement;
-  'x-org-people': typeof orgPeopleElement;
-  'x-org-person': typeof orgPersonElement;
-  'x-org-tree': typeof orgTreeElement;
   'x-profile-hero': typeof profileHeroElement;
-  'x-selected-company': typeof selectedCompanyElement;
 }

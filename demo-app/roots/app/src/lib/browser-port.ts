@@ -10,12 +10,11 @@
 // else: the filters (`ilike` substrings on email/names, exact on status/plan), the order (surname
 // then firstname), the paging (`range` inclusive), `byId` answering null for a missing row, and the
 // timeslot rules in `supabase/seeds/timeslots.sql`. If one of those changes, change it here too.
-import type { AvailabilityPort, CompaniesPort, MemberCriteria, MembersPort, TimeslotRow } from 'demo-app';
+import type { AvailabilityPort, MemberCriteria, MembersPort, TimeslotRow } from 'demo-app';
 import data from './sandbox-data.generated.json';
 
 type Row = Record<string, string | null>;
 const MEMBERS = data.members as Row[];
-const COMPANIES = data.companies as Row[];
 
 const CONTAINS: (keyof MemberCriteria)[] = ['email', 'firstname', 'surname'];
 const EXACT: (keyof MemberCriteria)[] = ['status', 'plan'];
@@ -44,18 +43,6 @@ export function browserMembersPort(): MembersPort {
     },
     async byId(id) {
       return settle(MEMBERS.find((m) => m.id === id) ?? null);
-    },
-  };
-}
-
-export function browserCompaniesPort(): CompaniesPort {
-  return {
-    async search(term, limit) {
-      const t = term.trim().toLowerCase();
-      const rows = COMPANIES.filter((c) => t === '' || String(c.name).toLowerCase().includes(t)).sort((a, b) =>
-        String(a.name).localeCompare(String(b.name)),
-      );
-      return settle({ rows: rows.slice(0, limit).map(({ id, name, code }) => ({ id, name, code })), total: rows.length });
     },
   };
 }

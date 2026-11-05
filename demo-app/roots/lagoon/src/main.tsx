@@ -39,7 +39,10 @@ import {
   setCoupling,
   couplingOn,
 } from '@motu/debug-overlay';
-import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, adminArchipelago, ATLAS_CHART, ATLAS_COMPANY, companyName, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
+import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, draftFromMember, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
+// The profile region's own evidence rows — the member and calendar its flows already speak — rather
+// than a fourth copy of the vocabulary written for the gallery.
+import { ADA, OPEN_CALENDAR } from 'demo-app/evidence/profile';
 import css from 'demo-app/styles.css?inline';
 import config from '../lagoon.config.json';
 import { setupLagoonAngularHost } from './angular-host.js';
@@ -130,19 +133,23 @@ startLagoon({
         channels: [angularHostScopeChannel({ key: 'hostSearchConfig', into: 'searchConfig' })],
       }),
       overridesFor(usersArchipelago, { seed: { criteria: {} } }),
-      // ORG LOOKUP, seeded to a company already picked.
+      // THE PROFILE, opened on a member who has been resolved.
       //
-      // Seeded rather than empty because the empty state is one click away and has its own address,
-      // while the state worth OPENING on is the screen doing its job — three lists agreeing about
-      // one company, which is what the region exists to keep true.
-      overridesFor(adminArchipelago, {
+      // The page's resting state (`member: null`) is the hero's "Select a member" and has its own
+      // address as the first step of `each built slot renders its own island`. The state worth OPENING
+      // on is the one a person sees after clicking a row: hero, card and availability for one member.
+      // `selectedDay` / `selectedSlot` belong to the planned calendar islands and stay null — seeding
+      // them would claim a choice no island has made.
+      overridesFor(profileArchipelago, {
         seed: {
-          selectedCompany: ATLAS_COMPANY,
-          companyLabel: companyName(ATLAS_COMPANY),
-          chart: ATLAS_CHART,
-          selectedDepartment: ATLAS_CHART[2],
-          selectedPerson: ATLAS_CHART[2].people[0],
+          member: ADA,
+          draft: draftFromMember(ADA),
+          calendar: OPEN_CALENDAR,
+          selectedDay: null,
+          selectedSlot: null,
         },
+        // The page passes `loading` on the hero; in the gallery the member is already resolved.
+        props: { 'profile-hero': { loading: false } },
       }),
     ],
   },

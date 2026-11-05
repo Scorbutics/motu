@@ -27,7 +27,6 @@ body {
 .app__tab--on { background: #fff; border-color: #ddd9d0; color: #14201c; }
 .app__split { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
 @media (min-width: 900px) { .app__split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
-.app__stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* The profile page: the calendar column beside the card column. Same proportion as `app__split`,
    because they are the same composition seen twice and two ratios drifting apart is what makes a

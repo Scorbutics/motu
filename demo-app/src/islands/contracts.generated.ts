@@ -8,26 +8,15 @@
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
-import type { CompanyLookup as C_company_lookup } from '../ui/company-lookup/CompanyLookup.js';
 import type { MemberActions as C_member_actions } from '../ui/member-actions/MemberActions.js';
 import type { MemberCard as C_member_card } from '../ui/member-card/MemberCard.js';
 import type { MemberFilterChips as C_member_filter_chips } from '../ui/member-filter-chips/MemberFilterChips.js';
 import type { MemberForm as C_member_form } from '../ui/member-form/MemberForm.js';
 import type { MemberHeader as C_member_header } from '../ui/member-header/MemberHeader.js';
 import type { MemberResults as C_member_results } from '../ui/member-results/MemberResults.js';
-import type { OrgHeadcount as C_org_headcount } from '../ui/org-headcount/OrgHeadcount.js';
-import type { OrgPeople as C_org_people } from '../ui/org-people/OrgPeople.js';
-import type { OrgPerson as C_org_person } from '../ui/org-person/OrgPerson.js';
-import type { OrgTree as C_org_tree } from '../ui/org-tree/OrgTree.js';
 import type { ProfileHero as C_profile_hero } from '../ui/profile-hero/ProfileHero.js';
-import type { SelectedCompany as C_selected_company } from '../ui/selected-company/SelectedCompany.js';
 
 export const CONTRACTS = {
-  'x-company-lookup': {
-    input: ['prefix'],
-    output: { onCompanySelected: 'company-selected' },
-    effects: [],
-  },
   'x-member-actions': {
     input: [],
     output: { onNew: 'new', onPaste: 'paste' },
@@ -63,34 +52,9 @@ export const CONTRACTS = {
     output: {  },
     effects: [],
   },
-  'x-org-headcount': {
-    input: ['chart', 'department', 'companyLabel'],
-    output: {  },
-    effects: [],
-  },
-  'x-org-people': {
-    input: ['department', 'person'],
-    output: { onPersonSelected: 'person-selected' },
-    effects: [],
-  },
-  'x-org-person': {
-    input: ['person', 'department'],
-    output: {  },
-    effects: [],
-  },
-  'x-org-tree': {
-    input: ['chart', 'department', 'companyLabel'],
-    output: { onDepartmentSelected: 'department-selected' },
-    effects: [],
-  },
   'x-profile-hero': {
     input: ['member', 'calendar', 'loading'],
     output: { onBack: 'profile-back' },
-    effects: [],
-  },
-  'x-selected-company': {
-    input: ['company'],
-    output: {  },
     effects: [],
   },
 } as const;
@@ -119,8 +83,6 @@ type ContractFitsComponent<C, T extends Tag> = [
       keyof PropsOf<C>
     >];
 
-const _company_lookup: ContractFitsComponent<typeof C_company_lookup, 'x-company-lookup'> = true;
-void _company_lookup;
 const _member_actions: ContractFitsComponent<typeof C_member_actions, 'x-member-actions'> = true;
 void _member_actions;
 const _member_card: ContractFitsComponent<typeof C_member_card, 'x-member-card'> = true;
@@ -133,18 +95,8 @@ const _member_header: ContractFitsComponent<typeof C_member_header, 'x-member-he
 void _member_header;
 const _member_results: ContractFitsComponent<typeof C_member_results, 'x-member-results'> = true;
 void _member_results;
-const _org_headcount: ContractFitsComponent<typeof C_org_headcount, 'x-org-headcount'> = true;
-void _org_headcount;
-const _org_people: ContractFitsComponent<typeof C_org_people, 'x-org-people'> = true;
-void _org_people;
-const _org_person: ContractFitsComponent<typeof C_org_person, 'x-org-person'> = true;
-void _org_person;
-const _org_tree: ContractFitsComponent<typeof C_org_tree, 'x-org-tree'> = true;
-void _org_tree;
 const _profile_hero: ContractFitsComponent<typeof C_profile_hero, 'x-profile-hero'> = true;
 void _profile_hero;
-const _selected_company: ContractFitsComponent<typeof C_selected_company, 'x-selected-company'> = true;
-void _selected_company;
 
 /**
  * Declare an island: its tag, the component it mounts, and nothing that can be derived.

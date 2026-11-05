@@ -11,8 +11,8 @@
     "./archipelagos/members": "./src/archipelagos/members/members.archipelago.ts",
     "./search-config": "./src/ui/member-search-ng/search.config.ts",
     "./archipelagos/users": "./src/archipelagos/users/users.archipelago.ts",
-    "./archipelagos/admin": "./src/archipelagos/admin/admin.archipelago.ts",
-    "./archipelagos/profile": "./src/archipelagos/profile/profile.archipelago.ts"
+    "./archipelagos/profile": "./src/archipelagos/profile/profile.archipelago.ts",
+    "./evidence/profile": "./src/shared/profile-evidence.ts"
   },
   "dependencies": {
     "@motu/adapter-angularjs": "workspace:*",

@@ -2,7 +2,7 @@
 //
 // WHY NOT `react-router`. Two reasons, and the second is the one that decides it.
 //
-// The small one: this app has four screens and one parameter. A router would be more code than it
+// The small one: this app has three screens and one parameter. A router would be more code than it
 // removes, which is the same judgement the tab bar already made before there was a profile page.
 //
 // The one that matters: a `<Router>` CANNOT NEST. The lagoon installs an island's `providers` for
@@ -22,20 +22,18 @@ import type { HostBridge } from '@motu/core';
 export type Route =
   | { name: 'members' }
   | { name: 'users' }
-  | { name: 'org' }
   | { name: 'profile'; memberId: string };
 
 /**
  * A path into a route.
  *
  * UNKNOWN PATHS FALL BACK TO THE DIRECTORY rather than rendering an error screen. This is a demo
- * with four addresses; a 404 page would be a fifth screen that exists only to be wrong at.
+ * with three addresses; a 404 page would be a fourth screen that exists only to be wrong at.
  */
 export function routeFrom(pathname: string): Route {
   const member = /^\/member\/([^/?#]+)/.exec(pathname);
   if (member) return { name: 'profile', memberId: decodeURIComponent(member[1]!) };
   if (pathname.startsWith('/add')) return { name: 'users' };
-  if (pathname.startsWith('/org')) return { name: 'org' };
   return { name: 'members' };
 }
 
@@ -46,8 +44,6 @@ export function pathFor(route: Route): string {
       return `/member/${encodeURIComponent(route.memberId)}`;
     case 'users':
       return '/add';
-    case 'org':
-      return '/org';
     default:
       return '/';
   }

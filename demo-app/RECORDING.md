@@ -5,7 +5,7 @@ Everything below has been run; the numbers are what it actually printed.
 
     Directory      240 members, searched and filtered through the region
     Add a member   the form and the card, one key between them
-    Org lookup     a company from Postgres, then its structure
+    Profile        one member and their availability, reached from a directory row
 
 ## Start it (two terminals, ~40 seconds)
 
@@ -39,10 +39,10 @@ motu lagoon states                       # every state, as URLs
 
 | command | takes | says |
 |---|---|---|
-| `motu check` | ~2s | PASS · 13 island(s), 3 region(s), removable |
+| `motu check` | ~2s | PASS · 8 island(s), 3 region(s), removable |
 | `motu integrate check` | ~2s | PASS · 3 region(s) integrated · 0 warning(s) |
 | `motu removal-check --force` | ~30s | PASS · 66 host file(s) scanned, 57 deleted, 3 unwrapped |
-| `motu lagoon states` | instant | 15 island scenarios + 13 flow step-stops = 28 addresses |
+| `motu lagoon states` | instant | 20 island scenarios + 12 flows (21 steps, each a `&step=` stop) |
 | `motu check --runtime` | ~100s | **never run this live** — run it before you record |
 
 ## The deliberate failure (scene 5)
@@ -70,7 +70,7 @@ Say "same component, different answers". Do not say "the same code path runs in 
 ## Where things live
 
     src/shared/members-source.ts        criteria -> a page, over a port. No motu, no vendor.
-    src/shared/companies-source.ts      the lookup's half of the same idea
+    src/shared/availability-source.ts   the profile calendar's half of the same idea
     roots/app/src/lib/supabase-port.ts  the adapter. The unproven inch.
     roots/app/src/lib/members-transport.ts   the contract's one seam
     roots/app/src/motu/*-region.ts      the bindings — motu imports only, so they delete cleanly

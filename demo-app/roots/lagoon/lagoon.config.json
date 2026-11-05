@@ -9,12 +9,12 @@
       "label": "Members",
       "order": 1
     },
-    "admin": {
-      "label": "Org Lookup",
-      "order": 2
-    },
     "users": {
       "label": "Users",
+      "order": 2
+    },
+    "profile": {
+      "label": "Profile",
       "order": 3
     }
   }

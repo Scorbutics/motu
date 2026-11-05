@@ -21,8 +21,8 @@ import './app.css';
 // and a second auth state for one anon key. That module also carries the "you forgot the env vars"
 // message, because a blank page with a console warning is how a demo dies on camera.
 // In the public sandbox build the same ports are answered in the browser (see `lib/browser-port.ts`).
-const { members, companies } = appPorts();
-configure(membersTransport({ members, companies }));
+const { members } = appPorts();
+configure(membersTransport({ members }));
 
 // One island in this region is AngularJS. It needs a host to render into, exactly as it does in the
 // lagoon — a mixed-framework region is a supported shape, not a special case.

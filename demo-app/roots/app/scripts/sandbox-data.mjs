@@ -54,7 +54,6 @@ function rowsOf(table) {
 const idFor = (prefix, n) => `00000000-0000-4000-${prefix}-${String(n).padStart(12, '0')}`;
 
 const members = rowsOf('members').map((m) => ({ id: idFor('8000', m.member_no), photo: null, ...m }));
-const companies = rowsOf('companies').map((c, k) => ({ id: idFor('9000', k + 1), ...c }));
 
-writeFileSync(outPath, JSON.stringify({ members, companies }) + '\n');
-console.log(`sandbox data: ${members.length} members, ${companies.length} companies -> ${outPath}`);
+writeFileSync(outPath, JSON.stringify({ members }) + '\n');
+console.log(`sandbox data: ${members.length} members -> ${outPath}`);

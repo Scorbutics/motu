@@ -6,7 +6,7 @@ import { absorbHostTheme, setDefaultIsolation } from '@motu/core';
 import { defineMotuApp } from '@motu/react';
 import { mountDebugOverlay } from '@motu/debug-overlay';
 import { angularHostBridge, angularHttpChannel, installMotuProvide } from '@motu/adapter-angularjs';
-import { ELEMENT_REGISTRY, adminArchipelago, membersArchipelago, usersArchipelago } from 'demo-app';
+import { ELEMENT_REGISTRY, membersArchipelago, usersArchipelago } from 'demo-app';
 import css from 'demo-app/styles.css?inline';
 
 // Stripped from the prod bridge (vite define __MOTU_DEBUG__ = false), present in the console
@@ -63,7 +63,6 @@ defineMotuApp({
   // Embedded uses the legacy skin by design so islands match the host — no gradients or preview fonts.
   defaultTheme: 'legacy',
   archipelagos: [
-    { config: adminArchipelago, options: { host } },
     // The Users page: only the Search box is extracted so far. It's default-OFF via legacy-toggle, so
     // prod still shows the legacy search until someone flips it. NOTE: the Users *results* list is
     // still legacy AngularJS — driving it from this island needs an outbound channel (or extracting the

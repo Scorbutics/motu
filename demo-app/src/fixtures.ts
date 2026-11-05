@@ -3,7 +3,6 @@
 // island with a `fixtures.mock.ts` = adding its two imports here.
 
 import type { Fixture, RegionScenario, Scenario } from '@motu/runtime/mock';
-import { fixtures as companyLookup, roles as companyLookupRoles } from './islands/company-lookup/fixtures.mock.js';
 import {
   fixtures as memberResults,
   roles as memberResultsRoles,
@@ -15,10 +14,10 @@ import { scenarios as usersFlows } from './archipelagos/users/users.evidence.js'
 import { scenarios as profileHeroScenarios } from './islands/profile-hero/fixtures.mock.js';
 import { scenarios as profileFlows } from './archipelagos/profile/profile.evidence.js';
 
-export const ALL_FIXTURES: Fixture[] = [...companyLookup, ...memberResults];
+export const ALL_FIXTURES: Fixture[] = [...memberResults];
 
 export const ALL_ROLES: string[] = [
-  ...new Set([...companyLookupRoles, ...memberResultsRoles]),
+  ...new Set([...memberResultsRoles]),
 ];
 
 /**

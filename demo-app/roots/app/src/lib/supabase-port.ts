@@ -8,7 +8,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { MemberCriteria } from 'demo-app';
 import type { MembersPort, MembersQueryResult } from 'demo-app';
-import type { CompaniesPort } from 'demo-app';
 import type { AvailabilityPort, TimeslotRow } from 'demo-app';
 
 /** Substring filters: what a person types into a search box is a fragment, not an identifier. */
@@ -56,22 +55,6 @@ export function supabaseMembersPort(client: SupabaseClient): MembersPort {
  */
 export function membersClient(url: string, anonKey: string): SupabaseClient {
   return createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
-/**
- * The company lookup's backend. One filter, one order, and a hard cap — a lookup is a type-ahead,
- * not a report, so it never asks for more than it can show.
- */
-export function supabaseCompaniesPort(client: SupabaseClient): CompaniesPort {
-  return {
-    async search(term: string, limit: number) {
-      let q = client.from('companies').select('id,name,code', { count: 'exact' });
-      if (term.trim() !== '') q = q.ilike('name', `%${term.trim()}%`);
-      const { data, error, count } = await q.order('name').range(0, limit - 1);
-      if (error) throw new Error(`companies query failed: ${error.message}`);
-      return { rows: data ?? [], total: count ?? 0 };
-    },
-  };
 }
 
 /**

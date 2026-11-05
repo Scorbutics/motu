@@ -59,7 +59,10 @@ export function membersArchipelago(opts: MembersArchipelagoOptions = {}): Archip
         slot: 'member-actions',
         element: 'x-member-actions',
         on: {
-          'member-new': (_detail, { host }) => host.navigate('/member/edit'),
+          // THE ADD-A-MEMBER SCREEN. This used to say `/member/edit`, which the app's router reads as a
+          // PROFILE whose id is "edit" — so the button opened "No such member". `/add` is the users
+          // page, where the form that creates a member already lives.
+          'member-new': (_detail, { host }) => host.navigate('/add'),
           'member-paste': (_detail, { host }) => host.navigate('/member/paste'),
         },
       },

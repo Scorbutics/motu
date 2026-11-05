@@ -3,7 +3,6 @@
 
 export { ELEMENT_REGISTRY } from './islands/registry.js';
 
-export { adminArchipelago } from './archipelagos/admin/admin.archipelago.js';
 export { membersArchipelago } from './archipelagos/members/members.archipelago.js';
 export type { MembersArchipelagoOptions } from './archipelagos/members/members.archipelago.js';
 export { usersArchipelago } from './archipelagos/users/users.archipelago.js';
@@ -21,12 +20,8 @@ export type { MemberDraft, MemberTier } from './shared/member-draft.js';
 export { membersSource, PER_PAGE } from './shared/members-source.js';
 export { MEMBER_SEARCH_CONFIG } from './ui/member-search-ng/search.config.js';
 export type { MembersPort, MembersQueryResult, MembersSource } from './shared/members-source.js';
-export { companiesSource, LOOKUP_LIMIT } from './shared/companies-source.js';
 export { availabilitySource, calendarFrom, utcDate, HORIZON_DAYS } from './shared/availability-source.js';
 export type { AvailabilityPort, AvailabilitySource, TimeslotRow } from './shared/availability-source.js';
 export { SLOT_KIND_LABELS, emptyCalendar } from './shared/availability-types.js';
 export type { Calendar, DayAvailability, SlotKind, Timeslot } from './shared/availability-types.js';
-export type { CompaniesPort, CompaniesQueryResult } from './shared/companies-source.js';
-export { ATLAS_CHART, HELIOS_CHART, ATLAS_COMPANY, HELIOS_COMPANY, orgChartFor, companyName } from './shared/org-types.js';
-export type { OrgChart, OrgDepartment, OrgPerson } from './shared/org-types.js';
 export type { MotuTheme, MotuFit, LegacyStrategy } from '@motu/core';

@@ -1,4 +1,4 @@
-// Four screens and a tab bar, over the app's own URL.
+// Three screens and a tab bar, over the app's own URL.
 //
 // WHAT MATTERS HERE IS THAT NO PAGE KNOWS ABOUT ANOTHER, and none of them holds any region state.
 // Each mounts its own region; changing route unmounts one and mounts the next. The profile is the
@@ -10,17 +10,15 @@
 // island's providers once per view PLUS once per island.
 import { MembersPage } from './pages/MembersPage.js';
 import { UsersPage } from './pages/UsersPage.js';
-import { OrgPage } from './pages/OrgPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { navigate, useRoute, type Route } from './lib/routing.js';
 
 const TABS: { route: Route; label: string }[] = [
   { route: { name: 'members' }, label: 'Directory' },
   { route: { name: 'users' }, label: 'Add a member' },
-  { route: { name: 'org' }, label: 'Org lookup' },
 ];
 
-const PATHS: Record<string, string> = { members: '/', users: '/add', org: '/org' };
+const PATHS: Record<string, string> = { members: '/', users: '/add' };
 
 export function App() {
   const route = useRoute();
@@ -51,8 +49,6 @@ export function App() {
         <ProfilePage key={route.memberId} memberId={route.memberId} />
       ) : route.name === 'users' ? (
         <UsersPage />
-      ) : route.name === 'org' ? (
-        <OrgPage />
       ) : (
         <MembersPage />
       )}

@@ -10,8 +10,16 @@
 // precisely because everything that needs the vendor lives in files like this one.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { availabilitySource, membersSource } from 'demo-app';
-import type { AvailabilitySource, MembersSource } from 'demo-app';
-import { membersClient, supabaseAvailabilityPort, supabaseMembersPort } from './supabase-port.js';
+import type { AvailabilityPort, AvailabilitySource, CompaniesPort, MembersPort, MembersSource } from 'demo-app';
+import { membersClient, supabaseAvailabilityPort, supabaseCompaniesPort, supabaseMembersPort } from './supabase-port.js';
+import { browserAvailabilityPort, browserCompaniesPort, browserMembersPort } from './browser-port.js';
+
+/**
+ * TRUE IN THE PUBLIC SANDBOX BUILD (`pnpm build:sandbox`), which has no server: the ports are then
+ * answered in the browser from the committed seed. A build-time constant, so the branch not taken —
+ * and the Supabase client with it — is dropped from the bundle.
+ */
+export const IN_BROWSER_DATA = import.meta.env.VITE_DATA_SOURCE === 'browser';
 
 let client: SupabaseClient | null = null;
 
@@ -33,10 +41,30 @@ export function appClient(): SupabaseClient {
   return client;
 }
 
+export interface AppPorts {
+  members: MembersPort;
+  companies: CompaniesPort;
+  availability: AvailabilityPort;
+}
+
+let ports: AppPorts | null = null;
+
+/** The backend the whole app talks to: Postgres, or the browser in the sandbox. Built once. */
+export function appPorts(): AppPorts {
+  if (ports) return ports;
+  if (IN_BROWSER_DATA) {
+    ports = { members: browserMembersPort(), companies: browserCompaniesPort(), availability: browserAvailabilityPort() };
+  } else {
+    const c = appClient();
+    ports = { members: supabaseMembersPort(c), companies: supabaseCompaniesPort(c), availability: supabaseAvailabilityPort(c) };
+  }
+  return ports;
+}
+
 let sources: { members: MembersSource; availability: AvailabilitySource } | null = null;
 
 /**
- * The application's sources, over Supabase ports.
+ * The application's sources, over the app's ports.
  *
  * These are the REAL sources — the same objects the unit tests drive over a hand-made port and the
  * same ones the lagoon reaches through a channel. Only the port differs between the three, which is
@@ -44,10 +72,10 @@ let sources: { members: MembersSource; availability: AvailabilitySource } | null
  */
 export function appSources(): { members: MembersSource; availability: AvailabilitySource } {
   if (sources) return sources;
-  const c = appClient();
+  const p = appPorts();
   sources = {
-    members: membersSource(supabaseMembersPort(c)),
-    availability: availabilitySource(supabaseAvailabilityPort(c)),
+    members: membersSource(p.members),
+    availability: availabilitySource(p.availability),
   };
   return sources;
 }

@@ -8,7 +8,9 @@
     "build": "vite build",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset"
+    "db:reset": "supabase db reset",
+    "sandbox:data": "node scripts/sandbox-data.mjs",
+    "build:sandbox": "node scripts/sandbox-data.mjs && VITE_DATA_SOURCE=browser vite build --outDir dist-sandbox && cp dist-sandbox/index.html dist-sandbox/404.html"
   },
   "dependencies": {
     "@motu/adapter-angularjs": "workspace:*",

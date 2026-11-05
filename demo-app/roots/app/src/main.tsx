@@ -1,6 +1,6 @@
 // The composition root: where the app decides what answers its islands.
 //
-// THIS IS THE ONLY FILE THAT KNOWS ABOUT POSTGRES. The page composes a region; the region's results
+// THIS IS WHERE THE APP CHOOSES ITS BACKEND (`lib/app-data.ts` builds it). The page composes a region; the region's results
 // island calls `MemberService.search` through the contract; and the line below is where that call
 // gets a Supabase client instead of a fixture. Swap it and nothing else in the app changes — which
 // is the same swap the lagoon makes, from the other side.
@@ -10,8 +10,7 @@ import { configure } from '@motu/runtime';
 import { registerElements } from '@motu/react';
 import { ELEMENT_REGISTRY } from 'demo-app';
 import { setupAngularHost } from './lib/angular-host.js';
-import { supabaseCompaniesPort, supabaseMembersPort } from './lib/supabase-port.js';
-import { appClient } from './lib/app-data.js';
+import { appPorts } from './lib/app-data.js';
 import { membersTransport } from './lib/members-transport.js';
 import { App } from './App.js';
 import 'demo-app/styles.css';
@@ -21,8 +20,9 @@ import './app.css';
 // needs the same one for its two sources, and a second client would mean a second connection pool
 // and a second auth state for one anon key. That module also carries the "you forgot the env vars"
 // message, because a blank page with a console warning is how a demo dies on camera.
-const client = appClient();
-configure(membersTransport({ members: supabaseMembersPort(client), companies: supabaseCompaniesPort(client) }));
+// In the public sandbox build the same ports are answered in the browser (see `lib/browser-port.ts`).
+const { members, companies } = appPorts();
+configure(membersTransport({ members, companies }));
 
 // One island in this region is AngularJS. It needs a host to render into, exactly as it does in the
 // lagoon — a mixed-framework region is a supported shape, not a special case.

@@ -23,3 +23,5 @@ java/endpoint/src/main/resources/dev/motu/assets/bridge.js
 *.swp
 .motu/
 .playwright-mcp/
+# demo-app public sandbox build (see .github/workflows/sandbox.yml)
+dist-sandbox/

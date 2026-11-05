@@ -1,0 +1,68 @@
+# The public sandbox: demo-app's own Vite app, built static and served by GitHub Pages at
+# https://sandbox.bulgarelli.dev. No backend — the app's ports are answered in the browser from the
+# committed seed (`demo-app/roots/app/src/lib/browser-port.ts`); everything above the port is the
+# code the real app runs.
+#
+# ONE-TIME SETUP, outside this file:
+#   1. Repo Settings → Pages → Source: "GitHub Actions".
+#   2. DNS at bulgarelli.dev: CNAME  sandbox  →  scorbutics.github.io
+#   3. Settings → Pages → Custom domain: sandbox.bulgarelli.dev, then tick "Enforce HTTPS".
+name: sandbox
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'demo-app/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sandbox.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes a queued one, never a running one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Before setup-node: `cache: pnpm` needs the binary to exist (same reason as verify.yml).
+      - run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Every @motu/* package resolves through ./dist, which is gitignored.
+      - run: node scripts/build-packages.mjs
+
+      - run: pnpm --filter @demo-app/app build:sandbox
+
+      # The custom domain travels with the artifact, so a redeploy never drops it.
+      - run: echo 'sandbox.bulgarelli.dev' > demo-app/roots/app/dist-sandbox/CNAME
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo-app/roots/app/dist-sandbox
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

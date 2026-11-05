@@ -1,0 +1,60 @@
+// Turns the committed seed into the rows the sandbox build answers from.
+//
+// WHY READ `seed.sql` RATHER THAN DUMP A RUNNING DATABASE. The seed is the one description of the
+// demo's data that is committed and deterministic; a dump would need a live Supabase at build time
+// (which CI does not have) and would bake in `gen_random_uuid()` ids that change on every reset, so
+// a profile URL shared from the sandbox would die the next time someone rebuilt it.
+//
+// Ids are derived from `member_no` instead — stable, unique (the column is), and uuid-shaped so the
+// URL looks like the one the real app produces.
+//
+// Timeslots are NOT generated here: the seed computes them from `current_date`, so freezing them at
+// build time would show a calendar that drifts into the past. `browser-port.ts` runs the same rules
+// at the moment the page asks.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const seedPath = resolve(here, '../../../supabase/seed.sql');
+const outPath = resolve(here, '../src/lib/sandbox-data.generated.json');
+
+const sql = readFileSync(seedPath, 'utf8');
+
+/** Every `insert into public.<table> (cols) values (...), (...);` as an array of objects. */
+function rowsOf(table) {
+  const head = new RegExp(`insert into public\\.${table} \\(([^)]*)\\) values`, 'i').exec(sql);
+  if (!head) throw new Error(`seed.sql has no insert into public.${table}`);
+  const cols = head[1].split(',').map((c) => c.trim());
+  const rows = [];
+  let i = head.index + head[0].length;
+  let tuple = null;
+  let value = null;
+  for (; i < sql.length; i++) {
+    const ch = sql[i];
+    if (value !== null) {
+      if (ch === "'") {
+        if (sql[i + 1] === "'") { value += "'"; i++; continue; } // SQL escapes a quote by doubling it
+        tuple.push(value);
+        value = null;
+      } else value += ch;
+      continue;
+    }
+    if (ch === "'") value = '';
+    else if (ch === '(') tuple = [];
+    else if (ch === ')') {
+      if (tuple.length !== cols.length) throw new Error(`${table}: row ${rows.length} has ${tuple.length} values for ${cols.length} columns`);
+      rows.push(Object.fromEntries(cols.map((c, k) => [c, tuple[k]])));
+      tuple = null;
+    } else if (ch === ';') break;
+  }
+  return rows;
+}
+
+const idFor = (prefix, n) => `00000000-0000-4000-${prefix}-${String(n).padStart(12, '0')}`;
+
+const members = rowsOf('members').map((m) => ({ id: idFor('8000', m.member_no), photo: null, ...m }));
+const companies = rowsOf('companies').map((c, k) => ({ id: idFor('9000', k + 1), ...c }));
+
+writeFileSync(outPath, JSON.stringify({ members, companies }) + '\n');
+console.log(`sandbox data: ${members.length} members, ${companies.length} companies -> ${outPath}`);

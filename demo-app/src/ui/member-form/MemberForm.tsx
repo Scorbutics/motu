@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { MotuFit } from '@motu/core';
 import { MEMBER_TIERS, type MemberDraft, type MemberTier } from '../../shared/member-draft.js';
+import { CHAPTER_COLORS } from '../club/club-bits.js';
+
+/** The club's chapters, offered when the host supplies none — the list was empty on every page. */
+const CLUB_CHAPTERS = Object.keys(CHAPTER_COLORS);
 
 export interface MemberFormProps {
   /** Bound from the region, so the form stays in step with anything else that resets the draft. */
@@ -24,7 +28,7 @@ export interface MemberFormProps {
  * changes underneath it (a reset elsewhere, a seeded state in the lagoon). Rendering from defaults
  * alone is the rule that makes the empty state a designed thing rather than an accident.
  */
-export function MemberForm({ draft, chapters = [], fit, onDraftChanged, onReset }: MemberFormProps) {
+export function MemberForm({ draft, chapters = CLUB_CHAPTERS, fit, onDraftChanged, onReset }: MemberFormProps) {
   void fit;
   const [local, setLocal] = useState<MemberDraft>(draft ?? {});
   // The BOUND draft is the truth. Typing updates the local copy and publishes; anything that changes
@@ -38,26 +42,26 @@ export function MemberForm({ draft, chapters = [], fit, onDraftChanged, onReset 
   };
 
   return (
-    <form className="gm-card gm-form" onSubmit={(e) => e.preventDefault()} aria-label="Create a member">
-      <header className="gm-form__head">
-        <h2 className="gm-form__title">Create a member</h2>
-        <p className="gm-form__hint">The card updates as you type.</p>
+    <form className="cl-form" onSubmit={(e) => e.preventDefault()} aria-label="Create a member">
+      <header className="cl-form__head">
+        <h2 className="cl-lg">Create a member</h2>
+        <p>The card updates as you type.</p>
       </header>
 
-      <label className="gm-field">
-        <span className="gm-label">Full name</span>
+      <label>
+        <span className="cl-label">Full name</span>
         <input
-          className="gm-input"
+          className="cl-input"
           value={local.fullName ?? ''}
           placeholder="Ada Lovelace"
           onChange={(e) => set('fullName', e.target.value)}
         />
       </label>
 
-      <label className="gm-field">
-        <span className="gm-label">Email</span>
+      <label>
+        <span className="cl-label">Email</span>
         <input
-          className="gm-input"
+          className="cl-input"
           type="email"
           value={local.email ?? ''}
           placeholder="ada@example.org"
@@ -65,11 +69,11 @@ export function MemberForm({ draft, chapters = [], fit, onDraftChanged, onReset 
         />
       </label>
 
-      <div className="gm-form__row">
-        <label className="gm-field">
-          <span className="gm-label">Tier</span>
+      <div className="cl-form__row">
+        <label>
+          <span className="cl-label">Plan</span>
           <select
-            className="gm-input"
+            className="cl-input"
             value={local.tier ?? 'premium'}
             onChange={(e) => set('tier', e.target.value as MemberTier)}
           >
@@ -81,10 +85,10 @@ export function MemberForm({ draft, chapters = [], fit, onDraftChanged, onReset 
           </select>
         </label>
 
-        <label className="gm-field">
-          <span className="gm-label">Chapter</span>
+        <label>
+          <span className="cl-label">Chapter</span>
           <input
-            className="gm-input"
+            className="cl-input"
             list="gm-chapters"
             value={local.chapter ?? ''}
             placeholder="South chapter"
@@ -98,49 +102,56 @@ export function MemberForm({ draft, chapters = [], fit, onDraftChanged, onReset 
         </label>
       </div>
 
-      <div className="gm-form__row">
-        <label className="gm-field">
-          <span className="gm-label">Member no.</span>
+      <div className="cl-form__row">
+        <label>
+          <span className="cl-label">Member no.</span>
           <input
-            className="gm-input"
+            className="cl-input"
             inputMode="numeric"
             value={local.memberNo ?? ''}
-            placeholder="702506"
+            // AFTER THE SEED'S LAST NUMBER (702739). The placeholder used to be 702506 — Rich Stroustrup's —
+            // and member numbers are unique: it suggested a number nobody can be given.
+            placeholder="702740"
             onChange={(e) => set('memberNo', e.target.value)}
           />
         </label>
 
-        <label className="gm-field">
-          <span className="gm-label">Joined</span>
+        <label>
+          <span className="cl-label">Joined</span>
           <input
-            className="gm-input"
+            className="cl-input"
             value={local.joined ?? ''}
-            placeholder="01/09/2026"
+            placeholder="dd/mm/yyyy"
             onChange={(e) => set('joined', e.target.value)}
           />
         </label>
       </div>
 
-      <label className="gm-field">
-        <span className="gm-label">Photo URL</span>
+      <label>
+        <span className="cl-label">Photo URL</span>
         <input
-          className="gm-input"
+          className="cl-input"
           value={local.photo ?? ''}
           placeholder="leave empty to use initials"
           onChange={(e) => set('photo', e.target.value)}
         />
       </label>
 
-      <div className="gm-form__actions">
+      <div className="cl-form__actions">
         <button
           type="button"
-          className="gm-btn gm-btn--ghost"
+          className="cl-btn cl-btn--plain cl-lg"
           onClick={() => {
             setLocal({});
             onReset?.();
           }}
         >
           Clear
+        </button>
+        {/* SAID, NOT HIDDEN: the form is titled "Create a member", and nothing here can create one —
+            this demo has no backend to write to. The same honesty as the bulk bar's Change plan. */}
+        <button type="submit" className="cl-btn cl-btn--red cl-lg" disabled title="Members cannot be created in this demo: there is no backend to write to">
+          Save member
         </button>
       </div>
     </form>

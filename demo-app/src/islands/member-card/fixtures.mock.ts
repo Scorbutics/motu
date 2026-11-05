@@ -32,7 +32,6 @@ export const scenarios: Scenario[] = [
   // The shape before the data. `loading` is the island's own prop, not a region key — a card can be
   // waiting on a fetch its region knows nothing about.
   { name: 'loading skeleton', seed: { draft: EMPTY, loading: true } },
-  { name: 'without actions', seed: { draft: PREMIUM, showActions: false } },
   // The members-list row: same data, one line high.
   { name: 'compact row', seed: { draft: STANDARD, layout: 'row' } },
 ];

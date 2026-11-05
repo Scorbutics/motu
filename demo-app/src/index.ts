@@ -25,7 +25,7 @@ export type { MembersPort, MembersQueryResult, MembersSource } from './shared/me
 export { seedMembersPort, matchSeedMembers, orderMembers } from './shared/seed-members-port.js';
 export { clubSource } from './shared/club-source.js';
 export type { ClubSource } from './shared/club-source.js';
-export { clubOverview, memberStats, todayIso } from './shared/gamification.js';
+export { clubOverview, memberStats, rankOf, todayIso } from './shared/gamification.js';
 export type { ClubOverview, MemberStats } from './shared/gamification.js';
 export { DEFAULT_ORDER } from './shared/member-types.js';
 export type { MemberOrder, MemberSortKey } from './shared/member-types.js';

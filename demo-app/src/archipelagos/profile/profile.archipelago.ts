@@ -14,6 +14,8 @@
 //   member        HOST-FED. The page resolves it from the URL. No island produces it, so no island
 //                 declares it — a derived key listed as an output is a claim nobody can honour.
 //   calendar      HOST-FED, from `availabilitySource` over a port. Same reason.
+//   asOf          HOST-FED. The day the member's level and streak are computed for — today on the
+//                 page, a pinned day in the evidence. The same key the members region carries.
 //   selectedDay   PRODUCED by `calendar-days`. One producer, declared.
 //   selectedSlot  PRODUCED by `calendar-slots`. One producer, declared.
 //
@@ -36,7 +38,7 @@ export const profileArchipelago: ArchipelagoConfig = {
       element: 'x-profile-hero',
       // Reads two host-fed keys and produces nothing. Its only output is a navigation intent, which
       // is not a store write — so it claims no key and cannot collide with anything.
-      bind: ['member', 'calendar'],
+      bind: ['member', 'calendar', 'asOf'],
       on: {
         // `host.navigate` is an EFFECT, not a store write, which is what `on` is for. A handler that
         // set a key would be ownership expressed in a callback body: undrawable before it fires, and

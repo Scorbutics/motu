@@ -96,7 +96,7 @@ export const CONTRACTS = {
     effects: [],
   },
   'x-profile-hero': {
-    input: ['member', 'calendar', 'loading'],
+    input: ['member', 'calendar', 'asOf', 'loading'],
     output: { onBack: 'profile-back' },
     effects: [],
   },

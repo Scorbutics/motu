@@ -14,6 +14,7 @@
 // `provide` targets asserts that the lagoon stored what it was handed, which cannot fail.
 import type { RegionScenario } from '@motu/runtime/mock';
 import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
+import { EVIDENCE_DAY } from '../../shared/club-evidence.js';
 
 /**
  * The resting state: a route that has not resolved yet.
@@ -24,7 +25,7 @@ import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '
  * same thing to a component that distinguishes them, and the difference only ever shows up on the
  * real first paint, which is the one place the lagoon is not.
  */
-const EMPTY_SEED = { member: null, calendar: null, selectedDay: null, selectedSlot: null };
+const EMPTY_SEED = { member: null, calendar: null, asOf: EVIDENCE_DAY, selectedDay: null, selectedSlot: null };
 
 /** A resolved member with published availability — what the page looks like most of the time. */
 const DENNIS_SEED = { member: DENNIS, calendar: OPEN_CALENDAR };
@@ -73,6 +74,18 @@ export const scenarios: RegionScenario[] = [
         provide: { member: GUIDO, calendar: NO_CALENDAR },
         expectRender: { 'profile-hero': 'Guido publishes no availability' },
       },
+    ],
+  },
+  {
+    // THE CLUB'S GAME REACHES THE PROFILE. The same rules the directory runs, for the same day: Dennis
+    // Shaw is level 10 on the evidence day, 52,722 XP and 77% of the way to level 11, and Rich Stroustrup
+    // is on a 7-day streak. Asserted as two members, so a header that stopped reading `member` — or read
+    // the wrong one — fails rather than showing somebody's level.
+    name: 'the header shows where the member stands in the club',
+    seed: EMPTY_SEED,
+    steps: [
+      { provide: { member: DENNIS, calendar: OPEN_CALENDAR }, expectRender: { 'profile-hero': '52,722 XP · 77% to Lv 11' } },
+      { provide: { member: RICH, calendar: FULL_CALENDAR }, expectRender: { 'profile-hero': '7-day streak' } },
     ],
   },
   {

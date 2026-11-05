@@ -19,6 +19,12 @@ export const CHAPTER_COLORS: Record<string, string> = {
   'University chapter': '#8E3F5C',
 };
 
+/**
+ * THE CLUB'S NAME, said once. The sidebar's badge and the membership card both print it, and a name
+ * written twice is a name that ends up spelled two ways.
+ */
+export const CLUB_NAME = "The Motu's club";
+
 export function chapterColor(chapter: string | undefined): string {
   return (chapter && CHAPTER_COLORS[chapter]) || '#5C564C';
 }

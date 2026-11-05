@@ -12,6 +12,7 @@ import {
   dayNumber,
   isoOf,
   levelOf,
+  rankOf,
   memberStats,
   streakOn,
   xpForLevel,
@@ -104,6 +105,12 @@ describe('the club', () => {
       ok(quest.progress < quest.goal, `${quest.title}: ${quest.progress}/${quest.goal}`);
       ok(quest.daysLeft >= 1 && quest.daysLeft <= 7);
     }
+  });
+});
+
+describe('rankOf', () => {
+  it('names the level bands, and every member starts a Rookie', () => {
+    deepStrictEqual([1, 2, 3, 6, 7, 10, 11, 13, 14, 20].map(rankOf), ['Rookie', 'Rookie', 'Member', 'Member', 'Regular', 'Regular', 'Veteran', 'Veteran', 'Legend', 'Legend']);
   });
 });
 

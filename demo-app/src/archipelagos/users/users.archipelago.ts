@@ -43,12 +43,11 @@ export const usersArchipelago: ArchipelagoConfig = {
   // Scoped to this template's own class, so it styles the region's arrangement and nothing else.
   layout: `
 <style>
-  .gm-arch--split { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start;
-    max-width: 1120px; margin: 20px auto; padding: 0 16px; }
+  .gm-arch--split { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: start; }
   .gm-arch--split > motu-island { display: block; min-width: 0; }
-  @media (min-width: 900px) { .gm-arch--split { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+  @media (min-width: 900px) { .gm-arch--split { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); } }
 </style>
-<div class="gm-arch gm-arch--split">
+<div class="gm-arch--split cl-page cl-scope motu-root">
   <motu-island slot="member-form" theme="motu" fit="native"></motu-island>
   <motu-island slot="member-card" theme="motu" fit="native"></motu-island>
 </div>`,

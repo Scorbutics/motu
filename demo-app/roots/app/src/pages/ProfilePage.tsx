@@ -11,7 +11,7 @@
 // That is the property worth watching while the calendar gets built: the page below does not change.
 import { useEffect, useState } from 'react';
 import type { Calendar, MemberRow } from 'demo-app';
-import { emptyCalendar } from 'demo-app';
+import { emptyCalendar, todayIso } from 'demo-app';
 import { Profile } from '../motu/profile-region.js';
 import { appSources } from '../lib/app-data.js';
 
@@ -70,14 +70,16 @@ function ProfileScreen({ memberId }: { memberId: string }) {
   useEffect(() => {
     Profile.provide('member', member);
     Profile.provide('calendar', calendar);
+    // The day the hero's level and streak are computed for — the directory uses the same one.
+    Profile.provide('asOf', todayIso());
   }, [member, calendar]);
 
   if (state === 'missing') {
     return (
-      <div className="app__page app__empty motu-root" data-motu-theme="motu">
-        <h1>No such member</h1>
+      <div className="cl-page cl-page__state">
+        <h1 className="cl-lg">No such member</h1>
         <p>That profile link does not point at anyone in the directory.</p>
-        <a className="app__link" href="/">
+        <a href="/">
           Back to the directory
         </a>
       </div>
@@ -86,10 +88,10 @@ function ProfileScreen({ memberId }: { memberId: string }) {
 
   if (state === 'failed') {
     return (
-      <div className="app__page app__empty motu-root" data-motu-theme="motu">
-        <h1>The directory is not answering</h1>
+      <div className="cl-page cl-page__state">
+        <h1 className="cl-lg">The directory is not answering</h1>
         <p>The member could not be loaded. Check that the local database is running.</p>
-        <a className="app__link" href="/">
+        <a href="/">
           Back to the directory
         </a>
       </div>
@@ -101,7 +103,7 @@ function ProfileScreen({ memberId }: { memberId: string }) {
     // its tokens on `:where(:host, .motu-root)`, a marker the custom-element path adds for you and
     // the React path does not. Without it no token resolves and the gradients collapse to
     // transparent: invisible, and identical in the lagoon, which is how it survives.
-    <div className="app__page motu-root" data-motu-theme="motu">
+    <div className="cl-page cl-scope">
       {/*
         STAGE-ONE ADOPTION, like every other page in this app: the islands are placed inside the
         page's own JSX rather than through `<Profile.Root>`. The archipelago's `layout` is what the
@@ -139,9 +141,9 @@ function ProfileScreen({ memberId }: { memberId: string }) {
  */
 function ProfileCalendarPlaceholder() {
   return (
-    <section className="app__planned" aria-label="Availability, not yet built">
-      <p className="app__planned-tag">Declared, not built</p>
-      <p className="app__planned-copy">
+    <section className="cl-planned" aria-label="Availability, not yet built">
+      <p className="cl-planned__tag">Declared, not built</p>
+      <p className="cl-planned__copy">
         This region declares three more islands — <code>calendar-days</code>, <code>calendar-slots</code> and{' '}
         <code>booking-summary</code> — as <code>planned: true</code>. Their ownership of{' '}
         <code>selectedDay</code> and <code>selectedSlot</code> is already being enforced.
@@ -155,7 +157,7 @@ function ProfileFooter() {
   const region = Profile.useRegion();
   const day = typeof region.selectedDay === 'string' ? region.selectedDay : null;
   return (
-    <footer className="app__footer">
+    <footer className="cl-page__foot">
       {day ? `Looking at ${day}` : 'No day picked yet'}
     </footer>
   );

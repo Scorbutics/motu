@@ -1,5 +1,5 @@
 import type { MotuFit } from '@motu/core';
-import { PeopleIcon } from '../club/club-bits.js';
+import { CLUB_NAME, PeopleIcon } from '../club/club-bits.js';
 
 /** The app's sections that exist, in the order the sidebar shows them. A profile belongs to the directory. */
 export const APP_SECTIONS = [
@@ -36,8 +36,6 @@ export interface AppNavProps {
   fit?: MotuFit;
 }
 
-/** The club's own name in the sidebar's badge. */
-const CLUB_NAME = 'motu club';
 
 function Soon({ names }: { names: string[] }) {
   return (

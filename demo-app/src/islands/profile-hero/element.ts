@@ -10,7 +10,7 @@ export const profileHeroElement: ElementSpec = {
     // navigation intent, which is not a store write — so this island claims no key at all, and the
     // calendar islands beside it are free to own the ones they do.
     contract: {
-      input: ['member', 'calendar', 'loading'] as (keyof ProfileHeroProps & string)[],
+      input: ['member', 'calendar', 'asOf', 'loading'] as (keyof ProfileHeroProps & string)[],
     },
     // THE ONE PART OF THIS FILE THAT IS A DECISION. Everything else here is read off the component
     // by `motu island sync`; this says that the callback `onBack` is called `profile-back` in the

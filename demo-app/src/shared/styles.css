@@ -1375,3 +1375,132 @@
 .cl-members__aside { flex: 1 1 280px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .cl-members__aside > motu-island:last-child, .cl-members__aside > :last-child { flex: 1; display: flex; flex-direction: column; }
 .cl-members motu-island { display: block; min-width: 0; }
+
+/* ======================================================= the club skin: the other two regions ===
+   The add-a-member page (x-member-form, x-member-card) and the profile (x-profile-hero), in the
+   members page's language: flag-coloured blocks, League Gothic capitals, Verdana, wells for fields.
+   Every rule names its own colours from `--cl-*`, so each island renders the same at its own lagoon
+   address as on the page. */
+.cl-input { font-family: var(--cl-text); font-size: 13px; width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 12px;
+  border: 2px solid transparent; border-radius: 2px; background: var(--cl-well); color: var(--cl-ink); }
+.cl-input::placeholder { color: var(--cl-muted); }
+.cl-input:focus { outline: none; border-color: var(--cl-focus); }
+.cl-label { display: block; font-family: var(--cl-text); font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: .6px; color: var(--cl-muted); margin-bottom: 4px; }
+
+/* ---- the form (x-member-form) ---- */
+.cl-form { background: var(--cl-card); color: var(--cl-ink); border-radius: 3px; padding: 14px; display: flex; flex-direction: column; gap: 12px; font-family: var(--cl-text); font-size: 13px; }
+.cl-form__head h2 { margin: 0; font-size: 30px; line-height: 1; color: var(--cl-head); }
+.cl-form__head p { margin: 4px 0 0; font-size: 12px; color: var(--cl-muted); }
+.cl-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cl-form__actions { display: flex; justify-content: flex-end; gap: 6px; }
+.cl-form__actions .cl-btn { font-size: 18px; min-height: 44px; padding: 0 14px; }
+@container (max-width: 380px) { .cl-form__row { grid-template-columns: 1fr; } }
+.cl-form { container-type: inline-size; }
+
+/* ---- the membership card (x-member-card) ---- */
+.cl-mcard { width: 100%; max-width: 440px; border-radius: 3px; overflow: hidden; font-family: var(--cl-text); font-size: 13px;
+  background: var(--cl-card); color: var(--cl-ink); box-shadow: 0 1px 2px var(--cl-edge), 0 0 0 1px var(--cl-edge); container-type: inline-size; }
+.cl-mcard__band { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; }
+.cl-mcard--premium .cl-mcard__band { background: var(--cl-gold); color: var(--cl-goldink); }
+.cl-mcard--standard .cl-mcard__band { background: var(--cl-teal); color: var(--cl-onblk); }
+.cl-mcard__brand { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; }
+.cl-mcard__pill { font-size: 15px; padding: 3px 8px 1px; border-radius: 2px; }
+.cl-mcard--premium .cl-mcard__pill { background: var(--cl-ox); color: #F0DDB0; }
+.cl-mcard--standard .cl-mcard__pill { background: var(--cl-stdbg); color: var(--cl-stdfg); }
+.cl-mcard__body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.cl-mcard__who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cl-mcard__ava { flex: none; width: 56px; height: 56px; border-radius: 3px; background: var(--cl-well); color: var(--cl-ink); font-weight: bold; font-size: 18px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.cl-mcard__ava img { width: 100%; height: 100%; object-fit: cover; }
+.cl-mcard__name { margin: 0; font-size: 30px; line-height: 1; color: var(--cl-head); overflow-wrap: anywhere; }
+.cl-mcard__chapter { margin: 3px 0 0; font-size: 12px; color: var(--cl-ink2); display: flex; align-items: center; gap: 6px; }
+.cl-mcard--empty .cl-mcard__name { color: var(--cl-muted); }
+.cl-mcard__xp { display: flex; align-items: center; gap: 8px; }
+.cl-mcard__xp .cl-lg { font-size: 18px; min-width: 38px; }
+.cl-mcard__xp .cl-bar { flex: 1; height: 8px; background: var(--cl-well); }
+.cl-mcard__xp small { font-size: 11px; color: var(--cl-muted); white-space: nowrap; }
+.cl-mcard__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.cl-mcard__field { background: var(--cl-well); border-radius: 2px; padding: 7px 10px; min-width: 0; }
+.cl-mcard__field--wide { grid-column: 1 / -1; }
+.cl-mcard__field .cl-label { margin-bottom: 2px; }
+.cl-mcard__value { font-size: 13px; font-weight: bold; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.cl-mcard__value--empty { color: var(--cl-muted); font-weight: normal; }
+.cl-mcard__actions { display: flex; gap: 6px; }
+.cl-mcard__actions .cl-btn { flex: 1; font-size: 18px; min-height: 40px; }
+.cl-mcard-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--cl-card); color: var(--cl-ink); border-radius: 3px; font-family: var(--cl-text); }
+.cl-mcard-row .cl-mcard__ava { width: 36px; height: 36px; font-size: 12px; }
+.cl-mcard-row__who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cl-mcard-row__who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-mcard-row__who span { font-size: 12px; color: var(--cl-muted); }
+@container (max-width: 300px) { .cl-mcard__fields { grid-template-columns: 1fr; } .cl-mcard__name { font-size: 24px; } }
+
+/* ---- the profile header (x-profile-hero) ---- */
+.cl-ph { display: flex; flex-direction: column; gap: 6px; font-family: var(--cl-text); font-size: 13px; color: var(--cl-ink); container-type: inline-size; }
+.cl-ph__top { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-ph__id { background: var(--cl-red); color: #FBF3E2; padding: 12px 18px; flex: 1 1 380px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cl-ph__back { align-self: flex-start; font-size: 16px; min-height: 32px; padding: 0 10px; background: rgba(0, 0, 0, .22); color: #FBF3E2; }
+.cl-ph__back:hover { background: rgba(0, 0, 0, .34); }
+.cl-ph__back:focus-visible { outline: 3px solid #FBF3E2; }
+.cl-ph__who { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.cl-ph__ava { flex: none; width: 64px; height: 64px; border-radius: 3px; background: rgba(251, 243, 226, .18); color: #FBF3E2; font-weight: bold; font-size: 22px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.cl-ph__ava img { width: 100%; height: 100%; object-fit: cover; }
+.cl-ph__name { margin: 0; font-size: 48px; line-height: .9; overflow-wrap: anywhere; }
+.cl-ph__chapter { margin: 4px 0 0; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .6px; }
+.cl-ph__pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-ph__pill { font-size: 15px; padding: 3px 8px 1px; border-radius: 2px; }
+.cl-ph__pill--premium { background: var(--cl-gold); color: var(--cl-goldink); }
+.cl-ph__pill--standard { background: var(--cl-stdbg); color: var(--cl-stdfg); }
+.cl-ph__pill--active { background: rgba(0, 0, 0, .22); color: #FBF3E2; }
+.cl-ph__pill--suspended { background: #FBF3E2; color: var(--cl-red); }
+.cl-ph__game { background: var(--cl-teal); color: var(--cl-onblk); padding: 12px 16px; flex: 0 1 340px; min-width: 240px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.cl-ph__game-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cl-ph__game-top .cl-lg { font-size: 30px; line-height: 1; }
+.cl-ph__game-top small { font-size: 11px; font-weight: bold; }
+.cl-ph__game .cl-bar { height: 12px; background: var(--cl-tealdeep); }
+.cl-ph__game .cl-bar > span { background: color-mix(in srgb, var(--cl-accent), #ffffff 45%); }
+.cl-ph__streak { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: bold; }
+.cl-ph__streak svg path { stroke: currentColor; }
+.cl-ph__facts { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.cl-ph__fact { background: var(--cl-card); border-radius: 3px; padding: 9px 12px; min-width: 0; }
+.cl-ph__fact .cl-label { margin-bottom: 2px; }
+.cl-ph__fact-value { font-size: 14px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cl-ph__fact-value--empty { color: var(--cl-muted); font-weight: normal; }
+.cl-ph__avail { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-radius: 3px; font-size: 13px; font-weight: bold;
+  background: var(--cl-card); }
+.cl-ph__avail--open { color: var(--cl-teal); }
+.cl-ph__avail--full { color: var(--cl-red); }
+.cl-ph__avail--none { color: var(--cl-muted); font-weight: normal; }
+.cl-ph__dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: currentColor; }
+.cl-ph-skel { display: block; border-radius: 2px; background: rgba(251, 243, 226, .2); }
+.cl-ph .cl-skel--box { height: 52px; border-radius: 3px; background: var(--cl-card); }
+@container (max-width: 520px) {
+  .cl-ph__facts { grid-template-columns: 1fr 1fr; }
+  .cl-ph__facts > :first-child { grid-column: 1 / -1; }
+  .cl-ph__name { font-size: 38px; }
+}
+@media (prefers-color-scheme: dark) {
+  :where(:host, .motu-root) .cl-ph__avail--open { color: var(--cl-link); }
+  :where(:host, .motu-root) .cl-ph__avail--full { color: var(--cl-kicker); }
+}
+
+/* ---- the profile and add pages' own chrome, in the club's paper ---- */
+.cl-page { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-family: var(--cl-text); font-size: 13px; color: var(--cl-ink); }
+.cl-page__split { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: start; }
+@media (min-width: 900px) { .cl-page__split { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); } }
+.cl-page__foot { padding: 8px 12px; background: var(--cl-well); border-radius: 3px; font-size: 12px; color: var(--cl-muted); }
+.cl-page__state { background: var(--cl-card); border-radius: 3px; padding: 24px; }
+.cl-page__state h1 { margin: 0 0 6px; font-size: 40px; line-height: 1; color: var(--cl-head); }
+.cl-page__state p { margin: 0 0 12px; }
+.cl-planned { background: var(--cl-card); border: 2px dashed var(--cl-well); border-radius: 3px; padding: 14px 16px; color: var(--cl-ink2); }
+.cl-planned__tag { margin: 0 0 6px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: var(--cl-kicker); }
+.cl-planned__copy { margin: 0; font-size: 13px; line-height: 1.6; }
+.cl-planned code { font-size: 12px; background: var(--cl-well); color: var(--cl-ink); padding: 1px 5px; border-radius: 2px; }
+
+/* Review fixes: the game block fills the row once the header wraps (it stopped 18px short on a phone),
+   the chapter dot keeps a cream ring on the red block, the card fills its column on the add page, and a
+   disabled action reads as unavailable rather than broken. */
+@container (max-width: 640px) { .cl-ph__game { flex: 1 1 100%; } }
+.cl-ph__chapter .cl-chap__dot { box-shadow: 0 0 0 2px rgba(251, 243, 226, .85); }
+.cl-page__split .cl-mcard { max-width: none; }
+.cl-btn:disabled { opacity: .55; cursor: not-allowed; }

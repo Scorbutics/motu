@@ -36,8 +36,8 @@ body {
 /* The profile page: the calendar column beside the card column. Same proportion as `app__split`,
    because they are the same composition seen twice and two ratios drifting apart is what makes a
    product look assembled rather than designed. */
-.app__profile { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
-.app__profile-col { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.app__profile { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: start; }
+.app__profile-col { display: grid; gap: 6px; align-content: start; min-width: 0; }
 @media (min-width: 900px) { .app__profile { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
 
 /* WHAT STANDS WHERE A PLANNED ISLAND WILL GO. Deliberately drawn as a NOTE rather than as a

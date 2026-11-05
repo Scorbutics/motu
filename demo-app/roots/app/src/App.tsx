@@ -41,12 +41,12 @@ function ShellFeed({ route }: { route: Route }) {
 }
 
 /** The browser tab's title, read back from the shell — it said "Members" on every page before. */
-const TITLES: Record<string, string> = { directory: 'Directory', add: 'Add a member' };
+const TITLES: Record<string, string> = { directory: 'Members', add: 'Add a member' };
 function ShellTitle() {
   const region = Shell.useRegion();
   const title = typeof region.section === 'string' ? TITLES[region.section] : undefined;
   useEffect(() => {
-    document.title = title ? `${title} · motu demo` : 'motu demo';
+    document.title = title ? `${title} · The Motu's club` : "The Motu's club";
   }, [title]);
   return null;
 }

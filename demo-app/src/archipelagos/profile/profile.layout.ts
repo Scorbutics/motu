@@ -16,23 +16,20 @@ export const PROFILE_LAYOUT = `
   .gm-profile {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 18px;
+    gap: 6px;
     align-items: start;
-    max-width: 1120px;
-    margin: 20px auto;
-    padding: 0 16px;
   }
   .gm-profile > motu-island,
   .gm-profile .gm-profile__col > motu-island { display: block; min-width: 0; }
   .gm-profile__hero { grid-column: 1 / -1; }
-  .gm-profile__col { display: grid; gap: 18px; align-content: start; min-width: 0; }
+  .gm-profile__col { display: grid; gap: 6px; align-content: start; min-width: 0; }
   /* Two columns only when there is room for both to be usable. The booking column carries the card
      and the summary, which are narrow by design; the calendar wants the wider half. */
   @media (min-width: 900px) {
     .gm-profile { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
   }
 </style>
-<div class="gm-arch gm-profile">
+<div class="gm-profile cl-page cl-scope motu-root">
   <motu-island class="gm-profile__hero" slot="profile-hero" theme="motu" fit="native"></motu-island>
   <div class="gm-profile__col">
     <motu-island slot="calendar-days" theme="motu" fit="native"></motu-island>

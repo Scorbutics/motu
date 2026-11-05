@@ -51,6 +51,18 @@ export function xpForLevel(level: number): number {
   return 500 * (level - 1) * level;
 }
 
+/**
+ * A member's RANK, named by level: what the card and the profile call where someone stands. Every
+ * member starts a Rookie on the day they join.
+ */
+export function rankOf(level: number): string {
+  if (level >= 14) return 'Legend';
+  if (level >= 11) return 'Veteran';
+  if (level >= 7) return 'Regular';
+  if (level >= 3) return 'Member';
+  return 'Rookie';
+}
+
 /** The level an XP total reaches. */
 export function levelOf(xp: number): number {
   let level = 1;

@@ -11,6 +11,7 @@
 //
 // No fixtures: this island calls nothing. Everything it draws is a function of its two region keys.
 import type { Fixture, Scenario } from '@motu/runtime/mock';
+import { EVIDENCE_DAY } from '../../shared/club-evidence.js';
 import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
 
 export const fixtures: Fixture[] = [];
@@ -19,11 +20,11 @@ export const scenarios: Scenario[] = [
   // The state it is first seen in, and the one an island MUST have: `default-props` requires it to
   // render from defaults alone, before any member id has resolved.
   { name: 'no member yet', seed: {} },
-  { name: 'has availability', seed: { member: DENNIS, calendar: OPEN_CALENDAR } },
+  { name: 'has availability', seed: { member: DENNIS, calendar: OPEN_CALENDAR, asOf: EVIDENCE_DAY } },
   // Days exist, nothing free. A DIFFERENT screen from the next one, and confusing the two is the
   // bug this pair exists to keep visible.
-  { name: 'fully booked', seed: { member: RICH, calendar: FULL_CALENDAR } },
-  { name: 'publishes nothing', seed: { member: GUIDO, calendar: NO_CALENDAR } },
+  { name: 'fully booked', seed: { member: RICH, calendar: FULL_CALENDAR, asOf: EVIDENCE_DAY } },
+  { name: 'publishes nothing', seed: { member: GUIDO, calendar: NO_CALENDAR, asOf: EVIDENCE_DAY } },
   // The shape before the data. `loading` is the island's own prop, not a region key.
   { name: 'loading skeleton', seed: { loading: true } },
 ];

@@ -147,6 +147,7 @@ startLagoon({
         seed: {
           member: DENNIS,
           calendar: OPEN_CALENDAR,
+          asOf: EVIDENCE_DAY,
           selectedDay: null,
           selectedSlot: null,
         },

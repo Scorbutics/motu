@@ -31,6 +31,7 @@ export const Profile = createRegion(profileArchipelago, {
   seed: {
     member: null,
     calendar: null,
+    asOf: null,
     selectedDay: null,
     selectedSlot: null,
   },

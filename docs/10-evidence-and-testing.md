@@ -405,6 +405,17 @@ tells the author that an island whose empty state *is* its correct answer cannot
 at all (`packages/cli/src/commands/verify.mjs:883`). Duplicate renders are a warning, not a pass:
 "N of them show nothing the others do not" (`packages/cli/src/commands/verify.mjs:871`).
 
+**What "rendered" means: the island's own DOM plus what its own mount PORTALED.** A dialog or sheet built
+on a portal (Radix Dialog, vaul Drawer) lands on `<body>`, outside the island's subtree — and `data-flow`
+used to call such an island "rendered NOTHING" while the region flow asserting that dialog's text passed,
+because `expectRender` searches the whole document. The island checks now count a body-level node only
+when its React fiber walks back (`fiber.return` crosses the portal) into THIS island's mount. Not counted:
+lagoon chrome (marked `data-motu-chrome`), anything that is not React-owned by the island, and a portal
+from another island or a previous mount — so an island that renders nothing still fails, chrome and all.
+The seen-count names it (`· 4 portals in 2 of 2 scenario(s)`). `responsive` measures the portal's box,
+`a11y` includes it in axe's context, and the snapshot of a portaling island is the viewport with the
+chrome hidden (`packages/cli/src/lib/island-render.mjs`).
+
 `report.skip` and `report.inconclusive` are the other two honest outcomes: a rule that does not apply to
 this posture, and a check that could not look (`packages/cli/src/commands/verify.mjs:121`,
 `packages/cli/src/commands/verify.mjs:129`). See
@@ -645,7 +656,8 @@ output, by the path a person takes.
 
 It inherits the constraint that keeps island scenarios from being browser tests. A control is named,
 never selected; resolution is exact-name first, then the narrowest containing match, visible elements
-only, across the whole document so a portal is reachable. A control with no accessible name cannot be
+only, across the whole document so a portal is reachable (the island checks reach the same portal, by
+ownership rather than by searching — see `data-flow` above). A control with no accessible name cannot be
 driven — which is a feature, not a gap. When the name matches nothing, the failure lists what IS
 clickable in that state.
 

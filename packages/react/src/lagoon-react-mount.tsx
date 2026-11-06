@@ -27,6 +27,8 @@ import {
   ensureMountpointStyle,
   slotNameOf,
   slotShows,
+  regionRefOf,
+  regionRefs,
   type ArchipelagoConfig,
   type Channel,
   type HostBridge,
@@ -35,6 +37,7 @@ import {
 import type { DeclaredChannel } from '@motu/core';
 import { ArchipelagoProvider, Island, useRegion } from './react-island';
 import { renderArchipelagoLayout } from './archipelago-layout';
+import { RegionRefSlot, type ResolvedRegionRef } from './region-ref-slot';
 import type { ElementSpec } from './bootstrap';
 
 /** One React root per container, so a re-mount replaces rather than stacks. */
@@ -87,6 +90,38 @@ export interface ReactLagoonOptions {
    * checks see a different application than the human does.
    */
   providers?: (children: ReactNode, slot: string) => ReactNode;
+  /**
+   * How a root prop filled by ANOTHER REGION (`slots: { prop: { region: 'x' } }`) is offered.
+   *
+   * The slot always renders a PLACEHOLDER first — the other region is its own, and loading it by
+   * default would tie this region's flows and snapshots to its rendering. With `resolve`, the
+   * placeholder can load it in place, mounted from ITS config with ITS own lagoon overrides (seed,
+   * channels, providers), and a reference `resolve` refuses renders as a refusal, never as something
+   * else. Without this option the placeholder still names the region and links to it, and says it
+   * cannot be loaded in this view.
+   */
+  regionRefs?: RegionRefOptions;
+}
+
+/** See `ReactLagoonOptions.regionRefs`. */
+export interface RegionRefOptions {
+  /** The referenced region's config and its own lagoon options — or why it cannot be shown. */
+  resolve?: (id: string) => ResolvedRegionRef<{ config: ArchipelagoConfig; opts: ReactLagoonOptions }>;
+  /** The referenced region's own address. Defaults to `?region=<id>` on the current page. */
+  href?: (id: string) => string;
+  /** Open it at its own address without a reload, when the entry can. */
+  open?: (id: string) => void;
+  /** A display name for an id. */
+  label?: (id: string) => string;
+}
+
+/** `?region=<id>` on this page, with every state parameter that belonged to the region being left. */
+export function regionAddress(id: string): string {
+  if (typeof location === 'undefined') return `?region=${encodeURIComponent(id)}`;
+  const url = new URL(location.href);
+  for (const k of ['target', 'scenario', 'flow', 'step']) url.searchParams.delete(k);
+  url.searchParams.set('region', id);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 declare global {
@@ -177,10 +212,12 @@ function RegionRoot({
   config,
   islandNode,
   hostProps,
+  regionRefs,
 }: {
   config: ArchipelagoConfig;
   islandNode: (slot: string) => ReactNode;
   hostProps: Record<string, unknown> | undefined;
+  regionRefs?: RegionRefOptions;
 }): ReactNode {
   // THE LIVE REGION, not the seed it started with. `when`/`unless` was read once at mount against the
   // initial seed, so a slot the seed hid stayed hidden for the rest of the session — and a FLOW is
@@ -188,7 +225,23 @@ function RegionRoot({
   // "no island mounted under slot login-form", because the region had moved and the arrangement had
   // not. A component, so it re-renders with the store like everything else here does.
   const region = useRegion<Record<string, unknown>>();
-  return renderRegionRoot(config, islandNode, hostProps, region as Record<string, unknown>) ?? null;
+  const refNode = (prop: string, id: string) => regionRefNode(config.id, prop, id, regionRefs);
+  return renderRegionRoot(config, islandNode, hostProps, region as Record<string, unknown>, refNode) ?? null;
+}
+
+/** The placeholder for a root prop another region fills — see `RegionRefSlot`. */
+function regionRefNode(parent: string, prop: string, id: string, regionRefs: RegionRefOptions | undefined): ReactNode {
+  return createElement(RegionRefSlot<{ config: ArchipelagoConfig; opts: ReactLagoonOptions }>, {
+    key: `region:${prop}:${id}`,
+    parent,
+    prop,
+    refId: id,
+    label: regionRefs?.label?.(id),
+    resolve: regionRefs?.resolve,
+    render: (loaded) => regionTree(loaded.config, loaded.opts),
+    href: (regionRefs?.href ?? regionAddress)(id),
+    open: regionRefs?.open,
+  });
 }
 
 function renderRegionRoot(
@@ -196,10 +249,11 @@ function renderRegionRoot(
   islandNode: (slot: string) => ReactNode,
   hostProps: Record<string, unknown> | undefined,
   state: Record<string, unknown> | undefined,
+  refNode: (prop: string, id: string) => ReactNode,
 ): ReactNode | undefined {
   const declared = config as {
     root?: unknown;
-    slots?: Record<string, string | { slot: string; when?: string; unless?: string }>;
+    slots?: Record<string, string | { slot: string; when?: string; unless?: string } | { region: string }>;
     hostSlots?: Record<string, unknown>;
   };
   if (!declared.root) return undefined;
@@ -209,7 +263,14 @@ function renderRegionRoot(
   // screen carrying an expired-link banner AND a sign-in form at once — a state the application cannot
   // produce, which is exactly the kind of thing a preview exists to not invent.
   for (const [prop, entry] of Object.entries(declared.slots ?? {})) {
-    composed[prop] = slotShows(entry, state ?? {}) ? islandNode(slotNameOf(entry)) : null;
+    // ANOTHER REGION fills this prop: a placeholder, loaded on request — never this region's island.
+    const ref = regionRefOf(entry);
+    if (ref !== undefined) {
+      composed[prop] = refNode(prop, ref);
+      continue;
+    }
+    const island = entry as string | { slot: string; when?: string; unless?: string };
+    composed[prop] = slotShows(island, state ?? {}) ? islandNode(slotNameOf(island)) : null;
   }
   for (const [prop, Component] of Object.entries(declared.hostSlots ?? {})) {
     composed[prop] = createElement(Component as never, ((hostProps ?? {})[prop] ?? {}) as never);
@@ -224,23 +285,12 @@ function renderRegionRoot(
   return createElement(declared.root as never, composed as never);
 }
 
-export function mountReactLagoon(
-  mountEl: HTMLElement | null,
-  config: ArchipelagoConfig,
-  opts: ReactLagoonOptions,
-): void {
-  if (!mountEl) {
-    console.warn('motu: lagoon has no mount element');
-    return;
-  }
-  // Switching station or view re-mounts: drop the previous root first, or React warns about two roots
-  // on one container and the old tree keeps its store subscription alive.
-  roots.get(mountEl)?.unmount();
-  // And the channels that view installed, for the same reason one layer down: a channel left running
-  // writes to a store nobody reads, and one built on a polling source keeps fetching as well.
-  pageChannels.get(mountEl)?.();
-  pageChannels.delete(mountEl);
-
+/**
+ * The region view or the mountpoints view of `config`, as one React tree — the whole of what
+ * `mountReactLagoon` renders outside the page view, and what a region REFERENCED from another one
+ * renders when it is loaded in place (`RegionRefSlot`), with its own provider, seed and channels.
+ */
+export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions): ReactNode {
   // PER ISLAND, not once around the set: some of what an island needs is per-island (Twenty's widgets
   // read a `WidgetComponentInstanceContext` keyed by widget id), and a wrapper around the whole
   // region cannot supply that. Page-wide providers repeated per island are idempotent — they are
@@ -279,6 +329,64 @@ export function mountReactLagoon(
       <Fragment key={island.slot}>{islandNode(island.slot)}</Fragment>
     ),
   );
+  // A slot ANOTHER REGION fills gets a frame too, so the mountpoints view does not hide that the
+  // region has it — but no `data-motu-slot`: it is not one of this region's islands, and every check
+  // that counts mounted slots reads that attribute.
+  if (opts.view === 'mountpoints') {
+    for (const [prop, id] of Object.entries(regionRefs(config))) {
+      islands.push(
+        <section key={`region:${prop}`} className="motu-frame" data-motu-arch={config.id} data-motu-region-slot={prop}>
+          <header className="motu-frame__label">
+            <span>{prop} → region {id}</span>
+          </header>
+          <div className="motu-frame__stage">{regionRefNode(config.id, prop, id, opts.regionRefs)}</div>
+        </section>,
+      );
+    }
+  }
+
+  return (
+    <ArchipelagoProvider
+      config={config}
+      elements={opts.elements}
+      host={opts.host}
+      seed={opts.seed}
+      channels={opts.channels}
+    >
+      {opts.view === 'mountpoints' ? (
+        <div className="motu-gallery">{islands}</div>
+      ) : (
+        // Preference order, most faithful first: the archipelago's ROOT — the application's own
+        // component, the same one the page renders, composed from the same `slots` — then its
+        // `layout` template (an ocean, whose legacy page cannot hand React anything), then declared
+        // order. There is deliberately no hand-written frame in between any more: one existed, it was
+        // a second copy of the page, and every copy drifted.
+        ((config as { root?: unknown }).root ? (
+          <RegionRoot config={config} islandNode={islandNode} hostProps={opts.hostProps} regionRefs={opts.regionRefs} />
+        ) : (
+          renderArchipelagoLayout(config.layout, islandNode) ?? islands
+        ))
+      )}
+    </ArchipelagoProvider>
+  );
+}
+
+export function mountReactLagoon(
+  mountEl: HTMLElement | null,
+  config: ArchipelagoConfig,
+  opts: ReactLagoonOptions,
+): void {
+  if (!mountEl) {
+    console.warn('motu: lagoon has no mount element');
+    return;
+  }
+  // Switching station or view re-mounts: drop the previous root first, or React warns about two roots
+  // on one container and the old tree keeps its store subscription alive.
+  roots.get(mountEl)?.unmount();
+  // And the channels that view installed, for the same reason one layer down: a channel left running
+  // writes to a store nobody reads, and one built on a polling source keeps fetching as well.
+  pageChannels.get(mountEl)?.();
+  pageChannels.delete(mountEl);
 
   // THE PAGE VIEW RENDERS THE APPLICATION, not the region. Deliberately outside the provider below:
   // the page composes its OWN region (`createRegion` … `<X.Region>`), so wrapping it in a second
@@ -360,30 +468,7 @@ export function mountReactLagoon(
     return;
   }
 
-  const tree = (
-    <ArchipelagoProvider
-      config={config}
-      elements={opts.elements}
-      host={opts.host}
-      seed={opts.seed}
-      channels={opts.channels}
-    >
-      {opts.view === 'mountpoints' ? (
-        <div className="motu-gallery">{islands}</div>
-      ) : (
-        // Preference order, most faithful first: the archipelago's ROOT — the application's own
-        // component, the same one the page renders, composed from the same `slots` — then its
-        // `layout` template (an ocean, whose legacy page cannot hand React anything), then declared
-        // order. There is deliberately no hand-written frame in between any more: one existed, it was
-        // a second copy of the page, and every copy drifted.
-        ((config as { root?: unknown }).root ? (
-          <RegionRoot config={config} islandNode={islandNode} hostProps={opts.hostProps} />
-        ) : (
-          renderArchipelagoLayout(config.layout, islandNode) ?? islands
-        ))
-      )}
-    </ArchipelagoProvider>
-  );
+  const tree = regionTree(config, opts);
 
   let root = createRoot(mountEl);
   roots.set(mountEl, root);

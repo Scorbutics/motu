@@ -38,6 +38,7 @@ export function motuSplash(x, y, color = 'rgba(53, 194, 179, .55)') {
       `position:fixed;left:${x}px;top:${y}px;width:${size}px;height:${size}px;` +
       `margin:${-size / 2}px 0 0 ${-size / 2}px;border-radius:50%;pointer-events:none;z-index:9999;` +
       `background:${color}`;
+    drop.setAttribute('data-motu-chrome', '');
     document.body.appendChild(drop);
     const animation = drop.animate(
       [

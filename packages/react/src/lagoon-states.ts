@@ -250,6 +250,7 @@ export function reportState(outcome: StateOutcome): void {
     lines.push(`${outcome.target} declares no ${outcome.kind === 'flow' ? 'flows' : 'scenarios'} at all.`);
   }
   el.textContent = lines.join('  ·  ');
+  el.setAttribute('data-motu-chrome', '');
   document.body.appendChild(el);
   console.error(lines.join('\n'));
 }

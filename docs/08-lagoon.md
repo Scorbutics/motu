@@ -231,6 +231,28 @@ There is deliberately no hand-written frame in between any more: one existed, it
 the page, and every copy drifted (`:245-246`). Which shape a region should be in, and the staged path
 to `root`, is [06 — Composition and adoption](06-composition-and-adoption.md).
 
+### A slot filled by another region
+
+A root prop declared `{ region: '<id>' }` ([05](05-archipelagos-and-regions.md#a-slot-another-region-fills--region-id))
+renders a PLACEHOLDER in the parent's region view, never the child: it names the region, says it is a
+separate one, and offers two ways in — **Load it here**, which mounts the child in place from ITS
+config with ITS own overrides (seed, channels, providers, `hostProps`), and **Open it on its own**, a
+link to `?region=<id>` that the gallery follows in place through the station switch
+(`packages/react/src/region-ref-slot.tsx`, wired at `packages/react/src/lagoon-gallery.ts`). Loaded,
+it can be unloaded again.
+
+NOT LOADED BY DEFAULT, and that is the point. Rendering it inline would tie the parent's flows,
+snapshots and `lagoon-render` to how the child renders: a change to the child would move the parent's
+baseline, and a parent flow could pass on the child's data. The placeholder carries no
+`data-motu-slot`, so no runtime check counts it as one of the parent's slots; the mountpoints view
+frames it (`data-motu-region-slot`) so it is not hidden there either. The child is verified, flowed
+and snapshotted at its own address, and `motu lagoon states` lists both regions as usual.
+
+A reference that cannot be honoured — an unknown id, a cycle — REFUSES: a red `role="alert"` box naming
+what is wrong, a console error, no load button, and nothing rendered in its place. The focused entry
+(`lagoon.html`) has no resolver, so its placeholder names the region and says it cannot be loaded in
+that view.
+
 Two views, toggled from the tide line and persisted in `localStorage`
 (`packages/react/src/tideline.ts:44`, `:927-938`; `packages/react/src/lagoon-gallery.ts:138`, `:327`):
 

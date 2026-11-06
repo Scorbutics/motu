@@ -21,6 +21,7 @@ import {
   type HostBridge,
   type MotuFit,
   slotNameOf,
+  regionRefOf,
   type RegionOf,
   type SlotsOf,
   type ProducedKeys,
@@ -140,8 +141,13 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     const declared = config as AnyArchipelagoConfig;
     // The page decides exclusivity ITSELF, by passing a node or null — `when`/`unless` is the lagoon's
     // way of following that decision, and is not consulted here.
+    // A prop filled by ANOTHER REGION (`{ region: 'x' }`) is not wrapped: the page puts that region's
+    // own composition there (`<X.Region><X.Root /></X.Region>`), and wrapping it in an island of THIS
+    // region would make the child's islands look like ours. It passes straight through, below.
     const slots = Object.fromEntries(
-      Object.entries((declared.slots ?? {}) as Record<string, string | { slot: string }>).map(([p, e]) => [p, slotNameOf(e)]),
+      Object.entries((declared.slots ?? {}) as Record<string, string | { slot: string } | { region: string }>)
+        .filter(([, e]) => regionRefOf(e) === undefined)
+        .map(([p, e]) => [p, slotNameOf(e as string | { slot: string })]),
     );
     const hostSlots = (declared.hostSlots ?? {}) as Record<string, unknown>;
     if (!declared.root) {

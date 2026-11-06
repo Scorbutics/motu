@@ -6,6 +6,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as React from 'react';
 import { stringifyEvidence } from './lib/evidence-json.mjs';
+import { installIslandRender } from './lib/island-render.mjs';
 
 /**
  * GENERATED IDS ARE MEANT TO DIFFER between mounts. React's `useId` counter is module state and Radix
@@ -129,7 +130,10 @@ async function main() {
     }
     return node;
   };
-  const rendered = (node) => (node ? (node.shadowRoot ? node.shadowRoot.innerHTML : node.innerHTML) : '');
+  // The same reading of "what the island rendered" as the browser lane: its own DOM plus what its own
+  // mount portaled to <body> (lib/island-render.mjs) — so `--fast` and the browser agree on a dialog.
+  installIslandRender(window);
+  const rendered = (node) => window.__motuRendered(node);
 
   // DIFFERENTIATION mode: mount once per declared scenario seed and diff the rendered output. Distinct
   // inputs producing distinct output prove data flows criteria -> contract -> render (not just wiring).
@@ -137,12 +141,16 @@ async function main() {
     const result = { differentiates: null, scenarioCount: scenarios.length, diagnostics };
     if (scenarios.length >= 2) {
       const outputs = [];
+      const portals = [];
       for (const scenario of scenarios) {
         document.body.innerHTML = '';
         mountOne(scenario.seed ?? {});
         await new Promise((r) => setTimeout(r, 80));
-        outputs.push(rendered(findIsland()));
+        const island = findIsland();
+        outputs.push(rendered(island));
+        portals.push(island ? window.__motuPortals(island).length : 0);
       }
+      result.portals = portals;
       // All rendered something AND not every output is identical.
       result.differentiates = outputs.every((o) => o.trim().length > 0) && new Set(outputs).size > 1;
       // WHICH scenarios collide, not just whether any two do. `size > 1` passes a set where two of
@@ -198,6 +206,7 @@ async function main() {
       shadowLength: renderedHtml.length,
       diagnostics,
       remountIdentical,
+      portals: island ? window.__motuPortals(island).length : 0,
     }) + '\n',
   );
   process.exit(0);

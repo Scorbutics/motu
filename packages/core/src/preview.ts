@@ -102,6 +102,7 @@ export function ensureBadge(): void {
   label.className = 'motu-badge__label';
   btn.append(dot, label);
   btn.addEventListener('click', () => setPreview(!previewOn));
+  btn.setAttribute('data-motu-chrome', '');
   document.body.appendChild(btn);
   badgeEl = btn;
   syncBadge();

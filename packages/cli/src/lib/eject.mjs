@@ -18,7 +18,7 @@
 // It is a CODEMOD, not a refactor: it may leave state the page also keeps under another name. That is
 // the honest trade — the ejected app compiles and behaves the same, and a human can tidy after.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { islandsFromSource } from './lagoon-declares.mjs';
+import { islandsFromSource, rootSlots as parsedRootSlots, regionRefsDeclared } from './lagoon-declares.mjs';
 import { blankComments as blankCommentsShared } from './util.mjs';
 import { dirname, resolve } from 'node:path';
 import { SyntaxKind } from 'ts-morph';
@@ -47,7 +47,7 @@ export function readRegions(archipelagosDir) {
       sources: readSources(text, file),
       // The region's ROOT and how its props map — what an ejected page needs to keep composing the
       // same arrangement once `<X.Root>` is gone.
-      ...readRoot(text),
+      ...readRoot(text, file),
       // The APP's own region type, and where it comes from. Generated state is typed with it —
       // `useState<ActionsRegion['weekMissions']>()` — so an ejected page keeps the exact types it had,
       // from a declaration that is the app's and survives motu's removal.
@@ -77,7 +77,11 @@ export function regionOfRoot(el, regions) {
   let bestScore = 0;
   for (const region of regions) {
     if (!region.root) continue;
-    const names = [...Object.keys(region.rootSlots ?? {}), ...Object.keys(region.rootHostSlots ?? {})];
+    const names = [
+      ...Object.keys(region.rootSlots ?? {}),
+      ...Object.keys(region.rootHostSlots ?? {}),
+      ...Object.keys(region.rootRegions ?? {}),
+    ];
     const score = names.filter((n) => passed.has(n)).length;
     if (score > bestScore) {
       best = region;
@@ -131,10 +135,10 @@ function slotElements(expr) {
  * Read from TEXT, like the rest of this module. A `root` is a component reference, so importing the
  * archipelago to read it would pull the application's UI into the CLI.
  */
-function readRoot(text) {
+function readRoot(text, file) {
   const code = blankComments(text);
   const root = code.match(/^\s*root\s*:\s*([A-Za-z_$][\w$]*)\s*,/m)?.[1] ?? null;
-  if (!root) return { root: null, rootFrom: null, rootSlots: {}, rootHostSlots: {} };
+  if (!root) return { root: null, rootFrom: null, rootSlots: {}, rootHostSlots: {}, rootRegions: {} };
   const importOf = (name) =>
     [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)].find(([, names]) =>
       new RegExp(`(^|[\\s,])${name}([\\s,]|$)`).test(names),
@@ -144,7 +148,15 @@ function readRoot(text) {
   const slotBlock =
     code.match(/^ {2}slots\s*:\s*\{([^}\n]*)\}/m) ?? code.match(/^ {2}slots\s*:\s*\{([\s\S]*?)^ {2}\},/m);
   // Both value forms — see `rootSlotMap` for the object one.
+  // A prop another REGION fills (`{ region: 'x' }`) is not an island slot: nothing of this region's
+  // stands in it. It is still this root's vocabulary, so `regionOfRoot` counts it.
+  const rootRegions = {};
   for (const [, prop, rest] of (slotBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*(\{[^}]*\}|'[^']+')/g)) {
+    const region = rest.startsWith('{') ? rest.match(/\bregion\s*:\s*'([^']+)'/)?.[1] : null;
+    if (region) {
+      rootRegions[prop] = region;
+      continue;
+    }
     const slot = rest.startsWith('{') ? rest.match(/\bslot\s*:\s*'([^']+)'/)?.[1] : rest.slice(1, -1);
     if (slot) rootSlots[prop] = slot;
   }
@@ -153,7 +165,15 @@ function readRoot(text) {
   for (const [, prop, comp] of (hostBlock?.[1] ?? '').matchAll(/(\w+)\s*:\s*([A-Za-z_$][\w$]*)/g)) {
     rootHostSlots[prop] = { component: comp, from: importOf(comp) };
   }
-  return { root, rootFrom: importOf(root), rootSlots, rootHostSlots };
+  // PARSED where the file parses, the patterns above only as the fallback. The one-line pattern stops
+  // at the first `}`, so `slots: { main: 'm', panel: { region: 'x' } }` read the reference's own
+  // `region` key as a ROOT PROP named `region` — the same misreading `rootSlots` was written to end.
+  const parsedSlots = file ? parsedRootSlots(file) : null;
+  const parsedRefs = file ? regionRefsDeclared(file) : null;
+  if (parsedSlots && parsedRefs) {
+    return { root, rootFrom: importOf(root), rootSlots: parsedSlots, rootHostSlots, rootRegions: parsedRefs };
+  }
+  return { root, rootFrom: importOf(root), rootSlots, rootHostSlots, rootRegions };
 }
 
 /**

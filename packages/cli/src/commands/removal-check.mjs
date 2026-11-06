@@ -150,7 +150,33 @@ const MOTU_TYPES_ONLY = /^@motu\/types(\/|$)/;
  * which of them an island was wrapping (nothing to unwrap — the island wrapper is motu's, the child is
  * the app's) and which is a host component given as data.
  */
-function rewriteRegionRoots(sf, regions, tags, filePath) {
+/**
+ * Which region a `<X.Root>` belongs to, from the BINDING it hangs off — `X = createRegion(<arch>)`,
+ * declared in this file or in the module `X` is imported from — or null when that cannot be read.
+ *
+ * Preferred over the prop-scoring guess (`regionOfRoot`) because it is not a guess, and because a
+ * region nested in another one's slot is exactly where the guess fails: `<Equipage.Root />` passes no
+ * prop at all, scores zero against every region, and was replaced with `null` — the proof still
+ * compiled, but it proved a page with the nested region deleted rather than ejected.
+ */
+function regionOfBinding(sf, binding, regions, resolveSpec) {
+  const archOf = (text, name) =>
+    blankComments(text).match(new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*createRegion\\s*\\(\\s*([A-Za-z_$][\\w$]*)`))?.[1] ?? null;
+  let arch = archOf(sf.getFullText(), binding);
+  if (!arch) {
+    for (const imp of sf.getImportDeclarations()) {
+      const named = imp.getNamedImports().find((n) => (n.getAliasNode() ?? n.getNameNode()).getText() === binding);
+      if (!named) continue;
+      const target = resolveSpec?.(sf, imp.getModuleSpecifierValue());
+      if (target && existsSync(target)) arch = archOf(readFileSync(target, 'utf8'), named.getName());
+      break;
+    }
+  }
+  if (!arch) return null;
+  return regions.find((r) => r.file && existsSync(r.file) && new RegExp(`export\\s+const\\s+${arch}\\b`).test(readFileSync(r.file, 'utf8'))) ?? null;
+}
+
+function rewriteRegionRoots(sf, regions, tags, filePath, resolveSpec) {
   const rooted = regions.filter((r) => r.root);
   if (!rooted.length) return;
   const needed = new Map();
@@ -161,7 +187,8 @@ function rewriteRegionRoots(sf, regions, tags, filePath) {
     const tag = el.getTagNameNode().getText();
     if (tag.split('.').pop() !== 'Root') continue;
     if (!tags.has(rootTagName(tag))) continue;
-    const region = regionOfRoot(el, rooted) ?? (rooted.length === 1 ? rooted[0] : null);
+    const byBinding = regionOfBinding(sf, rootTagName(tag), rooted, resolveSpec);
+    const region = byBinding ?? regionOfRoot(el, rooted) ?? (rooted.length === 1 ? rooted[0] : null);
     if (!region) continue;
 
     // A host-slot prop carries the component's PROPS; it has to become the element again.
@@ -189,6 +216,52 @@ function rewriteRegionRoots(sf, regions, tags, filePath) {
     sf.addImportDeclaration({ moduleSpecifier: from, namedImports: [name] });
   }
   void filePath;
+}
+
+/**
+ * The JSX half of the surgery on one file: `<X.Root>` rewritten to the application's own root, then
+ * every other motu tag unwrapped (children kept) or, self-closing, replaced with `null`.
+ *
+ * Exported so the shape it produces can be pinned without a host and a `tsc` — a region nested in
+ * another region's slot (`businessTeamPanel={<Equipage.Region><Equipage.Root /></Equipage.Region>}`)
+ * must come out as `businessTeamPanel={<EquipageLayout />}`, not as `null`.
+ */
+export function rewriteMotuJsx(sf, regions, tags, resolveSpec) {
+  rewriteRegionRoots(sf, regions, tags, sf.getFilePath(), resolveSpec);
+  // Form 2: unwrap motu's JSX, keep the children, drop the imports.
+  for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxElement)].reverse()) {
+    // `<Actions.Island>` — a region binding namespaces its surface, so the tag is qualified and the
+    // thing that came from motu is the object it hangs off.
+    const name = rootTagName(el.getOpeningElement().getTagNameNode().getText());
+    if (!tags.has(name)) continue;
+    // What the page KEEPS. JSX comments and whitespace are not children in any sense that matters —
+    // React never sees them — but joining them in produced `{/* … */}<Thing/>`, which is not one
+    // expression, and replacing an element inside a JSX attribute with it threw out of ts-morph and
+    // took `motu check` down with a stack trace. A comment inside an island was enough.
+    const kept = el
+      .getJsxChildren()
+      .map((c) => c.getText())
+      .filter((t) => t.trim() && !/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(t.trim()));
+    const inner = kept.join('').trim();
+    const single = kept.length === 1 && (inner.startsWith('<') || inner.startsWith('{'));
+    // WHERE THE WRAPPER STOOD DECIDES WHAT REPLACES IT.
+    //
+    // `{expr}` is how a JSX child holds an expression, and it is an OBJECT LITERAL anywhere else. So
+    // unwrapping `return <MotuRegion>{screen}</MotuRegion>` by keeping the child verbatim produced
+    // `return {screen}` — valid TypeScript, a completely different program, and a removal proof that
+    // failed with "type '{ screen: Element }' is not a valid JSX element type". Strip the braces when
+    // the wrapper was NOT itself a JSX child; keep them when it was, or `<div>{x}</div>` unwraps to a
+    // div containing the letter x.
+    const parentKind = el.getParent()?.getKind();
+    const inJsxChild = parentKind === SyntaxKind.JsxElement || parentKind === SyntaxKind.JsxFragment;
+    const braced = single && inner.startsWith('{') && inner.endsWith('}') && !inJsxChild;
+    el.replaceWithText(
+      inner === '' ? 'null' : braced ? inner.slice(1, -1).trim() : single ? inner : `<>${inner}</>`,
+    );
+  }
+  for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)].reverse()) {
+    if (tags.has(rootTagName(el.getTagNameNode().getText()))) el.replaceWithText('null');
+  }
 }
 
 function unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec) {
@@ -506,41 +579,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     // What it becomes is the application's own component with the same props: the island props
     // already hold the page's own JSX, and a host-slot prop holds that component's props, so it
     // grows back into an element. Both imports are added; motu's go with the rest.
-    rewriteRegionRoots(sf, regions, tags, p);
-    // Form 2: unwrap motu's JSX, keep the children, drop the imports.
-    for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxElement)].reverse()) {
-      // `<Actions.Island>` — a region binding namespaces its surface, so the tag is qualified and the
-      // thing that came from motu is the object it hangs off.
-      const name = rootTagName(el.getOpeningElement().getTagNameNode().getText());
-      if (!tags.has(name)) continue;
-      // What the page KEEPS. JSX comments and whitespace are not children in any sense that matters —
-      // React never sees them — but joining them in produced `{/* … */}<Thing/>`, which is not one
-      // expression, and replacing an element inside a JSX attribute with it threw out of ts-morph and
-      // took `motu check` down with a stack trace. A comment inside an island was enough.
-      const kept = el
-        .getJsxChildren()
-        .map((c) => c.getText())
-        .filter((t) => t.trim() && !/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(t.trim()));
-      const inner = kept.join('').trim();
-      const single = kept.length === 1 && (inner.startsWith('<') || inner.startsWith('{'));
-      // WHERE THE WRAPPER STOOD DECIDES WHAT REPLACES IT.
-      //
-      // `{expr}` is how a JSX child holds an expression, and it is an OBJECT LITERAL anywhere else. So
-      // unwrapping `return <MotuRegion>{screen}</MotuRegion>` by keeping the child verbatim produced
-      // `return {screen}` — valid TypeScript, a completely different program, and a removal proof that
-      // failed with "type '{ screen: Element }' is not a valid JSX element type". Strip the braces when
-      // the wrapper was NOT itself a JSX child; keep them when it was, or `<div>{x}</div>` unwraps to a
-      // div containing the letter x.
-      const parentKind = el.getParent()?.getKind();
-      const inJsxChild = parentKind === SyntaxKind.JsxElement || parentKind === SyntaxKind.JsxFragment;
-      const braced = single && inner.startsWith('{') && inner.endsWith('}') && !inJsxChild;
-      el.replaceWithText(
-        inner === '' ? 'null' : braced ? inner.slice(1, -1).trim() : single ? inner : `<>${inner}</>`,
-      );
-    }
-    for (const el of [...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)].reverse()) {
-      if (tags.has(rootTagName(el.getTagNameNode().getText()))) el.replaceWithText('null');
-    }
+    rewriteMotuJsx(sf, regions, tags, resolveSpec);
     for (const imp of sf.getImportDeclarations()) {
       const spec = imp.getModuleSpecifierValue();
       const target = resolveSpec(sf, spec);

@@ -18,7 +18,7 @@ import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } fr
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
 import { declaredSourcesOf } from '../lib/declared-sources.mjs';
-import { rootSlots } from '../lib/lagoon-declares.mjs';
+import { rootSlots, regionRefsDeclared } from '../lib/lagoon-declares.mjs';
 import { slotNameOfElement } from '../lib/island-placement.mjs';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
@@ -144,6 +144,107 @@ function producedKeys(region) {
     }
   }
   return keys;
+}
+
+/**
+ * A root prop ANOTHER REGION fills (`slots: { prop: { region: 'x' } }`): does the page put that
+ * region's composition there?
+ *
+ * Not an island of this region, so `placed` has nothing to say about it — and saying nothing is how a
+ * slot ends up empty in the application while both regions verify green on their own. The child's
+ * own `composed`/`mounted` rows say it is composed SOMEWHERE; this says it is composed HERE.
+ *
+ * Accepted: the child's `<Y.Region>` or `<Y.Root>` written straight into the prop, or an application
+ * component in the prop whose own file renders `<Y.Region>` (the page keeping the child's wiring in a
+ * component of its own is ordinary and fine). A prop that is passed but holds neither is a WARNING —
+ * the composition may be further away than this text scan follows; a prop never passed is an ERROR.
+ */
+export function regionRefPlacement(region, rootNames, rootTags, sources, add) {
+  const refs = regionRefsDeclared(region.file);
+  if (refs === null) {
+    add('warn', 'region-ref', `${paths.rel(region.file)} could not be parsed, so its region references were not checked against the page`);
+    return;
+  }
+  for (const [prop, childId] of Object.entries(refs)) {
+    const childConst = archConst(childId);
+    let childBinding = null;
+    let childFile = null;
+    for (const [file, text] of sources) {
+      const m = code(text).match(new RegExp(`const\\s+(\\w+)\\s*=\\s*createRegion\\(\\s*${childConst}\\b`));
+      if (m) {
+        childBinding = m[1];
+        childFile = file;
+        break;
+      }
+    }
+    if (!childBinding) {
+      add(
+        'error',
+        'region-ref',
+        `${prop} is filled by region "${childId}", and the host never composes it — no \`createRegion(${childConst})\`, ` +
+          `so the slot cannot hold it`,
+      );
+      continue;
+    }
+    // The child's composition, under every name it is re-exported as (an RSC page renders an alias).
+    const childNames = [`${childBinding}.Region`, `${childBinding}.Root`];
+    for (const [, alias] of code(readFileSync(childFile, 'utf8')).matchAll(
+      new RegExp(`const\\s+(\\w+)\\s*=\\s*${childBinding}\\.(?:Region|Root)\\b`, 'g'),
+    )) {
+      childNames.push(alias);
+    }
+    const holds = (text) => childNames.some((n) => new RegExp(`<${n.replace('.', '\\.')}\\b`).test(text));
+
+    const values = [];
+    for (const { file, tag, children } of rootTags) {
+      if (prop === 'children') {
+        if (children.trim()) values.push({ file, text: children });
+        continue;
+      }
+      const at = tag.search(new RegExp(`(^|\\s)${prop}\\s*=\\s*\\{`));
+      if (at === -1) continue;
+      const open = tag.indexOf('{', at);
+      let depth = 0;
+      let end = open;
+      for (; end < tag.length; end++) {
+        if (tag[end] === '{') depth++;
+        else if (tag[end] === '}' && --depth === 0) break;
+      }
+      values.push({ file, text: tag.slice(open, end + 1) });
+    }
+    if (!values.length) {
+      add(
+        'error',
+        'region-ref',
+        `<${rootNames[0]}> never passes ${prop}, which region "${childId}" fills — the slot is empty in the ` +
+          `application. Pass ${prop}={<${childBinding}.Region><${childBinding}.Root /></${childBinding}.Region>}`,
+      );
+      continue;
+    }
+    const direct = values.find((v) => holds(v.text));
+    if (direct) {
+      add('ok', 'region-ref', `${prop} holds region "${childId}" (<${childNames.find((n) => holds(direct.text))}>) in ${paths.rel(direct.file)}`);
+      continue;
+    }
+    // One component away: `${prop}={<EquipagePanel />}`, where EquipagePanel's own file renders it.
+    const components = [...new Set(values.flatMap((v) => [...v.text.matchAll(/<([A-Z][\w$]*)/g)].map((m) => m[1])))];
+    const via = [...sources].find(
+      ([, text]) =>
+        holds(code(text)) &&
+        components.some((c) => new RegExp(`(?:function|const|let|class)\\s+${c}\\b`).test(code(text))),
+    );
+    if (via) {
+      add('ok', 'region-ref', `${prop} holds region "${childId}" through a component rendered from ${paths.rel(via[0])}`);
+      continue;
+    }
+    add(
+      'warn',
+      'region-ref',
+      `${prop} is passed, but nothing in it renders <${childNames[0]}> — region "${childId}" is declared to fill ` +
+        `this slot, and the page may be putting something else there. Place <${childBinding}.Region> in it ` +
+        `(directly, or in a component whose own file renders it)`,
+    );
+  }
 }
 
 /** One region's integration, as data. */
@@ -403,6 +504,8 @@ function checkRegion(region, sources) {
       rootNames.push(alias);
     }
     let rootRendered = false;
+    /** Every `<X.Root …>` found, with its attribute text and — when paired — its children's text. */
+    const rootTags = [];
     for (const [file, text] of sources) {
       const t = code(text);
       for (const name of rootNames) {
@@ -411,6 +514,8 @@ function checkRegion(region, sources) {
         rootRendered = true;
         // The element's own attribute region: up to the matching `/>` or `>`, whichever ends it.
         const tag = t.slice(at, at + Math.max(0, closingOf(t, at)));
+        const close = tag.trimEnd().endsWith('/>') ? -1 : t.indexOf(`</${name}>`, at + tag.length);
+        rootTags.push({ file, tag, children: close === -1 ? '' : t.slice(at + tag.length, close) });
         // A SPREAD is still the page passing props — `{...(cond ? { hero } : { hero, frozenBanner })}`
         // is how a page keeps a whole branch in one expression, and reading only `prop=` reported four
         // of the ambassador region's slots as never placed on a page that places all four.
@@ -433,6 +538,7 @@ function checkRegion(region, sources) {
         `the archipelago declares a \`root\` and nothing renders <${rootNames.join('> or <')}> — ` +
           `the region has one description and the page is not using it`,
       );
+    if (rootRendered) regionRefPlacement(region, rootNames, rootTags, sources, add);
   }
   // PLACED IS NOT THE SAME AS RENDERED, and the regex above cannot tell them apart. A slot written
   // inside `{isOpen && …}`, a ternary, or a `.map()` callback reads as placed and may never appear —

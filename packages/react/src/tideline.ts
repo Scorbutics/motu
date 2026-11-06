@@ -377,6 +377,7 @@ function splash(x: number, y: number, color: string): void {
     drop.style.cssText =
       `position:fixed;left:${x}px;top:${y}px;width:${size}px;height:${size}px;border-radius:50%;` +
       `background:${color};pointer-events:none;z-index:2147483647;will-change:transform,opacity`;
+    drop.setAttribute('data-motu-chrome', '');
     document.body.appendChild(drop);
     const angle = -Math.PI / 2 + (Math.random() - 0.5) * 2.2;
     const dist = 26 + Math.random() * 46;
@@ -991,7 +992,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
 
   const tide = el(
     'div',
-    { id: 'tide', 'data-open': 'false', 'data-transport': opts.transport },
+    { id: 'tide', 'data-open': 'false', 'data-transport': opts.transport, 'data-motu-chrome': '' },
     railDock,
     panel,
   );
@@ -1001,7 +1002,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   // The reserve flips between an edge and the bottom at the same breakpoint the dock does.
   window.matchMedia('(max-width: 760px)').addEventListener('change', reserve);
 
-  const targets = el('div', { id: 'tide-targets' });
+  const targets = el('div', { id: 'tide-targets', 'data-motu-chrome': '' });
   for (const edge of EDGES) targets.appendChild(el('i', { 'data-edge': edge }));
   document.body.appendChild(targets);
 
@@ -1239,7 +1240,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
     'aria-label': 'Lagoon command palette',
   }) as HTMLInputElement;
   const list = el('ul', { role: 'listbox' });
-  const palette = el('div', { id: 'tide-palette', hidden: '' }, el('div', { class: 'box' }, input, list));
+  const palette = el('div', { id: 'tide-palette', hidden: '', 'data-motu-chrome': '' }, el('div', { class: 'box' }, input, list));
   document.body.appendChild(palette);
 
   let shown: Command[] = [];

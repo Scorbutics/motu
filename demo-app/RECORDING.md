@@ -59,6 +59,16 @@ pnpm dev:lagoon                          # from the repo root
 motu lagoon states                       # every state, as URLs
 ```
 
+## Screens in the lagoon (experimental)
+
+The panel lists the app's SCREENS (`▣`) above its regions: `AppFrame` — the app's own layout — with
+the sidebar region and the page's region beside it, at `?screen=<id>`. Clicking a section in the
+sidebar, a member row or "All events" moves between screens by their declared routes
+(`src/screens/screens.ts`), so the lagoon clicks through like the app. Chapters shows "Not a motu
+region (yet)" on purpose: that page is plain React. `motu check` prints a `screens` section and fails
+on a navigation target no screen serves. Each region on a screen is still its own region, checked
+alone — a screen only arranges them. See docs/08-lagoon.md, "Screens".
+
 ## What each command prints, so nothing surprises you on camera
 
 | command | takes | says |

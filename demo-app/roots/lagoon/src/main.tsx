@@ -40,6 +40,8 @@ import {
 } from '@motu/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, shellArchipelago, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
 import { eventsRegion, homeRegion, SIGNED_IN } from './regions/club.js';
+// EXPERIMENTAL: the app's screens — its own layout with a region in each part (`src/screens/screens.ts`).
+import { SCREENS } from 'demo-app/screens';
 // The profile region's own evidence rows — the member and calendar its flows already speak — rather
 // than a fourth copy of the vocabulary written for the gallery.
 import { DENNIS, OPEN_CALENDAR } from 'demo-app/evidence/profile';
@@ -87,6 +89,7 @@ const frames = import.meta.glob('./frames/*.css', {
 
 startLagoon({
   elements: ELEMENT_REGISTRY,
+  screens: SCREENS,
   archipelagos: ARCHIPELAGOS,
   fixtures: ALL_FIXTURES,
   roles: ALL_ROLES,

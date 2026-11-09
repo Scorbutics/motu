@@ -22,6 +22,7 @@
 // island's providers once per view PLUS once per island.
 import { useEffect, useRef } from 'react';
 import type { AppSection } from 'demo-app';
+import { AppFrame } from 'demo-app';
 import { MembersPage } from './pages/MembersPage.js';
 import { UsersPage } from './pages/UsersPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
@@ -91,35 +92,30 @@ export function App() {
     <Shell.Region>
       <ShellFeed route={route} me={me} />
       <ShellTitle />
-      {/* THE CLUB'S SHEET: aged paper, the sidebar beside every page. The frame carries the skin marker
-          the island tokens resolve against (`--cl-*`, `--mc-*`), so every page inherits them. */}
-      <div className="app__frame cl-paper motu-root" data-motu-theme="motu">
-        <div className="app__sheet cl-sheet cl-aged">
-          <div className="app__side">
-            <Shell.Island slot="app-nav" />
-          </div>
-          <div className="app__main">
-      {route.name === 'profile' ? (
-        // KEYED BY THE MEMBER ID. Without this, clicking a second member reuses the mounted page and
-        // its region keeps the first member's store — the hero swaps and the calendar does not,
-        // which reads as a stale calendar rather than a remount that never happened.
-        <ProfilePage key={route.memberId} memberId={route.memberId} />
-      ) : route.name === 'users' ? (
-        <UsersPage />
-      ) : route.name === 'home' ? (
-        <HomePage me={resolved} />
-      ) : route.name === 'events' ? (
-        <EventsPage me={resolved} />
-      ) : route.name === 'chapters' ? (
-        <ChaptersPage />
-      ) : route.name === 'chapter' ? (
-        <ChapterPage key={route.slug} slug={route.slug} />
-      ) : (
-        <MembersPage />
-      )}
-          </div>
-        </div>
-      </div>
+      {/* THE CLUB'S LAYOUT (`AppFrame`), the same component the lagoon's screens render. */}
+      <AppFrame
+        sidebar={<Shell.Island slot="app-nav" />}
+        main={
+          route.name === 'profile' ? (
+            // KEYED BY THE MEMBER ID. Without this, clicking a second member reuses the mounted page
+            // and its region keeps the first member's store — the hero swaps and the calendar does
+            // not, which reads as a stale calendar rather than a remount that never happened.
+            <ProfilePage key={route.memberId} memberId={route.memberId} />
+          ) : route.name === 'users' ? (
+            <UsersPage />
+          ) : route.name === 'home' ? (
+            <HomePage me={resolved} />
+          ) : route.name === 'events' ? (
+            <EventsPage me={resolved} />
+          ) : route.name === 'chapters' ? (
+            <ChaptersPage />
+          ) : route.name === 'chapter' ? (
+            <ChapterPage key={route.slug} slug={route.slug} />
+          ) : (
+            <MembersPage />
+          )
+        }
+      />
     </Shell.Region>
   );
 }

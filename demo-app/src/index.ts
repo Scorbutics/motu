@@ -54,3 +54,6 @@ export { PERSONAS } from './shared/personas.js';
 export type { Persona } from './shared/personas.js';
 export { memberStats as statsOf, shortChapter } from './shared/gamification.js';
 export { chapterColor, grouped, initials, CHAPTER_COLORS } from './ui/club/club-bits.js';
+export { AppFrame } from './ui/app-frame/AppFrame.js';
+export type { AppFrameProps } from './ui/app-frame/AppFrame.js';
+export { seedTimeslots } from './shared/seed-timeslots.js';

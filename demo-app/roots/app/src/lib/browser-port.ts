@@ -10,8 +10,8 @@
 // else: the filters (`ilike` substrings on email/names, exact on status/plan), the order (surname
 // then firstname), the paging (`range` inclusive), `byId` answering null for a missing row, and the
 // timeslot rules in `supabase/seeds/timeslots.sql`. If one of those changes, change it here too.
-import type { AvailabilityPort, MembersPort, TimeslotRow } from 'demo-app';
-import { SEED_MEMBERS, seedMembersPort, seedEventsPort } from 'demo-app';
+import type { AvailabilityPort, MembersPort } from 'demo-app';
+import { SEED_MEMBERS, seedMembersPort, seedEventsPort, seedTimeslots } from 'demo-app';
 import type { EventsPort, RsvpStore } from 'demo-app';
 
 type Row = Record<string, unknown>;
@@ -29,43 +29,11 @@ export function browserMembersPort(): MembersPort {
   return seedMembersPort(SEED_MEMBERS, LATENCY_MS);
 }
 
-const HOURS = [9, 11, 14, 16] as const;
-const MINUTES: Record<number, number> = { 9: 30, 11: 60, 14: 30, 16: 45 };
-const KIND: Record<number, string> = { 9: 'intro', 11: 'workshop', 14: 'intro', 16: 'mentoring' };
-const DAY_MS = 86_400_000;
-
-/**
- * `supabase/seeds/timeslots.sql`, run at the moment of asking. Generated from today (UTC, like the
- * database's `current_date`) so the calendar never drifts into the past, and keyed only on member_no
- * and the day offset so it is the same calendar for every visitor on a given day.
- */
-function timeslotsFor(member: Row): TimeslotRow[] {
-  const no = Number(member.member_no);
-  // Same rules as the SQL seed: even numbers publish, suspended members do not, and a member_no
-  // ending in 6 is fully booked.
-  if (no % 2 !== 0 || member.status !== 'active') return [];
-  const booked = no % 10 === 6;
-  const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
-  const out: TimeslotRow[] = [];
-  for (let d = 0; d <= 20; d++) {
-    const day = today + d * DAY_MS;
-    const dow = new Date(day).getUTCDay();
-    if (dow < 1 || dow > 5) continue;
-    if ((Math.floor(no / 2) + d) % 4 === 0) continue;
-    for (const h of HOURS) {
-      if (d > 10 && h >= 14 && (no + d) % 2 === 0) continue;
-      const startsAt = new Date(day + h * 3_600_000).toISOString();
-      out.push({ id: `${member.id}@${startsAt}`, starts_at: startsAt, minutes: MINUTES[h]!, kind: KIND[h]!, taken: booked || (no + d * 7 + h) % 3 === 0 });
-    }
-  }
-  return out;
-}
-
 export function browserAvailabilityPort(): AvailabilityPort {
   return {
     async forMember(memberId, fromISO) {
       const member = SEED_MEMBERS.find((m) => m.id === memberId) as Row | undefined;
-      return settle(member ? timeslotsFor(member).filter((s) => s.starts_at >= fromISO).slice(0, 400) : []);
+      return settle(member ? seedTimeslots(member, new Date().toISOString().slice(0, 10)).filter((s) => s.starts_at >= fromISO).slice(0, 400) : []);
     },
   };
 }

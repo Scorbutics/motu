@@ -1357,6 +1357,30 @@ export function hostFedKeys(config: AnyArchipelagoConfig): Set<string> {
  * Registers an archipelago. Each island becomes mountable by slot, all sharing one store and host.
  * Returns the store so a composition root can seed or observe it.
  */
+/**
+ * Forget a region entirely: its store, its slots, its channels. The next `defineArchipelago` for the
+ * same id starts from scratch — its own seed, its own host bridge, its sources answering anew.
+ *
+ * For a SCREEN (the lagoon's experimental view of the app's layout). A region on a screen is mounted
+ * the way the app mounts a page's region on a route: fresh, with what THAT address gives it. The
+ * provider deliberately REUSES a registered store (StrictMode and Fast Refresh re-run it), which is
+ * right for one mount and wrong across screens: the profile reached by clicking Grace Allen showed
+ * whichever member the store was first seeded with, and every region kept the host bridge of the view
+ * that first built it. Never called on a live application path.
+ */
+export function disposeArchipelago(id: string): void {
+  const store = stores.get(id);
+  regionChannels.get(id)?.dispose();
+  regionChannels.delete(id);
+  for (const slot of archSlots.get(id) ?? []) {
+    if (slots.get(slot)?.store === store) slots.delete(slot);
+  }
+  stores.delete(id);
+  configs.delete(id);
+  archSlots.delete(id);
+  layouts.delete(id);
+}
+
 export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOptions = {}): Store {
   const store = new Store(opts.seed);
   // Who owns which key, for the store's write check. A seed is not a write (it goes through the

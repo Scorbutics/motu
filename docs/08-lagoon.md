@@ -245,6 +245,60 @@ against the element path (`packages/react/src/lagoon-react-mount.tsx:261-267` an
 
 ---
 
+## Screens — the app's layout, a region per part (EXPERIMENTAL)
+
+A region is previewed alone. A real screen is several regions at once — the demo app's sidebar is
+the `shell` region and the page beside it is another — and past a dozen regions, a flat list of
+stations stops looking like the application. A **screen** is the third level, and deliberately the
+thinnest:
+
+    island   a component with a declared surface
+    region   declared state — who owns each key, which flows it must end in
+    screen   ARRANGEMENT — a route, the app's own layout, a region per slot
+
+```ts
+// src/screens/screens.ts — read by the gallery and by `motu check`
+screen({
+  id: 'events',
+  path: '/events',
+  layout: AppFrame,                                         // the APPLICATION's layout component
+  slots: { sidebar: shellArchipelago, main: eventsArchipelago },
+  host: () => ({ shell: { section: 'events', me }, events: { me } }),
+})
+screen({ id: 'chapters', path: '/chapters', layout: AppFrame,
+  slots: { sidebar: shellArchipelago, main: notARegion('plain React — not surveyed yet') } })
+```
+
+Pass `screens` to `startLagoon`. Screens appear in the panel above the regions (`▣`), and each is an
+address: `?screen=<id>`, plus `&path=/member/<id>` for a route with parameters (which must declare an
+`example` path to open at).
+
+**What a screen is not.** It holds no state, declares no keys, writes or flows, and never becomes a
+bigger region. Each slot mounts its region exactly as the region's own station does — its seed, its
+channels, its providers — in its own root with its own store, created fresh for that screen. Nothing
+crosses between regions except what `host` gives each of them, which is what the page's own code
+`provide`s. If two regions on one screen need to WRITE the same key, they are one region.
+
+**Navigation follows declared routes.** A region's `host.navigate(path)` opens the screen that serves
+`path`. A path no screen serves is refused out loud: a banner, a console error, and
+`window.__motuScreen.unresolved`. `motu check — screens` does the same statically: routes unique,
+every slot a known region, every `host.navigate(...)` target in an archipelago resolved to a screen
+(literals, `'/prefix/' + id`, both sides of a ternary, every value of a path map). A target built some
+other way is reported as NOT CHECKED rather than passed.
+
+**Know the limits.**
+- A target that MATCHES the wrong route passes. `/member/edit` is served by `/member/:memberId`, so a
+  button meant for "new member" that opens a profile for a member called "edit" is invisible here —
+  it is a test about meaning, and that is the host's test runner.
+- The main slot renders the REGION (its lagoon arrangement), not the page around it, so page-level
+  chrome the app draws outside its regions does not appear. A region with `root` is where the two
+  converge.
+- Regions are remounted on every navigation, including one the app keeps alive across routes (the
+  sidebar). Fine for previewing; it means a screen cannot show state that survives navigation.
+- No flows, checks or snapshots run per screen yet: every check is still per region. A screen-level
+  smoke check (every slot mounted and rendered) is the natural next step, and cross-region "journeys"
+  are deliberately not — that is an end-to-end test.
+
 ## States are addresses
 
 Every state a project has written down is reachable by URL. The failure this refuses is the quiet one:

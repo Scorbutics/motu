@@ -26,6 +26,8 @@ import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
 import { mountReactLagoon } from './lagoon-react-mount';
+import { mountScreen, unmountScreen } from './lagoon-screen';
+import { matchScreen, type ScreenConfig } from './screens';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
 import {
   stateNames,
@@ -98,6 +100,14 @@ export interface LagoonLens extends TideLens {
 
 export interface StartLagoonOptions {
   elements: ElementSpec[];
+  /**
+   * EXPERIMENTAL — the application's SCREENS (see `screens.ts`): a route, the app's own layout, and
+   * which region fills each part of it. Listed in the panel above the regions, addressable as
+   * `?screen=<id>` (`&path=` for a route with parameters), and navigation between them follows the
+   * declared routes. Regions are still mounted, checked and flowed one at a time; a screen only
+   * arranges them.
+   */
+  screens?: readonly ScreenConfig[];
   /** The project's archipelagos by id (its registry). */
   archipelagos: Record<string, ArchipelagoConfig>;
   fixtures?: Fixture[];
@@ -467,8 +477,56 @@ markSandbox();
         ? 'mountpoints'
         : 'region';
 
+  // ---------------------------------------------------------------- screens (experimental) ----
+  const screens = opts.screens ?? [];
+  const SCREEN = 'screen:';
+  const screenStations = screens.map((sc) => ({ id: SCREEN + sc.id, label: `\u25A3 ${sc.label ?? sc.id}` }));
+
+  /** Open the screen that serves `path`, and make the address say so. */
+  function openScreen(path: string): void {
+    const opened = mountScreen(root!, path, {
+      elements: opts.elements,
+      css: opts.css,
+      overrides,
+      screens,
+      host,
+      onNavigated: (sc, to) => {
+        current = SCREEN + sc.id;
+        writeScreenAddress(sc, to);
+        controlChanged();
+      },
+    });
+    const hit = matchScreen(screens, path);
+    current = hit ? SCREEN + hit.screen.id : current;
+    if (hit) writeScreenAddress(hit.screen, path);
+    island = undefined;
+    shownFlow = null;
+    reportState(
+      opened
+        ? { ok: true, target: `screen:${hit!.screen.id}`, kind: 'none' }
+        : { ok: false, target: 'this lagoon', kind: 'none', error: `no declared screen serves ${path}`, available: screens.map((x) => x.path) },
+    );
+    controlChanged();
+  }
+
+  function writeScreenAddress(sc: ScreenConfig, path: string): void {
+    const url = new URL(location.href);
+    for (const k of ['region', 'flow', 'step', 'target', 'scenario', 'view']) url.searchParams.delete(k);
+    url.searchParams.set('screen', sc.id);
+    if (path !== sc.path) url.searchParams.set('path', path);
+    else url.searchParams.delete('path');
+    history.replaceState(null, '', url);
+  }
+
   function mount(id: string): void {
     if (!id) return;
+    if (id.startsWith(SCREEN)) {
+      const sc = screens.find((x) => SCREEN + x.id === id);
+      if (sc) openScreen(sc.example ?? sc.path);
+      return;
+    }
+    // A screen may be showing in this container — take it down before a region takes its place.
+    unmountScreen(root!);
     current = id;
     localStorage.setItem(STORAGE_KEY, id);
     // Changing region leaves whatever flow was showing behind with the region that had it.
@@ -693,7 +751,7 @@ markSandbox();
    */
   const publishControl = (): void => {
     (window as unknown as { __motuLagoonControl?: unknown }).__motuLagoonControl = {
-      regions: () => stations.map((x) => ({ id: x.id, label: x.label })),
+      regions: () => [...screenStations, ...stations.map((x) => ({ id: x.id, label: x.label }))],
       // `scenario` alongside `flow` for the same reason the dock needs both: an island target's
       // showing-state is its scenario, and without it the list could not light the current row.
       current: () => ({
@@ -711,7 +769,12 @@ markSandbox();
        * read rather than captured: the dock asks after every change, and a pill for a view the current
        * station cannot render would open the "no page declared" placeholder and read as a failure.
        */
-      views: () => (regionOverrides(overrides, current).page ? ['region', 'mountpoints', 'page'] : ['region', 'mountpoints']),
+      views: () =>
+        current.startsWith(SCREEN)
+          ? ['region']
+          : regionOverrides(overrides, current).page
+            ? ['region', 'mountpoints', 'page']
+            : ['region', 'mountpoints'],
       setView: (next: TideView) => onView(next),
       runFlow: (name: string | null) => onFlow(name),
       /**
@@ -995,6 +1058,9 @@ markSandbox();
       const url = new URL(location.href);
       url.searchParams.delete('target');
       url.searchParams.delete('scenario');
+      // And a screen's address, or reloading would reopen the screen the station was picked over.
+      url.searchParams.delete('screen');
+      url.searchParams.delete('path');
       url.searchParams.set('region', id);
       url.searchParams.delete('flow');
       url.searchParams.delete('step');
@@ -1149,6 +1215,16 @@ markSandbox();
   } else if (refused) {
     // Said above, in the banner and in `window.__motuLagoonState`. Nothing renders under it.
     root.replaceChildren();
+  } else if (screens.length && new URLSearchParams(location.search).has('screen')) {
+    // `?screen=<id>` (and `&path=` for a route with parameters) — a screen, by address.
+    const q = new URLSearchParams(location.search);
+    const sc = screens.find((x) => x.id === q.get('screen'));
+    if (!sc) {
+      // AN UNKNOWN SCREEN REFUSES. Falling back to a path made "?screen=nope" open the directory —
+      // a lagoon address that names nothing must not render something else.
+      reportState({ ok: false, target: 'this lagoon', kind: 'none', error: `no screen "${q.get('screen')}"`, available: screens.map((x) => x.id) });
+      root.replaceChildren();
+    } else openScreen(q.get('path') ?? sc.example ?? sc.path);
   } else if (ids.length) {
     mount(current);
   } else {

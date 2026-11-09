@@ -224,6 +224,20 @@ function renderRegionRoot(
   return createElement(declared.root as never, composed as never);
 }
 
+/**
+ * Tear down what `mountReactLagoon` put in a container: its React root and any channels it installed.
+ *
+ * A SCREEN mounts several regions into containers its own layout owns, and those containers go away
+ * when the screen does — so the regions in them have to be unmounted by whoever made them, or their
+ * stores keep their subscriptions and a polling source keeps fetching for a screen nobody is on.
+ */
+export function unmountReactLagoon(mountEl: HTMLElement): void {
+  roots.get(mountEl)?.unmount();
+  roots.delete(mountEl);
+  pageChannels.get(mountEl)?.();
+  pageChannels.delete(mountEl);
+}
+
 export function mountReactLagoon(
   mountEl: HTMLElement | null,
   config: ArchipelagoConfig,

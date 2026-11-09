@@ -11,6 +11,7 @@
 //
 // Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
 // (a browser per island), which belongs in CI or before a release, not in a tight loop.
+import { screenFindings } from '../lib/screens.mjs';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
 import { resolve } from 'node:path';
@@ -145,6 +146,10 @@ export async function checkCommand(argv) {
   // application composes none of it — which is exactly how a region can verify for a day without a
   // browser ever rendering it. Static, cheap, and it belongs in the same verdict.
   const integration = integrationResults();
+  // EXPERIMENTAL: the declared screens, and whether every navigation a region asks for goes somewhere.
+  // Null when the project declares no screens — then the section is not printed at all.
+  const screens = screenFindings();
+  const screensOk = !screens || screens.findings.every((f) => f.level !== 'error');
 
   // Last, and only when the rest holds up: it rewrites the host on disk (and restores it), so running
   // it after a failure that is already fatal buys nothing and costs a typecheck of the whole app.
@@ -159,7 +164,7 @@ export async function checkCommand(argv) {
     regionResults.every((r) => r.errors.length === 0);
   const removal = structureOk ? await runRemovalCheck(argv, { quiet: true }) : null;
 
-  const pass = structureOk && integrationOk && (removal?.pass ?? false);
+  const pass = structureOk && integrationOk && screensOk && (removal?.pass ?? false);
 
   if (argv.json) {
     console.log(
@@ -171,6 +176,7 @@ export async function checkCommand(argv) {
           islands: islandResults.map(summaryOf),
           archipelagos: regionResults.map(summaryOf),
           integration,
+          screens: screens?.findings ?? null,
           removal: removal ?? { skipped: 'structure checks failed first' },
         },
         null,
@@ -234,6 +240,14 @@ export async function checkCommand(argv) {
     for (const f of [...errs, ...warns]) {
       const again = unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
       console.log(`      ${f.level === 'error' ? color.red('✗') : color.yellow('!')} ${color.dim(f.check.padEnd(12))} ${f.msg}${again}`);
+    }
+  }
+
+  if (screens) {
+    console.log(color.bold('\nmotu check — screens') + color.dim('  (experimental)') + '\n');
+    for (const f of screens.findings) {
+      const mark = f.level === 'error' ? color.red('✗') : f.level === 'warn' ? color.yellow('!') : color.green('✓');
+      console.log(`  ${mark} ${color.dim(f.check.padEnd(20))}${f.level === 'ok' ? color.dim(f.msg) : f.msg}`);
     }
   }
 

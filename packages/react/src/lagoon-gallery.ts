@@ -550,7 +550,9 @@ markSandbox();
     reportState(
       opened
         ? { ok: true, target: `screen:${hit!.screen.id}`, kind: 'none' }
-        : { ok: false, target: 'this lagoon', kind: 'none', error: `no declared screen serves ${path}`, available: screens.map((x) => x.path) },
+        : hit
+          ? { ok: false, target: `screen:${hit.screen.id}`, kind: 'none', error: `screen "${hit.screen.id}" refuses ${path}: ${String(hit.screen.accepts?.(hit.params))}`, available: [hit.screen.example ?? hit.screen.path] }
+          : { ok: false, target: 'this lagoon', kind: 'none', error: `no declared screen serves ${path}`, available: screens.map((x) => x.path) },
     );
     controlChanged();
   }

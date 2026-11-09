@@ -115,6 +115,7 @@ function readScreens(sf) {
       }
     }
     if (id && path) out.push({ id, path, regions, line: call.getStartLineNumber() });
+    else out.push({ unread: true, line: call.getStartLineNumber(), text: (spec.getProperty('id')?.getText?.() ?? spec.getText()).slice(0, 60) });
   }
   return out;
 }
@@ -149,7 +150,19 @@ export function screenFindings() {
   const findings = [];
   const add = (level, check, msg) => findings.push({ level, check, msg });
   const sf = sourceFileAt(file, { allowJs: true, jsx: 4 });
-  const screens = readScreens(sf);
+  const all = readScreens(sf);
+  // A screen() whose id or path is not a plain string literal — a template, a helper's parameter — is
+  // a screen this check did not see. Said, never dropped: it once reported "8 screen(s)" over 21, and
+  // then called a route served by one of the unseen thirteen unserved.
+  const unreadScreens = all.filter((s) => s.unread);
+  const screens = all.filter((s) => !s.unread);
+  if (unreadScreens.length)
+    add(
+      'warn',
+      'screens-declared',
+      `${unreadScreens.length} screen(...) call(s) NOT read — write \`id\` and \`path\` as string literals: ` +
+        unreadScreens.map((s) => `${paths.rel(file)}:${s.line}`).join(', '),
+    );
   if (!screens.length) {
     add('error', 'screens-declared', `${paths.rel(file)} declares no screen(...) — nothing was examined, so nothing is proved`);
     return { findings, screens };
@@ -178,9 +191,24 @@ export function screenFindings() {
       else onScreen.add(id);
     }
   }
-  if (!findings.some((f) => f.level === 'error'))
+  if (!findings.some((f) => f.level === 'error' && f.check === 'screens-declared'))
     add('ok', 'screens-declared', `${screens.length} screen(s), unique routes, every slot a known region · ${onScreen.size} region(s) placed`);
 
+  // A region REFERENCED by a placed region's root (`slots: { x: { region: 'equipage' } }`) is on the
+  // screen too — inside its parent. Followed to a fixed point, so a reference of a reference counts.
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const id of [...onScreen]) {
+      const archFile = paths.archipelagoFile(id);
+      if (!existsSync(archFile)) continue;
+      for (const m of readFileSync(archFile, 'utf8').matchAll(/\bregion:\s*['"]([\w-]+)['"]/g)) {
+        if (regionIds.has(m[1]) && !onScreen.has(m[1])) {
+          onScreen.add(m[1]);
+          grew = true;
+        }
+      }
+    }
+  }
   const loose = [...regionIds].filter((id) => !onScreen.has(id)).sort();
   if (loose.length)
     add('warn', 'screen-coverage', `region(s) on no screen: ${loose.join(', ')} — reachable in the lagoon only on their own`);

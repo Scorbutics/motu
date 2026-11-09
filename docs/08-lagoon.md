@@ -291,22 +291,46 @@ screen({ id: 'chapters', path: '/chapters', layout: AppFrame,
   slots: { sidebar: shellArchipelago, main: notARegion('plain React — not surveyed yet') } })
 ```
 
-Pass `screens` to `startLagoon`. Screens appear in the panel above the regions (`▣`), and each is an
-address: `?screen=<id>`, plus `&path=/member/<id>` for a route with parameters (which must declare an
-`example` path to open at).
+Pass `screens` to `startLagoon`, or — for a project whose gallery entry the CLI generates — export
+them from the lagoon overrides module: `export const screens = [...]` in `lagoon.tsx`. Screens appear
+in the panel above the regions (`▣`), and each is an address: `?screen=<id>`, plus
+`&path=/member/<id>` for a route with parameters (which must declare an `example` path to open at).
+
+Three more fields, each found by putting screens on Peps:
+
+- `providers` — what the app renders AROUND the layout, outermost first, when the layout above it
+  cannot render here (a Next root layout draws `<html>`/`<body>`). The app's own components, listed:
+  Peps' sidebar needs the root layout's `CookieConsentProvider`.
+- `accepts(params)` — `true`, or why the lagoon cannot show those params. `path` is the APP's route,
+  so a link to any team is valid; but a region whose lagoon channel is fixed on one team would show
+  that team under another's id. The screen refuses instead, with the reason.
+- `notARegion(reason)` in a slot — a page that is not islanded yet, named rather than drawn.
 
 **What a screen is not.** It holds no state, declares no keys, writes or flows, and never becomes a
-bigger region. Each slot mounts its region exactly as the region's own station does — its seed, its
-channels, its providers — in its own root with its own store, created fresh for that screen. Nothing
-crosses between regions except what `host` gives each of them, which is what the page's own code
-`provide`s. If two regions on one screen need to WRITE the same key, they are one region.
+bigger region. Each slot renders its region exactly as the region's own station does — its seed, its
+channels, its providers, its own store — INSIDE the layout's React tree, so the layout's context
+reaches it as in the app (a separate root per region could never see Peps' member or clock
+providers). Nothing crosses between regions except that context and what `host` gives each of them,
+which is what the page's own code `provide`s. If two regions on one screen need to WRITE the same key,
+they are one region.
+
+**The layout stays mounted across navigation**, as a Next layout does: between two screens with the
+same layout and providers, only the slots change. A region on both (the demo's sidebar) stays mounted
+and receives the new screen's `host` values through `provide`; regions that leave are unmounted and
+forgotten, regions that arrive start fresh. Without this, every click rebuilt the layout, and Peps'
+"once per session" news modal reopened on every screen, over the sidebar.
 
 **Navigation follows declared routes.** A region's `host.navigate(path)` opens the screen that serves
-`path`. A path no screen serves is refused out loud: a banner, a console error, and
+`path`. So does the app's OWN navigation on a Next host: the adapter's lagoon stubs for `next/link` and
+`next/navigation` hand a `<Link>` click or `router.push` to the mounted screen, and `usePathname()` /
+`useParams()` report the screen's path, so the app's sidebar lights the right item. Outside a screen
+those stubs stay inert, as before (a link click is swallowed and logged, never followed). A path no screen serves is refused out loud: a banner, a console error, and
 `window.__motuScreen.unresolved`. `motu check — screens` does the same statically: routes unique,
-every slot a known region, every `host.navigate(...)` target in an archipelago resolved to a screen
-(literals, `'/prefix/' + id`, both sides of a ternary, every value of a path map). A target built some
-other way is reported as NOT CHECKED rather than passed.
+every slot a known region (a region REFERENCED by a placed one counts as placed), every
+`host.navigate(...)` target in an archipelago resolved to a screen (literals, `'/prefix/' + id`, both
+sides of a ternary, every value of a path map). A target built some other way, and a `screen(...)`
+whose `id` or `path` is not a string literal, is reported as NOT CHECKED rather than passed. The app's
+own `<Link href>`s are not read — only motu intents.
 
 **Know the limits.**
 - A target that MATCHES the wrong route passes. `/member/edit` is served by `/member/:memberId`, so a
@@ -315,8 +339,12 @@ other way is reported as NOT CHECKED rather than passed.
 - The main slot renders the REGION (its lagoon arrangement), not the page around it, so page-level
   chrome the app draws outside its regions does not appear. A region with `root` is where the two
   converge.
-- Regions are remounted on every navigation, including one the app keeps alive across routes (the
-  sidebar). Fine for previewing; it means a screen cannot show state that survives navigation.
+- Two stand-ins can disagree, and only a screen shows it: on Peps the page greeted "Ada" while the
+  sidebar, reading the member stub, said "Alice". Each region's evidence was consistent on its own.
+  A screen is the first place the app's stand-ins are seen side by side — treat what it shows as
+  findings about them.
+- A write the lagoon cannot persist (a dismissed coach mark, a "seen" flag) reappears whenever its
+  region remounts.
 - No flows, checks or snapshots run per screen yet: every check is still per region. A screen-level
   smoke check (every slot mounted and rendered) is the natural next step, and cross-region "journeys"
   are deliberately not — that is an end-to-end test.

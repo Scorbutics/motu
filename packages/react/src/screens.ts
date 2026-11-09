@@ -15,7 +15,7 @@
 //
 // The layout is the APPLICATION'S component — the same rule as a region's `root` and the lagoon's
 // `layout`: a second, hand-drawn copy of the arrangement is the drift this framework exists to avoid.
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { AnyArchipelagoConfig } from '@motu/core';
 
 /**
@@ -50,6 +50,13 @@ export interface ScreenConfig {
   path: string;
   /** The application's own layout component. Each key of `slots` is one of its props. */
   layout: ComponentType<Record<string, unknown>>;
+  /**
+   * What the app renders AROUND this layout, outermost first — the providers of the layouts above it
+   * that cannot themselves render here (a Next root layout draws <html>/<body> and loads fonts). The
+   * application's own components, listed, never re-implemented: Peps' dashboard sidebar needs the
+   * root layout's `CookieConsentProvider`, and without it threw before the screen drew anything.
+   */
+  providers?: ComponentType<{ children?: ReactNode }>[];
   /** Layout prop -> the region that fills it (or `notARegion(why)`). */
   slots: Record<string, ScreenSlot>;
   /**
@@ -60,6 +67,16 @@ export interface ScreenConfig {
   host?: (ctx: ScreenContext) => Record<string, Record<string, unknown>>;
   /** A concrete path to open the screen at, for a route with parameters. Defaults to `path`. */
   example?: string;
+  /**
+   * Which parameters the LAGOON can honour — `true`, or the reason it cannot.
+   *
+   * `path` is the APP's route, so a link to any team is a link the app serves and the static check
+   * accepts it. But a region's lagoon stand-ins are often fixed on one entity (a channel built on one
+   * team), and opening `/teams/<another>` would then show that one team under the other's id — the
+   * silent substitution motu refuses everywhere else. So the screen refuses those params out loud,
+   * with the reason, and serves the ones it can.
+   */
+  accepts?: (params: Record<string, string>) => true | string;
 }
 
 /** Declare a screen. Identity at runtime; the point is the type, and one place a check can read. */

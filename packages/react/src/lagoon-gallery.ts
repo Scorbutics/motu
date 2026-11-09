@@ -79,6 +79,13 @@ export interface LagoonConfig {
 export interface LagoonOverrides extends RegionOverrideMaps {
   /** Outward seam. Defaults to logging intents, which is what you want with no router present. */
   host?: HostBridge;
+  /**
+   * EXPERIMENTAL — the app's screens (see `screens.ts`). Exported from the project's `lagoon.tsx` as
+   * `export const screens = [...]`: the GENERATED gallery entry hands that whole module over as
+   * `overrides`, so a project whose entry the CLI writes gets screens by exporting them — no
+   * regeneration, no ejected entry. `StartLagoonOptions.screens` wins when both are given.
+   */
+  screens?: readonly ScreenConfig[];
   /** Run before anything mounts — e.g. standing up a fake host for a foreign-framework island. */
   setup?: () => void;
   /**
@@ -478,7 +485,7 @@ markSandbox();
         : 'region';
 
   // ---------------------------------------------------------------- screens (experimental) ----
-  const screens = opts.screens ?? [];
+  const screens = opts.screens ?? overrides.screens ?? [];
   const SCREEN = 'screen:';
   const screenStations = screens.map((sc) => ({ id: SCREEN + sc.id, label: `\u25A3 ${sc.label ?? sc.id}` }));
 

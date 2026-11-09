@@ -56,6 +56,9 @@ importers:
       '@motu/runtime':
         specifier: workspace:*
         version: link:../packages/runtime
+      '@motu/types':
+        specifier: workspace:*
+        version: link:../packages/types
       react:
         specifier: ^18.3.1
         version: 18.3.1

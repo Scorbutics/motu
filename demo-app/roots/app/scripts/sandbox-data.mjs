@@ -10,8 +10,8 @@
 // (which CI does not have) and would bake in `gen_random_uuid()` ids that change on every reset, so
 // a profile URL shared from the sandbox would die the next time someone rebuilt it.
 //
-// Ids are derived from `member_no` instead — stable, unique (the column is), and uuid-shaped so the
-// URL looks like the one the real app produces.
+// Ids are derived from `member_no` — stable, unique (the column is), uuid-shaped — and `seed.sql`
+// inserts the SAME ids, so a profile URL means the same member in the sandbox and the live app.
 //
 // Timeslots are NOT generated here: the seed computes them from `current_date`, so freezing them at
 // build time would show a calendar that drifts into the past. `browser-port.ts` runs the same rules

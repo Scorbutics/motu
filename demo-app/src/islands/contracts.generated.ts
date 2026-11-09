@@ -10,6 +10,10 @@
 import { islandElement } from '@motu/react';
 import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
 import type { ChapterCup as C_chapter_cup } from '../ui/chapter-cup/ChapterCup.js';
+import type { EventDetail as C_event_detail } from '../ui/event-detail/EventDetail.js';
+import type { EventFilters as C_event_filters } from '../ui/event-filters/EventFilters.js';
+import type { EventList as C_event_list } from '../ui/event-list/EventList.js';
+import type { EventsHeader as C_events_header } from '../ui/events-header/EventsHeader.js';
 import type { FreshUnlocks as C_fresh_unlocks } from '../ui/fresh-unlocks/FreshUnlocks.js';
 import type { HighScores as C_high_scores } from '../ui/high-scores/HighScores.js';
 import type { MemberActions as C_member_actions } from '../ui/member-actions/MemberActions.js';
@@ -21,17 +25,40 @@ import type { MemberHighlights as C_member_highlights } from '../ui/member-highl
 import type { MemberPlanTabs as C_member_plan_tabs } from '../ui/member-plan-tabs/MemberPlanTabs.js';
 import type { MemberQuickSearch as C_member_quick_search } from '../ui/member-quick-search/MemberQuickSearch.js';
 import type { MemberResults as C_member_results } from '../ui/member-results/MemberResults.js';
+import type { MyChapter as C_my_chapter } from '../ui/my-chapter/MyChapter.js';
+import type { MyEvents as C_my_events } from '../ui/my-events/MyEvents.js';
+import type { MyStanding as C_my_standing } from '../ui/my-standing/MyStanding.js';
 import type { ProfileHero as C_profile_hero } from '../ui/profile-hero/ProfileHero.js';
 import type { WeeklyQuest as C_weekly_quest } from '../ui/weekly-quest/WeeklyQuest.js';
 
 export const CONTRACTS = {
   'x-app-nav': {
-    input: ['section', 'dataSource'],
-    output: { onNavigate: 'app-navigate' },
+    input: ['section', 'dataSource', 'me'],
+    output: { onNavigate: 'app-navigate', onSwitchMember: 'member-switch' },
     effects: [],
   },
   'x-chapter-cup': {
     input: ['overview'],
+    output: {  },
+    effects: [],
+  },
+  'x-event-detail': {
+    input: ['events', 'selectedEventId', 'me', 'myRsvps', 'rsvp', 'attendees'],
+    output: { onRsvp: 'rsvp', onOpenMember: 'open-member' },
+    effects: [],
+  },
+  'x-event-filters': {
+    input: ['filter', 'events', 'me'],
+    output: { onFilterChange: 'filter-change' },
+    effects: [],
+  },
+  'x-event-list': {
+    input: ['events', 'filter', 'me', 'myRsvps', 'selectedEventId', 'eventsLoading'],
+    output: { onSelect: 'select' },
+    effects: [],
+  },
+  'x-events-header': {
+    input: ['events', 'myRsvps', 'me'],
     output: {  },
     effects: [],
   },
@@ -95,6 +122,21 @@ export const CONTRACTS = {
     output: {  },
     effects: [],
   },
+  'x-my-chapter': {
+    input: ['me', 'chapters', 'events', 'overview'],
+    output: { onOpenChapter: 'open-chapter' },
+    effects: [],
+  },
+  'x-my-events': {
+    input: ['events', 'myRsvps', 'me', 'rsvp', 'eventsLoading'],
+    output: { onRsvp: 'rsvp', onBrowse: 'browse' },
+    effects: [],
+  },
+  'x-my-standing': {
+    input: ['me', 'asOf', 'overview', 'myRsvps'],
+    output: {  },
+    effects: [],
+  },
   'x-profile-hero': {
     input: ['member', 'calendar', 'asOf', 'loading'],
     output: { onBack: 'profile-back' },
@@ -135,6 +177,14 @@ const _app_nav: ContractFitsComponent<typeof C_app_nav, 'x-app-nav'> = true;
 void _app_nav;
 const _chapter_cup: ContractFitsComponent<typeof C_chapter_cup, 'x-chapter-cup'> = true;
 void _chapter_cup;
+const _event_detail: ContractFitsComponent<typeof C_event_detail, 'x-event-detail'> = true;
+void _event_detail;
+const _event_filters: ContractFitsComponent<typeof C_event_filters, 'x-event-filters'> = true;
+void _event_filters;
+const _event_list: ContractFitsComponent<typeof C_event_list, 'x-event-list'> = true;
+void _event_list;
+const _events_header: ContractFitsComponent<typeof C_events_header, 'x-events-header'> = true;
+void _events_header;
 const _fresh_unlocks: ContractFitsComponent<typeof C_fresh_unlocks, 'x-fresh-unlocks'> = true;
 void _fresh_unlocks;
 const _high_scores: ContractFitsComponent<typeof C_high_scores, 'x-high-scores'> = true;
@@ -157,6 +207,12 @@ const _member_quick_search: ContractFitsComponent<typeof C_member_quick_search, 
 void _member_quick_search;
 const _member_results: ContractFitsComponent<typeof C_member_results, 'x-member-results'> = true;
 void _member_results;
+const _my_chapter: ContractFitsComponent<typeof C_my_chapter, 'x-my-chapter'> = true;
+void _my_chapter;
+const _my_events: ContractFitsComponent<typeof C_my_events, 'x-my-events'> = true;
+void _my_events;
+const _my_standing: ContractFitsComponent<typeof C_my_standing, 'x-my-standing'> = true;
+void _my_standing;
 const _profile_hero: ContractFitsComponent<typeof C_profile_hero, 'x-profile-hero'> = true;
 void _profile_hero;
 const _weekly_quest: ContractFitsComponent<typeof C_weekly_quest, 'x-weekly-quest'> = true;

@@ -25,6 +25,10 @@ body {
 .app__frame { min-height: 100vh; padding: 20px 12px 48px; box-sizing: border-box; }
 .app__sheet { max-width: 1360px; margin: 0 auto; padding: 12px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
 .app__side { flex: 1 1 180px; display: flex; }
+/* ABOVE THE PAGE. The bar's persona menu overlaps the page, and the bar paints in its own stacking
+   context (`.cl-aged` is a filter) — so without this, page content later in the tree painted OVER the
+   open menu, and the events header's text showed through it on a phone. */
+.app__side { position: relative; z-index: 5; }
 .app__side > * { flex: 1; }
 .app__main { flex: 999 1 760px; min-width: 0; display: flex; flex-direction: column; }
 /* The profile and add pages keep their own card design inside the sheet; the sheet is their margin. */

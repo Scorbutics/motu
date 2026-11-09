@@ -11,5 +11,5 @@ export const Shell = createRegion(shellArchipelago, {
   useHost: useHostBridge,
   // Both keys established before the first paint. `section` is null until the route is read, which
   // the bar renders as nothing lit — a designed state, not `undefined` reaching a component.
-  seed: { section: null, dataSource: 'sandbox' },
+  seed: { section: null, dataSource: 'sandbox', me: null },
 });

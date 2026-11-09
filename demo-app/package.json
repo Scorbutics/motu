@@ -15,7 +15,10 @@
     "./archipelagos/profile": "./src/archipelagos/profile/profile.archipelago.ts",
     "./archipelagos/shell": "./src/archipelagos/shell/shell.archipelago.ts",
     "./evidence/profile": "./src/shared/profile-evidence.ts",
-    "./evidence/club": "./src/shared/club-evidence.ts"
+    "./evidence/club": "./src/shared/club-evidence.ts",
+    "./archipelagos/events": "./src/archipelagos/events/events.archipelago.ts",
+    "./archipelagos/home": "./src/archipelagos/home/home.archipelago.ts",
+    "./evidence/events": "./src/shared/events-evidence.ts"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
@@ -24,7 +27,8 @@
     "@motu/contract": "workspace:*",
     "@motu/core": "workspace:*",
     "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*"
+    "@motu/runtime": "workspace:*",
+    "@motu/types": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.3.1",

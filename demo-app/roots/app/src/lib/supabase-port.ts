@@ -10,6 +10,7 @@ import type { MemberCriteria, MemberOrder } from 'demo-app';
 import { orderMembers } from 'demo-app';
 import type { MembersPort, MembersQueryResult } from 'demo-app';
 import type { AvailabilityPort, TimeslotRow } from 'demo-app';
+import type { ClubEvent, EventsPort } from 'demo-app';
 
 /** Substring filters: what a person types into a search box is a fragment, not an identifier. */
 const CONTAINS: (keyof MemberCriteria)[] = ['email', 'firstname', 'surname'];
@@ -74,8 +75,9 @@ export function supabaseMembersPort(client: SupabaseClient): MembersPort {
 /**
  * The client the app talks to Postgres through.
  *
- * `persistSession: false` because this directory has no login: every visitor is `anon`, and the
- * only thing the anon key may do is read (the table's RLS policy decides that, not this file).
+ * `persistSession: false` because this club has no login: every visitor is `anon`. The anon key may
+ * read everything and write exactly one table, `event_rsvps` — the RLS policies decide that, not this
+ * file (see the events migration for why that write is open to anyone).
  */
 export function membersClient(url: string, anonKey: string): SupabaseClient {
   return createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -109,6 +111,93 @@ export function supabaseAvailabilityPort(client: SupabaseClient): AvailabilityPo
       // would render the first while meaning the second.
       if (error) throw new Error(`availability query failed: ${error.message}`);
       return (data ?? []) as TimeslotRow[];
+    },
+  };
+}
+
+/**
+ * The events backend. SAME UNPROVEN INCH, same mitigation: what is decided lives in `eventsSource`
+ * and in the database's guard trigger; this file is the vendor's shape. Two things here no check in
+ * this project can confirm, so they are named: the embed `members!events_host_id_fkey` (the FK's
+ * default name in the migration), and `event_rsvps(count)` coming back as `[{ count }]`.
+ */
+type EventDbRow = {
+  id: string;
+  title: string;
+  kind: ClubEvent['kind'];
+  chapter: string | null;
+  starts_at: string;
+  minutes: number;
+  venue: string;
+  capacity: number;
+  blurb: string;
+  host: { id: string; firstname: string; surname: string } | null;
+  event_rsvps: { count: number }[];
+};
+
+export function supabaseEventsPort(client: SupabaseClient): EventsPort {
+  return {
+    async upcoming(fromIso) {
+      const { data, error } = await client
+        .from('events')
+        .select('id,title,kind,chapter,starts_at,minutes,venue,capacity,blurb,host:members!events_host_id_fkey(id,firstname,surname),event_rsvps(count)')
+        .gte('starts_at', fromIso)
+        .order('starts_at')
+        // A ceiling, not a page: the club plans weeks ahead, not years. 200 is far past any season.
+        .limit(200);
+      if (error) throw new Error(`events query failed: ${error.message}`);
+      return ((data ?? []) as unknown as EventDbRow[]).map((r) => ({
+        id: r.id,
+        title: r.title,
+        kind: r.kind,
+        chapter: r.chapter,
+        startsAt: new Date(r.starts_at).toISOString(),
+        minutes: r.minutes,
+        venue: r.venue,
+        capacity: r.capacity,
+        going: r.event_rsvps?.[0]?.count ?? 0,
+        host: r.host ? { id: r.host.id, name: `${r.host.firstname} ${r.host.surname}` } : null,
+        blurb: r.blurb,
+      }));
+    },
+    async rsvpsOf(memberId, fromIso) {
+      // Upcoming only, filtered through the embedded event (`!inner` makes the filter drop the RSVP
+      // row, not just null the embed). Bounded by the calendar: one row per event.
+      const { data, error } = await client
+        .from('event_rsvps')
+        .select('event_id,events!inner(starts_at)')
+        .eq('member_id', memberId)
+        .gte('events.starts_at', fromIso)
+        .limit(500);
+      if (error) throw new Error(`rsvps query failed: ${error.message}`);
+      return (data ?? []).map((r: { event_id: string }) => r.event_id);
+    },
+    async attendees(eventId) {
+      // Bounded by the event's capacity (at most 80 in the seed).
+      const { data, error } = await client
+        .from('event_rsvps')
+        .select('member_id,created_at,members(firstname,surname,chapter)')
+        .eq('event_id', eventId)
+        .order('created_at')
+        .order('member_id')
+        .limit(500);
+      if (error) throw new Error(`attendees query failed: ${error.message}`);
+      type Row = { member_id: string; members: { firstname: string; surname: string; chapter: string | null } | null };
+      return ((data ?? []) as unknown as Row[]).map((r) => {
+        const first = r.members?.firstname ?? '';
+        const last = r.members?.surname ?? '';
+        return { id: r.member_id, name: `${first} ${last}`.trim(), initials: `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase(), chapter: r.members?.chapter ?? null };
+      });
+    },
+    async rsvp(eventId, memberId) {
+      // The guard trigger's refusal arrives as the error MESSAGE (`rsvp_refused:full`); the source
+      // maps it. Rethrown with the message intact, or the mapping would see only our prefix.
+      const { error } = await client.from('event_rsvps').insert({ event_id: eventId, member_id: memberId });
+      if (error) throw new Error(error.message);
+    },
+    async cancel(eventId, memberId) {
+      const { error } = await client.from('event_rsvps').delete().eq('event_id', eventId).eq('member_id', memberId);
+      if (error) throw new Error(`cancel failed: ${error.message}`);
     },
   };
 }

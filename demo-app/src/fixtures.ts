@@ -25,6 +25,15 @@ import { scenarios as chapterCupScenarios } from './islands/chapter-cup/fixtures
 import { scenarios as freshUnlocksScenarios } from './islands/fresh-unlocks/fixtures.mock.js';
 import { scenarios as shellFlows } from './archipelagos/shell/shell.evidence.js';
 import { scenarios as membersFlows } from './archipelagos/members/members.evidence.js';
+import { scenarios as eventsHeaderScenarios } from './islands/events-header/fixtures.mock.js';
+import { scenarios as eventFiltersScenarios } from './islands/event-filters/fixtures.mock.js';
+import { scenarios as eventListScenarios } from './islands/event-list/fixtures.mock.js';
+import { scenarios as eventDetailScenarios } from './islands/event-detail/fixtures.mock.js';
+import { scenarios as myStandingScenarios } from './islands/my-standing/fixtures.mock.js';
+import { scenarios as myEventsScenarios } from './islands/my-events/fixtures.mock.js';
+import { scenarios as myChapterScenarios } from './islands/my-chapter/fixtures.mock.js';
+import { scenarios as eventsFlows } from './archipelagos/events/events.evidence.js';
+import { scenarios as homeFlows } from './archipelagos/home/home.evidence.js';
 
 export const ALL_FIXTURES: Fixture[] = [...memberResults];
 
@@ -57,6 +66,13 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
   'x-high-scores': highScoresScenarios,
   'x-chapter-cup': chapterCupScenarios,
   'x-fresh-unlocks': freshUnlocksScenarios,
+  'x-events-header': eventsHeaderScenarios,
+  'x-event-filters': eventFiltersScenarios,
+  'x-event-list': eventListScenarios,
+  'x-event-detail': eventDetailScenarios,
+  'x-my-standing': myStandingScenarios,
+  'x-my-events': myEventsScenarios,
+  'x-my-chapter': myChapterScenarios,
 };
 
 /**
@@ -75,4 +91,6 @@ export const ALL_FLOWS: Record<string, RegionScenario[]> = {
   users: usersFlows,
   profile: profileFlows,
   shell: shellFlows,
+  events: eventsFlows,
+  home: homeFlows,
 };

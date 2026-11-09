@@ -8,6 +8,7 @@ import { ELEMENT_REGISTRY, getArchipelago, ALL_FIXTURES, ALL_ROLES } from 'demo-
 import 'demo-app/fonts';
 import css from 'demo-app/styles.css?inline';
 import { setupLagoonAngularHost } from './angular-host.js';
+import { eventsRegion, homeRegion } from './regions/club.js';
 
 // Injected by vite.config from MOTU_TARGET / MOTU_FIT. Empty target => the members archipelago.
 declare const __MOTU_TARGET__: string; // "island:x-company-lookup" | "archipelago:members"
@@ -43,7 +44,9 @@ const props = {
 };
 
 bootstrapLagoon({
-  overrides: { props },
+  // The two regions whose keys come from a SOURCE: the channel has to be installed here too, because
+  // this is the entry `--runtime` drives (see `regions/club.ts`).
+  overrides: { props, regions: [eventsRegion, homeRegion] },
   elements: ELEMENT_REGISTRY,
   css,
   fixtures: ALL_FIXTURES,

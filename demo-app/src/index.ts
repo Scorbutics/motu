@@ -8,6 +8,10 @@ export type { MembersArchipelagoOptions } from './archipelagos/members/members.a
 export { usersArchipelago } from './archipelagos/users/users.archipelago.js';
 export { profileArchipelago } from './archipelagos/profile/profile.archipelago.js';
 export { shellArchipelago } from './archipelagos/shell/shell.archipelago.js';
+export { eventsArchipelago } from './archipelagos/events/events.archipelago.js';
+export { homeArchipelago } from './archipelagos/home/home.archipelago.js';
+export type { EventsRegion } from './archipelagos/events/events.region.js';
+export type { HomeRegion } from './archipelagos/home/home.region.js';
 export type { AppSection, DataSource } from './ui/app-nav/AppNav.js';
 export { ARCHIPELAGOS, getArchipelago } from './archipelagos/registry.js';
 
@@ -35,3 +39,18 @@ export type { AvailabilityPort, AvailabilitySource, TimeslotRow } from './shared
 export { SLOT_KIND_LABELS, emptyCalendar } from './shared/availability-types.js';
 export type { Calendar, DayAvailability, SlotKind, Timeslot } from './shared/availability-types.js';
 export type { MotuTheme, MotuFit, LegacyStrategy } from '@motu/core';
+
+// The club's chapters and events — the second half of the app, beside the directory.
+export { CHAPTERS, chapterBySlug, chapterByName, memberIdOf } from './shared/chapter-types.js';
+export type { Chapter } from './shared/chapter-types.js';
+export { EVENT_KIND_LABELS, RSVP_REFUSAL_TEXT, IDLE_RSVP, ALL_EVENTS, filterEvents, spotsLeft } from './shared/event-types.js';
+export type { ClubEvent, EventKind, Attendee, RsvpRefusal, RsvpState, EventFilter } from './shared/event-types.js';
+export { eventsSource, createEventsSource, refusalOf } from './shared/events-source.js';
+export type { EventsPort, EventsPortLike, EventsSource, EventsSourceRegion, EventsKeys } from './shared/events-source.js';
+export { seedEventsPort, CHAPTER_NAMES } from './shared/seed-events-port.js';
+export type { RsvpStore } from './shared/seed-events-port.js';
+export { seedEvents, seedRsvps, EVENT_TEMPLATES } from './shared/events-seed.js';
+export { PERSONAS } from './shared/personas.js';
+export type { Persona } from './shared/personas.js';
+export { memberStats as statsOf, shortChapter } from './shared/gamification.js';
+export { chapterColor, grouped, initials, CHAPTER_COLORS } from './ui/club/club-bits.js';

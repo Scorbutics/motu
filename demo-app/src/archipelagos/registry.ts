@@ -6,12 +6,16 @@ import { membersArchipelago } from './members/members.archipelago.js';
 import { profileArchipelago } from './profile/profile.archipelago.js';
 import { shellArchipelago } from './shell/shell.archipelago.js';
 import { usersArchipelago } from './users/users.archipelago.js';
+import { eventsArchipelago } from './events/events.archipelago.js';
+import { homeArchipelago } from './home/home.archipelago.js';
 
 export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   members: membersArchipelago(),
   [profileArchipelago.id]: profileArchipelago,
   [shellArchipelago.id]: shellArchipelago,
   [usersArchipelago.id]: usersArchipelago,
+  [eventsArchipelago.id]: eventsArchipelago,
+  [homeArchipelago.id]: homeArchipelago,
 };
 
 /** Resolve an archipelago config by id (undefined if unknown). */

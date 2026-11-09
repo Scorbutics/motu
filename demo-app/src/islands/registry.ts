@@ -6,6 +6,10 @@ import type { ElementSpec } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
 import { appNavElement } from './app-nav/element';
 import { chapterCupElement } from './chapter-cup/element';
+import { element as eventDetailElement } from './event-detail/element';
+import { element as eventFiltersElement } from './event-filters/element';
+import { element as eventListElement } from './event-list/element';
+import { element as eventsHeaderElement } from './events-header/element';
 import { freshUnlocksElement } from './fresh-unlocks/element';
 import { highScoresElement } from './high-scores/element';
 import { memberActionsElement } from './member-actions/element';
@@ -18,6 +22,9 @@ import { memberPlanTabsElement } from './member-plan-tabs/element';
 import { memberQuickSearchElement } from './member-quick-search/element';
 import { memberResultsElement } from './member-results/element';
 import { memberSearchNgElement } from './member-search-ng/element';
+import { element as myChapterElement } from './my-chapter/element';
+import { element as myEventsElement } from './my-events/element';
+import { element as myStandingElement } from './my-standing/element';
 import { profileHeroElement } from './profile-hero/element';
 import { weeklyQuestElement } from './weekly-quest/element';
 
@@ -33,7 +40,7 @@ import { weeklyQuestElement } from './weekly-quest/element';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, chapterCupElement, freshUnlocksElement, highScoresElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberHighlightsElement, memberPlanTabsElement, memberQuickSearchElement, memberResultsElement, memberSearchNgElement, profileHeroElement, weeklyQuestElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, chapterCupElement, eventDetailElement, eventFiltersElement, eventListElement, eventsHeaderElement, freshUnlocksElement, highScoresElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberHighlightsElement, memberPlanTabsElement, memberQuickSearchElement, memberResultsElement, memberSearchNgElement, myChapterElement, myEventsElement, myStandingElement, profileHeroElement, weeklyQuestElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -43,6 +50,10 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, chapterCupElement
 export interface ElementTypes {
   'x-app-nav': typeof appNavElement;
   'x-chapter-cup': typeof chapterCupElement;
+  'x-event-detail': typeof eventDetailElement;
+  'x-event-filters': typeof eventFiltersElement;
+  'x-event-list': typeof eventListElement;
+  'x-events-header': typeof eventsHeaderElement;
   'x-fresh-unlocks': typeof freshUnlocksElement;
   'x-high-scores': typeof highScoresElement;
   'x-member-actions': typeof memberActionsElement;
@@ -55,6 +66,9 @@ export interface ElementTypes {
   'x-member-quick-search': typeof memberQuickSearchElement;
   'x-member-results': typeof memberResultsElement;
   'x-member-search-ng': typeof memberSearchNgElement;
+  'x-my-chapter': typeof myChapterElement;
+  'x-my-events': typeof myEventsElement;
+  'x-my-standing': typeof myStandingElement;
   'x-profile-hero': typeof profileHeroElement;
   'x-weekly-quest': typeof weeklyQuestElement;
 }

@@ -10,26 +10,12 @@
 // STAGE ONE. The islands are placed in the page's own JSX; the region's `layout` template is what
 // the lagoon renders, a second description of the same arrangement using the same classes. The
 // region earns `root` when the AngularJS ocean no longer embeds it through that template.
-import { useEffect, useState } from 'react';
-import { clubSource, todayIso, type ClubOverview } from 'demo-app';
+import { useEffect } from 'react';
+import { todayIso } from 'demo-app';
 import { Members } from '../motu/members-region.js';
-import { appPorts, IN_BROWSER_DATA } from '../lib/app-data.js';
-
-/** The club's game state for today, computed once per visit from every member. */
-function useClubOverview(asOf: string): ClubOverview | null {
-  const [overview, setOverview] = useState<ClubOverview | null>(null);
-  useEffect(() => {
-    let live = true;
-    clubSource(appPorts().members)
-      .overview(asOf)
-      .then((o) => live && setOverview(o))
-      .catch((err: unknown) => console.error('club overview failed', err));
-    return () => {
-      live = false;
-    };
-  }, [asOf]);
-  return overview;
-}
+import { IN_BROWSER_DATA } from '../lib/app-data.js';
+// The club's game state for today, computed once per visit from every member — shared with My club.
+import { useClubOverview } from '../lib/club-overview.js';
 
 /** Feeds the region its three host-fed keys. Inside the provider, because `provide` reaches it there. */
 function MembersFeed() {

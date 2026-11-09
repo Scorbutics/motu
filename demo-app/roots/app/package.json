@@ -10,7 +10,8 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "sandbox:data": "node scripts/sandbox-data.mjs",
-    "build:sandbox": "node scripts/sandbox-data.mjs && VITE_DATA_SOURCE=browser vite build --outDir dist-sandbox && cp dist-sandbox/index.html dist-sandbox/404.html"
+    "build:sandbox": "node scripts/sandbox-data.mjs && VITE_DATA_SOURCE=browser vite build --outDir dist-sandbox && cp dist-sandbox/index.html dist-sandbox/404.html",
+    "seed:club": "node --import tsx scripts/seed-club.mjs"
   },
   "dependencies": {
     "@motu/adapter-angularjs": "workspace:*",

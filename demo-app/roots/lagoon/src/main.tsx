@@ -39,6 +39,7 @@ import {
   couplingOn,
 } from '@motu/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, shellArchipelago, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
+import { eventsRegion, homeRegion, SIGNED_IN } from './regions/club.js';
 // The profile region's own evidence rows — the member and calendar its flows already speak — rather
 // than a fourth copy of the vocabulary written for the gallery.
 import { DENNIS, OPEN_CALENDAR } from 'demo-app/evidence/profile';
@@ -134,8 +135,13 @@ startLagoon({
         seed: { criteria: {}, overview: CLUB, asOf: EVIDENCE_DAY, dataSource: 'sandbox', selectedMember: null, resultCount: null },
       }),
       overridesFor(usersArchipelago, { seed: { criteria: {} } }),
-      // THE SHELL, as the sandbox build opens it: in the directory, on the committed seed.
-      overridesFor(shellArchipelago, { seed: { section: 'directory', dataSource: 'sandbox' } }),
+      // THE SHELL, as the sandbox build opens it: in the directory, on the committed seed, signed in as
+      // the first persona — what a first visit to the app looks like.
+      overridesFor(shellArchipelago, { seed: { section: 'directory', dataSource: 'sandbox', me: SIGNED_IN } }),
+      // THE EVENTS PAGE and MY CLUB: the app's own events source over the seed (`regions/club.ts`,
+      // shared with the focused entry the checks drive).
+      eventsRegion,
+      homeRegion,
       // THE PROFILE, opened on a member who has been resolved.
       //
       // The page's resting state (`member: null`) is the hero's "Select a member" and has its own

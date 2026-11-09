@@ -10,9 +10,9 @@
 // precisely because everything that needs the vendor lives in files like this one.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { availabilitySource, membersSource } from 'demo-app';
-import type { AvailabilityPort, AvailabilitySource, MembersPort, MembersSource } from 'demo-app';
-import { membersClient, supabaseAvailabilityPort, supabaseMembersPort } from './supabase-port.js';
-import { browserAvailabilityPort, browserMembersPort } from './browser-port.js';
+import type { AvailabilityPort, AvailabilitySource, EventsPort, MembersPort, MembersSource } from 'demo-app';
+import { membersClient, supabaseAvailabilityPort, supabaseEventsPort, supabaseMembersPort } from './supabase-port.js';
+import { browserAvailabilityPort, browserEventsPort, browserMembersPort } from './browser-port.js';
 
 /**
  * TRUE IN THE PUBLIC SANDBOX BUILD (`pnpm build:sandbox`), which has no server: the ports are then
@@ -44,6 +44,7 @@ export function appClient(): SupabaseClient {
 export interface AppPorts {
   members: MembersPort;
   availability: AvailabilityPort;
+  events: EventsPort;
 }
 
 let ports: AppPorts | null = null;
@@ -52,10 +53,10 @@ let ports: AppPorts | null = null;
 export function appPorts(): AppPorts {
   if (ports) return ports;
   if (IN_BROWSER_DATA) {
-    ports = { members: browserMembersPort(), availability: browserAvailabilityPort() };
+    ports = { members: browserMembersPort(), availability: browserAvailabilityPort(), events: browserEventsPort() };
   } else {
     const c = appClient();
-    ports = { members: supabaseMembersPort(c), availability: supabaseAvailabilityPort(c) };
+    ports = { members: supabaseMembersPort(c), availability: supabaseAvailabilityPort(c), events: supabaseEventsPort(c) };
   }
   return ports;
 }

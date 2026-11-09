@@ -9,17 +9,25 @@
       "label": "Shell",
       "order": 0
     },
+    "home": {
+      "label": "My club",
+      "order": 1
+    },
     "members": {
       "label": "Members",
-      "order": 1
+      "order": 2
+    },
+    "events": {
+      "label": "Events",
+      "order": 3
     },
     "users": {
       "label": "Users",
-      "order": 2
+      "order": 4
     },
     "profile": {
       "label": "Profile",
-      "order": 3
+      "order": 5
     }
   }
 }

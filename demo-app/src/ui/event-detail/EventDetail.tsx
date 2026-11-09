@@ -90,8 +90,9 @@ export function EventDetail({ events = [], selectedEventId = null, me = null, my
     // A FULL EVENT OFFERS NO RSVP. It used to say "Full — try anyway": a button inviting an action the
     // database refuses every time, which a fresh-eyes review rightly called out. Counts are refetched
     // after every RSVP on the page, so a place that frees up brings the button back.
+    // Once the club has REFUSED for "full", its own sentence below says it — no second hint above it.
     action = full ? (
-      <p className="cl-evd__hint">Every place is taken. One opens up when somebody cancels.</p>
+      refusal === 'full' ? null : <p className="cl-evd__hint">Every place is taken. One opens up when somebody cancels.</p>
     ) : (
       <button
         type="button"

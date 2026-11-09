@@ -34,7 +34,7 @@ export { traced, traceModule, hostCalls, calledModules, resetHostCalls, tracedEx
 export type { HostCall, Outbound, OutboundVia, LiveCall, LiveCallStart, LiveCallEnd } from './provenance';
 export { checkCatalogue } from './catalogue';
 export type { CatalogueMember, CatalogueReport, CatalogueCheckInput } from './catalogue';
-export { pageOf, channelFrom, rawChannel, channelRegionId, slotNameOf, slotShows, regionRefOf, regionRefs, regionRefGraph, regionRefProblems, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, disposeArchipelago, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago, restartRegionChannels } from './archipelago';
+export { pageOf, channelFrom, rawChannel, channelRegionId, slotNameOf, slotShows, regionRefOf, regionRefs, regionRefGraph, regionRefProblems, answerHostIntent, archipelago, bindEntries, hostFedKeys, regionIdOfStore, applyOutput, outputEvents, writtenKeys, defineArchipelago, mountIsland, getArchipelagoLayout, getArchipelagoSlots, getArchipelagoStore, disposeArchipelago, pinRegionKeys, archipelagoConfigs, getSlotStore, seededValue, getMountedIslands, subscribeMounts, observeHostIntents, registerMountedIsland, provideToArchipelago, seedArchipelago, restartRegionChannels } from './archipelago';
 export type {
   HostBridge,
   IslandContext,

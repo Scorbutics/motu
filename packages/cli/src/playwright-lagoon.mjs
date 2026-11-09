@@ -2,6 +2,7 @@
 // MOTU_TARGET=island:<tag>) and drives it with Playwright/Chromium, so verification exercises real
 // layout, CSS and paint — not just an in-process DOM. Exposes runLagoon() for `motu island verify`;
 // also runnable directly for a screenshot: `node --import tsx playwright-lagoon.mjs <tag> <fit> [screenshotPath]`.
+import { judgeRenders } from './lib/data-flow.mjs';
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -374,6 +375,19 @@ async function setupPageDiagnostics(page, diagnostics) {
       // Its wrapper carries the tag instead (display:contents, so it is the same box as the content).
       if (!el) el = document.querySelector('[data-motu-island="' + t + '"]');
       return el;
+    };
+    // EXPAND printf-style console.error before it leaves the page. React logs its warnings as a
+    // format string plus arguments ("Each child in a list should have a unique \"key\" prop.%s%s"),
+    // and the text Playwright reports is the bare format — the component that broke the rule was in
+    // the arguments and never reached the finding.
+    const origError = console.error.bind(console);
+    console.error = (...args) => {
+      if (typeof args[0] === 'string' && /%[sdifoOc]/.test(args[0])) {
+        let rest = args.slice(1);
+        const text = args[0].replace(/%[sdifoOc]/g, (m) => (rest.length ? (m === '%c' ? (rest.shift(), '') : String(rest.shift())) : m));
+        return origError(text, ...rest);
+      }
+      return origError(...args);
     };
     window.addEventListener('unhandledrejection', (e) => {
       const r = e && e.reason;
@@ -1619,6 +1633,9 @@ async function provideScenario(page, seed, { settleMs = 150, tag, remount = true
     // Tolerated when absent: an older host bundle has no `reset`, and the lane should degrade to the
     // previous behaviour rather than fail with a TypeError from inside a page evaluate.
     on?.reset?.(owned);
+    // THE SCENARIO'S KEYS ARE ITS OWN: pinned before they are provided, so a source the reset just
+    // restarted cannot replace them when it answers (the React harness exposes `pin`).
+    window.__motuLagoon?.pin?.(Object.keys(s || {}));
     if (provide) for (const [k, v] of Object.entries(s || {})) provide(k, v);
 
     if (!remount) return;
@@ -1777,10 +1794,9 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     // differ" into a boolean, and the caller could only say "rendered identically" — which is a lie
     // when the truth is that one scenario rendered NOTHING. That message sent someone looking for a
     // bind gap when the actual answer was an empty state the island renders on purpose.
-    const empty = outputs.map((o, i) => (o.trim().length ? null : (scenarios[i]?.name ?? `#${i + 1}`))).filter(Boolean);
-    const distinctOutputs = new Set(outputs).size;
-    const differentiates = empty.length === 0 && distinctOutputs > 1;
-    return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics, fixtureCoverage, inertInteractions, networkEscapes, portals };
+    // A scenario may DECLARE that it renders nothing (`blank: 'why'`) — see lib/data-flow.mjs.
+    const judged = judgeRenders(outputs, scenarios);
+    return { ...judged, scenarioCount: scenarios.length, mounted: true, diagnostics, fixtureCoverage, inertInteractions, networkEscapes, portals };
   });
 }
 

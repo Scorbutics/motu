@@ -3,7 +3,7 @@
 // <motu-island slot="…"> markers; all composition lives here, shipped in the composition root.
 
 import { Store, declareProducers, declareReaders, noteIslandOutput } from './store';
-import { installChannels, type Channel } from './channel';
+import { installChannels, rawStore, type Channel } from './channel';
 import { offerRegionToCoverage } from './sandbox';
 import { runWithWriteSource, currentWriteSource } from './store';
 import { runWithSource } from './provenance';
@@ -1305,6 +1305,8 @@ export function channelFrom<
     const publish = () => {
       const state = source.getState() as Record<string, unknown>;
       for (const key of declared.produces) {
+        // A key a SCENARIO seeded is the scenario's — see `pinRegionKeys`.
+        if (pinnedKeys.get(rawStore(store))?.has(key)) continue;
         // A key an island UPDATES is seeded, not written: the page establishing a value is first
         // paint, and writing it from the host is the ownership violation the store guard reports.
         if (islandOwned.has(key)) seedArchipelago(spec.to.id, key, state[key]);
@@ -1456,7 +1458,8 @@ export function applyOutput(spec: IslandSpec, eventName: string, detail: unknown
  * region's NAME to look anything up that is keyed by region — the coverage corpus, to begin with.
  */
 export function regionIdOfStore(store: Store): string | null {
-  for (const [id, s] of stores) if (s === store) return id;
+  const raw = rawStore(store);
+  for (const [id, s] of stores) if (s === raw) return id;
   return null;
 }
 
@@ -1475,9 +1478,35 @@ export function hostFedKeys(config: AnyArchipelagoConfig): Set<string> {
 }
 
 /**
- * Registers an archipelago. Each island becomes mountable by slot, all sharing one store and host.
- * Returns the store so a composition root can seed or observe it.
+ * Keys a SCENARIO seeded, per region, which the region's declared channels must not overwrite.
+ *
+ * An island scenario is the island's whole world; the region's sources still run (an island may need
+ * keys only a source produces) but a source answering a moment AFTER the seed used to replace it —
+ * Peps' `team-settings` seeded `team: MISSION`, the team source published `team: CONSEIL`, and whether a
+ * check saw the mission or the Conseil depended on which landed first. Lagoon-only: set by the lagoon
+ * harness when it applies a scenario, cleared when it resets the region. Never set on a live page.
  */
+//
+// Looked up by the RAW store (`rawStore`): under DEBUG a channel writes through an instrumenting Proxy,
+// which is never `===` the registered store, and the pin silently missed it.
+const pinnedKeys = new WeakMap<Store, Set<string>>();
+
+/**
+ * Pins by region id, OUTLIVING the store. A lagoon mount can dispose and redefine a region (a remount,
+ * React's double effect), and a pin consumed by the first store left the second one unpinned — the
+ * source then overwrote the scenario on the store that was actually on screen.
+ */
+const pinsById = new Map<string, readonly string[]>();
+
+export function pinRegionKeys(id: string, keys: readonly string[]): void {
+  if (keys.length) pinsById.set(id, keys);
+  else pinsById.delete(id);
+  const store = stores.get(id);
+  if (!store) return;
+  if (keys.length) pinnedKeys.set(store, new Set(keys));
+  else pinnedKeys.delete(store);
+}
+
 /**
  * Forget a region entirely: its store, its slots, its channels. The next `defineArchipelago` for the
  * same id starts from scratch — its own seed, its own host bridge, its sources answering anew.
@@ -1490,6 +1519,8 @@ export function hostFedKeys(config: AnyArchipelagoConfig): Set<string> {
  * that first built it. Never called on a live application path.
  */
 export function disposeArchipelago(id: string): void {
+  const pinnedStore = stores.get(id);
+  if (pinnedStore) pinnedKeys.delete(pinnedStore);
   const store = stores.get(id);
   regionChannels.get(id)?.dispose();
   regionChannels.delete(id);
@@ -1502,6 +1533,10 @@ export function disposeArchipelago(id: string): void {
   layouts.delete(id);
 }
 
+/**
+ * Registers an archipelago. Each island becomes mountable by slot, all sharing one store and host.
+ * Returns the store so a composition root can seed or observe it.
+ */
 export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOptions = {}): Store {
   const store = new Store(opts.seed);
   // Who owns which key, for the store's write check. A seed is not a write (it goes through the
@@ -1541,6 +1576,8 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
     slots.set(island.slot, { spec: island, store, host });
   }
   stores.set(config.id, store);
+  const pinned = pinsById.get(config.id);
+  if (pinned) pinnedKeys.set(store, new Set(pinned));
   configs.set(config.id, config as AnyArchipelagoConfig);
   archSlots.set(config.id, config.islands.map((i) => i.slot));
   if (config.layout) {

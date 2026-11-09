@@ -22,6 +22,7 @@ import {
   resetIslandOutputs,
   provideToArchipelago,
   restartRegionChannels,
+  pinRegionKeys,
   runWithWriteSource,
   seedArchipelago,
 } from '@motu/core';
@@ -38,6 +39,8 @@ export function lagoonHarness(
     archipelago: config.id,
     //  - provide: feed a host value into the region (the data-flow check).
     provide: (key, value) => provideToArchipelago(config.id, key, value),
+    //  - pin: the keys the current SCENARIO seeded — the region's sources may not overwrite them.
+    pin: (keys: string[]) => pinRegionKeys(config.id, keys),
     //  - seed: ESTABLISH a value rather than update one. The wiring probe puts a produced key back the
     //    way it found it, and doing that through `provide` made the harness itself look like a host
     //    reaching into island-owned state — motu's ownership guard fired on every probed key. A
@@ -90,6 +93,8 @@ export function lagoonHarness(
     //    scenario. Kept separate from `remount` so a lane that measures pixels can reset without
     //    restarting the entrance animations a fresh mount would replay.
     reset: (keys) => {
+      // The last scenario's pins go with it.
+      pinRegionKeys(config.id, []);
       getArchipelagoStore(config.id)?.clear(keys);
       // BACK TO WHAT THE PAGE ESTABLISHES, not to empty. The region's own seed is applied once, when
       // the store is built — so forgetting a key the page seeded and stopping there would measure every

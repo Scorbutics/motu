@@ -10,12 +10,18 @@ export const fixtures = [];
 export const roles: string[] = [];
 
 export const scenarios: Scenario[] = [
-  // NOT HERE: the two CLOSED states (over five repositories, and over an empty host). Closed, the
-  // palette renders NOTHING — correctly — and `data-flow` cannot compare a blank render against the
-  // others: "if its empty state is deliberate, that scenario does not belong here". Both sank
-  // `motu check --runtime` on every push from 5 Nov until they were taken out. What they pinned — no
-  // scrim leaking while closed — is a property of the PAGE around the palette, so it belongs in a
-  // region flow or a host test rather than in an island scenario that the comparison refuses.
+  {
+    // Closed. The component renders NOTHING, which is a state worth pinning: it is what every visitor
+    // who never presses ⌘K sees, and an overlay that leaked a scrim would be invisible in every other
+    // check and obvious here — `blank` ASSERTS the nothing, so a leaked scrim fails `data-flow`.
+    //
+    // SEEDED false, not omitted. An absent prop falls back to the component's default and an explicit
+    // false is a value the region produced; `input-coverage` counts them apart, and it is right to —
+    // only the second is what a region that has been opened and closed again actually holds.
+    name: 'closed, which is almost always',
+    seed: { repos: REPOS, open: false },
+    blank: 'closed, the palette draws nothing — no scrim, no dialog',
+  },
   {
     // Open with nothing typed. MORE THAN IT SHOWS: five repositories with their lagoons and two
     // groups make twelve entries and the palette holds eight, so this is also the state where the
@@ -48,5 +54,11 @@ export const scenarios: Scenario[] = [
     // asked for: every seeded input crossed, rather than varied one at a time.
     name: 'open over an empty host',
     seed: { repos: [], open: true },
+  },
+  {
+    // Closed over an empty host, which is the very first thing a new host renders.
+    name: 'closed over an empty host',
+    seed: { repos: [], open: false },
+    blank: 'closed, the palette draws nothing whatever the host holds',
   },
 ];

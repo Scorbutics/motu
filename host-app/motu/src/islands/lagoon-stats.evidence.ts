@@ -11,11 +11,12 @@ export const fixtures = [];
 export const roles: string[] = [];
 
 export const scenarios: Scenario[] = [
-  // NOT HERE: "the host has not been asked" (`stats: null`). The readout renders NOTHING then, on
-  // purpose — not asked yet is not the same as holds nothing — and `data-flow` cannot compare a blank
-  // render against the others: "if its empty state is deliberate, that scenario does not belong here".
-  // It sank `motu check --runtime` on every push from 5 Nov until it was taken out. The behaviour is
-  // still the component's; it is just not evidence of data flowing.
+  {
+    // NOT ASKED YET is not the same as HOLDS NOTHING, so it renders nothing rather than zeros.
+    name: 'the host has not been asked',
+    seed: { stats: null },
+    blank: 'not asked yet is not "holds nothing" — no zeros until the host answers',
+  },
   {
     // A genuinely empty host, where zero IS the answer. Paired with `a host with nothing published`
     // on the repositories island: together they are the screen somebody sees on day one.

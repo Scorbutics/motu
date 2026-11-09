@@ -129,6 +129,8 @@ declare global {
     /** The verify harness's handle on this mount path: the `provide` seam and a real re-mount. */
     __motuLagoon?: {
       provide: (key: string, value: unknown) => void;
+      /** The keys the current scenario seeded: the region's sources may not overwrite them. */
+      pin: (keys: string[]) => void;
       /** Installed channels and the keys each has written (debug builds only). */
       channels: () => { name: string; keys: string[]; fired: number }[];
       /** Establish a value (attributed as a seed, not a host write). */

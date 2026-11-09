@@ -7,6 +7,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as React from 'react';
 import { stringifyEvidence } from './lib/evidence-json.mjs';
 import { installIslandRender } from './lib/island-render.mjs';
+import { judgeRenders } from './lib/data-flow.mjs';
 
 /**
  * GENERATED IDS ARE MEANT TO DIFFER between mounts. React's `useId` counter is module state and Radix
@@ -151,8 +152,9 @@ async function main() {
         portals.push(island ? window.__motuPortals(island).length : 0);
       }
       result.portals = portals;
-      // All rendered something AND not every output is identical.
-      result.differentiates = outputs.every((o) => o.trim().length > 0) && new Set(outputs).size > 1;
+      // The same judgement as the browser lane (lib/data-flow.mjs): every scenario rendered something
+      // or DECLARED it would not (`blank`), and not every output is identical.
+      Object.assign(result, judgeRenders(outputs, scenarios));
       // WHICH scenarios collide, not just whether any two do. `size > 1` passes a set where two of
       // three render identically, while the report says "distinct inputs produce distinct output" —
       // claiming more than it tested, and leaving one scenario that is fake evidence by the project's

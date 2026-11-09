@@ -8,6 +8,7 @@ import { FailingTransport } from '@motu/runtime/mock';
 import { applyMotuChrome, bindEntries, markSandbox } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import type { DeclaredChannel } from '@motu/core';
+import { disposeArchipelago, pinRegionKeys } from '@motu/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
@@ -480,6 +481,12 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   // source — so `--runtime` drove regions whose keys nothing produced, and their flows failed on the
   // islands' defaults while the gallery, which passes none, rendered the same flows correctly.
   const merged = [...(opts.channels ?? []), ...(forRegion.channels ?? [])];
+  // A NAMED ISLAND SCENARIO IS THE ISLAND'S WHOLE WORLD. The region's channels still run — an island
+  // may need keys only a source produces — but they may not overwrite a key the scenario SEEDED.
+  // Without this, Peps' `team-settings` « a mission, which has no schedule » seeded `team: MISSION`, and
+  // the team region's source published `team: CONSEIL` a moment later: whether the check saw the
+  // mission (nothing) or the Conseil (a button) depended on which landed first, so the same scenario
+  // failed `data-flow` one way in the full sweep and the other way alone.
   const channels = merged.length ? merged : undefined;
 
   // The requested FLOW's own seed, resolved here (synchronously, read-only) rather than waited for
@@ -507,6 +514,17 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
 
   if (opts.mount === 'react') {
     const config = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: mountSeed });
+    // A RENDER STATES ITS OWN STATE, so the store it mounts must be its own. The provider reuses a
+    // registered store on purpose (StrictMode, Fast Refresh), and every lone island is mounted under
+    // the same synthesised id — so a harness RE-AIM from one island to the next kept the previous
+    // island's store: Peps' `member-results` rendered over `member-profile-panel`'s keys, without its
+    // own seed, and the React key warning that produced was blamed on `member-results`. Only the full
+    // sweep re-aims, so every island passed on its own and failed in the run that mattered.
+    disposeArchipelago(config.id);
+    // A NAMED ISLAND SCENARIO IS THE ISLAND'S WHOLE WORLD: the region's sources still run, but may not
+    // overwrite a key the scenario seeded (`pinRegionKeys` — held until the store is built, then applied).
+    // Set or CLEARED, never left: pins outlive a store, and a re-aim with no scenario must not inherit them.
+    pinRegionKeys(config.id, target.kind === 'island' && wanted?.seed ? Object.keys(wanted.seed) : []);
     mountReactLagoon(mountEl, config, {
       elements: opts.elements,
       host,
@@ -591,3 +609,4 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   mount?.appendChild(el);
   return el;
 }
+

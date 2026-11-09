@@ -102,6 +102,13 @@ function isFailure(f: Fixture): f is FixtureFailure {
 export interface Scenario {
   /** Human label for the case (shown in verify output). */
   name?: string;
+  /**
+   * This scenario renders NOTHING, on purpose — and why (a banner silent when nothing is wrong, a
+   * palette closed). `data-flow` then counts the empty render as this scenario's answer instead of
+   * refusing the comparison, and ASSERTS it: if the island renders something here, the check fails.
+   * A sentence, not a flag — an empty reason is no declaration.
+   */
+  blank?: string;
   /** Store seed for this case, e.g. `{ criteria: { login: 'brice' } }`. */
   seed?: Record<string, unknown>;
   /**

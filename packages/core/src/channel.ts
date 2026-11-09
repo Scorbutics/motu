@@ -60,11 +60,23 @@ function notifyChannels(): void {
   channelListeners.forEach((l) => l());
 }
 
+const RAW = Symbol('motu.rawStore');
+
+/**
+ * The store a channel's (possibly instrumented) store stands for. Anything keyed by store IDENTITY —
+ * a region id lookup, a scenario's pinned keys — must go through this: under DEBUG a channel writes
+ * through a Proxy, which is never `===` the registered store, so those lookups silently missed.
+ */
+export function rawStore(store: Store): Store {
+  return ((store as unknown as Record<symbol, Store | undefined>)[RAW]) ?? store;
+}
+
 // A Proxy over the real store (so it stays a genuine Store) that records each write against the
 // channel before delegating. Only `set` is intercepted; get/subscribe pass straight through.
 function instrumentStore(store: Store, info: ChannelInfo): Store {
   return new Proxy(store, {
     get(target, prop, receiver) {
+      if (prop === RAW) return rawStore(target);
       if (prop === 'set') {
         return (key: string, value: unknown) => {
           info.keys.add(key);

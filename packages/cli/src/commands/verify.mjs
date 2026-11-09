@@ -1126,11 +1126,11 @@ function reportDifferentiation(report, r) {
   if (r.differentiates) {
     // Duplicates are not a failure — two seeds may legitimately normalise to one output — but they are
     // not evidence either, and the ok line used to cover for them.
-    if (r.distinctOutputs != null && r.distinctOutputs < r.scenarioCount) {
+    if (r.distinctOutputs != null && r.distinctOutputs < (r.comparedCount ?? r.scenarioCount)) {
       report.warn(
         'data-flow',
         `${r.scenarioCount} scenarios produced only ${r.distinctOutputs} distinct render(s) — ` +
-          `${r.scenarioCount - r.distinctOutputs} of them show nothing the others do not`,
+          `${(r.comparedCount ?? r.scenarioCount) - r.distinctOutputs} of them show nothing the others do not`,
       );
     }
     // A pass that rests on what the island PORTALED (a dialog on <body>) says so — otherwise it reads
@@ -1144,6 +1144,15 @@ function reportDifferentiation(report, r) {
       `distinct inputs produce distinct output (${r.scenarioCount} scenarios) — data flows past the seam`,
       { n: r.distinctOutputs ?? r.scenarioCount, of: `distinct render(s)${portaled}` },
     );
+  } else if (r.blankButRendered?.length) {
+    // A DECLARATION THAT IS NO LONGER TRUE. `blank` says "renders nothing, on purpose"; an island that
+    // now renders something there either grew a state its author did not expect or the seed stopped
+    // meaning what it said. Either way the comparison would be built on a claim that is false.
+    report.error(
+      'data-flow',
+      `${r.blankButRendered.length} scenario(s) declared \`blank\` rendered something — ${r.blankButRendered.join(', ')}. ` +
+        `Remove \`blank\` if the render is right, or fix what it renders`,
+    );
   } else if (r.empty?.length) {
     // AN EMPTY SCENARIO IS NOT AN IDENTICAL ONE. The comparison needs every scenario to have rendered
     // something, so one that renders nothing sinks the check — and saying "rendered identically" then
@@ -1154,7 +1163,7 @@ function reportDifferentiation(report, r) {
       'data-flow',
       `${r.empty.length} of ${r.scenarioCount} scenario(s) rendered NOTHING — ${r.empty.join(', ')}. ` +
         `Distinct output cannot be compared against a blank one. Either the island is not receiving that ` +
-        `seed, or its empty state is deliberate — in which case that scenario does not belong here`,
+        `seed, or its empty state is deliberate — then say so on the scenario: \`blank: '<why it renders nothing>'\``,
     );
   } else {
     report.error(

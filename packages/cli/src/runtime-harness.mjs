@@ -145,8 +145,13 @@ async function main() {
       const portals = [];
       for (const scenario of scenarios) {
         document.body.innerHTML = '';
-        mountOne(scenario.seed ?? {});
+        const mounted = mountOne(scenario.seed ?? {});
         await new Promise((r) => setTimeout(r, 80));
+        // `afterMount`: provided once the island is up, as the browser lane does.
+        if (scenario.afterMount && typeof mounted?.provide === 'function') {
+          for (const [k, v] of Object.entries(scenario.afterMount)) mounted.provide(k, v);
+          await new Promise((r) => setTimeout(r, 80));
+        }
         const island = findIsland();
         outputs.push(rendered(island));
         portals.push(island ? window.__motuPortals(island).length : 0);

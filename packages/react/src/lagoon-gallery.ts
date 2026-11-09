@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import { PAGE_SHELL_CSS } from '@motu/chrome/html';
 import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
@@ -41,6 +41,7 @@ import {
   reportState,
   resolveFlowRegion,
   resolveIslandScenario,
+  hasPostMount,
   type LagoonEvidence,
 } from './lagoon-states';
 
@@ -676,6 +677,10 @@ markSandbox();
   function mountIsland(open: { tag: string; seed?: Record<string, unknown> }): void {
     const target: LagoonTarget = { kind: 'island', tag: open.tag };
     const synthesised = lagoonArchipelagoConfig(target, { elements: opts.elements, seed: open.seed });
+    // Every lone island mounts under one synthesised id, and the provider reuses a registered store —
+    // so switching island or scenario in place showed the new island over the LAST one's state. The
+    // same fault the focused entry had (lagoon-bootstrap `render`); the same fix.
+    disposeArchipelago(synthesised.id);
     if (react) {
       mountReactLagoon(root, synthesised, {
         elements: opts.elements,
@@ -717,9 +722,9 @@ markSandbox();
     const found = pickState(opts.evidence?.scenarios?.[tag], wanted);
     // No interactions means the seed already IS the state — `resolveIslandScenario` reported it, and
     // overwriting a correct outcome with a second one would only lose the name it resolved.
-    if (!found?.interactions?.length) return;
+    if (!hasPostMount(found)) return;
     tide.setFlowOutcome('running…');
-    const outcome = await replayInteractions(found, step === undefined ? request.step : step);
+    const outcome = await replayInteractions(found!, step === undefined ? request.step : step);
     reportState({ ...outcome, target: `island:${tag}` });
     tide.setFlowOutcome(
       outcome.ok ? `played ${outcome.applied}/${outcome.of} interaction(s)` : (outcome.error ?? 'could not run'),
@@ -984,7 +989,7 @@ markSandbox();
         url.searchParams.delete('step');
         history.replaceState(null, '', url.toString());
         controlChanged();
-        if (found?.interactions?.length) void applyRequestedInteractions(tag, currentScenario, null);
+        if (hasPostMount(found)) void applyRequestedInteractions(tag, currentScenario, null);
       },
       /**
        * The transport and fit chips, for a panel drawn outside this page.

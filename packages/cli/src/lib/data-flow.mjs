@@ -38,3 +38,10 @@ export function judgeRenders(outputs, scenarios) {
   const differentiates = empty.length === 0 && blankButRendered.length === 0 && distinctOutputs > 1;
   return { differentiates, empty, blankButRendered, distinctOutputs, comparedCount };
 }
+
+/**
+ * Every input a scenario hands the island — its `seed` and what arrives `afterMount` — for the checks
+ * that ask about inputs rather than about WHEN they land (seed transport, input coverage, the keys a
+ * reset must forget). The later value wins, as it does on screen.
+ */
+export const scenarioInputs = (scenario) => ({ ...(scenario?.seed ?? {}), ...(scenario?.afterMount ?? {}) });

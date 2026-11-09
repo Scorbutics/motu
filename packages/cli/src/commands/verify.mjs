@@ -31,6 +31,7 @@ import { readOperationNames, indexOperations, resolveOperation, askKind } from '
 import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { undrivenWrites } from '../lib/writes-coverage.mjs';
+import { scenarioInputs } from '../lib/data-flow.mjs';
 import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
 import { lostMarker, parseEvidence } from '../lib/evidence-json.mjs';
 import {
@@ -1629,7 +1630,7 @@ async function seedTransportCheck(report, kebab) {
   };
   const bad = [];
   for (const s of scenarios) {
-    for (const [key, value] of Object.entries(s?.seed ?? {})) {
+    for (const [key, value] of Object.entries(scenarioInputs(s))) {
       const found = [];
       walk(value, key, new Set(), found);
       for (const f of found) bad.push(`${s.name ?? '(unnamed)'} → ${f}`);
@@ -1671,7 +1672,7 @@ function inputCoverageCheck(report, scenarios) {
   if (!Array.isArray(scenarios) || scenarios.length === 0) return;
   const seen = new Map();
   for (const sc of scenarios) {
-    for (const [prop, value] of Object.entries(sc?.seed ?? sc?.props ?? {})) {
+    for (const [prop, value] of Object.entries(sc?.seed || sc?.afterMount ? scenarioInputs(sc) : sc?.props ?? {})) {
       if (!seen.has(prop)) seen.set(prop, []);
       seen.get(prop).push(value);
     }

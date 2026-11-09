@@ -41,3 +41,9 @@ test('several declared-blank scenarios are one expected render, not duplicates',
   assert.equal(r.distinctOutputs, 3);
   assert.equal(r.comparedCount, 3);
 });
+
+test('scenarioInputs: what arrives after mount counts as an input, and wins over the seed', async () => {
+  const { scenarioInputs } = await import('../src/lib/data-flow.mjs');
+  assert.deepEqual(scenarioInputs({ seed: { a: 1, r: null }, afterMount: { r: 2 } }), { a: 1, r: 2 });
+  assert.deepEqual(scenarioInputs({}), {});
+});

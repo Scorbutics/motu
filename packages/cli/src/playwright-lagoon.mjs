@@ -2,7 +2,7 @@
 // MOTU_TARGET=island:<tag>) and drives it with Playwright/Chromium, so verification exercises real
 // layout, CSS and paint — not just an in-process DOM. Exposes runLagoon() for `motu island verify`;
 // also runnable directly for a screenshot: `node --import tsx playwright-lagoon.mjs <tag> <fit> [screenshotPath]`.
-import { judgeRenders } from './lib/data-flow.mjs';
+import { judgeRenders, scenarioInputs } from './lib/data-flow.mjs';
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -1172,7 +1172,7 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
     const list = scenarios.length ? scenarios : [{ name: 'default', seed: {} }];
     const owned = scenarioKeys(list);
     for (const scenario of list) {
-      await provideScenario(page, scenario.seed, { tag, owned });
+      await provideScenario(page, scenario.seed, { afterMount: scenario.afterMount, tag, owned });
       const violations = await page.evaluate(async (t) => {
         const el = window.__motuFindIsland(t);
         if (!el) return [];
@@ -1236,7 +1236,7 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
       // NO REMOUNT: this lane measures pixels, and a fresh mount replays every entrance animation the
       // shot would then capture mid-flight. The reset inside still runs, so each picture is of the
       // scenario it is named after.
-      await provideScenario(page, scenario.seed, { remount: false, owned });
+      await provideScenario(page, scenario.seed, { afterMount: scenario.afterMount, remount: false, owned });
       for (const vp of viewports) {
         await page.setViewportSize({ width: vp.width, height: 900 });
         await sleep(250);
@@ -1461,7 +1461,7 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
     for (const scenario of list) {
     // NO REMOUNT, for the same reason the snapshot lane skips it: this one measures layout, and a
     // fresh mount would have it measuring a tree that is still filling in.
-    await provideScenario(page, scenario.seed, { remount: false, owned });
+    await provideScenario(page, scenario.seed, { afterMount: scenario.afterMount, remount: false, owned });
     for (const vp of viewports) {
       await page.setViewportSize({ width: vp.width, height: 900 });
       // Two beats: one for the resize to land, one for anything that re-measures on it.
@@ -1604,12 +1604,12 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
  */
 function scenarioKeys(scenarios) {
   const keys = new Set();
-  for (const s of scenarios ?? []) for (const k of Object.keys(s?.seed ?? {})) keys.add(k);
+  for (const s of scenarios ?? []) for (const k of Object.keys(scenarioInputs(s))) keys.add(k);
   return [...keys];
 }
 
-async function provideScenario(page, seed, { settleMs = 150, tag, remount = true, owned = [] } = {}) {
-  await page.evaluate(({ s, remount, owned }) => {
+async function provideScenario(page, seed, { settleMs = 150, tag, remount = true, owned = [], afterMount } = {}) {
+  await page.evaluate(({ s, later, remount, owned }) => {
     const arch = document.querySelector('motu-archipelago');
     // Either mount path exposes the same seams: the element on the custom-element path,
     // window.__motuLagoon on the React one.
@@ -1635,7 +1635,8 @@ async function provideScenario(page, seed, { settleMs = 150, tag, remount = true
     on?.reset?.(owned);
     // THE SCENARIO'S KEYS ARE ITS OWN: pinned before they are provided, so a source the reset just
     // restarted cannot replace them when it answers (the React harness exposes `pin`).
-    window.__motuLagoon?.pin?.(Object.keys(s || {}));
+    // `afterMount` keys too: they arrive later, and a source answering in between must not take them.
+    window.__motuLagoon?.pin?.([...Object.keys(s || {}), ...Object.keys(later || {})]);
     if (provide) for (const [k, v] of Object.entries(s || {})) provide(k, v);
 
     if (!remount) return;
@@ -1651,13 +1652,25 @@ async function provideScenario(page, seed, { settleMs = 150, tag, remount = true
         parent?.insertBefore(el, next);
       }
     }
-  }, { s: seed ?? {}, remount, owned });
+  }, { s: seed ?? {}, later: afterMount ?? {}, remount, owned });
   // A re-mount re-runs the island's fetch, so a lane that MEASURES (screenshot, viewport fit, axe)
   // would otherwise sample a tree that is still filling in — a fixed sleep was enough when `provide`
   // only updated props. Wait for the render to go quiet instead, and keep the fixed settle for callers
   // that wait for stability themselves.
   if (tag) await waitForStableRender(page, tag, { timeoutMs: 8000 });
   else await sleep(settleMs);
+  // WHAT ARRIVES AFTER MOUNT (`Scenario.afterMount`): only once the island has mounted and settled, so
+  // the component sees it as news rather than as where it started. Then settle again — the render
+  // that counts is the one after the arrival.
+  if (afterMount && Object.keys(afterMount).length) {
+    await page.evaluate((later) => {
+      const arch = document.querySelector('motu-archipelago');
+      const on = arch && typeof arch.provide === 'function' ? arch : window.__motuLagoon;
+      if (on) for (const [k, v] of Object.entries(later)) on.provide(k, v);
+    }, afterMount);
+    if (tag) await waitForStableRender(page, tag, { timeoutMs: 8000 });
+    else await sleep(settleMs);
+  }
 }
 
 /** Interactive roles worth trying, most-specific first — a checkbox's accessible name and a button's
@@ -1754,7 +1767,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     // a pass that rests on a dialog says so, rather than reading like the island's own subtree.
     const portals = [];
     for (const [i, scenario] of scenarios.entries()) {
-      await provideScenario(page, scenario.seed, { owned });
+      await provideScenario(page, scenario.seed, { afterMount: scenario.afterMount, owned });
       if (!scenario.interactions?.length) {
         outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
         portals.push(await portalCount(page, tag));
@@ -1862,6 +1875,10 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
       await sleep(300);
       await provide(seed);
       await sleep(500);
+      if (scenario.afterMount) {
+        await provide(scenario.afterMount);
+        await sleep(500);
+      }
     }
     await sleep(200);
 

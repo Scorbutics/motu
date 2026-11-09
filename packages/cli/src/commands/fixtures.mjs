@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { paths, names, color } from '../lib/util.mjs';
 import { recordLagoon } from '../playwright-lagoon.mjs';
+import { scenarioInputs } from '../lib/data-flow.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
 const CLI_PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -83,7 +84,7 @@ export async function fixturesRecordCommand(argv) {
 
   // Reduce host-fed store writes (channels + provide) to a last-wins seed, MINUS the keys the
   // scenarios themselves drove (those are inputs, not host config).
-  const scenarioKeys = new Set(scenarios.flatMap((s) => Object.keys(s.seed ?? {})));
+  const scenarioKeys = new Set(scenarios.flatMap((s) => Object.keys(scenarioInputs(s))));
   const seed = {};
   for (const w of result.seedWrites ?? []) {
     if (scenarioKeys.has(w.key)) continue;

@@ -112,6 +112,20 @@ export interface Scenario {
   /** Store seed for this case, e.g. `{ criteria: { login: 'brice' } }`. */
   seed?: Record<string, unknown>;
   /**
+   * Keys provided AFTER the island has mounted and settled — a value that ARRIVES, rather than one the
+   * island starts with. Applied on top of `seed`; the render is read once these have landed.
+   *
+   * FOR A COMPONENT THAT TELLS "ALREADY THERE" FROM "JUST HAPPENED", and nothing else. Peps' sphère
+   * sheet treats a request present at mount as dismissed (so « Ma Base » does not reopen the last
+   * sphère on every visit) and opens only on one that arrives later — a rule no seed can cross, so
+   * the opened sheet had no island scenario at all. `afterMount: { request }` is that arrival.
+   *
+   * DATA, not a script: one batch of keys, provided through the same seam the page uses, never a
+   * click or a wait. The keys are pinned like the seed's, so a region source cannot replace them. If
+   * the end state can be written as a seed, write it as a seed.
+   */
+  afterMount?: Record<string, unknown>;
+  /**
    * A scripted interaction, run after the seed settles and before the render is read.
    *
    * NOT the same rule as `RegionStep` — that model bans synthetic clicks because a FLOW tests region

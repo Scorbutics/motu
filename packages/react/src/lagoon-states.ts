@@ -168,7 +168,7 @@ export function resolveIslandScenario(
   scenarios: Record<string, Scenario[]> | undefined,
   tag: string,
   wanted: string,
-): { seed?: Record<string, unknown>; outcome: StateOutcome } {
+): { seed?: Record<string, unknown>; afterMount?: Record<string, unknown>; outcome: StateOutcome } {
   const target = `island:${tag}`;
   const declared = scenarios?.[tag];
   const found = pickState(declared, wanted);
@@ -183,7 +183,7 @@ export function resolveIslandScenario(
       },
     };
   }
-  return { seed: found.seed, outcome: { ok: true, target, kind: 'scenario', name: found.name ?? wanted } };
+  return { seed: found.seed, afterMount: found.afterMount, outcome: { ok: true, target, kind: 'scenario', name: found.name ?? wanted } };
 }
 
 /** EVERY region declaring a flow by this name — plural because the name alone can be ambiguous. */
@@ -400,12 +400,40 @@ async function waitForDomQuiet(stillMs = 120, budgetMs = 4000): Promise<void> {
   }
 }
 
+/** Does this scenario need anything applied after its seed has mounted? */
+export const hasPostMount = (scenario: Scenario | null | undefined): boolean =>
+  !!scenario && (!!scenario.interactions?.length || Object.keys(scenario.afterMount ?? {}).length > 0);
+
+/** The mounted island's `provide`, once it exists and the DOM has settled — or null after a timeout. */
+async function waitForProvideSeam(timeoutMs = 5000): Promise<((key: string, value: unknown) => void) | null> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const arch = document.querySelector('motu-archipelago') as unknown as { provide?: (k: string, v: unknown) => void } | null;
+    const lagoon = (window as unknown as { __motuLagoon?: { provide?: (k: string, v: unknown) => void } }).__motuLagoon;
+    const seam = typeof arch?.provide === 'function' ? arch.provide.bind(arch) : lagoon?.provide;
+    if (seam && regionMounted()) {
+      await waitForDomQuiet();
+      return seam;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return null;
+}
+
 export async function replayInteractions(scenario: Scenario, upTo: number | null): Promise<StateOutcome> {
   const steps = scenario.interactions ?? [];
   const base: StateOutcome = { ok: false, target: '', kind: 'scenario', name: scenario.name, of: steps.length };
   const limit = upTo === null ? steps.length : Math.min(upTo, steps.length);
   if (upTo !== null && upTo > steps.length) {
     return { ...base, applied: 0, error: `step ${upTo} does not exist — "${scenario.name ?? 'scenario'}" has ${steps.length} interaction(s)` };
+  }
+  // WHAT ARRIVES AFTER MOUNT first (`Scenario.afterMount`): once the island has mounted and gone
+  // quiet, through the same seam the page and the checks use — so a component that tells "already
+  // there" from "just happened" sees news. Then the clicks, if any, against what that arrival drew.
+  if (scenario.afterMount && Object.keys(scenario.afterMount).length) {
+    const provide = await waitForProvideSeam();
+    if (!provide) return { ...base, applied: 0, error: 'the island never mounted, so `afterMount` had nothing to arrive at' };
+    for (const [k, v] of Object.entries(scenario.afterMount)) provide(k, v);
   }
   for (let i = 0; i < limit; i++) {
     const { click } = steps[i];

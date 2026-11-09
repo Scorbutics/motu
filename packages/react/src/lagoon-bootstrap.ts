@@ -22,6 +22,7 @@ import {
   resolveIslandScenario,
   replayFlow,
   replayInteractions,
+  hasPostMount,
   reportState,
   stateNames,
   type LagoonEvidence,
@@ -261,7 +262,7 @@ function resolveScenario(
   request: StateRequest,
   target: LagoonTarget,
   opts: LagoonBootstrapOptions,
-): { seed?: Record<string, unknown>; outcome: StateOutcome } {
+): { seed?: Record<string, unknown>; afterMount?: Record<string, unknown>; outcome: StateOutcome } {
   const name = request.scenario!;
   const label = target.kind === 'island' ? `island:${target.tag}` : `archipelago:${target.config.id}`;
   if (target.kind !== 'island') {
@@ -396,8 +397,8 @@ async function applyInteractions(request: StateRequest, opts: LagoonBootstrapOpt
   const found = pickState(opts.evidence?.scenarios?.[target.tag], request.scenario!);
   // A scenario with no interactions is complete the moment its seed lands — `render` already
   // reported it, and saying anything else here would overwrite a correct outcome with a louder one.
-  if (!found?.interactions?.length) return;
-  reportState({ ...(await replayInteractions(found, request.step)), target: `island:${target.tag}` });
+  if (!hasPostMount(found)) return;
+  reportState({ ...(await replayInteractions(found!, request.step)), target: `island:${target.tag}` });
 }
 
 /** Replay a requested flow against the region that just mounted, and say what happened either way. */
@@ -524,7 +525,10 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
     // A NAMED ISLAND SCENARIO IS THE ISLAND'S WHOLE WORLD: the region's sources still run, but may not
     // overwrite a key the scenario seeded (`pinRegionKeys` — held until the store is built, then applied).
     // Set or CLEARED, never left: pins outlive a store, and a re-aim with no scenario must not inherit them.
-    pinRegionKeys(config.id, target.kind === 'island' && wanted?.seed ? Object.keys(wanted.seed) : []);
+    pinRegionKeys(
+      config.id,
+      target.kind === 'island' && wanted ? [...Object.keys(wanted.seed ?? {}), ...Object.keys(wanted.afterMount ?? {})] : [],
+    );
     mountReactLagoon(mountEl, config, {
       elements: opts.elements,
       host,

@@ -227,7 +227,11 @@ function resolveSourceFile(spec, fromFile) {
       return false;
     }
   };
-  const withExt = (base) => [base, `${base}.ts`, `${base}.tsx`, resolve(base, 'index.ts')].find(isFile) ?? null;
+  // `.js` NAMING A `.ts` FILE is how NodeNext/ESM TypeScript writes every relative import — the demo
+  // app's archipelagos import `../../shared/events-source.js`, and without this the source behind it
+  // was "unresolved", so nothing was checked against what it produces.
+  const swapped = (base) => (/\.(m|c)?jsx?$/.test(base) ? [base.replace(/\.(m|c)?js(x?)$/, '.ts$2'), base.replace(/\.(m|c)?jsx?$/, '.tsx')] : []);
+  const withExt = (base) => [base, ...swapped(base), `${base}.ts`, `${base}.tsx`, resolve(base, 'index.ts')].find(isFile) ?? null;
 
   if (spec.startsWith('.')) return withExt(resolve(dirname(fromFile), spec));
   if (!spec.startsWith('@/')) return null;

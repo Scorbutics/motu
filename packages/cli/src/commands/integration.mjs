@@ -565,7 +565,12 @@ function checkRegion(region, sources) {
   } else if (!pageSeeded.size) {
     add('skip', 'flow-shape', 'the page establishes no keys by `seed(...)` — nothing to compare');
   } else {
-    const missing = [...pageSeeded].filter((k) => !flowSeeded.has(k)).sort();
+    // A KEY A DECLARED SOURCE PRODUCES IS NOT THE FLOW'S TO SEED. The source is installed in every flow
+    // and publishes it; a flow that seeded it too would overwrite the source's first answer with the
+    // page's empty placeholder — which is exactly what happened when this warning was obeyed: every
+    // step without a stimulus failed on an empty calendar. The page seeds it for first paint; the flow
+    // gets it from the source, which is the more faithful of the two.
+    const missing = [...pageSeeded].filter((k) => !flowSeeded.has(k) && !sourceKeys.has(k)).sort();
     if (missing.length) {
       add(
         'warn',
@@ -723,6 +728,11 @@ function checkRegion(region, sources) {
     const users = [...sources].filter(([, t]) => code(t).includes(`${binding}.`));
     const channelled = new Set();
     for (const [file] of users) for (const id of channelSourceIds(file, region.id)) channelled.add(id);
+    // AND THE FILE THAT COMPOSES THE BINDING. `createRegion(arch, { channels: [channelFrom(...)] })` is
+    // a supported install, and it lives where the binding is DEFINED — which never says `Events.`, only
+    // `Events = createRegion(...)`. Reading only the files that USE the binding called that install
+    // missing: an error on the one shape the createRegion option exists for.
+    for (const id of channelSourceIds(bindingFile, region.id)) channelled.add(id);
 
     for (const [name, src] of Object.entries(declaredSrc)) {
       const module = src.module;

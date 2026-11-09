@@ -474,7 +474,13 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   // one layer down.
   if (wanted) reportState(wanted.outcome);
   const seed = wanted ? wanted.seed : translateRegionSeed(opts.seed ?? regionSeed, target, regionId, opts);
-  const channels = opts.channels ?? forRegion.channels;
+  // BOTH, not either. An entry-wide channel (the demo's AngularJS host-scope mirror) and a region's
+  // own channels (the source its flows drive) answer different questions, and `??` let the first hide
+  // the second: any focused entry that passed a channel of its own silently dropped every region's
+  // source — so `--runtime` drove regions whose keys nothing produced, and their flows failed on the
+  // islands' defaults while the gallery, which passes none, rendered the same flows correctly.
+  const merged = [...(opts.channels ?? []), ...(forRegion.channels ?? [])];
+  const channels = merged.length ? merged : undefined;
 
   // The requested FLOW's own seed, resolved here (synchronously, read-only) rather than waited for
   // from `applyFlow` below — a root prop derived from it (see `hostProps`'s function form) has to be

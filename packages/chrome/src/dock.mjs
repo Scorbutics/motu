@@ -1560,6 +1560,14 @@ function motuMountDock(opts) {
   grab.addEventListener('pointercancel', endDrag);
 
   /** The lagoon's own two globals — absent until it has booted, so everything here re-reads them. */
+  /** The lagoon's SCREENS — `regions()` entries with a `screen:` id — labelled without the gallery's glyph. */
+  var screenEntries = function (ctl) {
+    var all = [];
+    try { all = (ctl && ctl.regions && ctl.regions()) || []; } catch (e) { all = []; }
+    return all
+      .filter(function (r) { return typeof r.id === 'string' && r.id.indexOf('screen:') === 0; })
+      .map(function (r) { return { id: r.id, label: String(r.label || r.id).replace(/^\u25A3\s*/, '') }; });
+  };
   var catalogue = function () { try { return lagoonWindow().__motuLagoonStates || null; } catch (e) { return null; } };
   var control = function () { try { return lagoonWindow().__motuLagoonControl || null; } catch (e) { return null; } };
   /**
@@ -1644,6 +1652,11 @@ function motuMountDock(opts) {
     scroll.appendChild(box);
     return { list: list, count: count, box: box };
   };
+  // SCREENS FIRST, when the lagoon declares any (`@motu/react` screens, experimental): the app's own
+  // addresses, each a layout with its regions in place. They are entries of `__motuLagoonControl
+  // .regions()` with a `screen:` id — the catalogue's `archipelagos` lists regions only, and reading
+  // only that is why a hosted lagoon with seven screens offered no way to reach one but typing a URL.
+  var screensSect = section('Screens');
   var regions = section('Regions');
   // ISLANDS BESIDE THE STATES THEY BELONG TO. Selecting an island lived in another tab, so reaching
   // one of its scenarios meant: Islands tab, pick an island, back to States, pick a scenario — three
@@ -1752,6 +1765,7 @@ function motuMountDock(opts) {
       // The lagoon has not booted yet, or this build predates the control surface. Say so rather than
       // drawing an empty panel that looks like a region with nothing in it.
       regions.box.hidden = true;
+      screensSect.box.hidden = true;
       states.box.hidden = true;
       bayTitle.textContent = 'waiting for the lagoon…';
       baySub.textContent = '';
@@ -1762,6 +1776,13 @@ function motuMountDock(opts) {
     var now = ctl.current();
     var q = filter.value.trim().toLowerCase();
     var hit = function (s) { return !q || s.toLowerCase().indexOf(q) >= 0; };
+
+    var screenRows = screenEntries(ctl).filter(function (r) { return hit(r.label); });
+    screensSect.box.hidden = screenRows.length === 0;
+    screensSect.count.textContent = String(screenRows.length);
+    screensSect.list.replaceChildren.apply(screensSect.list, screenRows.map(function (r) {
+      return row(r.label, r.id === now.region, drive(function (c) { c.show(r.id); }));
+    }));
 
     var list = (cat.archipelagos || []).filter(function (r) { return hit(r.label); });
     regions.count.textContent = String(list.length);
@@ -2329,9 +2350,13 @@ function motuMountDock(opts) {
       scopeChip.hidden = true;
       toasts.dataset.scoped = 'false';
       scopeClose.onclick = null;
-      bayTitle.textContent = now.region || '—';
-      baySub.textContent = entries.length + (entries.length === 1 ? ' state' : ' states');
-      railLabel.textContent = now.region || 'lagoon';
+      // A screen is named by its label — its id is `screen:<id>`, an address rather than a name.
+      var onScreen = screenEntries(ctl).filter(function (r) { return r.id === now.region; })[0];
+      bayTitle.textContent = onScreen ? onScreen.label : now.region || '—';
+      baySub.textContent = onScreen
+        ? 'screen · the app’s layout, its regions in place'
+        : entries.length + (entries.length === 1 ? ' state' : ' states');
+      railLabel.textContent = onScreen ? onScreen.label : now.region || 'lagoon';
     }
   };
 
@@ -2552,9 +2577,11 @@ function motuMountDock(opts) {
     var cat = catalogue();
     if (!ctl || !cat) return [];
     var now = ctl.current();
-    var out = (cat.archipelagos || []).map(function (r) {
+    var out = screenEntries(ctl).map(function (r) {
+      return { label: r.label, kind: 'screen', run: drive(function (c) { c.show(r.id); }) };
+    }).concat((cat.archipelagos || []).map(function (r) {
       return { label: r.label, kind: 'region', run: drive(function (c) { c.show(r.id); }) };
-    });
+    }));
     ((cat.flows && cat.flows[now.region]) || []).forEach(function (f) {
       out.push({ label: f.name, kind: 'state', run: drive(function (c) { c.runFlow(f.name); }) });
     });

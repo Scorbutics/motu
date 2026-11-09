@@ -347,6 +347,34 @@ export function rootSlots(file) {
 }
 
 /**
+ * The root props this region fills with ANOTHER REGION — `slots: { prop: { region: '<id>' } }` — as
+ * prop -> region id. Read whether or not the region declares a `root`: a reference from a region with
+ * none is an error worth naming (`region-ref`), not a declaration to drop.
+ *
+ * `{}` when there are none; null when the file does not parse, which is "could not tell" — the caller
+ * must not read it as "references nothing".
+ */
+export function regionRefsDeclared(file) {
+  if (!existsSync(file)) return {};
+  let sf;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    sf = project.createSourceFile('archipelago.ts', readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+  const slots = propInit(configLiteral(sf), 'slots')?.asKind(SyntaxKind.ObjectLiteralExpression);
+  const map = {};
+  for (const prop of slots?.getProperties() ?? []) {
+    const name = nameOf(prop);
+    const obj = prop.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()?.asKind(SyntaxKind.ObjectLiteralExpression);
+    const region = str(propInit(obj, 'region'));
+    if (name && region) map[name] = region;
+  }
+  return map;
+}
+
+/**
  * Every slot this region DECLARES — the `slot` of each island entry.
  *
  * Read from the island entries rather than from every `slot:` in the file. The regex it replaces took

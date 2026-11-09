@@ -25,6 +25,7 @@ ${motuDockJs()}
     // artifact's would hide the replacement with it. In the host that never came up: the artifact is
     // in a frame and the new dock is in the shell. Mark ours, and hush only what is not ours.
     var mounted = document.createElement('div');
+    mounted.setAttribute('data-motu-chrome', '');
     document.body.appendChild(mounted);
     motuMountDock({ mount: mounted, lagoonWindow: function () { return window; } });
     var ours = mounted.querySelector('#tide');

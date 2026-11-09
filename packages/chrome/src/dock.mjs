@@ -1270,7 +1270,8 @@ function motuMountDock(opts) {
     return n;
   };
 
-  var tide = el('div', { id: 'tide', 'data-open': 'false' });
+  // `data-motu-chrome`: lagoon furniture, never an island's output (see cli lib/island-render.mjs).
+  var tide = el('div', { id: 'tide', 'data-open': 'false', 'data-motu-chrome': '' });
   // A STRIP, NOT A BUTTON. It used to be one button that opened the panel; it now holds more than one
   // act, and a button inside a button is not a thing. The opening half is still a button, so keyboard
   // and screen readers get it for free.
@@ -2353,6 +2354,7 @@ function motuMountDock(opts) {
   // card whose status column said "--" would be reporting an absence in the shape of a result.
   var toasts = el('div', {
     id: 'tide-calls',
+    'data-motu-chrome': '',
     // POLITE, and the whole point of saying so: a call landing is not an interruption, and a live
     // region that spoke over whatever the person was reading would make the toaster the loudest
     // thing on a screen it is only annotating.
@@ -2540,7 +2542,7 @@ function motuMountDock(opts) {
   // chip the artifact has mounted, including ones added by a package this file has never heard of.
   var pInput = el('input', { type: 'text', placeholder: 'Switch region, state, view\u2026', 'aria-label': 'Lagoon command palette' });
   var pList = el('ul', { role: 'listbox' });
-  var palette = el('div', { class: 'dock-palette', hidden: '' }, [el('div', { class: 'box' }, [pInput, pList])]);
+  var palette = el('div', { class: 'dock-palette', hidden: '', 'data-motu-chrome': '' }, [el('div', { class: 'box' }, [pInput, pList])]);
   mountEl.appendChild(palette);
   var shown = [];
   var cursor = 0;

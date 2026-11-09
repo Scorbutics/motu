@@ -373,7 +373,9 @@ motu integrate check [region] [--json]
 owns (`commands/integration.mjs:35-60`), plus each archipelago. It is entirely static: it can see
 `<X.Island slot="y">` and cannot see whether the branch containing it ever runs, so a slot inside a
 ternary, a `&&` guard or a `.map()` callback is reported as conditionally placed — a warning
-(`:764-798`). **Writes** nothing.
+(`:764-798`). A root prop another region fills (`{ region: '<id>' }`) is checked as `region-ref`: the
+page must pass it on `<X.Root>` holding the child's `<Y.Region>`/`<Y.Root>`, directly or through a
+component whose file renders it. **Writes** nothing.
 
 **Exit** — `2` when no region matches, or when the scan found **zero** host files (`host-sources`: a
 check that examined nothing has not passed, `:809-816`); `1` on any error finding; `0` otherwise.

@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import { PAGE_SHELL_CSS } from '@motu/chrome/html';
 import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
@@ -25,7 +25,7 @@ import { lagoonHarness } from './lagoon-harness';
 import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
-import { mountReactLagoon } from './lagoon-react-mount';
+import { mountReactLagoon, regionAddress, type ReactLagoonOptions, type RegionRefOptions } from './lagoon-react-mount';
 import { mountScreen, unmountScreen } from './lagoon-screen';
 import { matchScreen, type ScreenConfig } from './screens';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
@@ -484,6 +484,43 @@ markSandbox();
         ? 'mountpoints'
         : 'region';
 
+  // A ROOT PROP FILLED BY ANOTHER REGION. The parent shows a placeholder; loading it in place mounts
+  // the referenced region from ITS config with ITS overrides (seed, channels, providers), exactly as
+  // its own station would — and a reference that cannot be honoured refuses rather than rendering
+  // something else. The problems are the same `regionRefProblems` `motu archipelago verify` reports.
+  const refProblems = regionRefProblems(regionRefGraph(opts.archipelagos));
+  const regionRefOptions = (): RegionRefOptions => ({
+    resolve: (refId) => {
+      const config = opts.archipelagos[refId];
+      if (!config) {
+        return { ok: false, error: `no region "${refId}" in this lagoon (known: ${Object.keys(opts.archipelagos).join(', ')})` };
+      }
+      const cycle = refProblems.find((p) => p.kind === 'cycle' && p.path?.includes(refId));
+      if (cycle) return { ok: false, error: cycle.message };
+      const ov = regionOverrides(overrides, refId);
+      const hostProps = typeof ov.hostProps === 'function' ? ov.hostProps({ ...ov.seed }) : ov.hostProps;
+      const childOpts: ReactLagoonOptions = {
+        elements: opts.elements,
+        host,
+        ...ov,
+        hostProps,
+        // The region view: it is loaded INTO an arrangement, and a grid of frames inside a page is not
+        // what the page would show.
+        view: 'region',
+        regionRefs: regionRefOptions(),
+      };
+      return { ok: true, loaded: { config, opts: childOpts } };
+    },
+    href: regionAddress,
+    // In place, through the station switch, when the region is a station here; a full navigation to
+    // its address otherwise (an excluded region still has one).
+    open: (refId) => {
+      if (ids.includes(refId)) onStation(refId);
+      else location.assign(regionAddress(refId));
+    },
+    label: (refId) => stations.find((x) => x.id === refId)?.label ?? refId,
+  });
+
   // ---------------------------------------------------------------- screens (experimental) ----
   const screens = opts.screens ?? overrides.screens ?? [];
   const SCREEN = 'screen:';
@@ -497,6 +534,8 @@ markSandbox();
       overrides,
       screens,
       host,
+      // A region on a screen that REFERENCES another region resolves it the way its station does.
+      regionRefs: regionRefOptions(),
       onNavigated: (sc, to) => {
         current = SCREEN + sc.id;
         writeScreenAddress(sc, to);
@@ -558,6 +597,7 @@ markSandbox();
         ...ov,
         hostProps,
         view,
+        regionRefs: regionRefOptions(),
       });
       // A region offers `page` only when it declares one. Computed per region, on every mount, because
       // the answer changes with the station and a stale control is worse than no control.

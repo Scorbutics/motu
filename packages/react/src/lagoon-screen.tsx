@@ -16,7 +16,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { disposeArchipelago, type HostBridge } from '@motu/core';
 import type { ElementSpec } from './bootstrap';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
-import { mountReactLagoon, unmountReactLagoon } from './lagoon-react-mount';
+import { mountReactLagoon, unmountReactLagoon, type RegionRefOptions } from './lagoon-react-mount';
 import { isRegionSlot, matchScreen, type ScreenConfig, type ScreenSlot } from './screens';
 
 export interface ScreenMountOptions {
@@ -31,6 +31,8 @@ export interface ScreenMountOptions {
    * the first screen rendered every island as unstyled text, with every check still green.
    */
   css?: string;
+  /** How a region placed on this screen resolves a region it REFERENCES (see `RegionRefSlot`). */
+  regionRefs?: RegionRefOptions;
   /** Called when a navigation opened another screen, so the gallery can move its address and panel. */
   onNavigated?: (screen: ScreenConfig, path: string) => void;
 }
@@ -171,6 +173,7 @@ export function mountScreen(root: HTMLElement, path: string, opts: ScreenMountOp
       // `page` is a different view of a region; on a screen the region is mounted as a region.
       page: undefined,
       view: 'region',
+      regionRefs: opts.regionRefs,
     });
   };
 

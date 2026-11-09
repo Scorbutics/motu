@@ -259,6 +259,49 @@ member. Islanding it would invent an island that binds nothing. **A COMPONENT, n
 rendering nothing there and calling it correct. Naming the component means the preview shows the real
 one and only its PROPS are supplied as data.
 
+### A slot another REGION fills — `{ region: '<id>' }`
+
+A root prop can be filled by a whole region rather than by an island — the third value form of the
+same map (`RegionRef`, `regionRefOf` in `packages/core/src/archipelago.ts`):
+
+```ts
+// base.archipelago.ts — « Ma Base »
+root: BaseLayout,
+slots: {
+  timeline: 'teams-timeline',
+  businessTeamPanel: { region: 'equipage' },   // « Mon Équipage Business », its own archipelago
+},
+```
+
+It lives in `slots` because that map already answers "what fills this prop of the root", and a region
+is one more answer to that question — the app's vocabulary on the left, motu's on the right. The child
+stays FULLY a region of its own: its islands, keys, seed, sources, flows and address (`?region=equipage`)
+are its own, declared in its own archipelago, and none of them count as the parent's — ownership,
+coupling, `render-coverage` and `placed` never see them. That is what makes it individually observable
+and movable: moving it to another page is moving one `{ region }` entry.
+
+The page puts the child's composition in the prop, exactly as it would anywhere else:
+
+```tsx
+<Base.Root
+  timeline={<TeamsTimeline … />}
+  businessTeamPanel={<Equipage.Region><Equipage.Root … /></Equipage.Region>}
+/>
+```
+
+`<X.Root>` passes such a prop through untouched — wrapping it in one of the parent's islands would make
+the child's islands look like the parent's (`packages/react/src/create-region.tsx`). An app component
+that renders `<Equipage.Region>` itself is equally fine in that position.
+
+A STRING ID, not the imported archipelago: an import would make a cycle an ES-module cycle — one config
+read in its temporal dead zone, a `ReferenceError` at boot instead of an error naming the loop — and the
+id is how a region is addressed everywhere else. What an import would catch at compile time,
+`region-ref` catches statically: an id no archipelago has, a cycle (A → B → A, or a region naming
+itself), and a reference from a region with no `root` (there is no prop to fill) are all ERRORS, from
+one function (`regionRefProblems`) that the lagoon also uses to refuse the placeholder. In the lagoon
+the slot is a placeholder until someone loads it — see
+[08 — Lagoon](08-lagoon.md#a-slot-filled-by-another-region).
+
 A region composed by a hand-written frame instead is reported by the `region-root` check, as an error
 once a project sets `"regionRoot": "required"` in its config
 (`packages/cli/src/commands/verify.mjs:2240-2257`; see [04 — Configuration](04-configuration.md)).

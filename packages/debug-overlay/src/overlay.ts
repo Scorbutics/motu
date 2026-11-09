@@ -185,6 +185,7 @@ class Overlay {
     this.#wires.setAttribute('class', 'wires');
     this.#layer.append(this.#wires);
     this.#root.append(this.#layer);
+    hostEl.setAttribute('data-motu-chrome', '');
     document.body.append(hostEl);
 
     // The outlines follow the mount registry, and the panel follows the store — two different

@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT, paths, color } from './lib/util.mjs';
+import { installIslandRender } from './lib/island-render.mjs';
 
 /** The framework's own lagoon dev-server runner (see lagoon-dev.mjs). */
 const LAGOON_DEV = fileURLToPath(new URL('./lagoon-dev.mjs', import.meta.url));
@@ -374,8 +375,6 @@ async function setupPageDiagnostics(page, diagnostics) {
       if (!el) el = document.querySelector('[data-motu-island="' + t + '"]');
       return el;
     };
-    // Rendered output = the island's own shadow (standalone) or its light DOM (nested in an archipelago).
-    window.__motuRendered = (el) => (el ? (el.shadowRoot ? el.shadowRoot.innerHTML : el.innerHTML) : '');
     window.addEventListener('unhandledrejection', (e) => {
       const r = e && e.reason;
       (window.__motuRejections = window.__motuRejections || []).push(
@@ -383,6 +382,10 @@ async function setupPageDiagnostics(page, diagnostics) {
       );
     });
   });
+  // Rendered output = the island's own shadow (standalone) or its light DOM (nested in an
+  // archipelago), PLUS what its own mount portaled to <body> (a dialog, a sheet) — attributed by React
+  // ancestry, never by position, so lagoon chrome and other mounts stay out. See lib/island-render.mjs.
+  await page.addInitScript(installIslandRender);
   page.on('console', (msg) => {
     if (msg.type() === 'error' && !NOISE.test(msg.text())) sink.push(`console.error: ${msg.text()}`);
   });
@@ -548,6 +551,7 @@ export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPa
     if (result.mounted) {
       const settled = await waitForStableRender(page, tag);
       result.shadowLength = settled.length;
+      result.portals = await portalCount(page, tag);
     }
 
     if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
@@ -566,6 +570,16 @@ export async function runLagoon({ tag, fit = 'native', port = 5199, screenshotPa
 
     return { ok: result.mounted && result.shadowLength > 0, ...result, diagnostics, remountIdentical, fixtureCoverage, networkEscapes };
   });
+}
+
+/** How many body-level nodes the island's own mount portaled (0 when none, or unreadable). */
+async function portalCount(page, tag) {
+  return page
+    .evaluate((t) => {
+      const el = window.__motuFindIsland(t);
+      return el ? window.__motuPortals(el).length : 0;
+    }, tag)
+    .catch(() => 0);
 }
 
 /** Snapshot the island's rendered output, swap in a fresh clone (fires disconnect+reconnect), diff. */
@@ -1122,7 +1136,7 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
       const ready = await page
         .evaluate((t) => {
           const el = window.__motuFindIsland(t);
-          return !!el && (el.innerHTML || '').trim().length > 0;
+          return !!el && window.__motuRendered(el).trim().length > 0;
         }, tag)
         .catch(() => false);
       if (ready) break;
@@ -1150,8 +1164,10 @@ export async function axeLagoon({ tag, port = 5199, scenarios = [] }) {
         if (!el) return [];
         // A `display: contents` wrapper is not a valid axe context; its painted content is.
         const target = el.getBoundingClientRect().height ? el : el.firstElementChild;
-        if (!target) return [];
-        const res = await window.axe.run(target, { resultTypes: ['violations'] });
+        // What the island portaled (a dialog) is its UI too, and the part most likely to lack a name.
+        const include = [target, ...window.__motuPortals(el)].filter(Boolean);
+        if (!include.length) return [];
+        const res = await window.axe.run({ include }, { resultTypes: ['violations'] });
         return res.violations.map((v) => ({
           id: v.id,
           impact: v.impact,
@@ -1187,7 +1203,7 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
       const ready = await page
         .evaluate((t) => {
           const el = window.__motuFindIsland(t);
-          return !!el && (el.innerHTML || '').trim().length > 0;
+          return !!el && window.__motuRendered(el).trim().length > 0;
         }, tag)
         .catch(() => false);
       if (ready) break;
@@ -1212,6 +1228,21 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
         await sleep(250);
         const handle = await page.evaluateHandle((t) => window.__motuFindIsland(t), tag);
         const el = handle.asElement();
+        // An island that PORTALED something (a dialog over the page) is pictured as the viewport it
+        // covers — an element shot of its own box would miss the very thing it shows. The lagoon's
+        // chrome is hidden for that shot, so the picture is the island's and not the furniture's.
+        const portaled = el ? await el.evaluate((n) => window.__motuPortals(n).length) : 0;
+        if (portaled) {
+          await page.addStyleTag({ content: '[data-motu-chrome]{visibility:hidden!important}' });
+          shots.push({
+            scenario: scenario.name ?? 'default',
+            viewport: vp.name,
+            width: vp.width,
+            png: await page.screenshot({ animations: 'disabled' }),
+            portals: portaled,
+          });
+          continue;
+        }
         // A `display: contents` wrapper cannot be screenshotted; its first painted child can.
         const target = (await el?.evaluateHandle((n) => (n.getBoundingClientRect().height ? n : n.firstElementChild)))?.asElement();
         const png = target
@@ -1399,7 +1430,7 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
       const ready = await page
         .evaluate((t) => {
           const el = window.__motuFindIsland(t);
-          return !!el && (el.innerHTML || '').trim().length > 0;
+          return !!el && window.__motuRendered(el).trim().length > 0;
         }, tag)
         .catch(() => false);
       if (ready) break;
@@ -1439,7 +1470,17 @@ export async function responsiveLagoon({ tag, port = 5199, viewports = [], scena
           return l === Infinity ? null : { left: l, top: t2, right: r, bottom: b, width: r - l, height: b - t2 };
         };
         const doc = document.documentElement;
-        const rect = boxOf(window.__motuFindIsland(t));
+        const island = window.__motuFindIsland(t);
+        // The island's own box, grown by whatever it portaled — a dialog-only island is not "blank".
+        let rect = boxOf(island);
+        for (const p of island ? window.__motuPortals(island) : []) {
+          const b = boxOf(p);
+          if (!b || (!b.width && !b.height)) continue;
+          if (!rect || (!rect.width && !rect.height)) { rect = b; continue; }
+          const l = Math.min(rect.left, b.left), t2 = Math.min(rect.top, b.top);
+          const r = Math.max(rect.right, b.right), bt = Math.max(rect.bottom, b.bottom);
+          rect = { left: l, top: t2, right: r, bottom: bt, width: r - l, height: bt - t2 };
+        }
         return {
           overflow: doc.scrollWidth - doc.clientWidth,
           rendered: !!rect && rect.width > 0 && rect.height > 0,
@@ -1692,10 +1733,14 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     const requestCount = () =>
       page.evaluate(() => window.__motuFakeFetchRequestCount).catch(() => undefined);
 
+    // How many body-level nodes each scenario's render included from the island's own portals — so
+    // a pass that rests on a dialog says so, rather than reading like the island's own subtree.
+    const portals = [];
     for (const [i, scenario] of scenarios.entries()) {
       await provideScenario(page, scenario.seed, { owned });
       if (!scenario.interactions?.length) {
         outputs.push(normalizeRender(await waitForStableRender(page, tag, { timeoutMs: 8000 })));
+        portals.push(await portalCount(page, tag));
         continue;
       }
 
@@ -1720,6 +1765,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
         inertInteractions.push({ name: scenario.name ?? `#${i + 1}`, requestsObservable: known });
       }
       outputs.push(after);
+      portals.push(await portalCount(page, tag));
     }
 
     const rejections = await page.evaluate(() => window.__motuRejections || []).catch(() => []);
@@ -1734,7 +1780,7 @@ export async function differentiateLagoon({ tag, fit = 'native', port = 5199, sc
     const empty = outputs.map((o, i) => (o.trim().length ? null : (scenarios[i]?.name ?? `#${i + 1}`))).filter(Boolean);
     const distinctOutputs = new Set(outputs).size;
     const differentiates = empty.length === 0 && distinctOutputs > 1;
-    return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics, fixtureCoverage, inertInteractions, networkEscapes };
+    return { differentiates, empty, distinctOutputs, scenarioCount: scenarios.length, mounted: true, diagnostics, fixtureCoverage, inertInteractions, networkEscapes, portals };
   });
 }
 

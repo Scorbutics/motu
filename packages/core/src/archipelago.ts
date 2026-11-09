@@ -302,8 +302,19 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    *
    * It is the LAGOON's condition only. The page still decides for itself, by passing a node or null —
    * declaring it here does not move that decision, it lets the preview follow it.
+   *
+   * A WHOLE REGION can fill a prop too — `{ region: '<id>' }`, the id of another archipelago:
+   *
+   *   slots: { businessTeamPanel: { region: 'equipage' } }
+   *
+   * The child stays a region of its own — its islands, keys, seed, flows and address are its own, and
+   * none of them count as this one's. The page places the child's composition in the prop
+   * (`businessTeamPanel={<Equipage.Region><Equipage.Root /></Equipage.Region>}`); the lagoon shows a
+   * PLACEHOLDER naming it, loaded in place only on request, so this region's flows and snapshots do
+   * not depend on how the other one renders. An unknown id, a cycle, or a reference from a region with
+   * no `root` is refused — see `regionRefProblems`.
    */
-  slots?: Record<string, string | { slot: string; when?: string; unless?: string }>;
+  slots?: Record<string, string | { slot: string; when?: string; unless?: string } | RegionRef>;
   /**
    * Root props the HOST fills, and the application component that fills them: prop -> component.
    *
@@ -621,6 +632,116 @@ export type RegionOf<C> = C extends RegionBrand<infer R> ? (unknown extends R ? 
 /** A root slot's name, whichever form it was declared in. */
 export function slotNameOf(entry: string | { slot: string }): string {
   return typeof entry === 'string' ? entry : entry.slot;
+}
+
+/**
+ * A root prop filled by ANOTHER REGION rather than by an island: `{ region: '<archipelago id>' }`.
+ *
+ * A string id, not the archipelago object. An import would make the reference typo-proof, and it
+ * would also make a cycle (A fills a slot with B, B with A) an ES-module cycle — one of the two configs
+ * read in its temporal dead zone, a `ReferenceError` at boot instead of the error naming the cycle.
+ * The id is also how a region is addressed everywhere else: `?region=<id>`, `motu archipelago verify
+ * <id>`. What an import would have caught at compile time, `region-ref` catches statically.
+ */
+export interface RegionRef {
+  region: string;
+}
+
+/** The region a root slot entry refers to, or undefined when an island fills it. */
+export function regionRefOf(entry: unknown): string | undefined {
+  if (!entry || typeof entry !== 'object') return undefined;
+  const region = (entry as { region?: unknown }).region;
+  return typeof region === 'string' ? region : undefined;
+}
+
+/** prop -> referenced region id, for every root prop this config fills with another region. */
+export function regionRefs(config: { slots?: Record<string, unknown> }): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [prop, entry] of Object.entries(config.slots ?? {})) {
+    const ref = regionRefOf(entry);
+    if (ref !== undefined) out[prop] = ref;
+  }
+  return out;
+}
+
+/** Every region and what it references — the plain-data graph both the lagoon and the CLI build. */
+export type RegionRefGraph = Record<string, { root: boolean; refs: Record<string, string> }>;
+
+/** One reason a region reference cannot be honoured. */
+export interface RegionRefProblem {
+  /** `unknown`: no region has that id. `cycle`: following references comes back. `no-root`: the
+   *  referencing region declares no `root`, so it has no prop for the region to fill. */
+  kind: 'unknown' | 'cycle' | 'no-root';
+  region: string;
+  prop: string;
+  ref: string;
+  /** For a cycle: the ids walked, first and last the same (`['a', 'b', 'a']`). */
+  path?: string[];
+  message: string;
+}
+
+/** The graph, from live configs (the lagoon's registry). */
+export function regionRefGraph(configs: Record<string, { root?: unknown; slots?: Record<string, unknown> }>): RegionRefGraph {
+  const graph: RegionRefGraph = {};
+  for (const [id, config] of Object.entries(configs)) graph[id] = { root: Boolean(config.root), refs: regionRefs(config) };
+  return graph;
+}
+
+/**
+ * Every reference in the graph that cannot be honoured — REFUSED, never rendered as something else.
+ *
+ * One function for both readers: the lagoon (which refuses to load the slot) and `motu archipelago
+ * verify` (which errors), so the two cannot disagree about which references are broken.
+ *
+ * A cycle is reported once per edge that lies on it, each with the path from that edge's region, so
+ * every region in the loop gets its own error and the report names the loop the same way from any
+ * side. A self-reference is the one-edge cycle.
+ */
+export function regionRefProblems(graph: RegionRefGraph): RegionRefProblem[] {
+  const problems: RegionRefProblem[] = [];
+  /** A path from `from` back to `target`, following references, or null. */
+  const pathBack = (from: string, target: string, seen = new Set<string>()): string[] | null => {
+    if (from === target) return [target];
+    if (seen.has(from)) return null;
+    seen.add(from);
+    for (const next of Object.values(graph[from]?.refs ?? {})) {
+      const rest = pathBack(next, target, seen);
+      if (rest) return [from, ...rest];
+    }
+    return null;
+  };
+  for (const [region, node] of Object.entries(graph)) {
+    for (const [prop, ref] of Object.entries(node.refs)) {
+      if (!node.root) {
+        problems.push({
+          kind: 'no-root', region, prop, ref,
+          message:
+            `region "${region}" fills \`${prop}\` with region "${ref}" but declares no \`root\` — a region ` +
+            `reference fills a ROOT prop, so declare the application's own component as \`root\``,
+        });
+      }
+      if (!(ref in graph)) {
+        problems.push({
+          kind: 'unknown', region, prop, ref,
+          message:
+            `region "${region}" fills \`${prop}\` with region "${ref}", and no region has that id ` +
+            `(known: ${Object.keys(graph).join(', ') || 'none'})`,
+        });
+        continue;
+      }
+      const back = pathBack(ref, region);
+      if (back) {
+        const path = [region, ...back];
+        problems.push({
+          kind: 'cycle', region, prop, ref, path,
+          message:
+            `region "${region}" fills \`${prop}\` with region "${ref}", which leads back to it: ` +
+            `${path.join(' → ')} — a region cannot contain itself`,
+        });
+      }
+    }
+  }
+  return problems;
 }
 
 /**

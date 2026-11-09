@@ -89,6 +89,7 @@ export function motuToolbar(): HTMLElement {
   const bar = document.createElement('div');
   bar.id = TOOLBAR_ID;
   bar.setAttribute('role', 'toolbar');
+  bar.setAttribute('data-motu-chrome', '');
   if (toolbarHost) {
     bar.dataset.hosted = '';
     toolbarHost.appendChild(bar);

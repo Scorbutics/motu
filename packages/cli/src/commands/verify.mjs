@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
 import { conditionalSlots, declaredSlotNames, frameModuleFor, nestedSlots } from '../lib/lagoon-declares.mjs';
+import { regionRefsOf } from '../lib/region-refs.mjs';
 import { placementsIn } from '../lib/island-placement.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -813,6 +814,11 @@ export function reportReachDrift(report, observed, declared, label) {
   if (clean) report.ok('data-reach', `${clean} owner(s) reach exactly what they declare (${label})`, clean);
 }
 
+/** `1 portal` / `2 portals` — the body-level nodes an island's own mount portaled and a check counted. */
+function portalNote(n) {
+  return `${n} portal${n === 1 ? '' : 's'}`;
+}
+
 /** Map the runtime result's diagnostics + remount signal onto report findings (shared by both engines). */
 function reportRuntimeDiagnostics(report, r, label, declared = null) {
   const diagnostics = r?.diagnostics ?? [];
@@ -822,10 +828,12 @@ function reportRuntimeDiagnostics(report, r, label, declared = null) {
     report.error('no-console-errors', `console error / unhandled rejection (${label}): ${diagnostics[0]}`);
   }
 
+  // Both renders include what the island portaled (lib/island-render.mjs), and the line says so.
+  const portaled = r?.portals ? ` · ${portalNote(r.portals)}` : '';
   if (r?.remountIdentical === true) {
-    report.ok('remount-stable', `re-mount produces identical output (${label})`);
+    report.ok('remount-stable', `re-mount produces identical output (${label}${portaled})`);
   } else if (r?.remountIdentical === false) {
-    report.error('remount-stable', `re-mount changed the output (${label}) — likely accidental module-level state`);
+    report.error('remount-stable', `re-mount changed the output (${label}${portaled}) — likely accidental module-level state`);
   }
   // remountIdentical == null → the island never rendered; the mount error already covers it.
 
@@ -1125,10 +1133,16 @@ function reportDifferentiation(report, r) {
           `${r.scenarioCount - r.distinctOutputs} of them show nothing the others do not`,
       );
     }
+    // A pass that rests on what the island PORTALED (a dialog on <body>) says so — otherwise it reads
+    // like the island's own subtree differed, and the next person cannot tell which it was.
+    const withPortals = (r.portals ?? []).filter((n) => n > 0);
+    const portaled = withPortals.length
+      ? ` · ${portalNote(withPortals.reduce((a, b) => a + b, 0))} in ${withPortals.length} of ${r.scenarioCount} scenario(s)`
+      : '';
     report.ok(
       'data-flow',
       `distinct inputs produce distinct output (${r.scenarioCount} scenarios) — data flows past the seam`,
-      { n: r.distinctOutputs ?? r.scenarioCount, of: 'distinct render(s)' },
+      { n: r.distinctOutputs ?? r.scenarioCount, of: `distinct render(s)${portaled}` },
     );
   } else if (r.empty?.length) {
     // AN EMPTY SCENARIO IS NOT AN IDENTICAL ONE. The comparison needs every scenario to have rendered
@@ -2460,7 +2474,10 @@ function printReport(report, title, errors, warns) {
   for (const f of report.findings) if (verbose || f.level !== 'ok') line(f);
   if (!verbose && passed.length) {
     console.log(`  ${color.green('✓')} ${color.dim('passed'.padEnd(18))} ${passed.length} check(s)`);
-    console.log(`    ${color.dim(passed.map((f) => f.check).join(', '))}`);
+    // A pass that counted an island's PORTALED output (lib/island-render.mjs) keeps that on its name
+    // even collapsed — "data-flow" passing on a dialog is a different claim from passing on the subtree.
+    const named = (f) => (/\bportals?\b/.test(`${f.examinedOf ?? ''} ${f.msg}`) ? `${f.check} (incl. portal)` : f.check);
+    console.log(`    ${color.dim(passed.map(named).join(', '))}`);
   }
   console.log('');
   const unknown = report.findings.filter((f) => f.level === 'inconclusive');
@@ -3663,11 +3680,48 @@ function producedKeysOf(region) {
 }
 
 /** One region's checks, as data — see `runIslandVerify`. */
+/**
+ * A region inside a region: `slots: { prop: { region: '<id>' } }`.
+ *
+ * Refused, not rendered as a default: a reference to an id no archipelago has, one that leads back to
+ * the region making it (a region cannot contain itself), or one from a region with no `root` (there is
+ * no prop for it to fill). The verdict is `regionRefProblems` — the function the lagoon uses to refuse
+ * the placeholder — so the check and the preview give one answer.
+ *
+ * Says nothing on a region that neither references nor is referenced: that is nearly every region,
+ * and a row there would be a check that examined nothing reporting as one that passed.
+ */
+function regionRefCheck(report, id) {
+  const { refs, problems, referencedBy, unreadable } = regionRefsOf(id, paths.archipelagosDir);
+  if (unreadable) {
+    report.warn('region-ref', `${paths.rel(paths.archipelagoFile(id))} could not be parsed, so its region references were not read`);
+    return;
+  }
+  for (const p of problems) report.error('region-ref', p.message);
+  const entries = Object.entries(refs);
+  if (entries.length && !problems.length) {
+    report.ok(
+      'region-ref',
+      `${entries.map(([prop, ref]) => `${prop} → region ${ref}`).join(', ')} — a separate region: its islands, keys ` +
+        `and flows are its own and are not counted here; the lagoon shows a placeholder until it is loaded`,
+      { n: entries.length, of: 'region reference(s)' },
+    );
+  }
+  if (referencedBy.length) {
+    report.ok('region-ref', `fills ${referencedBy.join(', ')} — composed inside another region, verified on its own`, {
+      n: referencedBy.length,
+      of: 'slot(s) this region fills',
+    });
+  }
+}
+
 export async function runArchipelagoVerify(argv, id) {
   setVerbose(argv?.verbose);
   setProgressScope(id);
   const report = makeReport();
   const hasLayout = archipelagoConfigChecks(report, id);
+  // Static, and project-wide in what it reads: a cycle is a property of the graph, not of one file.
+  if (existsSync(paths.archipelagoFile(id))) regionRefCheck(report, id);
 
   // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);

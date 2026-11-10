@@ -9,8 +9,11 @@
 globalThis.__MOTU_DEBUG__ = true;
 
 const { liveCalls, resetLiveCalls, subscribeCalls, runWithSource, runWithIsland } = await import('../dist/index.js');
-const { createPostgrestFetch } = await import('@motu/runtime/postgrest-fetch');
-const { configure, call, MotuError } = await import('@motu/runtime');
+// RELATIVE, not `@motu/runtime`: core cannot declare runtime (runtime depends on core — a cycle), so the
+// bare specifier only resolved through hand-made links at the repo root and failed on a clean pnpm
+// install (CI). Runtime's own `@motu/core` resolves to this package's files, so the ledger is shared.
+const { createPostgrestFetch } = await import('../../runtime/dist/postgrest-fetch.js');
+const { configure, call, MotuError } = await import('../../runtime/dist/index.js');
 
 let pass = 0, fail = 0;
 const t = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' -> ' + detail : ''}`); };

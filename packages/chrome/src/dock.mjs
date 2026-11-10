@@ -1003,6 +1003,8 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
     -ms-overflow-style: none;
     height: 30px;
     padding-bottom: 4px;
+    /* The lit chip is scrolled into view — with room around it, not flush against the edge. */
+    scroll-padding-inline: 14px;
   }
   #tide .rail-states::-webkit-scrollbar { display: none; }
   /* After the display rule, so hiding actually hides: a bare [hidden] loses to #tide .rail-states. */
@@ -1027,6 +1029,11 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
     color: var(--w-deep);
   }
   #tide .rail-chip:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
+  /* The region the strip is aimed at: outlined, not filled — it is a switch, not a state. */
+  #tide .rail-chip--region { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--motu-on-primary, #fff) 60%, transparent); }
+  #tide .rail-chip--step { padding: 0 9px; font-variant-numeric: tabular-nums; }
+  #tide .rail-chip--step:disabled { opacity: .45; cursor: default; }
+  #tide .rail-chip--more { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--motu-on-primary, #fff) 55%, transparent); line-height: 23px; }
   #tide .rail-dock .stand {
     writing-mode: horizontal-tb;
     flex: 0 1 auto;
@@ -1787,6 +1794,101 @@ function motuMountDock(opts) {
   var focused = null;
   var lastFocus = null;
 
+  /** The region the phone strip is aimed at, when the reader picked one with the region chip. */
+  var railPick = null;
+
+  /**
+   * THE PHONE STRIP, FOR WHATEVER IS ON SCREEN — the states you reach for while watching the page.
+   *
+   * A screen holds several regions and the bar has one row, so the strip is aimed at ONE region,
+   * chosen the way a person would: the one you picked (the region chip cycles), else the station's own
+   * region, else a region already in a state, else the MAIN one — the region with the most states, which
+   * is the page body rather than the sidebar. Its row: the region chip (only when there is a choice),
+   * "As seeded", its flows (reachable, played in place), the steps of the playing flow, the what-if it
+   * is in, and a chip that opens the sheet on that region's island scenarios — too many for a row, and
+   * a what-if deserves the sheet that says what it forged.
+   */
+  var railChips = function (ctl, cat, now) {
+    var info = ctl.states();
+    var regs = info.regions || [];
+    if (!regs.length) return null;
+    var active = info.active || [];
+    var size = function (r) { return (r.flows || []).length * 1000 + (r.islands || []).reduce(function (n, i) { return n + i.scenarios.length; }, 0); };
+    var onRegionStation = now.region && now.region.indexOf('screen:') !== 0;
+    var ids = regs.map(function (r) { return r.region; });
+    var regId =
+      (railPick && ids.indexOf(railPick) !== -1 && railPick) ||
+      (onRegionStation && ids.indexOf(now.region) !== -1 && now.region) ||
+      (active[0] && ids.indexOf(active[0].region) !== -1 && active[0].region) ||
+      regs.slice().sort(function (a, b) { return size(b) - size(a); })[0].region;
+    var reg = regs.filter(function (r) { return r.region === regId; })[0];
+    var act = active.filter(function (a) { return a.region === regId; })[0] || null;
+    var own = onRegionStation && regId === now.region;
+    var activeFlow = own ? now.flow || null : act && act.kind === 'flow' ? act.name : null;
+    var labelOf = function (id) {
+      var r = (cat.archipelagos || []).filter(function (x) { return x.id === id; })[0];
+      return r ? r.label : id;
+    };
+    var chips = [];
+    var lit = null;
+    if (regs.length > 1) {
+      // CYCLES through the regions on screen — one tap, no menu to open over the page.
+      var next = ids[(ids.indexOf(regId) + 1) % ids.length];
+      var rc = stateChip(labelOf(regId) + ' \u25be', false, function () { railPick = next; paint(); });
+      rc.classList.add('rail-chip--region');
+      rc.title = 'Showing ' + labelOf(regId) + "'s states — tap for " + labelOf(next);
+      chips.push(rc);
+    }
+    var play = function (name, step) {
+      return drive(function (c) {
+        if (own && step == null) c.runFlow(name);
+        else if (name === null) c.clearState(regId);
+        else c.playState({ region: regId, kind: 'flow', name: name, step: step == null ? null : step });
+      });
+    };
+    var seeded = !activeFlow && !(act && act.kind === 'scenario');
+    chips.push(stateChip('As seeded', seeded, play(null)));
+    if (seeded) lit = 'As seeded';
+    if (act && act.kind === 'scenario') {
+      // The what-if this region is in, lit; pressing it opens the sheet on that island.
+      var w = stateChip('\u25c7 ' + act.name, true, drive(function (c) { c.focusRegion ? c.focusRegion(regId, act.island) : (open(true), showTab('states')); }));
+      w.title = 'what-if: ' + act.island + (act.forged && act.forged.length ? ' — forged ' + act.forged.map(function (f) { return f.key; }).join(', ') : '');
+      chips.push(w);
+      lit = w.textContent;
+    }
+    (reg.flows || []).forEach(function (name) {
+      var on = activeFlow === name;
+      chips.push(stateChip(name, on, play(name)));
+      if (on) lit = name;
+      // The steps of the flow this region is in, right beside it: scrub without opening anything.
+      if (on && !own && act && act.of > 1) {
+        var at = act.applied == null ? act.of : act.applied;
+        var prev = stateChip('\u2039', false, play(name, Math.max(0, at - 1)));
+        var pos = stateChip(at + '/' + act.of, false, function () {});
+        var nxt = stateChip('\u203a', false, play(name, Math.min(act.of, at + 1)));
+        prev.setAttribute('aria-label', 'previous step');
+        nxt.setAttribute('aria-label', 'next step');
+        if (at <= 0) prev.disabled = true;
+        if (at >= act.of) nxt.disabled = true;
+        pos.disabled = true;
+        [prev, pos, nxt].forEach(function (b) { b.classList.add('rail-chip--step'); chips.push(b); });
+      }
+    });
+    var nScen = (reg.islands || []).reduce(function (n, i) { return n + i.scenarios.length; }, 0);
+    if (nScen) {
+      var more = stateChip('\u25c7 ' + nScen + ' what-if' + (nScen === 1 ? '' : 's'), false, drive(function (c) {
+        // '*': every island of the region unfolded, and the sheet opened AT them — the chip promised the
+        // what-ifs, and landing on the flows above them would make the reader go looking.
+        if (c.focusRegion) c.focusRegion(regId, '*');
+        else { open(true); showTab('states'); }
+      }));
+      more.classList.add('rail-chip--more');
+      more.title = labelOf(regId) + "'s island scenarios — opens the sheet on them";
+      chips.push(more);
+    }
+    return { chips: chips, lit: lit };
+  };
+
   var stateTree = function (ctl, cat, now, hit) {
     var info = ctl.states();
     var onRegionStation = now.region && now.region.indexOf('screen:') !== 0;
@@ -1840,7 +1942,7 @@ function motuMountDock(opts) {
         var names = (isl.scenarios || []).filter(function (n) { return hit(n) || hit(isl.tag); });
         if (!names.length) return;
         count += names.length;
-        var open = (!!activeScenario && activeScenario.indexOf(isl.tag + '\u0000') === 0) || (isFocus && focused.island === isl.tag);
+        var open = (!!activeScenario && activeScenario.indexOf(isl.tag + '\u0000') === 0) || (isFocus && (focused.island === isl.tag || focused.island === '*'));
         var fold = el('details', { class: 'state-island', 'data-tag': isl.tag }, [
           el('summary', {}, [isl.slot || isl.tag, el('span', { class: 'count' }, [String(names.length)])]),
         ]);
@@ -1964,7 +2066,9 @@ function motuMountDock(opts) {
         showTab('states');
         setTimeout(function () {
           var target = states.list.querySelector(
-            focused.island ? '.state-island[data-tag="' + focused.island + '"]' : '.state-group[data-region="' + focused.region + '"]',
+            focused.island === '*'
+              ? '.state-group[data-region="' + focused.region + '"] .state-island'
+              : focused.island ? '.state-island[data-tag="' + focused.island + '"]' : '.state-group[data-region="' + focused.region + '"]',
           );
           if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
         }, 60);
@@ -1980,11 +2084,16 @@ function motuMountDock(opts) {
     entries.forEach(function (e) {
       chips.push(stateChip(e.name, showing === e.name, go(e.name)));
     });
+    var smart = !onIsland && ctl.states ? railChips(ctl, cat, now) : null;
+    if (smart) {
+      chips = smart.chips;
+      showing = smart.lit;
+    }
     railStates.replaceChildren.apply(railStates, chips);
     // A target with no declared states has one state, which is the one you are looking at. A lone
     // base chip is a control that cannot do anything, so the strip stands down and the bar keeps its
     // original height.
-    railStates.hidden = entries.length === 0;
+    railStates.hidden = smart ? smart.chips.length <= 1 : entries.length === 0;
     keepSelectedVisible(showing);
     syncBottomReserve();
 

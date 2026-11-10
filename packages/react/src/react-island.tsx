@@ -52,6 +52,7 @@ import {
   hostFedKeys,
   openIslandWindow,
   closeIslandWindow,
+  regionIdOfStore,
   type IslandSpec
 } from '@motu/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap';
@@ -513,6 +514,9 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
       className,
       'data-motu-island': spec.element,
       'data-motu-slot': slot,
+      // Which REGION this island is drawn for — a screen holds several, and the state player and the
+      // lens both need to tell them apart from the page.
+      'data-motu-region': regionIdOfStore(ctx.store) ?? undefined,
       style: className ? undefined : { display: 'contents' },
     },
     // The island's own effects run BETWEEN these two, because React runs passive effects in tree
@@ -595,6 +599,9 @@ function CustomElementIsland({
       className,
       'data-motu-island': spec.element,
       'data-motu-slot': slot,
+      // Which REGION this island is drawn for — a screen holds several, and the state player and the
+      // lens both need to tell them apart from the page.
+      'data-motu-region': regionIdOfStore(ctx.store) ?? undefined,
       style: className ? undefined : { display: 'contents' },
     },
     createElement(spec.element, { ref }),

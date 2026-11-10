@@ -72,6 +72,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # THE PACKAGES' OWN UNIT TESTS. They existed and nothing here ran them — only host-app's did. No
+      # browser, a few seconds; the react ones read `dist/`, which the build step above produced.
+      - name: Package unit tests
+        run: node --test packages/cli/test/*.test.mjs packages/core/test/*.test.mjs packages/chrome/test/*.test.mjs packages/host/test/*.test.mjs packages/react/test/*.test.mjs
+
       # THE GENERATOR, WHICH NOTHING ELSE IN THIS FILE EXERCISES. Every project checked below was
       # scaffolded ONCE, long ago, and hand-fixed; `motu check` proves they are correct TODAY and says
       # nothing about what `motu init` would produce now. A cold-start bench found seven defects in

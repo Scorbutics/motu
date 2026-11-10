@@ -43,3 +43,5 @@ export type {
 } from './bootstrap';
 export { readStateRequest, pickState, stateNames, slug, replayFlow, publishStates, reportState, regionsForFlow, resolveFlowRegion } from './lagoon-states';
 export type { LagoonEvidence, StateRequest, StateOutcome } from './lagoon-states';
+export { playState, clearState, activeStates, statesFor, mountedRegionIds, regionHarness, regionsInView, scenarioToRegion, subscribeStates, registerLagoonRegion, subscribeRegionRemount, formatStateParam, parseStateParam } from './lagoon-player';
+export type { StateRef, PlayOutcome } from './lagoon-player';

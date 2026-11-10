@@ -22,6 +22,7 @@ import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { lagoonHarness } from './lagoon-harness';
+import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef } from './lagoon-player';
 import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
@@ -36,7 +37,6 @@ import {
   publishStates,
   readStateRequest,
   readTarget,
-  replayFlow,
   replayInteractions,
   reportState,
   resolveFlowRegion,
@@ -437,6 +437,24 @@ markSandbox();
   // A REFUSAL MOUNTS NOTHING. The banner alone is not the refusal: leaving the first region on screen
   // under it is the substitution being refused, and a screenshot of it looks like a working lagoon.
   let refused = false;
+  // STATES BY ADDRESS — `?state=<region>.flow.<name>[@step]` / `<region>.scenario.<island>.<name>`, one per
+  // region (lagoon-player). Resolved BEFORE anything mounts: a state that names nothing refuses the
+  // whole view, as every other lagoon address does, rather than showing the view without it.
+  let requestedStates: StateRef[] = [];
+  {
+    const raw = new URLSearchParams(location.search).getAll('state');
+    const parsed = raw.map(parseStateParam);
+    const bad = parsed
+      .map((r, i) => ('error' in r ? r.error : resolveStateRef(r, opts.evidence) ? `"${raw[i]}": ${resolveStateRef(r, opts.evidence)}` : null))
+      .filter((e): e is string => !!e);
+    const regions = parsed.filter((r): r is StateRef => !('error' in r)).map((r) => r.region);
+    const twice = regions.filter((r, i) => regions.indexOf(r) !== i);
+    if (twice.length) bad.push(`one state per region — ${[...new Set(twice)].join(', ')} named more than once`);
+    if (bad.length) {
+      reportState({ ok: false, target: 'this lagoon', kind: 'none', error: bad.join(' · ') });
+      refused = true;
+    } else requestedStates = parsed as StateRef[];
+  }
   /** The island scenario currently showing. Not read off `request`: that is only ever what the URL
    *  said at LOAD, and switching in place has to move it. */
   let currentScenario: string | null = null;
@@ -556,6 +574,7 @@ markSandbox();
           : { ok: false, target: 'this lagoon', kind: 'none', error: `no declared screen serves ${path}`, available: screens.map((x) => x.path) },
     );
     controlChanged();
+    if (opened && requestedStates.length) void applyRequestedStates();
   }
 
   function writeScreenAddress(sc: ScreenConfig, path: string): void {
@@ -565,7 +584,12 @@ markSandbox();
     if (path !== sc.path) url.searchParams.set('path', path);
     else url.searchParams.delete('path');
     history.replaceState(null, '', url);
+    // A region that STAYED across the navigation (the sidebar) keeps its state, and the address says so.
+    writeStateAddress();
   }
+
+  /** The element path's remount subscription for the region on screen — replaced with each mount. */
+  let elementRemount: (() => void) | undefined;
 
   function mount(id: string): void {
     if (!id) return;
@@ -611,6 +635,7 @@ markSandbox();
       tide.setActive(current, view);
       tide.setFlows(flowsOf(id), activeFlowName(id));
       applyRequestedFlow(id);
+      if (requestedStates.length) void applyRequestedStates();
       return;
     }
 
@@ -659,12 +684,25 @@ markSandbox();
           seed: regionOverrides(overrides, id).seed,
           host,
         });
+        // AND THE STATE PLAYER, which the React path tells from `regionTree`. Its remount is this path's
+        // teardown — re-inserting the markers — so a scenario's seed is what the islands MOUNT with here too.
+        registerLagoonRegion(mountedConfig, { seed: regionOverrides(overrides, id).seed, host });
+        elementRemount?.();
+        elementRemount = subscribeRegionRemount(id, () => {
+          for (const m of root!.querySelectorAll('motu-island')) {
+            const parent = m.parentNode;
+            const next = m.nextSibling;
+            parent?.removeChild(m);
+            parent?.insertBefore(m, next);
+          }
+        });
       }
     }
 
     tide.setActive(current, view);
     tide.setFlows(flowsOf(id), activeFlowName(id));
     applyRequestedFlow(id);
+    if (requestedStates.length) void applyRequestedStates();
   }
 
   /**
@@ -741,7 +779,9 @@ markSandbox();
     const flow = pickState(opts.evidence?.flows?.[id], currentFlowName);
     if (!flow) return; // reported at boot, with the whole catalogue
     tide.setFlowOutcome('running…');
-    void replayFlow(flow, currentFlowStep).then((outcome) => {
+    // Through the state player, so the region's state is RECORDED (the dock lights it) — `fresh`,
+    // because `mount` has just built the region from its seed and a reset would only restart sources.
+    void playState({ region: id, kind: 'flow', name: flow.name ?? currentFlowName, step: currentFlowStep }, opts.evidence, { fresh: true }).then((outcome) => {
       reportState({ ...outcome, target: `archipelago:${id}` });
       tide.setFlowOutcome(
         outcome.ok ? `applied ${outcome.applied}/${outcome.of} step(s)` : (outcome.error ?? 'could not run'),
@@ -803,6 +843,146 @@ markSandbox();
    *
    * Installed on `window` rather than passed anywhere, because the consumer is in another document.
    */
+  /** What the page last pointed at, for the dock: a region (its chip), or an island on a screen. */
+  let focus: { region: string; island: string | null; n: number } | null = null;
+  let focusN = 0;
+  function focusOn(region: string, islandTag: string | null): void {
+    focus = { region, island: islandTag, n: ++focusN };
+    controlChanged();
+  }
+
+  /**
+   * POINT AT A REGION ON A SCREEN and it says what it can be put in.
+   *
+   * A screen shows several regions at once and nothing on it said where one ends — or that its islands
+   * have scenarios at all. Hovering draws the region's outline and a chip with its count of states;
+   * pressing the chip opens the dock on them. Screens only: on a region's own station the whole page is
+   * that region, and an outline around everything says nothing.
+   */
+  function installRegionHover(): void {
+    if (typeof document === 'undefined') return;
+    const box = document.createElement('div');
+    box.setAttribute('data-motu-chrome', '');
+    Object.assign(box.style, {
+      position: 'fixed', pointerEvents: 'none', zIndex: '2147482000', display: 'none',
+      border: '2px dashed var(--motu-primary, #2f5d8a)', borderRadius: '6px', boxSizing: 'border-box',
+    });
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.setAttribute('data-motu-chrome', '');
+    chip.setAttribute('data-motu-region-chip', '');
+    Object.assign(chip.style, {
+      position: 'fixed', zIndex: '2147482001', display: 'none', cursor: 'pointer',
+      padding: '5px 10px', borderRadius: '999px', border: '0',
+      background: 'var(--motu-primary, #2f5d8a)', color: 'var(--motu-on-primary, #fff)',
+      font: '600 12px/1.2 system-ui, sans-serif', boxShadow: '0 4px 14px rgba(0,0,0,.25)',
+    });
+    document.body.append(box, chip);
+    let shown: string | null = null;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const hide = () => {
+      shown = null;
+      box.style.display = 'none';
+      chip.style.display = 'none';
+    };
+    const rectOf = (id: string): DOMRect | null => {
+      let top = Infinity, left = Infinity, right = -Infinity, bottom = -Infinity;
+      for (const w of document.querySelectorAll<HTMLElement>(`[data-motu-region="${CSS.escape(id)}"]`)) {
+        // display:contents wrappers have no box of their own — their children do.
+        for (const c of [w, ...Array.from(w.children)]) {
+          const r = c.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          top = Math.min(top, r.top); left = Math.min(left, r.left);
+          right = Math.max(right, r.right); bottom = Math.max(bottom, r.bottom);
+        }
+      }
+      return top === Infinity ? null : new DOMRect(left, top, right - left, bottom - top);
+    };
+    const show = (id: string) => {
+      clearTimeout(hideTimer);
+      const r = rectOf(id);
+      if (!r) return hide();
+      Object.assign(box.style, { display: 'block', top: `${r.top - 4}px`, left: `${r.left - 4}px`, width: `${r.width + 8}px`, height: `${r.height + 8}px` });
+      if (shown !== id) {
+        const s = statesFor([id], opts.evidence)[0];
+        const scen = s ? s.islands.reduce((n, i) => n + i.scenarios.length, 0) : 0;
+        const label = stations.find((x) => x.id === id)?.label ?? id;
+        chip.textContent = `${label} · ${s?.flows.length ?? 0} flow${s?.flows.length === 1 ? '' : 's'} · ${scen} scenario${scen === 1 ? '' : 's'}`;
+        chip.onclick = () => {
+          focusOn(id, null);
+          hide();
+        };
+      }
+      shown = id;
+      chip.style.display = 'block';
+      chip.style.top = `${Math.max(8, r.top + 6)}px`;
+      chip.style.left = `${Math.max(8, Math.min(r.left + 6, window.innerWidth - chip.offsetWidth - 8))}px`;
+    };
+    document.addEventListener(
+      'pointermove',
+      (e) => {
+        if (!current.startsWith(SCREEN) || e.pointerType === 'touch') return hide();
+        const t = e.target as Element | null;
+        if (!t || chip.contains(t)) return;
+        const id = (t.closest?.('[data-motu-region]') as HTMLElement | null)?.dataset.motuRegion;
+        if (!id || id === 'lagoon') {
+          clearTimeout(hideTimer);
+          hideTimer = setTimeout(hide, 250);
+          return;
+        }
+        show(id);
+      },
+      { passive: true },
+    );
+    window.addEventListener('scroll', hide, { passive: true, capture: true });
+  }
+  installRegionHover();
+
+  /** The active states, as the address — after every change, and after a navigation keeps some. */
+  function writeStateAddress(): void {
+    const url = new URL(location.href);
+    url.searchParams.delete('state');
+    const inView = regionsInView();
+    for (const a of activeStates()) {
+      if (!inView.includes(a.ref.region)) continue;
+      // The region view's own flow is already `flow=`; writing it twice would let the two disagree.
+      if (!current.startsWith(SCREEN) && a.ref.kind === 'flow' && a.ref.region === current) continue;
+      url.searchParams.append('state', formatStateParam(a.ref));
+    }
+    history.replaceState(null, '', url);
+  }
+
+  async function playRequested(input: StateRef | string): Promise<unknown> {
+    const ref = typeof input === 'string' ? parseStateParam(input) : input;
+    if ('error' in ref) {
+      reportState({ ok: false, target: 'this lagoon', kind: 'none', error: ref.error });
+      return ref;
+    }
+    const outcome = await playState(ref, opts.evidence);
+    reportState(outcome);
+    writeStateAddress();
+    return outcome;
+  }
+
+  /** The states the ADDRESS asked for, once their regions are on screen. Once, at boot. */
+  async function applyRequestedStates(): Promise<void> {
+    const wanted = requestedStates;
+    requestedStates = [];
+    for (const ref of wanted) {
+      const until = Date.now() + 8000;
+      while (!regionsInView().includes(ref.region) && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+      if (!regionsInView().includes(ref.region)) {
+        reportState({ ok: false, target: `archipelago:${ref.region}`, kind: ref.kind, name: ref.name, error: `region "${ref.region}" is not on this view, so its state cannot be shown here` });
+        return;
+      }
+      const outcome = await playState(ref, opts.evidence);
+      reportState(outcome);
+      if (!outcome.ok) return;
+    }
+    writeStateAddress();
+  }
+  subscribeStates(() => controlChanged());
+
   const publishControl = (): void => {
     (window as unknown as { __motuLagoonControl?: unknown }).__motuLagoonControl = {
       regions: () => [...screenStations, ...stations.map((x) => ({ id: x.id, label: x.label }))],
@@ -814,8 +994,31 @@ markSandbox();
         island: island ?? null,
         flow: shownFlow,
         scenario: currentScenario,
+        // What the page last pointed at — the dock opens on its states (`n` tells one pointing from the next).
+        focus,
       }),
       show: (id: string) => onStation(id),
+      /** Open the dock on a region's states (and one island's scenarios, unfolded). */
+      focusRegion: (region: string, islandTag?: string | null) => focusOn(region, islandTag ?? null),
+      /**
+       * EVERY STATE THE VIEW CAN BE PUT IN, by region — each region on screen, its flows, and the
+       * scenarios of each island it places — plus which one each region is in now (one per region).
+       * The same list on a screen, a region and a region referenced from another one.
+       */
+      states: () => ({
+        regions: statesFor(regionsInView(), opts.evidence),
+        active: activeStates()
+          .filter((a) => regionsInView().includes(a.ref.region))
+          .map((a) => ({ ...a.ref, claim: a.outcome.claim, forged: a.outcome.forged ?? [], applied: a.outcome.applied, of: a.outcome.of })),
+      }),
+      /** Put one region into one state — a `StateRef`, or its address form (`events.flow.full@2`). */
+      playState: (ref: StateRef | string) => playRequested(ref),
+      /** Back to the region as this view seeds it. */
+      clearState: (region: string) => {
+        clearState(region);
+        writeStateAddress();
+        reportState({ ok: true, target: `archipelago:${region}`, kind: 'none' });
+      },
       /**
        * WHICH VIEWS THIS REGION CAN OFFER — the dock draws one pill per entry.
        *
@@ -1118,6 +1321,7 @@ markSandbox();
       url.searchParams.set('region', id);
       url.searchParams.delete('flow');
       url.searchParams.delete('step');
+      url.searchParams.delete('state');
       history.replaceState(null, '', url);
       if (island) {
         island = undefined;
@@ -1229,6 +1433,16 @@ markSandbox();
     picking = false;
     if (lens?.isOpen?.()) lens.toggle();
     controlChanged();
+    // ON A SCREEN, POINTING OPENS ITS STATES IN PLACE. Scoping would unmount the rest of the screen —
+    // the very context a screen exists to keep — so the island's scenarios open in the dock instead,
+    // to be played on its region where it stands.
+    if (current.startsWith(SCREEN)) {
+      const region = document.querySelector<HTMLElement>(`[data-motu-island="${CSS.escape(tag)}"][data-motu-region]`)?.dataset.motuRegion;
+      if (region && region !== 'lagoon') {
+        focusOn(region, tag);
+        return;
+      }
+    }
     if (island?.tag === tag) return; // already there; a pick is not a toggle
     (window as unknown as { __motuLagoonControl?: { openIsland?: (t: string) => void } }).__motuLagoonControl?.openIsland?.(tag);
   });

@@ -277,9 +277,9 @@ const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * region simply never settles — a region that writes continuously is a finding for the lens, not a
  * reason to refuse to drive a flow.
  */
-async function waitForQuiet(stillMs = 200, budgetMs = 2000): Promise<void> {
+async function waitForQuiet(lagoon: FlowSeam | undefined, stillMs = 200, budgetMs = 2000): Promise<void> {
   const snapshot = () => {
-    const l = window.__motuLagoon;
+    const l = lagoon;
     try {
       return JSON.stringify((l?.held() ?? []).map((k) => [k, l?.read(k)]));
     } catch {
@@ -420,7 +420,42 @@ async function waitForProvideSeam(timeoutMs = 5000): Promise<((key: string, valu
   return null;
 }
 
+/** An island alone: its scenario's `afterMount` goes through whichever seam this page mounted. */
+/** `provide`, once `mounted()` holds and the DOM has settled — or null after a timeout. */
+async function waitForMounted(
+  mounted: (() => boolean) | undefined,
+  provide: (key: string, value: unknown) => void,
+  timeoutMs = 5000,
+): Promise<((key: string, value: unknown) => void) | null> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    if (!mounted || mounted()) {
+      await waitForDomQuiet();
+      return provide;
+    }
+    await settle(50);
+  }
+  return null;
+}
+
 export async function replayInteractions(scenario: Scenario, upTo: number | null): Promise<StateOutcome> {
+  return replayInteractionsIn(scenario, upTo, { afterMount: scenario.afterMount });
+}
+
+/**
+ * A scenario's post-mount half — `afterMount`, then `interactions` — against a given seam. The state
+ * player passes its region's (`provide`, the region keys `afterMount` maps to, and what counts as
+ * mounted); an island alone falls back to the page's one seam.
+ */
+export async function replayInteractionsIn(
+  scenario: Scenario,
+  upTo: number | null,
+  seam: {
+    afterMount?: Record<string, unknown>;
+    provide?: (key: string, value: unknown) => void;
+    mounted?: () => boolean;
+  },
+): Promise<StateOutcome> {
   const steps = scenario.interactions ?? [];
   const base: StateOutcome = { ok: false, target: '', kind: 'scenario', name: scenario.name, of: steps.length };
   const limit = upTo === null ? steps.length : Math.min(upTo, steps.length);
@@ -430,10 +465,10 @@ export async function replayInteractions(scenario: Scenario, upTo: number | null
   // WHAT ARRIVES AFTER MOUNT first (`Scenario.afterMount`): once the island has mounted and gone
   // quiet, through the same seam the page and the checks use — so a component that tells "already
   // there" from "just happened" sees news. Then the clicks, if any, against what that arrival drew.
-  if (scenario.afterMount && Object.keys(scenario.afterMount).length) {
-    const provide = await waitForProvideSeam();
+  if (seam.afterMount && Object.keys(seam.afterMount).length) {
+    const provide = seam.provide ? await waitForMounted(seam.mounted, seam.provide) : await waitForProvideSeam();
     if (!provide) return { ...base, applied: 0, error: 'the island never mounted, so `afterMount` had nothing to arrive at' };
-    for (const [k, v] of Object.entries(scenario.afterMount)) provide(k, v);
+    for (const [k, v] of Object.entries(seam.afterMount)) provide(k, v);
   }
   for (let i = 0; i < limit; i++) {
     const { click } = steps[i];
@@ -493,9 +528,11 @@ async function waitForRegion(timeoutMs = 10_000): Promise<boolean> {
  * `upTo` is 1-based; `null` runs the whole flow. `upTo: 0` is the seed alone — the state the flow
  * STARTS from, which is a state worth looking at and one no check ever renders on its own.
  */
-export async function replayFlow(flow: RegionScenario, upTo: number | null): Promise<StateOutcome> {
+/** What replaying a flow needs from a region — `window.__motuLagoon`, or a per-region harness. */
+type FlowSeam = Pick<NonNullable<Window['__motuLagoon']>, 'provide' | 'seed' | 'emit' | 'held' | 'read'>;
+
+export async function replayFlow(flow: RegionScenario, upTo: number | null, lagoon: FlowSeam | undefined = window.__motuLagoon): Promise<StateOutcome> {
   const base: StateOutcome = { ok: false, target: '', kind: 'flow', name: flow.name, of: (flow.steps ?? []).length };
-  const lagoon = window.__motuLagoon;
   if (!lagoon || typeof lagoon.emit !== 'function') {
     // The element mount path has `provide` and nothing else — a flow needs the emit seam, and saying
     // which capability is missing beats "nothing happened".
@@ -509,7 +546,7 @@ export async function replayFlow(flow: RegionScenario, upTo: number | null): Pro
   // a moment later and overwrote it: the flow reported "applied 1/1", the panel agreed, and the screen
   // showed a different state entirely. Found by looking at one — `onboardingState` read `ready` under
   // a flow that seeds `unavailable`.
-  await waitForQuiet();
+  await waitForQuiet(lagoon);
 
   // A flow's `seed` is the page ESTABLISHING a starting value, even for a key an island owns — the
   // same distinction the flow runner draws, and for the same reason: applying it as a host write

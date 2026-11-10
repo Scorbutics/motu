@@ -364,6 +364,27 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   font-variant-numeric: tabular-nums;
 }
 #tide .list { position: relative; display: flex; flex-direction: column; gap: 6px; }
+/* States in this view: one group per region, its islands' scenarios folded beneath it. */
+#tide .state-group { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+#tide .state-group + .state-group { border-top: 1px solid var(--line, rgba(127,127,127,.25)); padding-top: 10px; }
+#tide .state-group__head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+#tide .state-group__head .motu-cap { flex: 1 1 auto; }
+#tide .state-claim {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px; border: 1px dashed currentColor; color: var(--ink-muted);
+}
+#tide .state-island { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; }
+#tide .state-island > summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--ink-muted); padding: 4px 2px;
+}
+#tide .state-island > summary::before { content: '▸'; font-size: 10px; transition: transform .15s; }
+#tide .state-island[open] > summary::before { transform: rotate(90deg); }
+#tide .state-island > summary .count { margin-left: auto; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+#tide .state-island > .motu-opt { margin-left: 4px; }
+#tide .state-group--focus > .state-group__head .motu-cap { color: var(--tide-accent); }
+#tide .state-steps { display: flex; align-items: center; gap: 8px; padding: 0 4px 0 18px; font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .state-forged { margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.4; color: var(--ink-muted); }
 /* A CARD PER ROW, not a dense line. These are the states somebody wrote down; a flow's name is a
  * sentence and needs to wrap rather than be clipped to a chip. */
 #tide .motu-opt {
@@ -1756,6 +1777,91 @@ function motuMountDock(opts) {
     return b;
   };
 
+  /**
+   * The states tree: region → "As seeded", its flows, then each island's scenarios (folded, unless one
+   * of them is what the region is showing). A flow is REACHABLE — it only fires declared outputs; an
+   * island scenario played inside its region is a WHAT-IF, marked as one, because it sets the island's
+   * inputs directly and may pair values the app never pairs.
+   */
+  /** What the page last pointed at (a region chip, or the crosshair on a screen) — kept unfolded. */
+  var focused = null;
+  var lastFocus = null;
+
+  var stateTree = function (ctl, cat, now, hit) {
+    var info = ctl.states();
+    var onRegionStation = now.region && now.region.indexOf('screen:') !== 0;
+    var labelOf = function (id) {
+      var r = (cat.archipelagos || []).filter(function (x) { return x.id === id; })[0];
+      return r ? r.label : id;
+    };
+    var nodes = [];
+    var count = 0;
+    (info.regions || []).forEach(function (reg) {
+      var act = (info.active || []).filter(function (a) { return a.region === reg.region; })[0] || null;
+      // The region view's OWN flows run through `runFlow`, which remounts so a root prop derived from
+      // the flow's seed lands; its state then shows as `now.flow` rather than in the player's list.
+      var own = onRegionStation && reg.region === now.region;
+      var activeFlow = own ? now.flow || (act && act.kind === 'flow' ? act.name : null) : act && act.kind === 'flow' ? act.name : null;
+      var activeScenario = act && act.kind === 'scenario' ? act.island + '\u0000' + act.name : null;
+      var isFocus = !!focused && focused.region === reg.region;
+      var group = el('div', { class: 'state-group' + (isFocus ? ' state-group--focus' : ''), 'data-region': reg.region }, []);
+      var head = el('div', { class: 'state-group__head' }, [
+        el('span', { class: 'motu-cap' }, [labelOf(reg.region)]),
+        act && act.claim === 'what-if' ? el('span', { class: 'state-claim', title: 'an island scenario played inside its region — it sets the island\'s inputs directly' }, ['what-if']) : null,
+      ].filter(Boolean));
+      group.appendChild(head);
+      var playFlow = function (name) {
+        return drive(function (c) {
+          if (own) c.runFlow(name);
+          else if (name === null) c.clearState(reg.region);
+          else c.playState({ region: reg.region, kind: 'flow', name: name });
+        });
+      };
+      group.appendChild(row('As seeded', !activeFlow && !activeScenario, playFlow(null)));
+      (reg.flows || []).forEach(function (name) {
+        if (!hit(name)) return;
+        count++;
+        group.appendChild(row(name, activeFlow === name, playFlow(name)));
+        // THE STEPS OF THE FLOW THIS REGION IS IN, scrubbable: the states BETWEEN steps are where you
+        // watch the region handle a change, and each one is replayed from the seed, never stacked.
+        if (!own && act && act.kind === 'flow' && act.name === name && act.of > 0) {
+          var at = act.applied == null ? act.of : act.applied;
+          var go = function (n) {
+            return drive(function (c) { c.playState({ region: reg.region, kind: 'flow', name: name, step: n }); });
+          };
+          var prev = el('button', { class: 'motu-btn', 'data-shape': 'pill', type: 'button', 'aria-label': 'previous step' }, ['‹']);
+          var next = el('button', { class: 'motu-btn', 'data-shape': 'pill', type: 'button', 'aria-label': 'next step' }, ['›']);
+          if (at <= 0) prev.disabled = true; else prev.addEventListener('click', go(at - 1));
+          if (at >= act.of) next.disabled = true; else next.addEventListener('click', go(at + 1));
+          group.appendChild(el('div', { class: 'state-steps' }, [prev, el('span', {}, ['step ' + at + ' / ' + act.of]), next]));
+        }
+      });
+      (reg.islands || []).forEach(function (isl) {
+        var names = (isl.scenarios || []).filter(function (n) { return hit(n) || hit(isl.tag); });
+        if (!names.length) return;
+        count += names.length;
+        var open = (!!activeScenario && activeScenario.indexOf(isl.tag + '\u0000') === 0) || (isFocus && focused.island === isl.tag);
+        var fold = el('details', { class: 'state-island', 'data-tag': isl.tag }, [
+          el('summary', {}, [isl.slot || isl.tag, el('span', { class: 'count' }, [String(names.length)])]),
+        ]);
+        if (open) fold.setAttribute('open', '');
+        names.forEach(function (name) {
+          fold.appendChild(row(name, activeScenario === isl.tag + '\u0000' + name, drive(function (c) {
+            c.playState({ region: reg.region, kind: 'scenario', island: isl.tag, name: name });
+          })));
+        });
+        group.appendChild(fold);
+      });
+      if (act && act.forged && act.forged.length) {
+        group.appendChild(el('p', { class: 'state-forged' }, [
+          'forged: ' + act.forged.map(function (f) { return f.key + ' (owned by ' + f.owner + ')'; }).join(', '),
+        ]));
+      }
+      nodes.push(group);
+    });
+    return { nodes: nodes, count: count, regions: (info.regions || []).length };
+  };
+
   var paint = function () {
     var cat = catalogue();
     var ctl = control();
@@ -1838,7 +1944,34 @@ function motuMountDock(opts) {
       if (!hit(e.name)) return;
       rows.push(row(e.name, showing === e.name, go(e.name)));
     });
-    states.list.replaceChildren.apply(states.list, rows);
+    // EVERY STATE THIS VIEW CAN BE PUT IN, when the lagoon can say (`states()`, lagoon-player): each
+    // region on screen with its flows and the scenarios of each island it places — so an island's
+    // scenarios are findable from the region and from a screen, not only by opening the island alone.
+    // One state per region; the lit row is the one that region is in.
+    var tree = !onIsland && ctl.states ? stateTree(ctl, cat, now, hit) : null;
+    if (tree) {
+      states.count.textContent = String(tree.count);
+      states.list.replaceChildren.apply(states.list, tree.nodes);
+      // THE PAGE POINTED AT SOMETHING: open on its states. Once per pointing — `n` changes each time —
+      // so the panel does not keep yanking itself back to a region the reader has scrolled away from.
+      if (now.focus && now.focus.n !== lastFocus) {
+        lastFocus = now.focus.n;
+        if (!focused || focused.region !== now.focus.region || focused.island !== now.focus.island) {
+          focused = { region: now.focus.region, island: now.focus.island || null };
+          setTimeout(paint, 0); // repaint with the fold open
+        }
+        open(true);
+        showTab('states');
+        setTimeout(function () {
+          var target = states.list.querySelector(
+            focused.island ? '.state-island[data-tag="' + focused.island + '"]' : '.state-group[data-region="' + focused.region + '"]',
+          );
+          if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }, 60);
+      }
+    } else {
+      states.list.replaceChildren.apply(states.list, rows);
+    }
 
     // The same states, as chips on the bar. NOT filtered by the panel's search box: the box is in
     // the panel and the strip is reachable with the panel shut, so filtering it from an input nobody
@@ -1945,7 +2078,21 @@ function motuMountDock(opts) {
             ' \u00b7 ' + sheet.owned + ' island-owned, ' + (sheet.total - sheet.owned) + ' host-fed']),
         ]));
         var table = el('div', { class: 'sheet' });
+        // A KEY THE REGION'S WHAT-IF FORGED: an island scenario set it, and another island owns it — the
+        // value on this row is the scenario's, not one the region reached.
+        var forgedHere = {};
+        if (sheet.region && ctl.states) {
+          (ctl.states().active || []).forEach(function (a) {
+            if (a.region === sheet.region) (a.forged || []).forEach(function (fk) { forgedHere[fk.key] = a; });
+          });
+        }
         sheet.rows.forEach(function (r) {
+          if (forgedHere[r.key]) {
+            r = Object.assign({}, r, {
+              flag: 'forged',
+              flagTitle: 'forged by the what-if "' + forgedHere[r.key].name + '" (' + forgedHere[r.key].island + ') — ' + r.owner + ' owns this key, and did not write this value',
+            });
+          }
           var row = el('div', {
             class: 'sheet__row',
             title: r.key + ' \u2014 ' + (r.islandOwned ? 'written by ' + r.owner : 'fed by the host') +
@@ -1959,7 +2106,7 @@ function motuMountDock(opts) {
           ]);
           if (r.flag) {
             var flag = el('span', { class: 'sheet__flag', title: r.flagTitle },
-              [r.flag === 'laundering' ? '\u26a0' : '\u25cb']);
+              [r.flag === 'laundering' ? '\u26a0' : r.flag === 'forged' ? '\u25c7' : '\u25cb']);
             row.appendChild(flag);
           }
           table.appendChild(row);
@@ -2353,9 +2500,8 @@ function motuMountDock(opts) {
       // A screen is named by its label — its id is `screen:<id>`, an address rather than a name.
       var onScreen = screenEntries(ctl).filter(function (r) { return r.id === now.region; })[0];
       bayTitle.textContent = onScreen ? onScreen.label : now.region || '—';
-      baySub.textContent = onScreen
-        ? 'screen · the app’s layout, its regions in place'
-        : entries.length + (entries.length === 1 ? ' state' : ' states');
+      var nStates = tree ? tree.count : entries.length;
+      baySub.textContent = (onScreen ? 'screen · ' : '') + nStates + (nStates === 1 ? ' state' : ' states') + (tree && tree.regions > 1 ? ' across ' + tree.regions + ' regions' : '');
       railLabel.textContent = onScreen ? onScreen.label : now.region || 'lagoon';
     }
   };
@@ -2582,9 +2728,30 @@ function motuMountDock(opts) {
     }).concat((cat.archipelagos || []).map(function (r) {
       return { label: r.label, kind: 'region', run: drive(function (c) { c.show(r.id); }) };
     }));
-    ((cat.flows && cat.flows[now.region]) || []).forEach(function (f) {
-      out.push({ label: f.name, kind: 'state', run: drive(function (c) { c.runFlow(f.name); }) });
-    });
+    var onScreenNow = now.region && now.region.indexOf('screen:') === 0;
+    if (ctl.states && !now.island) {
+      // EVERY STATE IN THIS VIEW, named with the region it is played on — the same list as the panel.
+      var info = ctl.states();
+      (info.regions || []).forEach(function (reg) {
+        var own = !onScreenNow && reg.region === now.region;
+        (reg.flows || []).forEach(function (name) {
+          out.push({ label: reg.region + ' · ' + name, kind: 'state', run: drive(function (c) {
+            if (own) c.runFlow(name); else c.playState({ region: reg.region, kind: 'flow', name: name });
+          }) });
+        });
+        (reg.islands || []).forEach(function (isl) {
+          (isl.scenarios || []).forEach(function (name) {
+            out.push({ label: (isl.slot || isl.tag) + ' · ' + name, kind: 'what-if', run: drive(function (c) {
+              c.playState({ region: reg.region, kind: 'scenario', island: isl.tag, name: name });
+            }) });
+          });
+        });
+      });
+    } else {
+      ((cat.flows && cat.flows[now.region]) || []).forEach(function (f) {
+        out.push({ label: f.name, kind: 'state', run: drive(function (c) { c.runFlow(f.name); }) });
+      });
+    }
     out.push({ label: 'As seeded', kind: 'state', run: drive(function (c) { c.runFlow(null); }) });
     // THE WAY OUT OF THE CARDS, in the one place every other dock control is reachable from. A
     // toaster with no off switch is a decision made for somebody about their own screen; putting it

@@ -8,9 +8,10 @@
 //
 // So the React host's lagoon renders through the same `<ArchipelagoProvider>` / `<Island>` its pages
 // do. One React root for the whole lagoon — the same as a page has — not one per island.
-import { Component, createElement, Fragment, StrictMode, type ReactNode } from 'react';
+import { Component, createElement, Fragment, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { lagoonHarness } from './lagoon-harness';
+import { registerLagoonRegion, subscribeRegionRemount } from './lagoon-player';
 import {
   applyOutput,
   installChannels,
@@ -361,6 +362,8 @@ export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions):
     }
   }
 
+  // EVERY VIEW MOUNTS ITS REGIONS HERE, so this is where the state player learns what is on screen.
+  registerLagoonRegion(config, { seed: opts.seed, host: opts.host });
   return (
     <ArchipelagoProvider
       config={config}
@@ -369,6 +372,7 @@ export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions):
       seed={opts.seed}
       channels={opts.channels}
     >
+      <RegionRemount id={config.id}>
       {opts.view === 'mountpoints' ? (
         <div className="motu-gallery">{islands}</div>
       ) : (
@@ -383,8 +387,20 @@ export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions):
           renderArchipelagoLayout(config.layout, islandNode) ?? islands
         ))
       )}
+      </RegionRemount>
     </ArchipelagoProvider>
   );
+}
+
+/**
+ * The region's islands, re-mountable on their own. INSIDE the provider, so the store survives: the
+ * state player seeds the store and then remounts the islands, which is what makes a scenario's `seed`
+ * mean "what the island MOUNTS with" on a screen too — not a value arriving at an island already up.
+ */
+function RegionRemount({ id, children }: { id: string; children?: ReactNode }): ReactNode {
+  const [n, setN] = useState(0);
+  useEffect(() => subscribeRegionRemount(id, () => setN((x) => x + 1)), [id]);
+  return <Fragment key={n}>{children}</Fragment>;
 }
 
 export function mountReactLagoon(

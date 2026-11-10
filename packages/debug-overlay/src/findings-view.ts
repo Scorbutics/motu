@@ -438,7 +438,7 @@ export function currentSheet() {
           : '',
     };
   });
-  return { rows, owned: rows.filter((r) => r.islandOwned).length, total: rows.length };
+  return { region: regionIdOfStore(store), rows, owned: rows.filter((r) => r.islandOwned).length, total: rows.length };
 }
 
 /**

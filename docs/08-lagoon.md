@@ -355,6 +355,32 @@ Every state a project has written down is reachable by URL. The failure this ref
 ask for a scenario that does not exist, get the default state, and believe you are looking at the
 state you named (`packages/react/src/lagoon-states.ts:25-27`).
 
+### Any state, in any view
+
+A state is played on a REGION, not on a view (`packages/react/src/lagoon-player.ts`). An island alone,
+a region's station and a screen differ only in how much of the application is drawn around the region's
+store — so every view can show every state of every region it has on screen. The dock's **States** tab
+lists them as a tree: each region in view, its flows, then each island it places with its scenarios
+folded beneath it. On a screen, hovering a region outlines it with a chip of its counts; the chip, and
+the crosshair, open the dock on that region's states instead of scoping the view to one island.
+
+- **One state per region.** Regions share nothing, so on a screen the sidebar can be in one state and
+  the main region in another. Within one region a new state replaces the last one — the region is reset
+  first, never stacked.
+- **Reachable vs what-if.** A flow only fires declared outputs: the state it reaches is one the app can
+  reach. An island scenario played inside its region sets that island's inputs directly (through its
+  `bind`, renames followed), so it is a **what-if** — and where one of those keys is PRODUCED by another
+  island, the value is forged. The dock tags the region `what-if`, lists the forged keys, and the Seams
+  sheet marks each forged row ◇ with who owns it. A scenario prop the region does not bind refuses to
+  play there: that scenario only exists for the island alone.
+- **A scenario's `seed` is still what the island MOUNTS with.** In place, the player establishes the
+  values and REMOUNTS the region's islands (its store stays), then delivers `afterMount`. Providing the
+  seed to a live island would make it an arrival — Peps' sphère sheet would open on "a request already
+  there at mount", the one state that scenario pins closed.
+- **It survives navigation** for a region that stays mounted (a screen's sidebar), and the address
+  follows: `state=` is rewritten from the active states after every change.
+- An unresolvable `state=` REFUSES the view, like every other address.
+
 ### The URL scheme
 
 | Address | Opens |
@@ -364,6 +390,9 @@ state you named (`packages/react/src/lagoon-states.ts:25-27`).
 | `/?region=<id>` | that station, no state applied |
 | `/?flow=<name>` | the region declaring that flow, replayed to its end |
 | `/?region=<id>&flow=<name>&step=<n>` | that flow, stopped after `n` steps |
+| `/?screen=<id>[&path=<p>]` | a SCREEN — the app's layout with each slot's region in place (experimental) |
+| `&state=<region>.flow.<slug>[@n]` | on a screen or a region view: that region put into that flow (repeatable, one per region) |
+| `&state=<region>.scenario.<tag>.<slug>[@n]` | that island's scenario played INSIDE its region — a what-if (below) |
 
 Read at `packages/react/src/lagoon-states.ts:111-123` (`scenario`, `flow`, `step`, `region`) and
 `:134-139` (`target`). Printed by `motu lagoon states`

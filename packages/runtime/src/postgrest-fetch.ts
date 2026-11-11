@@ -769,14 +769,25 @@ async function handleRest(req: ParsedRequest, tables: Record<string, PostgrestTa
   const table = req.path.slice('/rest/v1/'.length).split('?')[0];
   const singular = (req.headers.get('accept') ?? '').includes('vnd.pgrst.object');
   const wantsCount = (req.headers.get('prefer') ?? '').includes('count=');
-  if (req.method === 'GET') {
+  // HEAD IS A READ WITHOUT ITS BODY. supabase-js sends one for every `{ count: 'exact', head: true }`
+  // — "how many unread notifications" — and reads the answer from Content-Range alone. Refusing it
+  // with a 405 made every badge count in a lagoon an error the app's own code had to swallow.
+  const head = req.method === 'HEAD';
+  const answer = (res: Response): Response => (head ? new Response(null, { status: res.status, headers: res.headers }) : res);
+  const range = (offset: number, n: number, total: number): Record<string, string> =>
+    // PostgREST says `*/0` for an empty range; `0--1/0` is not a range at all.
+    ({ 'Content-Range': n > 0 ? `${offset}-${offset + n - 1}/${total}` : `*/${total}` });
+  if (req.method === 'GET' || head) {
     recordReach('table', table, 'select');
     // A read failure can be declared as a fixture (`{service: table, method: 'select', status,
     // after}`) WITHOUT needing a matching table row shape — checked first, same call-counting `after`
     // documented on `MockTransport`.
     try {
       const overridden = await transport.call(table, 'select', [Object.fromEntries(req.url.searchParams)]);
-      if (overridden !== undefined) return jsonResponse(overridden, 200);
+      if (overridden !== undefined) {
+        const n = Array.isArray(overridden) ? overridden.length : 1;
+        return answer(jsonResponse(overridden, 200, wantsCount ? range(0, n, n) : {}));
+      }
     } catch (err) {
       if (!isNoFixture(err)) return fromTransportError(err, { method: req.method, path: req.path, target: `table:${table}` });
       // no fixture override declared — fall through to the generic table engine below
@@ -801,13 +812,11 @@ async function handleRest(req: ParsedRequest, tables: Record<string, PostgrestTa
     const projected = applySelect(paged, req.url.searchParams.get('select'));
 
     if (singular) {
-      if (projected.length === 0) return jsonResponse(null, 200);
-      return jsonResponse(projected[0], 200);
+      if (projected.length === 0) return answer(jsonResponse(null, 200));
+      return answer(jsonResponse(projected[0], 200));
     }
-    const headers: Record<string, string> = wantsCount
-      ? { 'Content-Range': `${offset}-${offset + projected.length - 1}/${total}` }
-      : {};
-    return jsonResponse(projected, 200, headers);
+    const headers: Record<string, string> = wantsCount ? range(offset, projected.length, total) : {};
+    return answer(jsonResponse(projected, 200, headers));
   }
 
   // Writes: insert (POST), update (PATCH), delete (DELETE), upsert (POST + Prefer: resolution=...).

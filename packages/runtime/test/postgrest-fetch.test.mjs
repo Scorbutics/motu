@@ -43,6 +43,14 @@ const get = (fetchFn, path, headers = {}) => fetchFn(`${BASE}${path}`, { method:
 
   const counted = await get(fetchFn, '/rest/v1/member_challenge_prefs?select=*', { Prefer: 'count=exact' });
   t('count=exact sets Content-Range', counted.headers.get('content-range') === '0-1/2', counted.headers.get('content-range'));
+
+  // HEAD: supabase-js's `{ count: 'exact', head: true }` — the count is the answer, the body is absent.
+  const headed = await fetchFn(`${BASE}/rest/v1/member_challenge_prefs?select=member_id&entry_state=eq.engaged`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });
+  t('HEAD is answered, not refused', headed.status === 200, String(headed.status));
+  t('with the filtered count in Content-Range', headed.headers.get('content-range') === '0-0/1', headed.headers.get('content-range'));
+  t('and no body', (await headed.text()) === '');
+  const none = await fetchFn(`${BASE}/rest/v1/member_challenge_prefs?select=member_id&entry_state=eq.nobody`, { method: 'HEAD', headers: { Prefer: 'count=exact' } });
+  t('an empty count is */0, as PostgREST says it', none.headers.get('content-range') === '*/0', none.headers.get('content-range'));
 }
 
 // --- lazy table `rows` — a remount re-runs a GET, not the module, so a table that must react to a

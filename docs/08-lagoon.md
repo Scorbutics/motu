@@ -360,9 +360,20 @@ state you named (`packages/react/src/lagoon-states.ts:25-27`).
 A state is played on a REGION, not on a view (`packages/react/src/lagoon-player.ts`). An island alone,
 a region's station and a screen differ only in how much of the application is drawn around the region's
 store — so every view can show every state of every region it has on screen. The dock's **States** tab
-lists them as a tree: each region in view, its flows, then each island it places with its scenarios
-folded beneath it. On a screen, hovering a region outlines it with a chip of its counts; the chip, and
-the crosshair, open the dock on that region's states instead of scoping the view to one island.
+shows ONE region of the view at a time (pills switch between them when a screen holds several):
+
+- **the atoll** — the region drawn as a place, its islands as sand dots around the lagoon, each sized by
+  how many what-ifs it declares. Tapping one brings its shelf into view.
+- **now playing** — the state the region is in, and a flow's steps as segments you can press.
+- **flows** as a list, then **what-ifs** as one shelf per island that scrolls sideways — so an island
+  costs one row of height however many scenarios it carries, and the tab does not grow with the project.
+
+Screens, regions and every state by name are in **Find** (the button beside the tabs, or Ctrl/Cmd-K):
+navigation is a search, not a column. On a phone the closed dock is a mini player — the state playing,
+the region and step, step back/forward, **Share** (copies the address of exactly this state, step
+included; hosted, the shell's address rather than the frame's) and the picker. On a screen, hovering a
+region outlines it with a chip of its counts; the chip, and the crosshair, aim the dock at that region
+instead of scoping the view to one island.
 
 - **One state per region.** Regions share nothing, so on a screen the sidebar can be in one state and
   the main region in another. Within one region a new state replaces the last one — the region is reset

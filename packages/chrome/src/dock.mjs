@@ -192,14 +192,26 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 }
 #tide .rail-act[hidden] { display: none; }
 #tide .rail-dock .mark { width: 20px; height: 20px; flex: 0 0 auto; }
-#tide .rail-dock .lamp {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--motu-on-primary, #fff);
-  opacity: .85;
+/* THE ATOLL MARK — the icon's three sand islets on deep water, drawn in CSS so it wears the lagoon's
+ * own water rather than a fixed blue. It is the dock's face on the rail and on the phone's mini player,
+ * and the same picture the States tab draws at size. */
+#tide .atoll-mark {
   flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 34% 60%, var(--motu-sand, #e3c893) 0 24%, transparent 25%),
+    radial-gradient(circle at 70% 30%, var(--motu-sand, #e3c893) 0 17%, transparent 18%),
+    radial-gradient(circle at 72% 74%, var(--motu-sand, #e3c893) 0 11%, transparent 12%),
+    var(--w-deep);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--motu-on-primary, #fff) 35%, transparent);
 }
+/* The mini player's two lines are the phone's; the desktop rail keeps its standing label. Declared
+ * off ABOVE the media queries for the same reason as the strip below. */
+#tide .rail-txt { display: none; }
+#tide .kbd--word { display: none; }
+#tide .motu-kbd { white-space: nowrap; }
 /* The region's name, standing up along the rail. This is the one place the dock says what it is
  * showing while closed, so it takes the whole middle and truncates rather than wraps. */
 #tide .rail-dock .stand {
@@ -341,6 +353,33 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 }
 #tide .fold:hover { background: color-mix(in srgb, var(--motu-on-primary, #fff) 28%, transparent); }
 #tide .fold:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
+#tide .bay-share svg { display: block; margin: auto; }
+/* WHAT SHARE DID. Beside the dock's own edge, never over the middle of the page you are sharing. */
+#tide .share-note {
+  position: fixed;
+  top: 12px;
+  right: calc(var(--rail-w) + 12px);
+  z-index: 3;
+  width: min(360px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--w-deep) 30%, transparent);
+  font-size: 12.5px;
+}
+#tide[data-edge="left"] .share-note { right: auto; left: calc(var(--rail-w) + 12px); }
+#tide .share-note[hidden] { display: none; }
+#tide .share-note__url {
+  font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: .85;
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-user-select: all;
+}
 
 /* ── the searchable body ───────────────────────────────────────────────────────────────────── */
 #tide .find { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; flex: 0 0 auto; }
@@ -364,26 +403,201 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   font-variant-numeric: tabular-nums;
 }
 #tide .list { position: relative; display: flex; flex-direction: column; gap: 6px; }
-/* States in this view: one group per region, its islands' scenarios folded beneath it. */
-#tide .state-group { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
-#tide .state-group + .state-group { border-top: 1px solid var(--line, rgba(127,127,127,.25)); padding-top: 10px; }
-#tide .state-group__head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
-#tide .state-group__head .motu-cap { flex: 1 1 auto; }
-#tide .state-claim {
-  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 999px; border: 1px dashed currentColor; color: var(--ink-muted);
+/* ── the States tab: one region, as a place ─────────────────────────────────────────────── */
+/* Which region of the view, when there is a choice. A row of pills, never a list: a screen holds two
+ * or three regions, and the choice is a switch, not a destination. */
+#tide .aim { display: flex; flex-wrap: wrap; gap: 6px; }
+#tide .aim[hidden] { display: none; }
+#tide .aim .motu-btn { gap: 6px; }
+#tide .aim__n { font-size: 10.5px; font-weight: 700; opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* THE ATOLL: the region's islands around its lagoon. Sand dots, the icon's own, on the region's water.
+ * A fixed height whatever the region declares — the picture never grows; the shelves below carry the
+ * names an over-full ring has to drop. */
+#tide .atoll {
+  position: relative;
+  flex: 0 0 auto;
+  height: 168px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--w-shallow) 12%, var(--surface-row, #fff));
+  border: 1px solid var(--line);
+  overflow: hidden;
 }
-#tide .state-island { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; }
-#tide .state-island > summary {
-  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 600; color: var(--ink-muted); padding: 4px 2px;
+#tide .atoll[hidden] { display: none; }
+#tide .atoll__ring {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 20%;
+  bottom: 20%;
+  border-radius: 50%;
+  border: 2px dashed color-mix(in srgb, var(--w-mid) 45%, transparent);
+  background: color-mix(in srgb, var(--w-shallow) 16%, transparent);
 }
-#tide .state-island > summary::before { content: '▸'; font-size: 10px; transition: transform .15s; }
-#tide .state-island[open] > summary::before { transform: rotate(90deg); }
-#tide .state-island > summary .count { margin-left: auto; font-size: 10.5px; font-variant-numeric: tabular-nums; }
-#tide .state-island > .motu-opt { margin-left: 4px; }
-#tide .state-group--focus > .state-group__head .motu-cap { color: var(--tide-accent); }
-#tide .state-steps { display: flex; align-items: center; gap: 8px; padding: 0 4px 0 18px; font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .atoll__lagoon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 92px;
+  min-height: 44px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+#tide .atoll__lagoon small { font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--tide-accent); }
+#tide .atoll__lagoon b { font-size: 13px; }
+#tide .atoll__lagoon[aria-pressed="true"] { border-color: color-mix(in srgb, var(--tide-accent) 55%, transparent); background: color-mix(in srgb, var(--surface-row, #fff) 70%, transparent); }
+#tide .atoll__isle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+#tide .atoll__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--motu-sand, #e3c893);
+  color: var(--motu-on-sand, #0b3d5c);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--w-deep) 25%, transparent);
+  transition: box-shadow 140ms ease;
+}
+#tide .atoll__name {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 10.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--surface-row, #fff) 80%, transparent);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+#tide .atoll__isle[aria-pressed="true"] .atoll__dot { box-shadow: 0 0 0 4px color-mix(in srgb, var(--motu-sand, #e3c893) 45%, transparent); }
+#tide .atoll__isle[aria-pressed="true"] .atoll__name { color: var(--ink); }
+/* The island whose what-if the region is IN: ringed in the water's colour, so it reads as "playing". */
+#tide .atoll__isle[data-lit="true"] .atoll__dot { box-shadow: 0 0 0 3px var(--tide-accent); }
+#tide .atoll__isle:focus-visible, #tide .atoll__lagoon:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; border-radius: 10px; }
+
+/* NOW PLAYING. */
+#tide .now { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+#tide .now__kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--tide-accent); }
+#tide .now__title { font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--ink); }
+#tide .now__segs { display: flex; gap: 4px; padding-top: 6px; }
+#tide .now__seg {
+  flex: 1 1 0;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  position: relative;
+}
+/* A thin bar in a tall target: the segment a thumb can hit is 22px, the one the eye reads is 8. */
+#tide .now__seg::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--w-shallow) 22%, var(--surface-row, #fff));
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+#tide .now__seg[data-done="true"]::before { background: var(--tide-accent); box-shadow: none; }
+#tide .now__seg[aria-current="true"]::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--motu-sand, #e3c893);
+  box-shadow: 0 0 0 2px var(--surface-row, #fff);
+}
+#tide .now__seg:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 1px; border-radius: 6px; }
+#tide .now__step { font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+/* THE WHAT-IFS: one shelf per island, scrolling sideways. An island costs one row of height whatever
+ * it declares — this, not a cap or a fold, is what keeps the tab from growing with the project. */
+#tide .shelves { display: flex; flex-direction: column; gap: 12px; }
+#tide .shelf { display: flex; flex-direction: column; gap: 6px; scroll-margin-top: 8px; }
+#tide .shelf__head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+#tide .shelf__slot { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
+#tide .shelf[data-aimed="true"] .shelf__slot { color: var(--tide-accent); }
+#tide .shelf__head .count { font-size: 10.5px; font-weight: 700; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .shelf__alone {
+  border: 1px solid var(--line);
+  background: var(--surface-row, #fff);
+  border-radius: 999px;
+  padding: 2px 9px;
+  min-height: 26px;
+  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+#tide .shelf__track {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 2px;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
+}
+#tide .shelf__card {
+  flex: 0 0 auto;
+  width: 136px;
+  min-height: 60px;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: flex-end;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-row, #fff);
+  color: var(--ink);
+  font: 500 12.5px/1.3 ui-sans-serif, system-ui, sans-serif;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  position: relative;
+}
+/* The what-if mark, top-left: the same lozenge the palette and the Seams sheet use for a forged key. */
+#tide .shelf__card::before { content: "\\25c7"; position: absolute; top: 6px; left: 9px; font-size: 11px; color: color-mix(in srgb, var(--motu-sand, #e3c893) 80%, var(--ink-muted)); }
+#tide .shelf__card:hover { border-color: var(--tide-accent); }
+#tide .shelf__card[aria-current="true"] {
+  background: color-mix(in srgb, var(--tide-accent) 12%, #fff);
+  border-color: var(--tide-accent);
+  font-weight: 700;
+}
+#tide .shelf__card:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
 #tide .state-forged { margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.4; color: var(--ink-muted); }
 /* A CARD PER ROW, not a dense line. These are the states somebody wrote down; a flow's name is a
  * sentence and needs to wrap rather than be clipped to a chip. */
@@ -958,15 +1172,14 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
      * content and sat in the bottom-left corner, which reads as a stray chip rather than the edge of
      * a sheet you can pull. */
     width: 100%;
-    /* TWO ROWS: the handle, and the states strip under it. A grid rather than a column of flex rows
-     * so the handle and the picker stay side by side without a wrapper element — which would have to
-     * be display:contents on desktop to keep this rail's layout untouched. */
+    /* ONE ROW: the mini player. What is playing (the opening half, which takes the width), the two acts
+     * you take while watching it — step, share — and the picker. A grid rather than flex so the
+     * opening half can shrink to its ellipsis while the buttons keep their size. */
     display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: 'open pick' 'states states';
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'open states pick';
     align-items: center;
-    column-gap: 10px;
-    row-gap: 4px;
+    column-gap: 4px;
     /* A DETERMINISTIC BAR, AND NO SAFE-AREA INSET AT ALL.
      *
      * On Firefox for Android this arrived about twice as tall as anywhere else, because its height
@@ -979,68 +1192,80 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
      * specified to be zero here and buy nothing — while an engine that reports one anyway silently
      * doubles a bar whose height was never stated. So: state the height, and do not ask.
      */
-    min-height: 44px;
-    padding: 0 14px;
-    border-radius: 14px 14px 0 0;
-    background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 52%, var(--w-shallow));
+    height: 60px;
+    min-height: 60px;
+    padding: 0 8px 0 12px;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(90deg, var(--w-deep), var(--w-mid) 62%, var(--w-shallow));
   }
-  #tide .rail-open { flex-direction: row; gap: 10px; width: auto; grid-area: open; }
-  #tide .rail-act { grid-area: pick; }
+  #tide .rail-open { flex-direction: row; gap: 10px; width: auto; min-width: 0; height: 60px; grid-area: open; text-align: left; }
+  #tide .rail-act { grid-area: pick; width: 40px; height: 40px; border-radius: 12px; font-size: 16px; }
   /* The pin is a desktop control: there is no width to reserve beside a bottom sheet. */
-  #tide .bay-pin { display: none; }
+  #tide .bay-pin:not(.bay-share) { display: none; }
+  /* The bar carries Share already; the masthead's copy would be the same act twice on one screen. */
+  #tide .bay-share { display: none; }
+
+  #tide .atoll-mark { width: 36px; height: 36px; border-radius: 10px; }
+  #tide .rail-dock .stand { display: none; }
+  #tide .rail-txt { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; line-height: 1.25; }
+  #tide .rail-txt__title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tide .rail-txt__line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  #tide .rail-txt__sub { font-size: 11.5px; font-weight: 500; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #tide .rail-txt__flag {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--motu-sand, #e3c893);
+    color: var(--motu-on-sand, #0b3d5c);
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 16px;
+  }
+  #tide .rail-txt__flag[hidden] { display: none; }
 
   #tide .rail-states {
     grid-area: states;
     display: flex;
     align-items: center;
-    gap: 6px;
-    /* ONE ROW THAT SCROLLS, never a wrap: a strip that reflows to two lines changes the bar's height
-     * with the region you are looking at, and the page's reserve would chase it. */
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    height: 30px;
-    padding-bottom: 4px;
-    /* The lit chip is scrolled into view — with room around it, not flush against the edge. */
-    scroll-padding-inline: 14px;
+    gap: 2px;
   }
-  #tide .rail-states::-webkit-scrollbar { display: none; }
   /* After the display rule, so hiding actually hides: a bare [hidden] loses to #tide .rail-states. */
   #tide .rail-states[hidden] { display: none; }
   #tide .rail-chip {
     flex: 0 0 auto;
-    max-width: 46vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    height: 26px;
-    padding: 0 11px;
+    width: 40px;
+    height: 44px;
+    padding: 0;
     border: 0;
-    border-radius: 999px;
-    font: 600 12px/26px ui-sans-serif, system-ui, sans-serif;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 600 20px/1 ui-sans-serif, system-ui, sans-serif;
     color: var(--motu-on-primary, #fff);
-    background: color-mix(in srgb, var(--motu-on-primary, #fff) 18%, transparent);
+    background: transparent;
     cursor: pointer;
   }
-  #tide .rail-chip[aria-pressed="true"] {
-    background: var(--motu-on-primary, #fff);
-    color: var(--w-deep);
-  }
-  #tide .rail-chip:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
-  /* The region the strip is aimed at: outlined, not filled — it is a switch, not a state. */
-  #tide .rail-chip--region { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--motu-on-primary, #fff) 60%, transparent); }
-  #tide .rail-chip--step { padding: 0 9px; font-variant-numeric: tabular-nums; }
-  #tide .rail-chip--step:disabled { opacity: .45; cursor: default; }
-  #tide .rail-chip--more { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--motu-on-primary, #fff) 55%, transparent); line-height: 23px; }
-  #tide .rail-dock .stand {
-    writing-mode: horizontal-tb;
-    flex: 0 1 auto;
-    rotate: none;
-  }
-  #tide[data-edge="left"] .rail-dock .stand { rotate: none; }
-  #tide .rail-dock .chev { rotate: 90deg; }
+  #tide .rail-chip:hover { background: color-mix(in srgb, var(--motu-on-primary, #fff) 16%, transparent); }
+  #tide .rail-chip[hidden] { display: none; }
+  #tide .rail-chip:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: -2px; }
+  #tide .rail-chip--step:disabled { opacity: .4; cursor: default; }
+  #tide .rail-dock .chev { display: none; }
+
+  /* The note rises above the bar, full width, where the thumb that pressed Share already is. */
+  #tide .share-note { top: auto; left: 10px; right: 10px; width: auto; bottom: calc(var(--motu-dock-handle, 60px) + 10px); }
+  #tide[data-edge="left"] .share-note { left: 10px; }
+  #tide[data-open="true"] .share-note { bottom: calc(76vh + 10px); }
+
+  /* FIND, BY NAME. There is no Ctrl/Cmd-K on a phone, so the button says what it does. */
+  #tide .kbd--keys { display: none; }
+  #tide .kbd--word { display: inline; }
+  .dock-palette { padding-top: 6vh; }
+  .dock-palette .box { max-height: 70vh; }
+  .dock-palette li { min-height: 44px; }
+  /* A shelf is swiped, not dragged by a bar: no scrollbar under each one on a touch screen. */
+  #tide .shelf__track { scrollbar-width: none; }
+  #tide .shelf__track::-webkit-scrollbar { display: none; }
   #tide .panel {
     position: fixed;
     /* RESET THE TOP the edge-docked rule sets. It anchors the panel top 0 / bottom 0 so the desktop
@@ -1297,6 +1522,23 @@ function motuMountDock(opts) {
     (kids || []).forEach(function (c) { n.append(c); });
     return n;
   };
+  /** A chain link, drawn: the one glyph the Share buttons need, in currentColor so it follows the water. */
+  function shareIcon() {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    var p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', 'M10 14a4 4 0 006 0l3-3a4 4 0 00-6-6l-1 1M14 10a4 4 0 00-6 0l-3 3a4 4 0 006 6l1-1');
+    svg.appendChild(p);
+    return svg;
+  }
 
   // `data-motu-chrome`: lagoon furniture, never an island's output (see cli lib/island-render.mjs).
   var tide = el('div', { id: 'tide', 'data-open': 'false', 'data-motu-chrome': '' });
@@ -1304,9 +1546,18 @@ function motuMountDock(opts) {
   // act, and a button inside a button is not a thing. The opening half is still a button, so keyboard
   // and screen readers get it for free.
   var railLabel = el('span', { class: 'stand' }, ['lagoon']);
+  /**
+   * THE MINI PLAYER'S TWO LINES — phone only. What the region is playing, and where: the state's own
+   * name on top (that is what you are watching), the region and the step under it. The desktop rail
+   * keeps its standing label; the phone bar is wide enough to say a sentence, so it says one.
+   */
+  var railTitle = el('b', { class: 'rail-txt__title' }, ['']);
+  var railSub = el('small', { class: 'rail-txt__sub' }, ['']);
+  var railFlag = el('span', { class: 'rail-txt__flag', hidden: '' }, ['']);
+  var railTxt = el('span', { class: 'rail-txt' }, [railTitle, el('span', { class: 'rail-txt__line' }, [railSub, railFlag])]);
   var railOpen = el('button', {
     class: 'rail-open', type: 'button', 'aria-label': 'Lagoon controls', 'aria-expanded': 'false',
-  }, [el('span', { class: 'lamp' }), railLabel, el('span', { class: 'chev' }, ['‹'])]);
+  }, [el('span', { class: 'atoll-mark', 'aria-hidden': 'true' }), railLabel, railTxt, el('span', { class: 'chev' }, ['‹'])]);
   /**
    * THE PICKER, ON THE RAIL, reachable without opening anything.
    *
@@ -1320,18 +1571,24 @@ function motuMountDock(opts) {
     'aria-label': 'Pick an island on the page',
   }, ['⌖']);
   /**
-   * THE STATES, ON THE PHONE BAR — switching a flow without opening anything.
+   * THE PHONE BAR IS A MINI PLAYER — the state you are watching, and the two acts you take while
+   * watching it.
    *
-   * The sheet is 76vh. On a phone that means the only way to change state was to cover the screen
-   * you are trying to look at, pick a flow, and dismiss the sheet to see what it did — three
-   * gestures around a glimpse. The states are the one list you use WHILE watching the page, so on a
-   * phone they ride on the bar itself and the panel keeps everything you read rather than steer.
+   * It used to carry every state of the aimed region as a row of chips. That is a list, and a list
+   * on a bar grows with the region: a scrolling strip of sentences truncated to 46vw, read one chip
+   * at a time. What a person does WHILE looking at the page is smaller than that — step the flow that
+   * is playing, and hand the address to someone — so that is all the bar carries. Choosing another
+   * state is choosing from a list, and the list is the sheet's.
    *
-   * Hidden outright on desktop, where the panel sits beside the page instead of over it and this
-   * problem does not exist.
+   * Hidden outright on desktop, where the panel sits beside the page and carries the same acts.
    */
-  var railStates = el('div', { class: 'rail-states', role: 'group', 'aria-label': 'Switch state' });
-  var rail = el('div', { class: 'rail-dock' }, [railOpen, pick, railStates]);
+  var stepPrev = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Previous step' }, ['‹']);
+  var stepNext = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Next step' }, ['›']);
+  var railShare = el('button', {
+    class: 'rail-chip rail-chip--share', type: 'button', 'aria-label': 'Copy a link to this state', title: 'Copy a link to this state',
+  }, [shareIcon()]);
+  var railStates = el('div', { class: 'rail-states', role: 'group', 'aria-label': 'Step and share' }, [stepPrev, stepNext, railShare]);
+  var rail = el('div', { class: 'rail-dock' }, [railOpen, railStates, pick]);
 
   var bayTitle = el('b', {}, ['—']);
   var baySub = el('small', {}, ['']);
@@ -1403,12 +1660,17 @@ function motuMountDock(opts) {
     applyPin();
   });
 
+  // SHARE, beside the pin: the panel's copy of the bar's act, for the width where there is no bar.
+  var bayShare = el('button', {
+    class: 'bay-pin bay-share', type: 'button', title: 'Copy a link to this state', 'aria-label': 'Copy a link to this state',
+  }, [shareIcon()]);
   var masthead = el('div', { class: 'motu-bay', 'data-shape': 'masthead' }, [
     grab,
-    el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), pin, fold]),
+    el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), bayShare, pin, fold]),
   ]);
+  /** What Share just did — the address it copied, or the address to copy by hand when it could not. */
+  var shareNote = el('div', { class: 'share-note', role: 'status', hidden: '' });
 
-  var filter = el('input', { class: 'motu-search', type: 'search', placeholder: 'Filter regions and states…', 'aria-label': 'Filter regions and states' });
   var scroll = el('div', { class: 'scroll' });
   // THE RIG: what is a MODE rather than a place. The view toggle is the dock's own; the transport and
   // fit chips belong to whoever mounted them and are read rather than reimplemented, so a control a
@@ -1444,13 +1706,18 @@ function motuMountDock(opts) {
   var seams = el('div', { class: 'seams' });
   var islandsPane = el('div', { class: 'islands' });
   var coveragePane = el('div', { class: 'coverage' });
-  var kbd = el('button', { class: 'motu-kbd', type: 'button', title: 'Command palette' },
-    [/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '\u2318K' : 'Ctrl K']);
+  // FIND IS THE ONE PLACE EVERYTHING IS LISTED \u2014 screens, regions, every state of every region in
+  // view. The States tab used to stack all of that above the states themselves, and a list that holds
+  // everything grows with the project; a search does not. On a keyboard it is still Ctrl/Cmd-K; on a
+  // phone, where there is no such key, the button says what it does.
+  var kbd = el('button', { class: 'motu-kbd', type: 'button', title: 'Find a screen, region or state', 'aria-label': 'Find a screen, region or state' }, [
+    el('span', { class: 'kbd--keys' }, [/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '\u2318K' : 'Ctrl K']),
+    el('span', { class: 'kbd--word' }, ['Find']),
+  ]);
 
   var panel = el('div', { class: 'panel', role: 'group', 'aria-label': 'Lagoon controls' }, [
     masthead,
     el('div', { class: 'find' }, [tabs, kbd]),
-    el('div', { class: 'find find--filter' }, [filter]),
     scroll,
     seams,
     islandsPane,
@@ -1460,7 +1727,7 @@ function motuMountDock(opts) {
   var scrim = el('div', { class: 'scrim' });
   // AFTER the panel, so the chip stacks above the sliding surface rather than under it. A sibling of
   // the panel, not a child: it must survive the panel being shut.
-  tide.append(scrim, rail, panel, scopeChip);
+  tide.append(scrim, rail, panel, scopeChip, shareNote);
   mountEl.appendChild(tide);
   tide.dataset.edge = 'right';
 
@@ -1616,6 +1883,48 @@ function motuMountDock(opts) {
   };
 
   /**
+   * SHARE: THE ADDRESS OF WHAT YOU ARE LOOKING AT, ON THE CLIPBOARD.
+   *
+   * The loop motu is built for ends with a person handing a state back — to the agent that built the
+   * region, or to whoever should look next — and "the URL is the handover" was true everywhere except
+   * on the surface people actually look from. The lagoon already writes every state into its own
+   * address (`&state=…@n`, `?region=…&flow=…`); this copies it.
+   *
+   * THE PAGE'S ADDRESS, NOT THE FRAME'S. Hosted, the lagoon runs at `…/__motu_frame?…` inside a shell
+   * that forwards its own query to the frame, so the address worth sending is the frame's with that
+   * tail removed — the shell, with the state. Under `lagoon serve` there is no frame and nothing to
+   * remove.
+   */
+  var shareUrl = function () {
+    try {
+      return String(lagoonWindow().location.href).split('/__motu_frame').join('');
+    } catch (e) {
+      return String(location.href);
+    }
+  };
+  var shareTimer = null;
+  var share = function () {
+    var url = shareUrl();
+    var say = function (copied) {
+      shareNote.replaceChildren(
+        el('b', {}, [copied ? 'Link to this state copied' : 'Copy this link']),
+        el('span', { class: 'share-note__url' }, [url]),
+      );
+      shareNote.hidden = false;
+      clearTimeout(shareTimer);
+      // A link that could not be copied stays up long enough to be selected by hand.
+      shareTimer = setTimeout(function () { shareNote.hidden = true; }, copied ? 2600 : 9000);
+    };
+    try {
+      navigator.clipboard.writeText(url).then(function () { say(true); }, function () { say(false); });
+    } catch (e) {
+      say(false);
+    }
+  };
+  railShare.addEventListener('click', share);
+  bayShare.addEventListener('click', share);
+
+  /**
    * The decision count, refreshed whatever tab is showing.
    *
    * DECISIONS ONLY. A badge that counted every finding would sit permanently at "3" on a healthy
@@ -1636,6 +1945,20 @@ function motuMountDock(opts) {
     }
   };
 
+  /**
+   * THE THUMB UNDER THE TAB THAT IS UP. Placed on every paint, not only when a tab is pressed: it was
+   * positioned in `showTab` alone, so a dock nobody had clicked a tab in drew the States tab's white
+   * label on no thumb at all. Measured, so a tab whose label changes width moves it.
+   */
+  var placeThumb = function (on) {
+    if (!on) {
+      var t = panel.dataset.tab || 'states';
+      on = t === 'seams' ? seamsTab : t === 'islands' ? islandsTab : t === 'coverage' ? coverageTab : statesTab;
+    }
+    if (!on.offsetWidth) return; // not laid out yet; the next paint places it
+    tabThumb.style.left = on.offsetLeft + 'px';
+    tabThumb.style.width = on.offsetWidth + 'px';
+  };
   var showTab = function (which) {
     panel.dataset.tab = which;
     statesTab.setAttribute('aria-current', String(which === 'states'));
@@ -1646,8 +1969,7 @@ function motuMountDock(opts) {
       : which === 'seams' ? seamsTab
       : which === 'islands' ? islandsTab
       : coverageTab;
-    tabThumb.style.left = on.offsetLeft + 'px';
-    tabThumb.style.width = on.offsetWidth + 'px';
+    placeThumb(on);
     // The panel is a different width on Seams; the reserve follows the tab.
     applyPin();
     watchWhileLooking(which);
@@ -1670,88 +1992,53 @@ function motuMountDock(opts) {
   islandsTab.addEventListener('click', function () { showTab('islands'); });
   coverageTab.addEventListener('click', function () { showTab('coverage'); });
 
-  var section = function (cap) {
+  var section = function (cap, host) {
     var count = el('span', { class: 'count' }, ['0']);
+    var capEl = el('span', { class: 'motu-cap' }, [cap]);
     var list = el('div', { class: 'list', role: 'listbox', 'aria-label': cap });
     var box = el('div', { class: 'sect' }, [
-      el('div', { class: 'sect__head' }, [el('span', { class: 'motu-dot' }), el('span', { class: 'motu-cap' }, [cap]), count]),
+      el('div', { class: 'sect__head' }, [el('span', { class: 'motu-dot' }), capEl, count]),
       list,
     ]);
-    scroll.appendChild(box);
-    return { list: list, count: count, box: box };
-  };
-  // SCREENS FIRST, when the lagoon declares any (`@motu/react` screens, experimental): the app's own
-  // addresses, each a layout with its regions in place. They are entries of `__motuLagoonControl
-  // .regions()` with a `screen:` id — the catalogue's `archipelagos` lists regions only, and reading
-  // only that is why a hosted lagoon with seven screens offered no way to reach one but typing a URL.
-  var screensSect = section('Screens');
-  var regions = section('Regions');
-  // ISLANDS BESIDE THE STATES THEY BELONG TO. Selecting an island lived in another tab, so reaching
-  // one of its scenarios meant: Islands tab, pick an island, back to States, pick a scenario — three
-  // moves across two panes for one intent. The Islands TAB keeps the inspector (props, writes, what
-  // it called); this is only the picker, next to the list it changes.
-  var islands = section('Islands');
-  var states = section('States');
-
-  /**
-   * A state as a chip on the phone bar. Same act as a row in the panel's list, same lit-on-press
-   * rule: a flow takes as long as its steps take, and a strip that does not move for a second reads
-   * as a tap that missed.
-   */
-  var stateChip = function (label, on, run) {
-    var b = el('button', {
-      class: 'rail-chip', type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label,
-    }, [label]);
-    b.addEventListener('click', function () {
-      var siblings = b.parentNode ? b.parentNode.children : [];
-      for (var i = 0; i < siblings.length; i++) siblings[i].setAttribute('aria-pressed', 'false');
-      b.setAttribute('aria-pressed', 'true');
-      run();
-    });
-    return b;
+    (host || scroll).appendChild(box);
+    return { list: list, count: count, box: box, cap: capEl };
   };
 
-  /**
-   * Scroll the lit chip into view — ONLY when the selection actually changed.
-   *
-   * The strip repaints on everything the lagoon reports, and scrolling on every paint would drag the
-   * strip back under the reader's thumb mid-swipe. What matters is the case where the state changed
-   * from somewhere else (the panel's list, an address, a reload) and the chip for it is off-screen.
-   */
-  var lastLit = undefined;
-  var keepSelectedVisible = function (showing) {
-    if (showing === lastLit) return;
-    lastLit = showing;
-    var lit = railStates.querySelector('[aria-pressed="true"]');
-    if (!lit || !lit.scrollIntoView) return;
-    try {
-      lit.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-    } catch (e) {
-      /* an engine without the options form; the strip is still usable, just not auto-scrolled */
-    }
-  };
+  // ── THE STATES TAB: ONE REGION, AS A PLACE ──────────────────────────────────────────────────
+  //
+  // IT USED TO BE EVERYTHING. Screens, regions, the islands picker, then every state of every region in
+  // view, stacked in one column — on the demo's Events screen, 2,600px of list in a 366px sheet, with
+  // the first state below thirteen navigation rows. That is a catalogue, and the README is explicit
+  // that a catalogue is the thing motu is not: the unit is a REGION, so the tab shows one.
+  //
+  // Four pieces, top to bottom, each a fixed size whatever the region declares:
+  //  - which region of the view (only when there is a choice),
+  //  - the ATOLL: the region drawn as a place — its islands around the lagoon, each dot sized by how
+  //    many what-ifs it carries. Tapping one aims the tab at its shelf.
+  //  - NOW PLAYING: the state the region is in, and its steps as segments you can press.
+  //  - the flows, as a list (a region has few, and each is a sentence that needs to wrap), and the
+  //    what-ifs as ONE SHELF PER ISLAND that scrolls sideways. That last choice is what stops the
+  //    growth: eight scenarios or eighty, an island costs one row of height.
+  // Navigation — screens, regions, a state by name — is Find's job. Search scales; a column does not.
+  var aimRow = el('div', { class: 'aim', role: 'group', 'aria-label': 'Region on screen' });
+  var atoll = el('div', { class: 'atoll' });
+  var nowBox = el('div', { class: 'now' });
+  scroll.append(aimRow, atoll, nowBox);
+  var flowsSect = section('Flows');
+  var shelves = el('div', { class: 'shelves' });
+  scroll.appendChild(shelves);
 
   /**
    * WHAT THE PAGE RESERVES HAS TO BE WHAT THE BAR OCCUPIES.
    *
    * `html[data-motu-dock="bottom"]` reserves `--motu-dock-handle`, which nothing ever set — it lived
-   * on its 44px default, correct only while the bar was exactly one row. The strip makes the bar
-   * taller, and an unreserved bar sits on top of the application's last rows, which is the same
-   * defect the closed desktop panel had.
-   *
-   * Measured rather than stated because the bar is two stated rows plus its gaps, and the sum is the
-   * thing that has to be true. Only in phone layout: at any other width this variable addresses a
-   * dock that is not at the bottom, and the rail there is the height of the viewport.
+   * on its 44px default, correct only while the bar was exactly one row. Measured rather than stated,
+   * because the bar's height is the thing that has to be true. Only in phone layout: at any other
+   * width this variable addresses a dock that is not at the bottom.
    */
   var syncBottomReserve = function () {
     var root = document.documentElement;
-    var phone = false;
-    try {
-      phone = window.matchMedia('(max-width: 760px)').matches;
-    } catch (e) {
-      phone = false;
-    }
-    if (!phone) {
+    if (!isPhone()) {
       root.style.removeProperty('--motu-dock-handle');
       return;
     }
@@ -1759,14 +2046,6 @@ function motuMountDock(opts) {
     if (h > 0) root.style.setProperty('--motu-dock-handle', h + 'px');
   };
   window.addEventListener('resize', function () { syncBottomReserve(); applyPin(); });
-
-  // SCENARIOS DECLARED FOR A TAG, excluding nothing — the seeded default is not one of them, it is
-  // what an island shows with no scenario at all, so the number here is exactly what scoping buys.
-  var scenarioCount = function (tag) {
-    var cat = catalogue();
-    var list = cat && cat.scenarios ? cat.scenarios[tag] : null;
-    return list ? list.length : 0;
-  };
 
   var row = function (label, on, run) {
     var b = el('button', { class: 'motu-opt', type: 'button', role: 'option', 'aria-current': on ? 'true' : 'false' }, [
@@ -1784,37 +2063,27 @@ function motuMountDock(opts) {
     return b;
   };
 
-  /**
-   * The states tree: region → "As seeded", its flows, then each island's scenarios (folded, unless one
-   * of them is what the region is showing). A flow is REACHABLE — it only fires declared outputs; an
-   * island scenario played inside its region is a WHAT-IF, marked as one, because it sets the island's
-   * inputs directly and may pair values the app never pairs.
-   */
-  /** What the page last pointed at (a region chip, or the crosshair on a screen) — kept unfolded. */
-  var focused = null;
+  /** What the page last pointed at (a region chip, or the crosshair on a screen). */
   var lastFocus = null;
-
-  /** The region the phone strip is aimed at, when the reader picked one with the region chip. */
+  /** The region the dock is aimed at, when the reader picked one. */
   var railPick = null;
+  /** The island whose shelf the reader aimed at (the atoll, or the page's crosshair). */
+  var aimIsland = null;
+  /** Set when something asked for a shelf to be brought into view on the next paint. */
+  var revealShelf = null;
 
   /**
-   * THE PHONE STRIP, FOR WHATEVER IS ON SCREEN — the states you reach for while watching the page.
-   *
-   * A screen holds several regions and the bar has one row, so the strip is aimed at ONE region,
-   * chosen the way a person would: the one you picked (the region chip cycles), else the station's own
-   * region, else a region already in a state, else the MAIN one — the region with the most states, which
-   * is the page body rather than the sidebar. Its row: the region chip (only when there is a choice),
-   * "As seeded", its flows (reachable, played in place), the steps of the playing flow, the what-if it
-   * is in, and a chip that opens the sheet on that region's island scenarios — too many for a row, and
-   * a what-if deserves the sheet that says what it forged.
+   * THE REGION THE DOCK IS AIMED AT — one, chosen the way a person would: the one you picked, else
+   * the station's own region, else a region already in a state, else the MAIN one (the region with
+   * the most states, which is the page body rather than the sidebar). The bar and the tab aim at the
+   * same one, so what the bar steps is what the tab shows.
    */
-  var railChips = function (ctl, cat, now) {
-    var info = ctl.states();
+  var aimAt = function (info, now) {
     var regs = info.regions || [];
     if (!regs.length) return null;
     var active = info.active || [];
     var size = function (r) { return (r.flows || []).length * 1000 + (r.islands || []).reduce(function (n, i) { return n + i.scenarios.length; }, 0); };
-    var onRegionStation = now.region && now.region.indexOf('screen:') !== 0;
+    var onRegionStation = !!now.region && now.region.indexOf('screen:') !== 0;
     var ids = regs.map(function (r) { return r.region; });
     var regId =
       (railPick && ids.indexOf(railPick) !== -1 && railPick) ||
@@ -1823,278 +2092,315 @@ function motuMountDock(opts) {
       regs.slice().sort(function (a, b) { return size(b) - size(a); })[0].region;
     var reg = regs.filter(function (r) { return r.region === regId; })[0];
     var act = active.filter(function (a) { return a.region === regId; })[0] || null;
+    // The region view's OWN flows run through `runFlow`, which remounts so a root prop derived from
+    // the flow's seed lands; its state then shows as `now.flow` rather than in the player's list.
     var own = onRegionStation && regId === now.region;
-    var activeFlow = own ? now.flow || null : act && act.kind === 'flow' ? act.name : null;
-    var labelOf = function (id) {
-      var r = (cat.archipelagos || []).filter(function (x) { return x.id === id; })[0];
-      return r ? r.label : id;
-    };
-    var chips = [];
-    var lit = null;
-    if (regs.length > 1) {
-      // CYCLES through the regions on screen — one tap, no menu to open over the page.
-      var next = ids[(ids.indexOf(regId) + 1) % ids.length];
-      var rc = stateChip(labelOf(regId) + ' \u25be', false, function () { railPick = next; paint(); });
-      rc.classList.add('rail-chip--region');
-      rc.title = 'Showing ' + labelOf(regId) + "'s states — tap for " + labelOf(next);
-      chips.push(rc);
-    }
-    var play = function (name, step) {
-      return drive(function (c) {
-        if (own && step == null) c.runFlow(name);
-        else if (name === null) c.clearState(regId);
-        else c.playState({ region: regId, kind: 'flow', name: name, step: step == null ? null : step });
-      });
-    };
-    var seeded = !activeFlow && !(act && act.kind === 'scenario');
-    chips.push(stateChip('As seeded', seeded, play(null)));
-    if (seeded) lit = 'As seeded';
-    if (act && act.kind === 'scenario') {
-      // The what-if this region is in, lit; pressing it opens the sheet on that island.
-      var w = stateChip('\u25c7 ' + act.name, true, drive(function (c) { c.focusRegion ? c.focusRegion(regId, act.island) : (open(true), showTab('states')); }));
-      w.title = 'what-if: ' + act.island + (act.forged && act.forged.length ? ' — forged ' + act.forged.map(function (f) { return f.key; }).join(', ') : '');
-      chips.push(w);
-      lit = w.textContent;
-    }
-    (reg.flows || []).forEach(function (name) {
-      var on = activeFlow === name;
-      chips.push(stateChip(name, on, play(name)));
-      if (on) lit = name;
-      // The steps of the flow this region is in, right beside it: scrub without opening anything.
-      if (on && !own && act && act.of > 1) {
-        var at = act.applied == null ? act.of : act.applied;
-        var prev = stateChip('\u2039', false, play(name, Math.max(0, at - 1)));
-        var pos = stateChip(at + '/' + act.of, false, function () {});
-        var nxt = stateChip('\u203a', false, play(name, Math.min(act.of, at + 1)));
-        prev.setAttribute('aria-label', 'previous step');
-        nxt.setAttribute('aria-label', 'next step');
-        if (at <= 0) prev.disabled = true;
-        if (at >= act.of) nxt.disabled = true;
-        pos.disabled = true;
-        [prev, pos, nxt].forEach(function (b) { b.classList.add('rail-chip--step'); chips.push(b); });
-      }
-    });
-    var nScen = (reg.islands || []).reduce(function (n, i) { return n + i.scenarios.length; }, 0);
-    if (nScen) {
-      var more = stateChip('\u25c7 ' + nScen + ' what-if' + (nScen === 1 ? '' : 's'), false, drive(function (c) {
-        // '*': every island of the region unfolded, and the sheet opened AT them — the chip promised the
-        // what-ifs, and landing on the flows above them would make the reader go looking.
-        if (c.focusRegion) c.focusRegion(regId, '*');
-        else { open(true); showTab('states'); }
-      }));
-      more.classList.add('rail-chip--more');
-      more.title = labelOf(regId) + "'s island scenarios — opens the sheet on them";
-      chips.push(more);
-    }
-    return { chips: chips, lit: lit };
+    var activeFlow = own
+      ? now.flow || (act && act.kind === 'flow' ? act.name : null)
+      : act && act.kind === 'flow' ? act.name : null;
+    var activeScenario = act && act.kind === 'scenario' ? act : null;
+    // THE STEPS, only where the player can replay to one. A flow the region view runs itself has no
+    // step control (it remounts whole), so it is shown as playing and not as scrubbable.
+    var steps = !own && act && act.kind === 'flow' && act.of > 0
+      ? { at: act.applied == null ? act.of : act.applied, of: act.of }
+      : null;
+    return { regs: regs, reg: reg, regId: regId, act: act, own: own, activeFlow: activeFlow, activeScenario: activeScenario, steps: steps };
   };
 
-  var stateTree = function (ctl, cat, now, hit) {
-    var info = ctl.states();
-    var onRegionStation = now.region && now.region.indexOf('screen:') !== 0;
-    var labelOf = function (id) {
-      var r = (cat.archipelagos || []).filter(function (x) { return x.id === id; })[0];
-      return r ? r.label : id;
-    };
-    var nodes = [];
-    var count = 0;
-    (info.regions || []).forEach(function (reg) {
-      var act = (info.active || []).filter(function (a) { return a.region === reg.region; })[0] || null;
-      // The region view's OWN flows run through `runFlow`, which remounts so a root prop derived from
-      // the flow's seed lands; its state then shows as `now.flow` rather than in the player's list.
-      var own = onRegionStation && reg.region === now.region;
-      var activeFlow = own ? now.flow || (act && act.kind === 'flow' ? act.name : null) : act && act.kind === 'flow' ? act.name : null;
-      var activeScenario = act && act.kind === 'scenario' ? act.island + '\u0000' + act.name : null;
-      var isFocus = !!focused && focused.region === reg.region;
-      var group = el('div', { class: 'state-group' + (isFocus ? ' state-group--focus' : ''), 'data-region': reg.region }, []);
-      var head = el('div', { class: 'state-group__head' }, [
-        el('span', { class: 'motu-cap' }, [labelOf(reg.region)]),
-        act && act.claim === 'what-if' ? el('span', { class: 'state-claim', title: 'an island scenario played inside its region — it sets the island\'s inputs directly' }, ['what-if']) : null,
-      ].filter(Boolean));
-      group.appendChild(head);
-      var playFlow = function (name) {
-        return drive(function (c) {
-          if (own) c.runFlow(name);
-          else if (name === null) c.clearState(reg.region);
-          else c.playState({ region: reg.region, kind: 'flow', name: name });
-        });
-      };
-      group.appendChild(row('As seeded', !activeFlow && !activeScenario, playFlow(null)));
-      (reg.flows || []).forEach(function (name) {
-        if (!hit(name)) return;
-        count++;
-        group.appendChild(row(name, activeFlow === name, playFlow(name)));
-        // THE STEPS OF THE FLOW THIS REGION IS IN, scrubbable: the states BETWEEN steps are where you
-        // watch the region handle a change, and each one is replayed from the seed, never stacked.
-        if (!own && act && act.kind === 'flow' && act.name === name && act.of > 0) {
-          var at = act.applied == null ? act.of : act.applied;
-          var go = function (n) {
-            return drive(function (c) { c.playState({ region: reg.region, kind: 'flow', name: name, step: n }); });
-          };
-          var prev = el('button', { class: 'motu-btn', 'data-shape': 'pill', type: 'button', 'aria-label': 'previous step' }, ['‹']);
-          var next = el('button', { class: 'motu-btn', 'data-shape': 'pill', type: 'button', 'aria-label': 'next step' }, ['›']);
-          if (at <= 0) prev.disabled = true; else prev.addEventListener('click', go(at - 1));
-          if (at >= act.of) next.disabled = true; else next.addEventListener('click', go(at + 1));
-          group.appendChild(el('div', { class: 'state-steps' }, [prev, el('span', {}, ['step ' + at + ' / ' + act.of]), next]));
-        }
-      });
-      (reg.islands || []).forEach(function (isl) {
-        var names = (isl.scenarios || []).filter(function (n) { return hit(n) || hit(isl.tag); });
-        if (!names.length) return;
-        count += names.length;
-        var open = (!!activeScenario && activeScenario.indexOf(isl.tag + '\u0000') === 0) || (isFocus && (focused.island === isl.tag || focused.island === '*'));
-        var fold = el('details', { class: 'state-island', 'data-tag': isl.tag }, [
-          el('summary', {}, [isl.slot || isl.tag, el('span', { class: 'count' }, [String(names.length)])]),
-        ]);
-        if (open) fold.setAttribute('open', '');
-        names.forEach(function (name) {
-          fold.appendChild(row(name, activeScenario === isl.tag + '\u0000' + name, drive(function (c) {
-            c.playState({ region: reg.region, kind: 'scenario', island: isl.tag, name: name });
-          })));
-        });
-        group.appendChild(fold);
-      });
-      if (act && act.forged && act.forged.length) {
-        group.appendChild(el('p', { class: 'state-forged' }, [
-          'forged: ' + act.forged.map(function (f) { return f.key + ' (owned by ' + f.owner + ')'; }).join(', '),
-        ]));
-      }
-      nodes.push(group);
+  /** Play a flow (or the seed, for `null`) in the aimed region — resolved at click time, like every act. */
+  var playIn = function (aim, name, step) {
+    var regId = aim.regId;
+    var own = aim.own;
+    return drive(function (c) {
+      if (own && step == null) c.runFlow(name);
+      else if (name === null) c.clearState(regId);
+      else c.playState({ region: regId, kind: 'flow', name: name, step: step == null ? null : step });
     });
-    return { nodes: nodes, count: count, regions: (info.regions || []).length };
   };
+
+  var slotOf = function (reg, tag) {
+    var i = (reg.islands || []).filter(function (x) { return x.tag === tag; })[0];
+    return i ? i.slot || i.tag : tag;
+  };
+
+  /**
+   * THE ATOLL. The region's islands around its lagoon — the one picture in the dock that shows the
+   * region's SHAPE rather than a list of its parts. Dots are sand, the icon's own, and sized by the
+   * island's what-if count, so the island with the most states to look at is the biggest thing to tap.
+   * Names stand under the dots up to eight islands; past that they would collide, and the shelves
+   * below name every island anyway.
+   */
+  var drawAtoll = function (aim) {
+    var isl = aim.reg.islands || [];
+    var nFlows = (aim.reg.flows || []).length;
+    var nodes = [el('span', { class: 'atoll__ring', 'aria-hidden': 'true' })];
+    var lagoon = el('button', {
+      class: 'atoll__lagoon', type: 'button', 'aria-pressed': String(!aimIsland),
+      title: "The region's flows",
+    }, [el('small', {}, ['lagoon']), el('b', {}, [nFlows + (nFlows === 1 ? ' flow' : ' flows')])]);
+    lagoon.addEventListener('click', function () { aimIsland = null; revealShelf = 'flows'; paint(); });
+    nodes.push(lagoon);
+    var named = isl.length <= 8;
+    isl.forEach(function (i, k) {
+      var angle = -Math.PI / 2 + ((k + 0.5) * 2 * Math.PI) / isl.length;
+      var n = i.scenarios.length;
+      var size = 14 + Math.min(n, 10) * 2;
+      var lit = !!aim.activeScenario && aim.activeScenario.island === i.tag;
+      var dot = el('span', { class: 'atoll__dot' }, [n ? String(n) : '']);
+      dot.style.width = size + 'px';
+      dot.style.height = size + 'px';
+      var b = el('button', {
+        class: 'atoll__isle', type: 'button',
+        title: (i.slot || i.tag) + ' — ' + n + ' what-if' + (n === 1 ? '' : 's'),
+        'aria-label': (i.slot || i.tag) + ', ' + n + ' what-if' + (n === 1 ? '' : 's'),
+        'aria-pressed': String(aimIsland === i.tag),
+        'data-lit': lit ? 'true' : 'false',
+      }, named ? [dot, el('span', { class: 'atoll__name' }, [i.slot || i.tag])] : [dot]);
+      b.style.left = (50 + 36 * Math.cos(angle)).toFixed(2) + '%';
+      b.style.top = (50 + 30 * Math.sin(angle)).toFixed(2) + '%';
+      b.addEventListener('click', function () {
+        aimIsland = aimIsland === i.tag ? null : i.tag;
+        revealShelf = aimIsland;
+        paint();
+      });
+      nodes.push(b);
+    });
+    atoll.replaceChildren.apply(atoll, nodes);
+  };
+
+  /** NOW PLAYING — the state the aimed region is in, its kind, and its steps as pressable segments. */
+  var drawNow = function (aim, labelOf) {
+    var kind = 'as seeded';
+    var name = 'As seeded';
+    if (aim.activeScenario) {
+      kind = 'what-if · ' + slotOf(aim.reg, aim.activeScenario.island);
+      name = aim.activeScenario.name;
+    } else if (aim.activeFlow) {
+      kind = 'flow';
+      name = aim.activeFlow;
+    }
+    var kids = [
+      el('small', { class: 'now__kicker' }, [labelOf(aim.regId) + ' · ' + kind]),
+      el('b', { class: 'now__title' }, [name]),
+    ];
+    if (aim.steps) {
+      var segs = el('div', { class: 'now__segs', role: 'group', 'aria-label': 'Steps of this flow' });
+      for (var k = 1; k <= aim.steps.of; k++) {
+        var seg = el('button', {
+          class: 'now__seg', type: 'button', 'aria-label': 'Step ' + k + ' of ' + aim.steps.of,
+          'aria-current': String(k === aim.steps.at), 'data-done': String(k <= aim.steps.at),
+        });
+        seg.addEventListener('click', playIn(aim, aim.activeFlow, k));
+        segs.appendChild(seg);
+      }
+      kids.push(segs, el('small', { class: 'now__step' }, ['step ' + aim.steps.at + ' of ' + aim.steps.of]));
+    }
+    if (aim.act && aim.act.forged && aim.act.forged.length) {
+      kids.push(el('p', { class: 'state-forged' }, [
+        'forged: ' + aim.act.forged.map(function (f) { return f.key + ' (owned by ' + f.owner + ')'; }).join(', '),
+      ]));
+    }
+    nowBox.replaceChildren.apply(nowBox, kids);
+  };
+
+  /**
+   * THE WHAT-IFS: one shelf per island, scrolling sideways. An island scenario played inside its
+   * region sets that island's inputs directly — a what-if, not a state the app is known to reach —
+   * which is why they sit under the flows rather than among them.
+   */
+  var drawShelves = function (aim, now) {
+    var nodes = [];
+    var total = 0;
+    (aim.reg.islands || []).forEach(function (i) {
+      if (!i.scenarios.length) return;
+      total += i.scenarios.length;
+      var lit = aim.activeScenario && aim.activeScenario.island === i.tag ? aim.activeScenario.name : null;
+      var track = el('div', { class: 'shelf__track', role: 'listbox', 'aria-label': (i.slot || i.tag) + ' what-ifs' });
+      i.scenarios.forEach(function (name) {
+        var card = el('button', { class: 'shelf__card', type: 'button', role: 'option', 'aria-current': String(lit === name) }, [name]);
+        card.addEventListener('click', function () {
+          var all = shelves.querySelectorAll('.shelf__card');
+          for (var n = 0; n < all.length; n++) all[n].setAttribute('aria-current', 'false');
+          card.setAttribute('aria-current', 'true');
+          drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: i.tag, name: name }); })();
+        });
+        track.appendChild(card);
+      });
+      var head = [el('span', { class: 'shelf__slot' }, [i.slot || i.tag]), el('span', { class: 'count' }, [String(i.scenarios.length)])];
+      // ALONE only where the view can do it: opening an island scopes the REGION STATION, so on a
+      // screen (several regions, none of them the station) the act has nowhere to land.
+      if (aim.own && !now.island) {
+        var alone = el('button', { class: 'shelf__alone', type: 'button', title: 'Open ' + i.tag + ' on its own' }, ['alone ↗']);
+        alone.addEventListener('click', drive(function (c) { c.openIsland(i.tag); }));
+        head.push(alone);
+      }
+      nodes.push(el('section', { class: 'shelf', 'data-tag': i.tag, 'data-aimed': String(aimIsland === i.tag) }, [
+        el('div', { class: 'shelf__head' }, head),
+        track,
+      ]));
+    });
+    if (total) {
+      nodes.unshift(el('div', { class: 'sect__head' }, [
+        el('span', { class: 'motu-dot' }), el('span', { class: 'motu-cap' }, ['What-ifs']), el('span', { class: 'count' }, [String(total)]),
+      ]));
+    }
+    shelves.replaceChildren.apply(shelves, nodes);
+    // The lit card, in view — once per change, so a reader scrolling a shelf is not dragged back.
+    var litCard = shelves.querySelector('.shelf__card[aria-current="true"]');
+    var litKey = litCard ? litCard.textContent : null;
+    if (litKey !== lastLitCard) {
+      lastLitCard = litKey;
+      if (litCard && litCard.parentNode) {
+        var t = litCard.parentNode;
+        t.scrollLeft = Math.max(0, litCard.offsetLeft - t.offsetLeft - 16);
+      }
+    }
+    return total;
+  };
+  var lastLitCard = null;
 
   var paint = function () {
     var cat = catalogue();
     var ctl = control();
     // Whatever tab is up. The badge's whole job is to be right on the tab a person is NOT looking at.
     paintSeamsBadge();
+    placeThumb();
     if (!cat || !ctl) {
       // The lagoon has not booted yet, or this build predates the control surface. Say so rather than
       // drawing an empty panel that looks like a region with nothing in it.
-      regions.box.hidden = true;
-      screensSect.box.hidden = true;
-      states.box.hidden = true;
+      aimRow.hidden = true;
+      atoll.hidden = true;
+      flowsSect.box.hidden = true;
       bayTitle.textContent = 'waiting for the lagoon…';
       baySub.textContent = '';
+      railTitle.textContent = 'waiting for the lagoon…';
+      railSub.textContent = '';
       return;
     }
-    regions.box.hidden = false;
-    states.box.hidden = false;
+    flowsSect.box.hidden = false;
     var now = ctl.current();
-    var q = filter.value.trim().toLowerCase();
-    var hit = function (s) { return !q || s.toLowerCase().indexOf(q) >= 0; };
-
-    var screenRows = screenEntries(ctl).filter(function (r) { return hit(r.label); });
-    screensSect.box.hidden = screenRows.length === 0;
-    screensSect.count.textContent = String(screenRows.length);
-    screensSect.list.replaceChildren.apply(screensSect.list, screenRows.map(function (r) {
-      return row(r.label, r.id === now.region, drive(function (c) { c.show(r.id); }));
-    }));
-
-    var list = (cat.archipelagos || []).filter(function (r) { return hit(r.label); });
-    regions.count.textContent = String(list.length);
-    regions.list.replaceChildren.apply(regions.list, list.map(function (r) {
-      return row(r.label, r.id === now.region, drive(function (c) { c.show(r.id); }));
-    }));
-
-    // The region's islands, as a picker. Lit when scoped, and pressing the lit one lets go — the
-    // toggle is what makes this a scope control rather than a one-way door.
-    // DECLARED membership, not mounted: scoping unmounts the others, and a list built from what is
-    // mounted empties exactly when you need it to let go again. `islands()` stays the inspector's.
-    var mountedIslands = (ctl.regionIslands ? ctl.regionIslands() : (ctl.islands ? ctl.islands() : [])) || [];
-    var scopedTag = now.island && now.island.tag;
-    var islandRows = mountedIslands.filter(function (i) { return hit(i.tag) || hit(i.slot || ''); });
-    islands.count.textContent = String(islandRows.length);
-    islands.box.hidden = islandRows.length === 0;
-    islands.list.replaceChildren.apply(islands.list, islandRows.map(function (i) {
-      var n = scenarioCount(i.tag);
-      // The count rides in the label: `row` renders one, and a badge here would need its own layout
-      // in a list whose rows are already a lamp plus text.
-      return row((i.slot || i.tag) + (n ? '  ' + n : ''), i.tag === scopedTag, drive(function (c) { c.openIsland(i.tag); }));
-    }));
-
-    // AN ISLAND'S STATES ARE ITS SCENARIOS, a region's are its flows — one list, whichever applies.
-    //
-    // The two are the same idea (a declared state with a name and an address) and they are never both
-    // in play: an `island:` target mounts one island alone, with no region for a flow to move. Listing
-    // them in the same box is what makes a scenario reachable without knowing its URL, which is the
-    // gap that left the states a project writes the MOST of as the only ones a human could not find.
-    var onIsland = !!now.island;
-    var scenarios = onIsland && ctl.scenarios ? ctl.scenarios() : [];
-    var flows = onIsland ? [] : (cat.flows && cat.flows[now.region]) || [];
-    var entries = onIsland
-      ? scenarios.map(function (sc) {
-          // An interaction count is the difference between a state that simply IS and one the lagoon
-          // has to PLAY to reach — worth showing, because only the latter has `&step=<n>`.
-          return { name: sc.name, sub: sc.steps ? sc.steps + ' interaction' + (sc.steps === 1 ? '' : 's') : '' };
-        })
-      : flows.map(function (f) { return { name: f.name, sub: '' }; });
-    // The "back to nothing" row: a region's seeded state, or an island on its own defaults.
-    var baseLabel = onIsland ? 'Default mount' : 'As seeded';
-    var go = function (name) {
-      return drive(function (c) { onIsland ? c.openScenario(name) : c.runFlow(name); });
+    var labelOf = function (id) {
+      var r = (cat.archipelagos || []).filter(function (x) { return x.id === id; })[0];
+      return r ? r.label : id;
     };
+    var onScreen = screenEntries(ctl).filter(function (r) { return r.id === now.region; })[0];
+    var scopedTag = now.island && now.island.tag;
+    var decisions = 0;
+    try {
+      var rep = ctl.findings ? ctl.findings() : null;
+      decisions = rep && rep.tally ? rep.tally.decisions : 0;
+    } catch (e) { decisions = 0; }
 
-    states.count.textContent = String(entries.length);
-    // WHICH ONE IS SHOWING, from the lagoon rather than from a guess. This used to hardcode "As
-    // seeded" as current and every flow as not — so pressing a state ran it and the list went on
-    // showing the same row lit, which reads as the click having done nothing.
-    var showing = onIsland ? now.scenario || null : now.flow || null;
-    var rows = [row(baseLabel, showing === null, go(null))];
-    entries.forEach(function (e) {
-      if (!hit(e.name)) return;
-      rows.push(row(e.name, showing === e.name, go(e.name)));
-    });
-    // EVERY STATE THIS VIEW CAN BE PUT IN, when the lagoon can say (`states()`, lagoon-player): each
-    // region on screen with its flows and the scenarios of each island it places — so an island's
-    // scenarios are findable from the region and from a screen, not only by opening the island alone.
-    // One state per region; the lit row is the one that region is in.
-    var tree = !onIsland && ctl.states ? stateTree(ctl, cat, now, hit) : null;
-    if (tree) {
-      states.count.textContent = String(tree.count);
-      states.list.replaceChildren.apply(states.list, tree.nodes);
-      // THE PAGE POINTED AT SOMETHING: open on its states. Once per pointing — `n` changes each time —
-      // so the panel does not keep yanking itself back to a region the reader has scrolled away from.
+    // AN ISLAND OPENED ALONE has no region around it to aim at: its states are its own scenarios,
+    // played by remounting it, and there is no atoll to draw. One list, and the bar names the island.
+    var onIsland = !!now.island;
+    var info = !onIsland && ctl.states ? ctl.states() : null;
+    var aim = info ? aimAt(info, now) : null;
+    var nStates = 0;
+    var showingName;
+    var where;
+
+    if (aim) {
+      aimRow.hidden = aim.regs.length < 2;
+      aimRow.replaceChildren.apply(aimRow, aim.regs.map(function (r) {
+        var n = (r.flows || []).length + (r.islands || []).reduce(function (s, i) { return s + i.scenarios.length; }, 0);
+        var b = el('button', {
+          class: 'motu-btn', 'data-shape': 'pill', type: 'button', 'aria-current': String(r.region === aim.regId),
+        }, [labelOf(r.region), el('span', { class: 'aim__n' }, [String(n)])]);
+        b.addEventListener('click', function () { railPick = r.region; aimIsland = null; lastLitCard = null; paint(); });
+        return b;
+      }));
+      atoll.hidden = !(aim.reg.islands || []).length;
+      drawAtoll(aim);
+      drawNow(aim, labelOf);
+      flowsSect.cap.textContent = 'Flows';
+      var flowRows = [row('As seeded', !aim.activeFlow && !aim.activeScenario, playIn(aim, null))];
+      (aim.reg.flows || []).forEach(function (name) {
+        flowRows.push(row(name, aim.activeFlow === name, playIn(aim, name)));
+      });
+      flowsSect.count.textContent = String((aim.reg.flows || []).length);
+      flowsSect.list.replaceChildren.apply(flowsSect.list, flowRows);
+      drawShelves(aim, now);
+      (info.regions || []).forEach(function (r) {
+        nStates += (r.flows || []).length + (r.islands || []).reduce(function (s, i) { return s + i.scenarios.length; }, 0);
+      });
+      showingName = aim.activeScenario ? '◇ ' + aim.activeScenario.name : aim.activeFlow || 'As seeded';
+      // The screen, then the region — once, when a screen is named after the region it is built on.
+      where = onScreen && onScreen.label !== labelOf(aim.regId) ? onScreen.label + ' \u203a ' + labelOf(aim.regId) : labelOf(aim.regId);
+
+      // The bar's step buttons step the same flow the segments do.
+      var st = aim.steps;
+      stepPrev.hidden = !st;
+      stepNext.hidden = !st;
+      if (st) {
+        where += ' · step ' + st.at + '/' + st.of;
+        stepPrev.disabled = st.at <= 0;
+        stepNext.disabled = st.at >= st.of;
+        stepPrev.onclick = playIn(aim, aim.activeFlow, Math.max(0, st.at - 1));
+        stepNext.onclick = playIn(aim, aim.activeFlow, Math.min(st.of, st.at + 1));
+      }
+
+      // THE PAGE POINTED AT SOMETHING: aim at it and open on it. Once per pointing — `n` changes each
+      // time — so the panel does not keep yanking itself back to a region the reader has left.
       if (now.focus && now.focus.n !== lastFocus) {
         lastFocus = now.focus.n;
-        if (!focused || focused.region !== now.focus.region || focused.island !== now.focus.island) {
-          focused = { region: now.focus.region, island: now.focus.island || null };
-          setTimeout(paint, 0); // repaint with the fold open
-        }
+        railPick = now.focus.region;
+        aimIsland = now.focus.island && now.focus.island !== '*' ? now.focus.island : null;
+        revealShelf = now.focus.island === '*' ? 'shelves' : aimIsland || 'top';
         open(true);
-        showTab('states');
-        setTimeout(function () {
-          var target = states.list.querySelector(
-            focused.island === '*'
-              ? '.state-group[data-region="' + focused.region + '"] .state-island'
-              : focused.island ? '.state-island[data-tag="' + focused.island + '"]' : '.state-group[data-region="' + focused.region + '"]',
-          );
-          if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        }, 60);
+        showTab('states'); // repaints, aimed
+        return;
       }
     } else {
-      states.list.replaceChildren.apply(states.list, rows);
+      // An island alone, or a lagoon too old to say what its view can play: one plain list.
+      aimRow.hidden = true;
+      atoll.hidden = true;
+      shelves.replaceChildren();
+      var scenarios = onIsland && ctl.scenarios ? ctl.scenarios() : [];
+      var flows = onIsland ? [] : (cat.flows && cat.flows[now.region]) || [];
+      var entries = onIsland
+        ? scenarios.map(function (sc) { return sc.name; })
+        : flows.map(function (f) { return f.name; });
+      var baseLabel = onIsland ? 'Default mount' : 'As seeded';
+      var showing = onIsland ? now.scenario || null : now.flow || null;
+      var go = function (name) {
+        return drive(function (c) { onIsland ? c.openScenario(name) : c.runFlow(name); });
+      };
+      nowBox.replaceChildren(
+        el('small', { class: 'now__kicker' }, [onIsland ? scopedTag + ' · alone' : now.region || '']),
+        el('b', { class: 'now__title' }, [showing || baseLabel]),
+      );
+      flowsSect.cap.textContent = onIsland ? 'Scenarios' : 'Flows';
+      flowsSect.count.textContent = String(entries.length);
+      flowsSect.list.replaceChildren.apply(flowsSect.list, [row(baseLabel, showing === null, go(null))].concat(entries.map(function (n) {
+        return row(n, showing === n, go(n));
+      })));
+      nStates = entries.length;
+      showingName = showing || baseLabel;
+      where = onIsland ? scopedTag + ' · alone' : (onScreen ? onScreen.label : now.region || 'lagoon');
+      stepPrev.hidden = true;
+      stepNext.hidden = true;
     }
 
-    // The same states, as chips on the bar. NOT filtered by the panel's search box: the box is in
-    // the panel and the strip is reachable with the panel shut, so filtering it from an input nobody
-    // can see would silently hide states with no way to tell why.
-    var chips = [stateChip(baseLabel, showing === null, go(null))];
-    entries.forEach(function (e) {
-      chips.push(stateChip(e.name, showing === e.name, go(e.name)));
-    });
-    var smart = !onIsland && ctl.states ? railChips(ctl, cat, now) : null;
-    if (smart) {
-      chips = smart.chips;
-      showing = smart.lit;
+    // THE MINI PLAYER: what is playing, where, and whether the lens is waiting on a decision.
+    railTitle.textContent = showingName;
+    railSub.textContent = where;
+    railFlag.hidden = !decisions;
+    railFlag.textContent = decisions ? '⚑ ' + decisions : '';
+    railOpen.setAttribute('aria-label', 'Lagoon controls — ' + showingName + ', ' + where);
+
+    // Bring the shelf (or the flows) someone aimed at into view, once.
+    if (revealShelf) {
+      var want = revealShelf;
+      revealShelf = null;
+      setTimeout(function () {
+        var target = want === 'top' ? scroll.firstChild
+          : want === 'flows' ? flowsSect.box
+          : want === 'shelves' ? shelves
+          : shelves.querySelector('.shelf[data-tag="' + want + '"]');
+        if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }, 60);
     }
-    railStates.replaceChildren.apply(railStates, chips);
-    // A target with no declared states has one state, which is the one you are looking at. A lone
-    // base chip is a control that cannot do anything, so the strip stands down and the bar keeps its
-    // original height.
-    railStates.hidden = smart ? smart.chips.length <= 1 : entries.length === 0;
-    keepSelectedVisible(showing);
     syncBottomReserve();
 
     // ── the rig ──────────────────────────────────────────────────────────────────────────────
@@ -2595,7 +2901,7 @@ function motuMountDock(opts) {
     // out spelled out, both in the panel and on the collapsed rail.
     if (scopedTag) {
       bayTitle.textContent = scopedTag;
-      baySub.textContent = 'island only · ' + entries.length + (entries.length === 1 ? ' scenario' : ' scenarios');
+      baySub.textContent = 'island only · ' + nStates + (nStates === 1 ? ' scenario' : ' scenarios');
       railLabel.textContent = scopedTag;
       scopeChip.hidden = false;
       toasts.dataset.scoped = 'true';
@@ -2607,10 +2913,9 @@ function motuMountDock(opts) {
       toasts.dataset.scoped = 'false';
       scopeClose.onclick = null;
       // A screen is named by its label — its id is `screen:<id>`, an address rather than a name.
-      var onScreen = screenEntries(ctl).filter(function (r) { return r.id === now.region; })[0];
       bayTitle.textContent = onScreen ? onScreen.label : now.region || '—';
-      var nStates = tree ? tree.count : entries.length;
-      baySub.textContent = (onScreen ? 'screen · ' : '') + nStates + (nStates === 1 ? ' state' : ' states') + (tree && tree.regions > 1 ? ' across ' + tree.regions + ' regions' : '');
+      var nRegions = info ? (info.regions || []).length : 1;
+      baySub.textContent = (onScreen ? 'screen · ' : '') + nStates + (nStates === 1 ? ' state' : ' states') + (nRegions > 1 ? ' across ' + nRegions + ' regions' : '');
       railLabel.textContent = onScreen ? onScreen.label : now.region || 'lagoon';
     }
   };
@@ -2766,7 +3071,6 @@ function motuMountDock(opts) {
     while (live.length > MAX_CARDS) dropCard(live[0]);
   };
 
-  filter.addEventListener('input', paint);
   paint();
 
   // FOLLOW A MOUNT NOBODY HERE CAUSED. The lagoon can change region from its own URL, its own panel,

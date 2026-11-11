@@ -182,6 +182,7 @@ Skipped under `--fast`, which says so via `region-runtime`. Gated at `verify/reg
 | `page-render` (region) | **EXPERIMENTAL.** Renders the APPLICATION'S OWN PAGE (the `page` override) rather than the region, and asks three things: it mounted without throwing, every declared slot is present in the DOM, and each rendered something. This is the only check that can see a slot the page NAMES but never REACHES — one inside `{isOpen && …}`, a ternary or a `.map()` whose branch does not run. Skips (`0 examined`) when the region declares no `page`. | ok, skip, error | browser | `playwright-lagoon.mjs` `pageRenderLagoon`, `verify.mjs` `page-render` |
 | `region-flow` | Every declared flow step ends as declared. Absent evidence, unreadable evidence and step-less evidence each get their own warning rather than a silent pass. A `ReferenceError`/`TypeError` is rethrown — that is a bug in motu, not a region that could not be driven. | ok, warn, error, inconclusive | `verify/island-runtime.mjs:577`, `reach.mjs:231`, `reach.mjs:236`, `reach.mjs:261`, `reach.mjs:279`, `reach.mjs:283` |
 | `flow-mutation` | A step that cannot fail is not a check. **By construction**: a step whose `expect` names only keys it just `provide`d asserts the lagoon stored what it was handed (error). **By mutation**: the stimulus is changed crudely and re-run; an assertion that still holds is asserting a constant (error). A mutant that *broke* the region proves nothing and is a warning, not a kill. Counts what came back, not what was sent. | ok, warn, error, skip, inconclusive | `verify/island-runtime.mjs:455`, `island-runtime.mjs:516`, `island-runtime.mjs:538`, `island-runtime.mjs:546`, `island-runtime.mjs:553`, `island-runtime.mjs:560` |
+| `flow-calls` | Every backend call a flow step caused (counted by the live feed's `seq` since the previous step; step 1 includes the seed and the mount) was answered by a declaration. A call nothing answered — no fixture, no table, no route — is an error naming the step, the call, who asked and what to declare. A failure a fixture DECLARED (`status: 500`) never counts. No calls at all is a skip, not a pass. Measured on Peps: the four tables its screens 404'd passed every other check. | ok, error, skip | `lib/flow-calls.mjs`, `playwright-lagoon.mjs` (`runRegionFlows`) |
 | `wiring-live` | Firing each declared write actually moves the key it claims to write. Precise about its limit: it fires the event **itself**, through the lagoon's emit seam, so it cannot tell you the component still produces it. | ok, error, skip, inconclusive | `verify/reach.mjs:315`, `reach.mjs:319`, `reach.mjs:322`, `reach.mjs:328` |
 | `emitted-live` | The other half: an output the component invokes **from an effect** actually fired while the region merely rendered. Narrow by construction — only provably effect-driven outputs are checked, because a click-handler output legitimately never fires in a render-only pass. | ok, warn | `verify/region-composition.mjs:264`, `region-composition.mjs:270` |
 | `store-guard` | motu's own runtime ownership guard ("key X is produced by island A, but written by B") did not complain while the region was driven. Surfaced here because the guard fires into a console nobody reads. | error | `verify/region-composition.mjs:46` |
@@ -193,6 +194,22 @@ Skipped under `--fast`, which says so via `region-runtime`. Gated at `verify/reg
 | `region-responsive` | The **composed page** fits every declared viewport. Every island fits alone and the arrangement still overflows — a fixed-rail grid fits nothing on a phone and no island is at fault. Reports `inconclusive` when the region rendered **without the island stylesheet**, because an unstyled page cannot overflow by construction. | ok, error, inconclusive | `verify/region-composition.mjs:302`, `region-composition.mjs:311`, `region-composition.mjs:321`, `region-composition.mjs:328` |
 | `region-a11y` | axe over the composed page, in the states the flows establish. Serious/critical violations warn; a page with only minor findings is reported as such. | ok, warn | `verify/region-composition.mjs:338`, `region-composition.mjs:340`, `region-composition.mjs:341` |
 | `no-console-errors`, `remount-stable` | As §4.5, applied to the region mount. | ok, error | `verify/island-static.mjs:573`–`island-static.mjs:581` |
+
+### 4.7b Screen checks — runtime (`motu screen verify [id]`, and `motu check --runtime`)
+
+Each declared screen opens alone, in a fresh page, from its own address (`/?screen=<id>`). A fresh page
+per screen because a screen's layout stays mounted across navigation by design, so a re-aimed page would
+credit one screen's calls to the next. Screen flows come from `src/screens/screens.evidence.ts`
+(`export const scenarios = [{ name, screen, steps }]`).
+
+| Check | Holds when | Levels | Source |
+| --- | --- | --- | --- |
+| `screen-render` | every screen opens from its own address (`__motuLagoonState.ok`) | ok, error | `verify/screens-runtime.mjs` |
+| `flow-calls` | every call a screen or a screen-flow step made was answered by a declaration. One finding per call, naming every screen that makes it (a layout's call is on all of them) | ok, error, skip | `verify/screens-runtime.mjs` |
+| `screen-flow` | each step's `click` (the app's own link, by accessible name) or `navigate` (a path, through the app's screen router) ends where the step says: `expectScreen` (the screen open), `expectRender` (text in a slot). No screen flows is a warning. A flow starting on an undeclared screen is an error | ok, warn, error | `verify/screens-runtime.mjs` |
+
+A screen flow is the one place a coupling ACROSS regions is asserted: the shell's sidebar is one region,
+the page another, and only the app's own link joins them.
 
 ### 4.8 Host-integration checks — `motu integrate check`
 

@@ -25,7 +25,8 @@ import {
 } from '@motu/core';
 import type { Store } from '@motu/core';
 import { readWireCalls, subscribeWireCalls } from '@motu/runtime/postgrest-fetch';
-import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
+import { corpusFor, corpusMissing, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
+import { regionCoverage } from '@motu/coverage';
 import { lens } from './store';
 import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, plainValue, keyOrigins, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';
@@ -142,7 +143,14 @@ export function currentCoverage() {
   // Ask the host once; `watchSeams` re-paints when the answer lands.
   ensureCorpus(regionId);
   const corpus = corpusFor(regionId);
-  if (!store || !corpus) return null;
+  if (!store) return null;
+  if (!corpus) {
+    // COVERAGE IS ON AND NOTHING HAS ARRIVED. Only for a region the project actually watches —
+    // otherwise an absent corpus is just coverage being off, and there is nothing to say.
+    const why = corpusMissing(regionId);
+    if (!why || !regionId || !regionCoverage().has(regionId)) return null;
+    return { empty: true as const, region: regionId, reason: why };
+  }
 
   // THE SAME UNION THE SHEET IS BUILT FROM, so the two cannot disagree about what this region is.
   const declaredKeys = new Set<string>();

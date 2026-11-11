@@ -309,6 +309,23 @@ Three more fields, each found by putting screens on Peps:
   that team under another's id. The screen refuses instead, with the reason.
 - `notARegion(reason)` in a slot — a page that is not islanded yet, named rather than drawn.
 
+**A screen can declare FLOWS**, in `src/screens/screens.evidence.ts` beside `screens.ts` (plain node
+reads it, so no `@/` imports):
+
+```ts
+export const scenarios = [
+  { name: 'the sidebar opens the member directory', screen: 'home',
+    steps: [{ click: 'Members', expectScreen: 'directory', expectRender: { 'member-results': 'Allen' } }] },
+  { name: 'a path opens the screen that serves it', screen: 'home',
+    steps: [{ navigate: '/events', expectScreen: 'events' }] },
+];
+```
+
+A step clicks what a person clicks (the app's own link, by accessible name) or navigates to a path, and
+asserts which screen is open and what a slot renders. Every backend call a screen makes is held to a
+declaration (`flow-calls`): the layout's calls, which no region's flow ever makes, are where Peps' four
+undeclared tables were. `motu screen verify [id]` runs it alone; `motu check --runtime` includes it.
+
 **What a screen is not.** It holds no state, declares no keys, writes or flows, and never becomes a
 bigger region. Each slot renders its region exactly as the region's own station does — its seed, its
 channels, its providers, its own store — INSIDE the layout's React tree, so the layout's context

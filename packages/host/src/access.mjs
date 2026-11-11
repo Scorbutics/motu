@@ -150,6 +150,22 @@ export function canIngest(access, repo, offered) {
   return secretMatches(offered, hash);
 }
 
+/**
+ * The ONE repo an ingest token belongs to, or null.
+ *
+ * An ingest token is already scoped to exactly one repo, so the repo is a fact about the token, not
+ * something the application should have to repeat. Asking it to was one of the four values a
+ * production deployment had to get right for coverage to land, and the host has never stored a
+ * corpus. Fewer values to set is fewer ways to be silently wrong.
+ */
+export function ingestRepoOf(access, offered) {
+  if (!offered) return null;
+  for (const [repo, policy] of Object.entries(access.repos ?? {})) {
+    if (secretMatches(offered, policy?.ingestHash)) return repo;
+  }
+  return null;
+}
+
 /** The cookie a reader carries once they have opened a private link. */
 export const READ_COOKIE = 'motu_read';
 

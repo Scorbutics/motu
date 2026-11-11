@@ -1,5 +1,6 @@
 // A region's flows: catalogue, render coverage, mutation, what-if reach, live wiring.
 // Split out of commands/verify.mjs; verify.mjs re-exports the public surface.
+import { reportFlowCalls } from '../../lib/flow-calls.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readRegions } from '../../lib/eject.mjs';
@@ -416,6 +417,10 @@ export async function regionFlowCheck(report, id, port, region) {
   const passed = results.filter((r) => r.ok).length;
   if (passed === results.length)
     report.ok('region-flow', `${passed} declared flow step(s) end as declared`, { n: passed, of: 'step(s)' });
+  reportFlowCalls(
+    report,
+    results.map((r) => ({ where: `"${r.scenario}" step ${r.step}`, calls: r.calls, undeclared: r.undeclared })),
+  );
 }
 
 /** Each island's scenarios in a region, keyed by its element tag — what the chart places. */

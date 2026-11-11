@@ -3866,7 +3866,26 @@ function motuMountDock(opts) {
     // one sentence on every region, which is a tab you learn not to open.
     if (panel.dataset.tab === 'seams') {
       var cov = ctl.coverage ? ctl.coverage() : null;
-      if (cov) {
+      if (cov && cov.empty) {
+        // COVERAGE IS ON AND NOTHING HAS ARRIVED. Said in place of the section, because its absence
+        // read exactly like coverage being off — and on the first project that switched it on, the
+        // host had never stored a corpus and nothing anywhere said so.
+        coveragePane.replaceChildren(
+          el('div', { class: 'sect__head' }, [
+            el('span', { class: 'motu-dot' }),
+            el('span', { class: 'motu-cap' }, ['Production']),
+            el('span', { class: 'sect__hint' }, ['what production has been recorded doing']),
+          ]),
+          el('p', { class: 'seam-notice' }, [
+            cov.reason === 'unreachable'
+              ? 'The host could not be asked for this region\u2019s production coverage.'
+              : 'Coverage is on for ' + cov.region + ', and no production report has ever reached the host. ' +
+                'Either nobody has used it since it was switched on, or reports are not getting through.',
+          ]),
+          el('p', { class: 'motu-empty' }, ['To find the hop that fails: motu coverage doctor --url <production origin>']),
+        );
+        seams.appendChild(coveragePane);
+      } else if (cov) {
         var nodes = [el('div', { class: 'sect__head' }, [
           el('span', { class: 'motu-dot' }),
           el('span', { class: 'motu-cap' }, ['Production']),

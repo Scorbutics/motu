@@ -490,13 +490,15 @@ migration — around four hundred lines before a single state was recorded."
 | --- | --- | --- |
 | `host` | `MOTU_HOST_URL` | the motu host, e.g. `https://motu.example.ts.net` |
 | `token` | `MOTU_COVERAGE_TOKEN` | a **write-only** ingest token for ONE repo — `motu-host access --repo <r> --ingest`. In the SERVER's environment this is the ingest token; the same variable name means something else on a developer's machine — see [Two secrets, one variable name](#two-secrets-one-variable-name) |
-| `repo` | `MOTU_COVERAGE_REPO` | which repo this application publishes as |
+| `repo` | `MOTU_COVERAGE_REPO` | which repo this application publishes as. **Optional**: an ingest token belongs to exactly one repo, so the host reads the repo from the token |
+| `mode` | `MOTU_COVERAGE_MODE` | `forward` (default): post each report to the host. `log`: write one `motu-coverage {…}` line to this server's log instead, with no secret and no outbound network — see [Two modes](#two-modes-one-secret) |
+| `log` | — | where a `log`-mode line goes; defaults to `console.log` |
 | `regions` | — | restrict which regions may be forwarded: "the difference between 'our regions' and 'whatever a stranger types'" (`:31`) |
 | `maxBytes` | — | largest body accepted; default 256 kB (`:56`) |
-| `readToken` | `MOTU_HOST_READ_TOKEN` | the host's READ secret, for serving the accepted set back. "Deliberately not the ingest token: that one is write-only so a credential sitting in an application's environment cannot read what the host holds for anyone" (`:40`). Required when the repo is **private**; a public repo needs none. Prefer the repo-scoped `motu-host access --repo <r> --read` over the host-wide secret, which opens every private lagoon. Its absence is SILENT — `handleKnown` answers `[]` on any refusal (`:177`), so a missing read token shows up as browsers re-beaconing states you already accepted, never as an error |
+| `readToken` | `MOTU_HOST_READ_TOKEN`, then the ingest token | for serving the accepted set back. **The ingest token now reads its own repo's accepted ids**, so this is optional. Originally the host's READ secret. "Deliberately not the ingest token: that one is write-only so a credential sitting in an application's environment cannot read what the host holds for anyone" (`:40`). Required when the repo is **private**; a public repo needs none. Prefer the repo-scoped `motu-host access --repo <r> --read` over the host-wide secret, which opens every private lagoon. Its absence is SILENT — `handleKnown` answers `[]` on any refusal (`:177`), so a missing read token shows up as browsers re-beaconing states you already accepted, never as an error |
 
 `handleCoverage(request, opts)` (`packages/coverage/src/server/index.ts:82`) **never throws**. Its
-answers: `405` for a non-POST; `503` when the host, token or repo are unset — "MISCONFIGURATION IS
+answers: `405` for a non-POST; `503` in forward mode when the host or the token is unset (naming which) — "MISCONFIGURATION IS
 503, NOT 500. 'The host is not configured' is a deployment fact the operator can act on, and it must
 not read as a bug in the page that reported" (`:93`); `400` for an unreadable, non-JSON or misshapen
 body; `413` over `maxBytes`; `502` when the host answers non-OK or is unreachable — "the client learns
@@ -522,6 +524,43 @@ answer to everything, and the only one** (`:177`):
 > Failing loudly would turn a reporting tool's outage into a broken page; claiming a state is known
 > when it is not would silently delete a finding. At worst this costs one extra beacon; it can never
 > cause a wrong silence.
+
+### Two modes, one secret
+
+The first project to switch coverage on had a host that never stored a corpus, and nothing said so.
+Setup took four production values, a token minted by hand on the host, two route files and two meta
+tags, and any one missing gave silence. So:
+
+| Mode | The route | Secret in production | Outbound network |
+| --- | --- | --- | --- |
+| `forward` | posts each report to the motu host | one: the ingest token (the repo is read from it; the host URL is written into the route) | yes |
+| `log` | writes one `motu-coverage {…}` line to the server's own log | none | no |
+
+`log` is for a server that cannot reach the host, such as a JBoss behind a datacentre's egress firewall.
+Its log is collected somewhere already (a file, a CI artifact, an ELK or Splunk export).
+`motu coverage pull --from <file|->` reads the lines there, folds them per region and declaration, and
+uploads them with that machine's own host credentials. Pulled lines are remembered by hash
+(`.motu/cache/coverage-pulled.json`), so pulling the same log twice counts nothing twice. Pull from one
+place.
+
+Every answer carries `x-motu-coverage: forwarded | logged`, and a report marked `x-motu-doctor: 1` is a
+**dry run**: forwarded with `dryRun=1`, which the host checks (token, repo) and does not store, or
+logged under `motu-coverage-doctor`, which `pull` skips. That is what `motu coverage doctor` sends.
+
+### On a Java / Jakarta EE application
+
+`dev.motu:endpoint` ships `MotuCoverageServlet`, registered at `/motu/coverage` and
+`/motu/coverage/known` by its `META-INF/web-fragment.xml`. Putting the jar in the WAR is the whole
+installation, with no `web.xml` edit. Same answers, same headers, same two modes, configured by system
+property first and then environment: `motu.coverage.mode` / `MOTU_COVERAGE_MODE`, `motu.coverage.host` /
+`MOTU_HOST_URL`, `motu.coverage.token` / `MOTU_COVERAGE_TOKEN`, and optionally `motu.coverage.regions`.
+In `log` mode the line goes to `java.util.logging` (`motu.coverage`), which is server.log on JBoss.
+
+It needs no JSON library, and its HTTP client is pinned to HTTP/1.1. Java's client prefers HTTP/2 and,
+on a plain `http://` host, asks with `Upgrade: h2c`, which the motu host's live-reload socket handler
+answered with 502. Verified in an embedded Tomcat 10.1 (Servlet 6) deploying a WAR that held only this
+jar, so the web-fragment registration was exercised too: forwarded, refused token, unreachable host,
+log mode, and a `pull` of its log.
 
 ### `@motu/coverage/server/next` and `/server/next/known`
 
@@ -723,23 +762,21 @@ about coverage belongs here.
 (`packages/cli/src/lib/archipelagos.mjs:25`, `:66`). Verify it names `@motu/coverage` — if coverage is
 off, the module is an empty `export {}` by design.
 
-**4. Wire the server routes.** On Next, two files of two lines each — acme's
-`acme:app/api/motu/coverage/route.ts` and `acme:app/api/motu/coverage/known/route.ts`:
+**4. Wire the server route: `motu coverage init`.**
 
-```ts
-export const dynamic = "force-dynamic"
-export { POST } from "@motu/coverage/server/next"
+```
+motu coverage init                 # forward mode: writes the route, mints the ingest token
+motu coverage init --mode log      # no secret, no outbound network
 ```
 
-```ts
-export const dynamic = "force-dynamic"
-export { GET } from "@motu/coverage/server/next/known"
-```
-
-Set `MOTU_HOST_URL`, `MOTU_COVERAGE_TOKEN` (write-only ingest, `motu-host access --repo <r> --ingest`)
-and `MOTU_COVERAGE_REPO` in the server environment; add `MOTU_HOST_READ_TOKEN` unless the repo is
-public on the host (`packages/coverage/src/server/index.ts:24`). On any other runtime, call
-`handleCoverage`/`handleKnown` from `@motu/coverage/server` behind whatever adapter that host uses.
+On Next it writes `app/api/motu/coverage/route.ts` (and the `known` route in forward mode), with the
+host URL in the file (not a secret). Existing files are kept unless `--force`. It mints the ingest token
+over the host's admin API (`POST /api/access/ingest`, admin credentials from
+`~/.config/motu/host.json`) and prints it once. Then it prints the ONE remaining production step in
+that platform's terms: `vercel env add MOTU_COVERAGE_TOKEN production`, a JBoss system property, or a
+plain environment variable. On a Java host (`host: "angularjs"`) it prints the servlet's steps instead.
+On any other runtime, call `handleCoverage`/`handleKnown` from `@motu/coverage/server` behind that
+host's adapter.
 
 **5. Render the two meta tags** in the application's document head — acme does this in
 `acme:app/layout.tsx`:
@@ -753,6 +790,23 @@ This is where the addresses live, and the reason is the lagoon
 (`packages/coverage/src/index.ts:672`). The two halves of suppression run on different clocks: the
 baked half changes only on a redeploy, the served half is why accepting a state takes effect at once
 (`packages/coverage/src/server/index.ts:164`).
+
+**Prove it after every deploy: `motu coverage doctor --url <production origin>`.** It sends a dry-run
+report through the DEPLOYED route and names the hop that fails:
+
+| Hop | Means | Exit |
+| --- | --- | --- |
+| `forwarded` | the route reached the host, which accepted the token | 0 |
+| `logged` | log mode; look for the `motu-coverage-doctor` line, then `pull` | 0 |
+| `route missing` | nothing answers at the endpoint (404) | 1 |
+| `route not configured` | 503, naming the missing value | 1 |
+| `host refused the token` | the ingest token is wrong or was re-minted | 1 |
+| `host unreachable from the application` | the network cause, e.g. `ECONNREFUSED` | 1 |
+| `application unreachable` | this machine cannot reach the app at all | 2 |
+
+The lagoon says the same thing from the other side. When coverage is on for a region and the host has
+never received a report for it, the dock's Seams tab says so and names `doctor`. (Its absence used to
+read exactly like coverage being off.)
 
 **6. Ship it, then ask.** Once real traffic has folded and beaconed:
 

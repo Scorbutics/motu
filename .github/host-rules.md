@@ -269,6 +269,19 @@ archipelago that already contains the other agents' ownership, so a second claim
 that agent's own branch, on their first `motu check`. The archipelago IS the claim registry; a
 separate ledger would only restate it.
 
+## A call nothing declared fails the flow
+
+Every backend call a flow step causes is held to a declaration (`flow-calls`): one no fixture, table or
+route answered fails the step and names what to declare. Never make an island swallow the error to pass
+it. A failure a fixture asks for (`status: 500`) does not count. Screens are held to it too, since the
+app's layout makes calls no region's flow does, and a screen can declare flows of its own
+(`src/screens/screens.evidence.ts`: `click` the app's link or `navigate`, then `expectScreen` /
+`expectRender`). `motu screen verify [id]`; `motu check --runtime` includes it.
+
+With coverage on, prove production reports arrive: `motu coverage doctor --url <production origin>`
+after a deploy names the failing hop. `motu coverage init` writes the route (`--mode log` for a server
+with no outbound network, collected later by `motu coverage pull --from <log>`).
+
 ## A flow step must be able to fail
 
 `flow-mutation` runs with the region's flows and asks whether they could have failed. Two rules:

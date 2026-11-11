@@ -128,6 +128,11 @@ pnpm motu island integrate <name> --archipelago <id> [--slot <slot>]
 - The `<motu-island>` / `<motu-archipelago>` custom-element tags are a runtime contract — unaffected
   by source layout; you only add the marker where the island should mount.
 
+- A `flow-calls` error from `--runtime` is a backend call nothing declared: add the fixture, table or
+  route it names. Do not catch the error in the island to make the check pass.
+- Coverage on, and this ships to production: `motu coverage doctor --url <production origin>` after the
+  deploy (`motu coverage init` first if there is no route).
+
 ### 5 — Validate with the OCEAN's existing verification
 motu's lagoon is not a replacement for the host's own checks. Run the ocean's build + tests:
 - `pnpm typecheck` and `pnpm build:bridge` (motu side compiles),

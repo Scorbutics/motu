@@ -668,7 +668,15 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       .catch(() => []);
 
     const out = [];
+    // THE CALL WATERMARK: every landed call carries a monotonic `seq`, so "what did this step cause"
+    // is "what landed after the mark". The first step's mark is taken BEFORE the scenario's reset and
+    // remount, so calls the seed and the mount make are that step's too.
+    const lastSeq = () =>
+      page.evaluate(() => Math.max(0, ...((window.__motuLagoon?.calls?.() ?? []).map((c) => c.seq)))).catch(() => 0);
+    const callsSince = (seq) =>
+      page.evaluate((s) => (window.__motuLagoon?.calls?.() ?? []).filter((c) => c.seq > s), seq).catch(() => []);
     for (const scenario of scenarios) {
+      let mark = await lastSeq();
       // A fresh REGION per scenario: forget the store, THEN rebuild the tree. One flow CAN leave the
       // region unrenderable — seed an index past the end of a list and the component that reads it
       // throws, React tears the tree down, and every later flow reports "no island mounted under that
@@ -1018,12 +1026,20 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
           },
           { seed: scenario.seed ?? {}, step },
         );
+        // A beat for the calls a step starts to land, then read them against the mark.
+        await sleep(150);
+        const landed = await callsSince(mark);
+        mark = landed.reduce((m, c) => Math.max(m, c.seq), mark);
         out.push({
           scenario: scenario.name ?? 'flow',
           step: index + 1,
           ok: !result.error && result.mismatches.length === 0 && result.alive !== false,
           error: result.error ?? (result.alive === false ? 'the region rendered nothing after this step' : null),
           mismatches: result.mismatches ?? [],
+          calls: landed.length,
+          // A FAILURE NOTHING DECLARED. A declared one (a fixture's `status: 500`) is the flow's own
+          // state and never lands here.
+          undeclared: landed.filter((c) => !c.ok && !c.declared),
         });
       }
     }
@@ -1985,4 +2001,123 @@ export async function pageRenderLagoon({ id, port = 5199 }) {
       return { ...result, diagnostics };
     },
   );
+}
+
+/**
+ * Open every declared SCREEN, and replay the screen flows.
+ *
+ * A screen is the application's own layout with a region per slot, and the calls that matter most
+ * come from that layout — Peps' dashboard reads feature grants and two badge counts on every screen,
+ * none of which a region's own flows ever make. So each screen is opened alone, in a fresh page, and
+ * every call it causes is collected; and a screen may declare FLOWS (`src/screens/screens.evidence.ts`)
+ * that click the app's own links, `navigate` to a path, and assert what renders afterwards.
+ *
+ * A fresh page per screen and per flow, not one re-aimed page: a screen's layout stays mounted across
+ * navigation by design, so a re-aimed page would credit one screen's calls to the next.
+ */
+export async function runScreens({ port, screens = [], flows = [] }) {
+  const server = await startLagoon({ target: '', port });
+  const browser = await getBrowser();
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const base = `http://localhost:${server.port}/`;
+  const addr = (q) => `${base}?${new URLSearchParams({ ...q, dockInset: 'off', autoPrimary: 'off' })}`;
+  const open = async (page, url) => {
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForFunction(() => window.__motuLagoonState !== undefined, null, { timeout: 20000 }).catch(() => {});
+    await sleep(1200);
+  };
+  const calls = (page, after = 0) =>
+    page.evaluate((s) => (window.__motuLagoonControl?.calls?.() ?? []).filter((c) => c.seq > s), after).catch(() => []);
+  const state = (page) => page.evaluate(() => window.__motuLagoonState ?? null).catch(() => null);
+  const failing = (list) => list.filter((c) => !c.ok && !c.declared);
+
+  const opened = [];
+  const ran = [];
+  try {
+    for (const id of screens) {
+      const page = await context.newPage();
+      try {
+        await open(page, addr({ screen: id }));
+        const st = await state(page);
+        const landed = await calls(page);
+        opened.push({ screen: id, ok: !!st?.ok, error: st?.ok ? null : (st?.error ?? 'the screen never reported a state'), calls: landed.length, undeclared: failing(landed) });
+      } finally {
+        await page.close().catch(() => {});
+      }
+    }
+
+    for (const flow of flows) {
+      const page = await context.newPage();
+      try {
+        await open(page, addr({ screen: flow.screen }));
+        let mark = 0;
+        for (const [index, step] of (flow.steps ?? []).entries()) {
+          const result = await page.evaluate(async (st) => {
+            const ctl = window.__motuLagoonControl;
+            if (st.click) {
+              const name = String(st.click).trim();
+              const CLICKABLE = 'button, [role="button"], a[href], [role="menuitem"], [role="tab"], [role="link"], label, summary';
+              const nameOf = (el) =>
+                `${el.getAttribute('aria-label') ?? el.getAttribute('title') ?? ''} ${el.innerText ?? el.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
+              const candidates = [...document.querySelectorAll(CLICKABLE)].filter((el) => el.getClientRects().length > 0);
+              const el =
+                candidates.find((c) => nameOf(c) === name) ??
+                candidates.filter((c) => nameOf(c).includes(name)).sort((a, b) => nameOf(a).length - nameOf(b).length)[0];
+              if (!el) {
+                const available = [...new Set(candidates.map(nameOf).filter(Boolean))].slice(0, 12);
+                return { error: `nothing clickable is named "${name}" — clickable here: ${available.map((n) => `"${n}"`).join(', ') || '(nothing)'}` };
+              }
+              el.click();
+            } else if (st.navigate) {
+              if (typeof ctl?.openPath !== 'function') return { error: 'this lagoon cannot open a path (no openPath on its control)' };
+              ctl.openPath(String(st.navigate));
+            } else if (!st.expectScreen && !Object.keys(st.expectRender ?? {}).length) {
+              return { error: 'a screen step must `click`, `navigate`, or assert with `expectScreen` / `expectRender`' };
+            }
+            if (!st.expectScreen && !Object.keys(st.expectRender ?? {}).length) {
+              return { error: 'a screen step must assert something — `expectScreen` or `expectRender`' };
+            }
+            const text = (el) => (el?.innerText ?? '').replace(/\s+/g, ' ').trim();
+            const mismatches = () => {
+              const out = [];
+              const onScreen = new URL(location.href).searchParams.get('screen');
+              if (st.expectScreen && onScreen !== st.expectScreen) out.push({ key: 'screen', expected: st.expectScreen, actual: onScreen });
+              for (const [slot, want] of Object.entries(st.expectRender ?? {})) {
+                const els = [...document.querySelectorAll(`[data-motu-slot="${slot}"]`)];
+                const seen = els.map(text).join(' | ');
+                if (!els.length) out.push({ key: `render:${slot}`, expected: `slot "${slot}" on screen`, actual: 'no such slot is mounted' });
+                else if (!seen.includes(String(want))) out.push({ key: `render:${slot}`, expected: `text containing ${JSON.stringify(want)}`, actual: seen.slice(0, 300) });
+              }
+              return out;
+            };
+            const until = Date.now() + 3000;
+            let m = mismatches();
+            while (m.length && Date.now() < until) {
+              await new Promise((r) => setTimeout(r, 80));
+              m = mismatches();
+            }
+            return { mismatches: m };
+          }, step);
+          await sleep(150);
+          const landed = await calls(page, mark);
+          mark = landed.reduce((n, c) => Math.max(n, c.seq), mark);
+          ran.push({
+            flow: flow.name ?? 'screen flow',
+            screen: flow.screen,
+            step: index + 1,
+            ok: !result.error && !(result.mismatches ?? []).length,
+            error: result.error ?? null,
+            mismatches: result.mismatches ?? [],
+            calls: landed.length,
+            undeclared: failing(landed),
+          });
+        }
+      } finally {
+        await page.close().catch(() => {});
+      }
+    }
+  } finally {
+    await context.close().catch(() => {});
+  }
+  return { screens: opened, flows: ran };
 }

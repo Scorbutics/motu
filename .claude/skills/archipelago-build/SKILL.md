@@ -83,7 +83,16 @@ A region's flows need a browser — `--fast` skips them and says so — so this 
 work belongs. `motu archipelago verify <id> --runtime` must pass with:
 - `region-flow` — the journey ends as declared,
 - `flow-mutation` — every step dies when its stimulus is mutated,
-- `render-coverage` — every slot is asserted by some flow.
+- `render-coverage` — every slot is asserted by some flow,
+- `flow-calls` — every backend call a step caused was answered by a declaration. A failure here is a
+  missing fixture, table or route: declare it (the finding names what), never make the island swallow
+  the error. A failure the flow WANTS (`status: 500`) is declared on the fixture and does not count.
+
+If the region sits on a SCREEN (`src/screens/screens.ts`), also add a step to
+`src/screens/screens.evidence.ts` that reaches it the way a person does (the app's own link: `click`,
+or `navigate` to its path) and asserts `expectScreen` plus one `expectRender` of this region. Then
+`motu screen verify <screen>`: it opens the screen with the app's own layout, whose calls no region's
+flow makes.
 
 ### Which level, when
 
@@ -243,3 +252,9 @@ describes files; the work is a rendered region, and until someone opens it nobod
 
 And say plainly what motu did not check: the host's typecheck and its test runner, both of which are
 yours to run.
+
+If the project has coverage on (`coverage.enabled` in motu.config.json) and the region is deployed,
+run `motu coverage doctor --url <production origin>` after the deploy and put its hop in your report.
+No route yet: `motu coverage init` (or `--mode log` for a server that cannot reach the host) writes it
+and prints the one production step left. A green check says nothing about whether production reports
+arrive; the first project to switch coverage on never stored a single one.

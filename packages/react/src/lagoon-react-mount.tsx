@@ -157,6 +157,12 @@ declare global {
        * reach. `hostCalls` is one of the three and stays for the lens, which reads a module's calls.
        */
       outbound: () => { via: 'host-module' | 'contract' | 'wire'; name: string; args: string; owner: string; at: number }[];
+      /**
+       * Every call that has LANDED, with how it was answered — the live feed (`liveCalls` in core).
+       * `declared` marks a failure a fixture asked for; a failure without it is one nothing declared,
+       * which is what fails a flow step (`flow-calls`).
+       */
+      calls: () => { seq: number; via: 'contract' | 'wire'; url: string; method: string; label: string; owner: string; status: number; ok: boolean; error?: string; declared?: boolean }[];
       /** Read a region key, for a check that needs to know whether it moved. */
       read: (key: string) => unknown;
       /** Which keys the region HOLDS — a declared source that was seeded rather than installed still

@@ -29,7 +29,10 @@ import { wrapFragment, withRepoMeta } from './document.mjs';
 import { parseManifest, manifestPage, contentTypeOf, MANIFEST_TYPE } from './manifest.mjs';
 import { hashBytes } from './store.mjs';
 import { lagoonPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
-import { loadAccess, isPublic, canRead, canIngest, cookieValue, readSecretFrom, READ_COOKIE } from './access.mjs';
+import { loadAccess, isPublic, canRead, canIngest, ingestRepoOf, cookieValue, readSecretFrom, READ_COOKIE, digest } from './access.mjs';
+import { randomBytes } from 'node:crypto';
+import { readFileSync as readFileSyncFs, writeFileSync as writeFileSyncFs } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
 
 /**
  * Two limits, because one of them was measuring the wrong thing.
@@ -444,8 +447,14 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // AN EMPTY SET IS THE SAFE ANSWER for every kind of no, and the only safe one. Refusing loudly
       // would turn a reporting tool's outage into a broken page; claiming a state is known when it is
       // not would silently delete a finding. So: at worst one extra beacon, never a wrong silence.
-      if (!repo || !region || !keysHash || !readable(repo)) return json(res, 200, [], NO_STORE);
-      return json(res, 200, store.readAccepted(repo, region, keysHash), {
+      // THE INGEST TOKEN MAY READ THE ACCEPTED SET of its own repo, and nothing else. Accepted ids are
+      // the states somebody chose not to preview: an application needs them to stay quiet, and they
+      // say nothing a beacon did not already send. Requiring a separate read secret for them was the
+      // fourth value a deployment had to set. The repo may be left out: the token names it.
+      const knownRepo = repo ?? ingestRepoOf(access, bearer);
+      const mayRead = knownRepo && (readable(knownRepo) || canIngest(access, knownRepo, bearer));
+      if (!knownRepo || !region || !keysHash || !mayRead) return json(res, 200, [], NO_STORE);
+      return json(res, 200, store.readAccepted(knownRepo, region, keysHash), {
         'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
       });
     }
@@ -505,10 +514,18 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // The admin token still works here — one credential that can do everything is exactly what it
       // is for — but nothing an app holds needs to be that credential.
       if (path === '/api/coverage') {
-        const repo = normalizeRepo(url.searchParams.get('repo'));
-        if (!repo) return json(res, 400, { error: 'repo must be `name` or `owner/name`, [A-Za-z0-9._-]' });
+        // THE REPO MAY BE LEFT OUT: an ingest token belongs to exactly one, so it names it.
+        const named = url.searchParams.get('repo');
+        const repo = named ? normalizeRepo(named) : ingestRepoOf(access, bearer);
+        if (!repo)
+          return json(res, named ? 400 : 401, {
+            error: named ? 'repo must be `name` or `owner/name`, [A-Za-z0-9._-]' : 'bad or missing ingest token — it names no repo on this host',
+          });
         if (!adminOk && !canIngest(access, repo, bearer))
           return json(res, 401, { error: 'bad or missing ingest token for this repo' });
+        // A DRY RUN proves the path without writing: `motu coverage doctor` sends one through the
+        // deployed application, and a synthetic state must never land in a real corpus.
+        if (url.searchParams.get('dryRun') === '1') return json(res, 200, { ok: true, dryRun: true, repo });
         return void (await ingestCoverage(req, res, url, repo));
       }
       // ACCEPTING IS A PERSON'S DECISION, so it takes the ADMIN token and not the ingest one.
@@ -560,6 +577,26 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       const auth = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!tokenMatches(auth, token)) return json(res, 401, { error: 'bad or missing token' });
       if (path === '/api/publish') return void (await publish(req, res, url));
+      // MINT AN INGEST TOKEN over the admin API, so `motu coverage init` needs no shell on this
+      // machine. Same effect as `motu-host access --repo <r> --ingest`: the secret is returned once
+      // and only its hash is kept. Minting again REPLACES the previous token for that repo.
+      if (path === '/api/access/ingest') {
+        const repo = normalizeRepo(url.searchParams.get('repo'));
+        if (!repo) return json(res, 400, { error: 'repo must be `name` or `owner/name`, [A-Za-z0-9._-]' });
+        const file = resolvePath(store.root, 'access.json');
+        let raw = {};
+        try {
+          raw = JSON.parse(readFileSyncFs(file, 'utf8'));
+        } catch {
+          raw = {};
+        }
+        if (!raw || typeof raw !== 'object') raw = {};
+        if (!raw.repos || typeof raw.repos !== 'object') raw.repos = {};
+        const secret = randomBytes(32).toString('hex');
+        raw.repos[repo] = { ...(raw.repos[repo] ?? {}), ingestHash: digest(secret).toString('hex') };
+        writeFileSyncFs(file, `${JSON.stringify(raw, null, 2)}\n`);
+        return json(res, 200, { ok: true, repo, token: secret });
+      }
       if (path === '/api/blobs/missing') {
         let hashes;
         try {

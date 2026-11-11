@@ -18,6 +18,7 @@ import {
   getMountedIslands,
   hostCalls,
   outboundCalls,
+  liveCalls,
   islandOutputs,
   resetIslandOutputs,
   provideToArchipelago,
@@ -54,6 +55,9 @@ export function lagoonHarness(
     //    through a traced host module, or through the wire beneath the app's own client, and each used
     //    to be observed separately — the contract's calls by nothing a check ever printed.
     outbound: () => outboundCalls().map((c) => ({ ...c })) as ReturnType<LagoonHarness['outbound']>,
+    //  - calls: every call that LANDED and how it was answered, so a flow step can fail on one nothing
+    //    declared (`flow-calls`) — the gap that let Peps' screens 404 four tables with every check green.
+    calls: () => liveCalls().map((c) => ({ ...c })) as ReturnType<LagoonHarness['calls']>,
     outputs: () => islandOutputs(),
     resetOutputs: () => resetIslandOutputs(),
     //  - channels: what each installed channel has actually WRITTEN. The registry tracks it already

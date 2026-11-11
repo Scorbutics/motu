@@ -392,6 +392,27 @@ What it CANNOT prove is the seam on the other side of the port: that the real ad
 stays green while production breaks. The lagoon replaces the host module so completely that nothing
 shows a fetch happened — that is the point of it, and it is the boundary.
 
+## A call nothing declared fails the flow
+
+Every backend call a flow step causes is held to a declaration (`flow-calls`, in every region runtime
+check): a call no fixture, table or route answered fails that step, naming what to declare. A failure a
+fixture asked for (`status: 500`) is the flow's own state and never counts. This exists because Peps'
+screens 404'd four tables while every check stayed green: the app swallowed each error and rendered a
+plausible page.
+
+Screens are held to it too, because the app's LAYOUT makes calls no region's flow does. A screen can
+declare FLOWS (`src/screens/screens.evidence.ts`): click the app's own link or `navigate` to a path,
+then `expectScreen` and `expectRender`. That is the one place a coupling ACROSS regions is asserted.
+`motu screen verify [id]` runs them; `motu check --runtime` includes them.
+
+## Production coverage is proved, not assumed
+
+`motu coverage init` writes the route and mints the ONE secret (`--mode log`: none, for a server with
+no outbound network; `motu coverage pull --from <log>` uploads the lines later).
+`motu coverage doctor --url <production origin>` sends a dry run through the deployed route and names
+the hop that fails. Run it after a deploy and report the hop. The first project to switch coverage on
+never stored a single corpus, and nothing said so.
+
 ## WHAT MOTU DOES NOT CHECK, and is your job
 
 motu checks COMPOSITION: that a region's islands are placed, that a declared coupling carries, that

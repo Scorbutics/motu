@@ -625,6 +625,76 @@ motu archipelago coverage actions --ids --fail-above 2
 
 ---
 
+## `motu screen verify [id]`
+
+Open every declared screen (or one) at runtime, hold its backend calls to declarations, and replay
+the screen flows in `src/screens/screens.evidence.ts`. The same pass runs inside `motu check --runtime`;
+this is the scoped verb for the loop on one screen.
+
+```console
+motu screen verify            # all screens
+motu screen verify team --json
+```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `[id]` | one screen | every declared screen |
+| `--json` | `{ findings: [{ level, check, msg }] }` | off |
+
+Checks: `screen-render`, `flow-calls`, `screen-flow` (see [the checks](07-checks-and-verification.md)).
+**Exit**: `0` holds, `1` a finding, `2` no screens declared or the lagoon could not be opened.
+
+## `motu coverage init | doctor | pull`
+
+Production coverage that reaches the host, on any stack. See [coverage](09-coverage.md#two-modes-one-secret).
+
+### `motu coverage init`
+
+Write the route for this project's host stack, mint the ingest token over the host's admin API, and
+print the one remaining production step in that platform's terms.
+
+```console
+motu coverage init [--mode forward|log] [--force] [--json]
+```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `--mode` | `forward` (one secret; the route posts to the host) or `log` (no secret, no outbound network; collect with `pull`) | `forward` |
+| `--force` | rewrite existing route files | keep them |
+| `--host`, `--token` | the lagoon host and its ADMIN token, for minting | `MOTU_HOST_URL` / `MOTU_HOST_TOKEN`, then `host.json` |
+| `--json` | `{ ok, mode, repo, host, wrote, token, steps }` (the token appears once, here) | off |
+
+### `motu coverage doctor --url <origin>`
+
+Send a dry-run report through the DEPLOYED route and name the hop that fails: `forwarded`, `logged`,
+`route missing`, `route not configured`, `host refused the token`, `host unreachable from the
+application`, `application unreachable`. Nothing is stored.
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `--url` | the application's origin (required) | — |
+| `--endpoint` | the route's path | `/api/motu/coverage` (`/motu/coverage` on a Java host) |
+| `--region` | the region named in the dry run (a route may restrict regions) | the first declared region |
+| `--json` | `{ ok, hop, detail, target, region }` | off |
+
+**Exit**: `0` the route works, `1` a finding about the deployment, `2` the application could not be
+reached from this machine (retry, or run it from somewhere that can).
+
+### `motu coverage pull --from <file|->`
+
+Fold `motu-coverage {…}` lines from a `log`-mode server's log and upload them per region with this
+machine's host credentials. Lines already pulled are skipped (by hash, in
+`.motu/cache/coverage-pulled.json`); doctor lines are never uploaded.
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `--from` | a log file, or `-` for stdin (`kubectl logs … \| motu coverage pull --from -`) | — |
+| `--dry-run` | fold and report, upload nothing | off |
+| `--json` | `{ ok, repo, lines, already, malformed, regions }` | off |
+
+**Exit**: `0` uploaded, `1` no coverage lines in the input (the wrong file, or a route not in log
+mode) or an upload refused, `2` unreadable input or no host to upload to.
+
 ## `motu fixtures record <island>`
 
 Boot the focused lagoon, drive the island's declared scenarios, and record every contract call's

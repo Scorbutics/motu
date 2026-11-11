@@ -12,6 +12,7 @@
 // Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
 // (a browser per island), which belongs in CI or before a release, not in a tight loop.
 import { screenFindings } from '../lib/screens.mjs';
+import { screenRuntimeFindings } from './verify/screens-runtime.mjs';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
 import { resolve } from 'node:path';
@@ -149,6 +150,9 @@ export async function checkCommand(argv) {
   // EXPERIMENTAL: the declared screens, and whether every navigation a region asks for goes somewhere.
   // Null when the project declares no screens — then the section is not printed at all.
   const screens = screenFindings();
+  // AT RUNTIME, the screens are opened too: the app's own layout makes calls no region's flow does
+  // (Peps' badge counts and feature grants), and screen flows click its links and navigate.
+  if (screens && (runtime || audit)) screens.findings.push(...((await screenRuntimeFindings()) ?? []));
   const screensOk = !screens || screens.findings.every((f) => f.level !== 'error');
 
   // Last, and only when the rest holds up: it rewrites the host on disk (and restores it), so running
@@ -246,7 +250,7 @@ export async function checkCommand(argv) {
   if (screens) {
     console.log(color.bold('\nmotu check — screens') + color.dim('  (experimental)') + '\n');
     for (const f of screens.findings) {
-      const mark = f.level === 'error' ? color.red('✗') : f.level === 'warn' ? color.yellow('!') : color.green('✓');
+      const mark = f.level === 'error' ? color.red('✗') : f.level === 'warn' ? color.yellow('!') : f.level === 'ok' ? color.green('✓') : color.dim('–');
       console.log(`  ${mark} ${color.dim(f.check.padEnd(20))}${f.level === 'ok' ? color.dim(f.msg) : f.msg}`);
     }
   }

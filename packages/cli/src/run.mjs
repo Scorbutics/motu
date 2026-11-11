@@ -14,6 +14,9 @@ import { integrateCommand } from './commands/integrate.mjs';
 import { integrateCheckCommand } from './commands/integration.mjs';
 import { archipelagoInitCommand } from './commands/archipelago-init.mjs';
 import { regionCoverageCommand } from './commands/region-coverage.mjs';
+import { coverageCommand } from './commands/coverage.mjs';
+import { screenVerifyCommand } from './commands/verify/screens-runtime.mjs';
+import { closeLagoonPool } from './playwright-lagoon.mjs';
 import { archipelagoAdoptRootCommand } from './commands/adopt-root.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
 import { fixturesRecordCommand } from './commands/fixtures.mjs';
@@ -66,6 +69,10 @@ ${color.bold('Usage:')}
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
   motu archipelago coverage <id> [--corpus <f>]     states production reached that no flow previews
+  motu screen verify [id] [--json]                  open each declared screen (or one), hold its calls to declarations, replay screen flows
+  motu coverage init [--mode forward|log]           wire production coverage: the route, the ingest token, the one step left
+  motu coverage doctor --url <origin>               prove the deployed route reaches the host; names the hop that fails
+  motu coverage pull --from <log|->                 upload \`motu-coverage\` lines from a log-mode server's log
     --json --ids --accept <id> --fail-above <n>     machine-readable · print ids · accept one · gate
     --forget <id> | --forget-all                    remove a state the instrument recorded wrongly
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
@@ -311,6 +318,21 @@ async function main() {
     console.error(color.red(`unknown: motu lagoon ${sub ?? ''}`));
     console.log(USAGE);
     process.exit(2);
+  }
+
+  if (group === 'screen') {
+    if (sub === 'verify') {
+      const code = await screenVerifyCommand(parse(rest));
+      await closeLagoonPool().catch(() => {});
+      process.exit(code ?? 0);
+    }
+    console.error(color.red(`unknown: motu screen ${sub ?? ''}`) + color.dim(' — verify [id]'));
+    process.exit(2);
+  }
+
+  if (group === 'coverage') {
+    const code = await coverageCommand(sub, argv);
+    process.exit(code ?? 0);
   }
 
   // Single-word verbs: their flags land in `sub`, since `argv` is parsed from what follows it.

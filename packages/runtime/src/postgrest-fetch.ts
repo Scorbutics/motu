@@ -936,6 +936,10 @@ export function armFakeFetch(): void {
   const g = globalThis as unknown as Record<string, unknown>;
   if (g.__motuFakeFetchArmed) return;
   const original = globalThis.fetch.bind(globalThis);
+  // MOTU'S OWN REQUESTS GO AROUND THE APPLICATION'S FAKE. An app that claims `/api/` (Peps does)
+  // also claimed the host's `/api/coverage`, so the lens asked the app's mock for the corpus, got a
+  // 404, and never showed production coverage even where the host had it.
+  g.__motuNativeFetch = original;
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     let url: URL;
     try {

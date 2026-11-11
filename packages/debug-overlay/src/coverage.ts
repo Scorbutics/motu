@@ -38,6 +38,13 @@ export function corpusFor(regionId: string | null): CoverageCorpus | null {
 // is what makes `lagoon dev` on a laptop work at all — there is no host in front of it to ask.
 
 const fetched = new Map<string, CoverageCorpus>();
+/**
+ * What the host said when it had NO corpus for a region: `none` (it answered, and holds nothing) or
+ * `unreachable`. Kept because the two absences are different findings, and before this the section
+ * simply vanished for both — so "coverage is switched on and nothing has ever arrived" looked exactly
+ * like "coverage is off". The first project to switch it on sat in that state, unnoticed.
+ */
+const missing = new Map<string, 'none' | 'unreachable'>();
 const asked = new Set<string>();
 const listeners = new Set<() => void>();
 let version = 0;
@@ -62,8 +69,18 @@ export function ensureCorpus(regionId: string | null): void {
   if (!repo) return; // not served by a host — `lagoon dev`, or a page opened from disk
   asked.add(regionId);
   const url = `/api/coverage?repo=${encodeURIComponent(repo)}&region=${encodeURIComponent(regionId)}`;
-  void fetch(url, { credentials: 'same-origin' })
-    .then((res) => (res.ok ? res.json() : null))
+  // THE BROWSER'S fetch, not the application's: a lagoon whose app claims `/api/` would otherwise
+  // answer this host request from its own mock (see `armFakeFetch`).
+  const nativeFetch = ((globalThis as unknown as { __motuNativeFetch?: typeof fetch }).__motuNativeFetch ?? fetch);
+  void nativeFetch(url, { credentials: 'same-origin' })
+    .then((res) => {
+      if (res.status === 404) {
+        missing.set(regionId, 'none');
+        version++;
+        listeners.forEach((l) => l());
+      }
+      return res.ok ? res.json() : null;
+    })
     .then((body) => {
       if (!body?.corpus?.entries) return;
       fetched.set(regionId, body.corpus as CoverageCorpus);
@@ -71,8 +88,16 @@ export function ensureCorpus(regionId: string | null): void {
       listeners.forEach((l) => l());
     })
     .catch(() => {
-      // The host is not answering. The section renders nothing, which is the honest outcome.
+      // The host is not answering. Said, not hidden: the lens shows it only where coverage is on.
+      missing.set(regionId, 'unreachable');
+      version++;
+      listeners.forEach((l) => l());
     });
+}
+
+/** Why there is no corpus for this region, when the host was asked and had none. */
+export function corpusMissing(regionId: string | null): 'none' | 'unreachable' | null {
+  return regionId ? (missing.get(regionId) ?? null) : null;
 }
 
 /** Subscribe to corpora arriving — the lens re-reads when one does. */

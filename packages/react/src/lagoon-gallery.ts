@@ -987,6 +987,9 @@ markSandbox();
   const publishControl = (): void => {
     (window as unknown as { __motuLagoonControl?: unknown }).__motuLagoonControl = {
       regions: () => [...screenStations, ...stations.map((x) => ({ id: x.id, label: x.label }))],
+      // A screen flow's `navigate` step: open the screen that serves this path, as the app's own
+      // router would. Refused out loud (`__motuLagoonState.ok: false`) when no screen serves it.
+      openPath: (path: string) => openScreen(path),
       // `scenario` alongside `flow` for the same reason the dock needs both: an island target's
       // showing-state is its scenario, and without it the list could not light the current row.
       current: () => ({

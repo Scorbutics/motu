@@ -519,6 +519,19 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 #tide .now__kicker { font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: color-mix(in srgb, var(--w-shallow) 70%, #fff); }
 #tide .now__title { font-size: 15.5px; font-weight: 800; line-height: 1.3; color: #fff; }
 #tide .voy__route { margin: 0; font-size: 12.5px; line-height: 1.4; color: rgba(255, 255, 255, .82); }
+#tide .voy__about {
+  align-self: flex-start;
+  margin-top: -2px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--motu-sand, #e3c893);
+  font: 700 12px/1.3 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+#tide .voy__about[hidden] { display: none; }
+#tide .voy__about:hover { text-decoration: underline; }
+#tide .voy__about:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 4px; }
 #tide .voy__passage { position: relative; height: 46px; margin-top: 2px; }
 #tide .voy__passage .water { position: absolute; left: 0; right: 0; top: 12px; }
 #tide .voy__buoys i {
@@ -2584,11 +2597,18 @@ function motuMountDock(opts) {
       }, kids);
       b.style.left = (50 + 36 * Math.cos(angle)).toFixed(2) + '%';
       b.style.top = (50 + 30 * Math.sin(angle)).toFixed(2) + '%';
-      // AN ISLAND OPENS ITS CARD — what it was given, what it does, its what-ifs.
+      // AN ISLAND IS A PLACE TO GO: tapping it drops anchor at its first what-if, so the voyage card
+      // shows that island's anchorages and ‹ / › walk them. Already anchored there: stay put. Its
+      // DETAILS are a deliberate act — "About <island>" on the voyage card, ⌖ on the page, "about" in
+      // the list — and an island with no what-ifs has nowhere to anchor, so it opens them directly.
       b.addEventListener('click', function () {
         aimIsland = i.tag;
         closedAll = false;
-        openCard(i.tag);
+        if (!i.scenarios.length) return openCard(i.tag);
+        if (aim.activeScenario && aim.activeScenario.island === i.tag) return paint();
+        underWay('Dropping anchor\u2026', drive(function (c) {
+          c.playState({ region: aim.regId, kind: 'scenario', island: i.tag, name: i.scenarios[0] });
+        }))();
       });
       nodes.push(b);
     });
@@ -2681,6 +2701,8 @@ function motuMountDock(opts) {
     v.kicker = el('small', { class: 'now__kicker' });
     v.title = el('b', { class: 'now__title' });
     v.route = el('p', { class: 'voy__route' });
+    // While anchored: the island's details, one deliberate tap away.
+    v.about = el('button', { class: 'voy__about', type: 'button', hidden: '' });
     v.sea = water(30, 15, 5);
     v.buoys = el('span', { class: 'voy__buoys', 'aria-hidden': 'true' });
     v.boat = boat(28);
@@ -2696,7 +2718,7 @@ function motuMountDock(opts) {
     v.fwd = el('button', { class: 'voy__btn', type: 'button' }, [chevron('on')]);
     v.forged = el('p', { class: 'state-forged' });
     nowBox.replaceChildren(
-      v.kicker, v.title, v.route, v.passage,
+      v.kicker, v.title, v.route, v.about, v.passage,
       el('div', { class: 'voy__labels' }, [v.from, v.status, v.to]),
       el('div', { class: 'voy__transport' }, [v.back, v.main, v.fwd]),
       v.forged,
@@ -2722,6 +2744,9 @@ function motuMountDock(opts) {
       v.from.textContent = '';
       v.to.textContent = '';
       var ah = anchorage(aim);
+      v.about.hidden = false;
+      v.about.textContent = 'About ' + slot + ' \u203a';
+      v.about.onclick = function () { openCard(ah.tag); };
       v.status.textContent = pending ? pending.label : ah.names.length > 1 && ah.at >= 0 ? 'At anchor \u00b7 ' + (ah.at + 1) + ' of ' + ah.names.length : 'At anchor';
       v.from.textContent = ah.names.length > 1 ? ah.names[0] : '';
       v.to.textContent = ah.names.length > 1 ? ah.names[ah.names.length - 1] : '';
@@ -2741,6 +2766,7 @@ function motuMountDock(opts) {
       v.to.textContent = aim.steps ? 'step ' + legs : 'the end';
       v.status.textContent = pending ? pending.label : at >= legs ? 'Arrived' : 'At step ' + at + ' of ' + legs;
     }
+    if (!anchored) v.about.hidden = true;
     nowBox.dataset.mode = anchored ? 'anchored' : seed ? 'harbour' : 'sailing';
     nowBox.dataset.pending = pending ? 'true' : 'false';
     // The passage: buoys for the steps (none at anchor — there was no passage), the boat at its buoy.

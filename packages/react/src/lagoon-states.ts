@@ -531,7 +531,17 @@ async function waitForRegion(timeoutMs = 10_000): Promise<boolean> {
 /** What replaying a flow needs from a region — `window.__motuLagoon`, or a per-region harness. */
 type FlowSeam = Pick<NonNullable<Window['__motuLagoon']>, 'provide' | 'seed' | 'emit' | 'held' | 'read'>;
 
-export async function replayFlow(flow: RegionScenario, upTo: number | null, lagoon: FlowSeam | undefined = window.__motuLagoon): Promise<StateOutcome> {
+export async function replayFlow(
+  flow: RegionScenario,
+  upTo: number | null,
+  lagoon: FlowSeam | undefined = window.__motuLagoon,
+  /**
+   * Told after the seed has settled (0) and after each step has settled (1, 2, …) — the moments a
+   * state address can name. The chart reads the region's store here, so it compares what the region
+   * HOLDS at each step rather than what the step said it would do.
+   */
+  onStep?: (applied: number) => void | Promise<void>,
+): Promise<StateOutcome> {
   const base: StateOutcome = { ok: false, target: '', kind: 'flow', name: flow.name, of: (flow.steps ?? []).length };
   if (!lagoon || typeof lagoon.emit !== 'function') {
     // The element mount path has `provide` and nothing else — a flow needs the emit seam, and saying
@@ -553,6 +563,7 @@ export async function replayFlow(flow: RegionScenario, upTo: number | null, lago
   // makes the harness itself look like a host reaching into island-owned state.
   for (const [k, v] of Object.entries(flow.seed ?? {})) (lagoon.seed ?? lagoon.provide)(k, v);
   await settle(120);
+  if (onStep) await onStep(0);
 
   const steps = flow.steps ?? [];
   const limit = upTo === null ? steps.length : Math.min(upTo, steps.length);
@@ -587,6 +598,7 @@ export async function replayFlow(flow: RegionScenario, upTo: number | null, lago
     // A step that only asserts (`expectRender`) moves nothing — it is still a step, and skipping it
     // silently would make `step=3` mean different things here and in the check.
     await settle(150);
+    if (onStep) await onStep(i + 1);
   }
   return { ...base, ok: true, applied: limit };
 }

@@ -634,7 +634,7 @@ async function remountAndCompare(page, tag) {
  *
  * Returns [{ scenario, step, ok, mismatches: [{ key, expected, actual }] }].
  */
-export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
+export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWith = null }) {
   const { chromium } = await import('playwright');
   // See probeWiring: the flows are where writes happen, so this is where a store complaint lands.
   const diagnostics = [];
@@ -1055,7 +1055,20 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [] }) {
     const held = await page
       .evaluate(() => (typeof window.__motuLagoon?.held === 'function' ? window.__motuLagoon.held() : []))
       .catch(() => []);
-    return { flows: out, suspects, diagnostics, channels, provenance, outbound, held, renderOutputs };
+    // THE CHART, LAST — after every ledger above has been read, because it replays the flows again
+    // and would add its own calls to them. Same page, no navigation: `chartRegion` is the in-page
+    // function the dock uses, so the check and the dock place every what-if by the same rule.
+    // The focused entry carries no evidence of its own, so the caller hands the chart the region's
+    // real flows (not the mutants) and each island's scenarios.
+    const chart = !chartWith
+      ? null
+      : await page
+          .evaluate(
+            ({ rid, evidence }) => (typeof window.__motuLagoonChart === 'function' ? window.__motuLagoonChart(rid, evidence) : null),
+            { rid: id, evidence: { flows: { [id]: chartWith.flows }, scenarios: chartWith.scenarios } },
+          )
+          .catch((err) => ({ error: String(err?.message ?? err) }));
+    return { flows: out, suspects, diagnostics, channels, provenance, outbound, held, renderOutputs, chart };
   });
 }
 

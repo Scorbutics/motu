@@ -23,6 +23,8 @@ export const APP_PACKAGE = cfg.appPackage;
 export const HOST = cfg.host;
 /** Whether the `legacy` fit gate applies (only hosts that actually have a legacy skin). */
 export const LEGACY_FIT = cfg.legacyFit;
+/** Prefix of every custom element tag (`x-` by default) — `names(k).tag` is this plus the kebab. */
+export const TAG_PREFIX = cfg.tagPrefix;
 
 const ISLANDS_DIR = cfg.islandsDir;
 const ARCHIPELAGOS_DIR = cfg.archipelagosDir;

@@ -15,6 +15,7 @@ import {
 } from '@motu/core';
 import { defineReactElement, type DefineOptions } from './defineReactElement';
 import { lagoonHarness } from './lagoon-harness';
+import { registerLagoonRegion } from './lagoon-player';
 
 /** A React-backed registry row: a tag bound to a React component + its options. */
 export interface ReactElementSpec<P extends object = any> {
@@ -279,6 +280,10 @@ export function defineLagoon(target: LagoonTarget, opts: DefineLagoonOptions): H
   // path that works and replace it with one that does not exist.
   if (typeof window !== 'undefined') {
     window.__motuLagoon = lagoonHarness(config, { seed: opts.seed, host: opts.host });
+    // AND THE STATE PLAYER LEARNS IT IS HERE. The React path registers in `regionTree`; this path did
+    // not, so on an ocean host every in-page state act — the dock's states, the chart the region lane
+    // runs — found "no region mounted" over a region whose islands were plainly on screen.
+    registerLagoonRegion(config, { seed: opts.seed, host: opts.host });
   }
 
   const el = document.createElement('motu-archipelago');

@@ -13,6 +13,7 @@ import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { mountReactLagoon } from './lagoon-react-mount';
+import { exposeChart } from './lagoon-player';
 import { regionOverrides } from './lagoon-overrides';
 import type { LagoonOverrides } from './lagoon-gallery';
 import {
@@ -374,6 +375,7 @@ markSandbox();
   // WHAT THIS PAGE CAN BE OPENED IN, published before it is opened in anything — the list is most
   // needed by whoever just got a name wrong, which is exactly when the mount may not have happened.
   publishStates(opts.evidence);
+  exposeChart(opts.evidence);
 
   const request = readStateRequest();
   const el = render({ ...opts, host, state: request });

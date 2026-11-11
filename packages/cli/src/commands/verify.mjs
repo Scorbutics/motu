@@ -32,7 +32,7 @@ import { readComponentContract } from '../lib/component-props.mjs';
 import { lagoonEnv, nodeAliasEnv } from '../lib/node-aliases.mjs';
 import { undrivenWrites } from '../lib/writes-coverage.mjs';
 import { scenarioInputs } from '../lib/data-flow.mjs';
-import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases } from '../lib/util.mjs';
+import { ensureNoInstallLinks, MOTU_CHECKOUT, REPO_ROOT, blankComments, paths, names, color, HOST, HOST_ROOT, APP_ROOT, resolveAppImport, LEGACY_FIT, islandComponentPath, islandComponentExport, islandComponentIdentifier, lagoonViewports, lagoonA11y, lagoonAliases, TAG_PREFIX } from '../lib/util.mjs';
 import { lostMarker, parseEvidence } from '../lib/evidence-json.mjs';
 import {
   runLagoon,
@@ -2331,8 +2331,10 @@ async function regionFlowCheck(report, id, port, region) {
   let results;
   let suspects = [];
   try {
+    // What the chart needs: the real flows, and every island's scenarios keyed by its tag.
+    const chartWith = { flows: scenarios, scenarios: await regionWhatIfs(region) };
     const run = await step('region-flow', () =>
-      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants] }),
+      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants], chartWith }),
     );
     results = (run.flows ?? []).filter((f) => !String(f.scenario).startsWith(MUTANT_PREFIX));
     reportMutants(report, run.flows ?? [], mutation);
@@ -2344,6 +2346,7 @@ async function regionFlowCheck(report, id, port, region) {
   operationReachCheck(report, run.outbound ?? [], operationUniverse(), declaredReach({ regionId: id }));
     sourcesLiveCheck(report, id, run.channels, region, run.held ?? []);
     emittedLiveCheck(report, id, run.renderOutputs);
+    whatIfReachCheck(report, run.chart);
   } catch (err) {
     // A ReferenceError or a TypeError here is a BUG IN THIS FILE, not a region that could not be
     // driven — and reporting it as a warning meant the flows silently stopped running twice today
@@ -2372,6 +2375,67 @@ async function regionFlowCheck(report, id, port, region) {
   const passed = results.filter((r) => r.ok).length;
   if (passed === results.length)
     report.ok('region-flow', `${passed} declared flow step(s) end as declared`, { n: passed, of: 'step(s)' });
+}
+
+/** Each island's scenarios in a region, keyed by its element tag — what the chart places. */
+async function regionWhatIfs(region) {
+  const out = {};
+  for (const island of region?.islands ?? []) {
+    const tag = island.element;
+    if (!tag || out[tag]) continue;
+    const kebab = tag.startsWith(TAG_PREFIX) ? tag.slice(TAG_PREFIX.length) : tag;
+    out[tag] = await islandScenarios(kebab);
+  }
+  return out;
+}
+
+/**
+ * WHICH WHAT-IFS A FLOW REACHES — the chart, reported.
+ *
+ * An island scenario played in its region is a what-if: the island is TOLD a state. A flow is the
+ * region getting somewhere by its own wiring. Often they are the same situation, and the chart (the
+ * lagoon's `chartRegion`, the same function the dock's Chart runs) finds the pairs by replaying the
+ * flows and comparing the store. What is left over is the finding:
+ *   - UNREACHED: no flow ends in that situation — a flow is missing, or the app never gets there and
+ *     the island renders a state that does not exist. Named with the nearest step and what differs.
+ *   - CONTEXT: a flow reaches the situation only with other context (another `me`). For a what-if
+ *     whose point IS that context ("a guest"), no flow runs that way.
+ * Warnings, never errors: a what-if no flow reaches can be deliberate (an error state the lagoon
+ * cannot provoke), and whether it is, is the author's call. What a check owes them is the knowing.
+ */
+function whatIfReachCheck(report, chart) {
+  if (!chart) {
+    report.skip('what-if-reach', 'this lagoon build predates the chart — rebuild it to place what-ifs against flows');
+    return;
+  }
+  if (chart.error) {
+    report.warn('what-if-reach', `could not chart the region: ${chart.error}`);
+    return;
+  }
+  const placed = chart.whatIfs.filter((w) => w.status !== 'not-comparable');
+  const reached = placed.filter((w) => w.status === 'reached' || w.status === 'seeded');
+  const unreached = placed.filter((w) => w.status === 'unreached');
+  const context = placed.filter((w) => w.status === 'context');
+  for (const w of unreached) {
+    const near = w.nearest
+      ? ` — nearest: "${w.nearest.flow}" step ${w.nearest.step}, where ${w.nearest.differs.join(', ')} still differ${w.nearest.differs.length === 1 ? 's' : ''}`
+      : '';
+    report.warn('what-if-reach', `${w.slot} · "${w.name}" is shown only by telling the island; no flow reaches it${near}`);
+  }
+  for (const w of context) {
+    const r = w.reachedBy[0];
+    const empty = r.emptyHere ?? [];
+    const set = r.absent.filter((k) => !empty.includes(k));
+    const parts = [];
+    // Two directions, said the right way round: the what-if leaves a key empty that every flow sets
+    // ("a guest"), or sets one every flow leaves empty ("in the directory", where no flow picks a section).
+    if (empty.length) parts.push(`no flow runs with ${empty.join(', ')} empty, as this what-if does`);
+    if (set.length) parts.push(`no flow sets ${set.join(', ')}, as this what-if does`);
+    report.warn('what-if-reach', `${w.slot} · "${w.name}" is reached by "${r.flow}" step ${r.step} only in another context — ${parts.join('; ')}`);
+  }
+  if (!unreached.length && !context.length) {
+    report.ok('what-if-reach', `every what-if a flow could reach is reached by one`, { n: reached.length, of: 'what-if(s) placed' });
+  }
 }
 
 /**

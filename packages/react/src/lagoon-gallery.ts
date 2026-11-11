@@ -22,7 +22,7 @@ import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { lagoonHarness } from './lagoon-harness';
-import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef } from './lagoon-player';
+import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef, chartRegion, exposeChart, regionChart } from './lagoon-player';
 import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
@@ -397,6 +397,7 @@ markSandbox();
   // belongs to exactly one region — making the visitor also know (and type) which region declares it
   // would be asking for the one thing the catalogue already knows.
   publishStates(opts.evidence, stations.map((s) => ({ id: s.id, label: s.label })));
+  exposeChart(opts.evidence);
   const request = readStateRequest();
   let flowRegion: string | undefined;
   // Mutable so `onFlow` (switching flows FROM the dock, no reload) can move these forward — unlike
@@ -1013,6 +1014,12 @@ markSandbox();
       }),
       /** Put one region into one state — a `StateRef`, or its address form (`events.flow.full@2`). */
       playState: (ref: StateRef | string) => playRequested(ref),
+      /**
+       * CHART a region on screen: replay its flows, and say which what-ifs each one reaches. The
+       * region is put back in the state it was in. The last chart is kept, per region, for this page.
+       */
+      chart: (region: string) => chartRegion(region, opts.evidence),
+      chartOf: (region: string) => regionChart(region),
       /** Back to the region as this view seeds it. */
       clearState: (region: string) => {
         clearState(region);

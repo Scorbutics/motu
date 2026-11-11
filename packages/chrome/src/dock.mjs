@@ -733,6 +733,56 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 }
 #tide .shelf__card:focus-visible, #tide .shelf__title:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
 
+/* THE CHART'S MARKS on a what-if. */
+#tide .shelf__item { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; width: 136px; scroll-snap-align: start; }
+#tide .shelf__item .shelf__card { width: auto; }
+#tide .reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: 500 11px/1.3 ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink-muted);
+  text-align: left;
+}
+#tide button.reach {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 6px;
+  cursor: pointer;
+  color: var(--tide-accent);
+}
+#tide button.reach em { grid-column: 2; }
+#tide .reach--unreached, #tide .reach--seeded, #tide .reach--na { flex-direction: column; align-items: flex-start; }
+#tide button.reach:hover { background: color-mix(in srgb, var(--tide-accent) 10%, #fff); }
+#tide .reach .boat { flex: 0 0 auto; color: var(--tide-accent); animation: none; }
+#tide .reach .boat__hull { fill: color-mix(in srgb, var(--motu-sand, #e3c893) 70%, #6b4f1d); }
+#tide .reach em { font-style: normal; color: var(--motu-caution, #b45309); }
+#tide .reach--unreached b { color: var(--motu-caution, #b45309); font-weight: 700; }
+#tide .reach--na { opacity: .75; }
+#tide .chart-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--tide-accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--surface-row, #fff);
+  color: var(--tide-accent);
+  font: 700 11.5px/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+#tide .chart-btn:disabled { cursor: default; opacity: .8; }
+#tide .chart-btn .boat { color: var(--tide-accent); }
+#tide .chart-hint { margin: -4px 2px 0; font-size: 11.5px; color: var(--ink-muted); }
+
 /* UNDER A MOUSE: albums that open into tracklists, one at a time. */
 @media (hover: hover) and (pointer: fine) {
   #tide .shelves { gap: 2px; }
@@ -756,10 +806,12 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
     border-radius: 8px;
     background: transparent;
   }
-  #tide .shelf__card + .shelf__card { box-shadow: 0 -1px 0 var(--line); }
   #tide .shelf__card:hover { background: color-mix(in srgb, var(--tide-accent) 6%, #fff); }
   #tide .shelf__card[aria-current="true"] { box-shadow: none; }
   #tide .shelf__mark { width: 20px; justify-content: center; }
+  #tide .shelf__item { width: auto; gap: 0; }
+  #tide .shelf__item + .shelf__item { box-shadow: 0 -1px 0 var(--line); }
+  #tide .shelf__item .shelf__card + .reach { margin: -4px 0 4px 32px; }
 }
 #tide .state-forged { margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.4; color: var(--ink-muted); }
 /* A CARD PER ROW, not a dense line. These are the states somebody wrote down; a flow's name is a
@@ -2642,9 +2694,50 @@ function motuMountDock(opts) {
    * one open at a time (the one aimed at, else the one at anchor), so the tab is still as tall as its
    * islands plus one list, never the sum of every list.
    */
+  /**
+   * THE CHART, ON EACH WHAT-IF — how it relates to the flows. The link people could not see: a what-if
+   * and a flow are often the same situation reached two ways, and the chart (`chartRegion`, the same
+   * function the region lane's `what-if-reach` check runs) finds the pairs by replaying the flows.
+   * A reached what-if names the flow and step that gets there, and pressing it SAILS that flow there.
+   */
+  var charting = null; // the region being charted right now
+  var reachLine = function (aim, w) {
+    if (!w) return null;
+    var line = function (cls, kids, title) {
+      var n = el('span', { class: 'reach reach--' + cls }, kids);
+      if (title) n.title = title;
+      return n;
+    };
+    if (w.status === 'reached' || w.status === 'context') {
+      var r = w.reachedBy.filter(function (x) { return !x.absent.length; })[0] || w.reachedBy[0];
+      var go = el('button', {
+        class: 'reach reach--' + w.status, type: 'button',
+        title: 'Sail "' + r.flow + '" to step ' + r.step + (r.context.length ? ' (there, ' + r.context.join(', ') + ' differ' + (r.context.length === 1 ? 's' : '') + ')' : ''),
+      }, [boat(14), el('span', {}, [r.flow + ' \u00b7 step ' + r.step]),
+        w.status === 'context'
+          ? el('em', {}, [(r.emptyHere || []).length ? 'only with ' + r.emptyHere.join(', ') + ' set' : 'only with ' + r.absent.join(', ') + ' empty'])
+          : null].filter(Boolean));
+      go.addEventListener('click', underWay('Sailing to step ' + r.step + '\u2026', playIn(aim, r.flow, r.step)));
+      return go;
+    }
+    if (w.status === 'seeded') return line('seeded', ['held at the seed'], 'True before any flow step — the page sets it; no flow moves the region here');
+    if (w.status === 'unreached') {
+      return line('unreached', [
+        el('b', {}, ['never sailed to']),
+        w.nearest ? el('span', {}, ['nearest: ' + w.nearest.flow + ' \u00b7 step ' + w.nearest.step + ', ' + w.nearest.differs.join(', ') + ' differ' + (w.nearest.differs.length === 1 ? 's' : '')]) : null,
+      ].filter(Boolean), 'No flow ends in this situation — a flow is missing, or the app never gets here');
+    }
+    return line('na', ['not charted'], w.reason || '');
+  };
+
   var drawShelves = function (aim, now) {
     var nodes = [];
     var total = 0;
+    var liveCtl = control();
+    var chart = liveCtl && liveCtl.chartOf ? liveCtl.chartOf(aim.regId) : null;
+    var placed = function (tag, name) {
+      return chart ? chart.whatIfs.filter(function (w) { return w.island === tag && w.name === name; })[0] || null : null;
+    };
     var litIsland = aim.activeScenario ? aim.activeScenario.island : null;
     var openTag = aimIsland || litIsland;
     (aim.reg.islands || []).forEach(function (i) {
@@ -2652,6 +2745,7 @@ function motuMountDock(opts) {
       total += i.scenarios.length;
       var lit = litIsland === i.tag ? aim.activeScenario.name : null;
       var list = el('div', { class: 'shelf__track', role: 'listbox', 'aria-label': (i.slot || i.tag) + ' what-ifs' });
+      var reachedHere = 0;
       i.scenarios.forEach(function (name) {
         var card = el('button', { class: 'shelf__card', type: 'button', role: 'option', 'aria-current': String(lit === name) }, [
           el('span', { class: 'shelf__mark' }, lit === name ? [anchorIcon(14)] : ['◇']),
@@ -2660,14 +2754,20 @@ function motuMountDock(opts) {
         card.addEventListener('click', underWay('Dropping anchor…', function () {
           drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: i.tag, name: name }); })();
         }));
-        list.appendChild(card);
+        // A what-if and the flow that reaches it, side by side — a button cannot hold a button.
+        var w = placed(i.tag, name);
+        if (w && w.status === 'reached') reachedHere++;
+        var reach = reachLine(aim, w);
+        list.appendChild(el('div', { class: 'shelf__item' }, reach ? [card, reach] : [card]));
       });
       var open = openTag === i.tag && !closedAll;
       var title = el('button', { class: 'shelf__title', type: 'button', 'aria-expanded': String(open) }, [
         el('span', { class: 'shelf__cover', 'aria-hidden': 'true' }, [String(i.scenarios.length)]),
         el('span', { class: 'shelf__slot' }, [i.slot || i.tag]),
         lit ? anchorIcon(14, 'shelf__anchor') : null,
-        el('span', { class: 'shelf__count' }, [i.scenarios.length + ' what-if' + (i.scenarios.length === 1 ? '' : 's')]),
+        el('span', { class: 'shelf__count' }, [
+          chart ? reachedHere + ' of ' + i.scenarios.length + ' sailed to' : i.scenarios.length + ' what-if' + (i.scenarios.length === 1 ? '' : 's'),
+        ]),
       ].filter(Boolean));
       title.addEventListener('click', function () {
         // Closing the open island shows none, rather than falling back to the one at anchor.
@@ -2688,12 +2788,31 @@ function motuMountDock(opts) {
       }, [el('div', { class: 'shelf__head' }, head), list]));
     });
     if (total) {
+      // CHART: replay the flows and mark which what-ifs one reaches. On demand — it replays every flow,
+      // which takes seconds and moves the region while it runs (it is put back afterwards).
+      var busy = charting === aim.regId;
+      var chartBtn = el('button', {
+        class: 'chart-btn', type: 'button', 'aria-busy': String(busy),
+        title: 'Replay every flow and mark which what-ifs one reaches',
+      }, busy ? [boat(14, 'is-sailing'), 'Charting\u2026'] : [chart ? 'Chart again' : 'Chart']);
+      chartBtn.disabled = busy || !(liveCtl && liveCtl.chart);
+      chartBtn.addEventListener('click', function () {
+        var c = control();
+        if (!c || !c.chart) return;
+        charting = aim.regId;
+        paint();
+        Promise.resolve(c.chart(aim.regId)).then(function () { charting = null; paint(); }, function () { charting = null; paint(); });
+      });
       nodes.unshift(el('div', { class: 'sect__head' }, [
         el('span', { class: 'motu-dot' }),
         el('span', { class: 'motu-cap' }, ['What-ifs']),
         el('span', { class: 'sect__hint' }, ['an island is told what to show']),
         el('span', { class: 'count' }, [String(total)]),
+        chartBtn,
       ]));
+      if (!chart && !busy) {
+        nodes.splice(1, 0, el('p', { class: 'chart-hint' }, ['Chart to see which flow reaches each what-if \u2014 and which none does.']));
+      }
     }
     shelves.replaceChildren.apply(shelves, nodes);
     // The lit card, in view on a shelf — once per change, so a reader swiping is not dragged back.

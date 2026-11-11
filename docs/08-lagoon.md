@@ -377,6 +377,13 @@ shows ONE region of the view at a time (pills switch between them when a screen 
   its own declared outputs; a what-if is ANCHORED — the anchor — because one island was handed the
   state directly, so the water stills and any key it overwrote is named as forged. Under a finger an
   island's what-ifs are a shelf you swipe sideways; under a mouse, a row that opens into its list.
+- **Chart** (beside *What-ifs*) replays the region's flows and marks each what-if with how it relates
+  to them: *sailed by "a full event refuses the RSVP" · step 2* (press it to sail there), *never sailed
+  to* with the nearest step and the keys that still differ, *held at the seed*, or why it cannot be
+  compared. It is the same function the region lane's `what-if-reach` check runs. A what-if is reached
+  when a flow step holds its SITUATION — the keys some flow moves, lists excluded — after the flow
+  moved one of them; context (`me`) may differ, unless the what-if leaves it empty where every flow
+  sets it ("a guest").
 
 Screens, regions and every state by name are in **Find** (the button beside the tabs, or Ctrl/Cmd-K):
 navigation is a search, not a column. On a phone the closed dock is a mini player — the state playing,

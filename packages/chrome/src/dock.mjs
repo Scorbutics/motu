@@ -1868,11 +1868,16 @@ function motuMountDock(opts) {
    * on the page" — and the panel is 560px of the page, sitting between you and whatever you meant to
    * point at. The rail is the state where the page is unobstructed, so the picker lives there.
    */
+  //
+  // AN ANCHOR, because that is what it does now: point at an island and the dock drops anchor there —
+  // the voyage card on its what-ifs, ‹ / › walking them, the rest of the page stepped back. It used to
+  // open the island's details, which is a reading act; pointing at the page is a navigating one, and
+  // the details stay one tap away on the card ("About <island>").
   var pick = el('button', {
     class: 'rail-act', type: 'button', 'aria-pressed': 'false',
-    title: 'Point at an island on the page to inspect it (Esc to stop)',
-    'aria-label': 'Pick an island on the page',
-  }, ['⌖']);
+    title: 'Point at an island on the page to anchor there (Esc to stop)',
+    'aria-label': 'Anchor at an island on the page',
+  });
   /**
    * THE PHONE BAR IS A MINI PLAYER — the state you are watching, and the two acts you take while
    * watching it.
@@ -2549,6 +2554,10 @@ function motuMountDock(opts) {
    */
   var pending = null;
   var stateSig = '';
+  /** An island pointed at on the page, waiting for the dock to be aimed at its region. */
+  var anchorTo = null;
+  /** A pointed-at island with no what-ifs: dimmed around while the region stays where it was. */
+  var lookAt = null;
   var underWay = function (label, run) {
     return function () {
       pending = { label: label, sig: stateSig };
@@ -2599,7 +2608,7 @@ function motuMountDock(opts) {
       b.style.top = (50 + 30 * Math.sin(angle)).toFixed(2) + '%';
       // AN ISLAND IS A PLACE TO GO: tapping it drops anchor at its first what-if, so the voyage card
       // shows that island's anchorages and ‹ / › walk them. Already anchored there: stay put. Its
-      // DETAILS are a deliberate act — "About <island>" on the voyage card, ⌖ on the page, "about" in
+      // DETAILS are a deliberate act — "About <island>" on the voyage card, "about" in
       // the list — and an island with no what-ifs has nowhere to anchor, so it opens them directly.
       b.addEventListener('click', function () {
         aimIsland = i.tag;
@@ -2615,6 +2624,7 @@ function motuMountDock(opts) {
     atoll.replaceChildren.apply(atoll, nodes);
   };
 
+  pick.replaceChildren(anchorIcon(18));
   // The bar's two chevrons were built before these existed; they wear the panel's glyphs.
   stepPrev.appendChild(chevron('back'));
   stepNext.appendChild(chevron('on'));
@@ -2944,7 +2954,7 @@ function motuMountDock(opts) {
   };
   var lastDim = '';
 
-  /** The island whose card is open, by tag — set by the atoll, an island's row, or the page's ⌖. */
+  /** The island whose card is open, by tag — set by "About" on the voyage card or "about" on an island's row. */
   var cardTag = null;
   var openCard = function (tag) { cardTag = tag; paint(); if (scroll.scrollTo) scroll.scrollTo(0, 0); };
 
@@ -3244,12 +3254,33 @@ function motuMountDock(opts) {
         lastFocus = now.focus.n;
         railPick = now.focus.region;
         aimIsland = now.focus.island && now.focus.island !== '*' ? now.focus.island : null;
-        revealShelf = now.focus.island === '*' ? 'shelves' : aimIsland || 'top';
-        // Pointed at ONE island: its card is the answer to "what is this".
-        if (aimIsland) cardTag = aimIsland;
-        open(true);
+        // The NAVIGATOR is what comes into view — the voyage card, where the anchorage and ‹ / › are —
+        // not the island's row in the list below it.
+        revealShelf = now.focus.island === '*' ? 'shelves' : 'top';
+        // Pointed at ONE island: ANCHOR THERE, as a tap on the atoll does — not its card. Resolved
+        // on the next paint, once the dock is aimed at the region the island belongs to.
+        cardTag = null;
+        anchorTo = aimIsland ? { region: now.focus.region, tag: aimIsland } : null;
+        // On a phone the panel would cover the page that was just pointed at — and dimmed around the
+        // island. The bar carries the anchor and the chevrons there; the panel opens only beside it.
+        if (!isPhone()) open(true);
         showTab('states'); // repaints, aimed
         return;
+      }
+      // THE POINTED-AT ISLAND, now that the dock is aimed at its region.
+      if (anchorTo && anchorTo.region === aim.regId) {
+        var wanted = anchorTo;
+        anchorTo = null;
+        var pickedIsl = (aim.reg.islands || []).filter(function (i) { return i.tag === wanted.tag; })[0];
+        if (pickedIsl && pickedIsl.scenarios.length && !(aim.activeScenario && aim.activeScenario.island === wanted.tag)) {
+          underWay('Dropping anchor\u2026', drive(function (c) {
+            c.playState({ region: aim.regId, kind: 'scenario', island: wanted.tag, name: pickedIsl.scenarios[0] });
+          }))();
+        } else if (pickedIsl && !pickedIsl.scenarios.length) {
+          // Nowhere to anchor: no what-ifs. Still the place to look, so the page steps back around it
+          // until the region's state moves.
+          lookAt = { region: aim.regId, tag: wanted.tag, sig: stateSig };
+        }
       }
     } else {
       // An island alone, or a lagoon too old to say what its view can play: one plain list.
@@ -3287,11 +3318,13 @@ function motuMountDock(opts) {
     // AT ANCHOR: the rest of the page steps back. Re-marked on every paint (cheap: one path), and once
     // more shortly after a change — a what-if remounts the region's islands, so the nodes it marked may
     // be replaced a moment after the state is reported.
-    var dimKey = aim && aim.activeScenario ? aim.regId + '\u0000' + aim.activeScenario.island : '';
-    if (dimKey) dimAround(aim.regId, aim.activeScenario.island);
+    if (lookAt && (lookAt.sig !== stateSig || !aim || aim.regId !== lookAt.region)) lookAt = null;
+    var dimTag = aim && aim.activeScenario ? aim.activeScenario.island : lookAt ? lookAt.tag : null;
+    var dimKey = dimTag ? aim.regId + '\u0000' + dimTag : '';
+    if (dimKey) dimAround(aim.regId, dimTag);
     else if (lastDim) clearDim();
     if (dimKey && dimKey !== lastDim) {
-      var again = { reg: aim.regId, tag: aim.activeScenario.island };
+      var again = { reg: aim.regId, tag: dimTag };
       setTimeout(function () { if (lastDim === again.reg + '\u0000' + again.tag) dimAround(again.reg, again.tag); }, 400);
     }
     lastDim = dimKey;

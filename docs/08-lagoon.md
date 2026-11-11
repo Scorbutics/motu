@@ -395,9 +395,14 @@ shows ONE region of the view at a time (pills switch between them when a screen 
 Screens, regions and every state by name are in **Find** (the button beside the tabs, or Ctrl/Cmd-K):
 navigation is a search, not a column. On a phone the closed dock is a mini player — the state playing,
 the region and step with the water along its top edge, the same ‹ / ›, **Share** (copies the address of exactly this state, step
-included; hosted, the shell's address rather than the frame's) and the picker. On a screen, hovering a
-region outlines it with a chip of its counts; the chip, and the crosshair, aim the dock at that region
-instead of scoping the view to one island.
+included; hosted, the shell's address rather than the frame's) and the picker, **⚓**: point at an
+island on the page and the dock drops anchor there — its first what-if, the voyage card in view with
+‹ / › on its anchorages, the rest of the page at 80% and the island ringed. It does not open the
+island's details; that is *About <island>* on the card. On a phone the panel stays closed, so what was
+pointed at stays visible and the bar carries the anchor. An island with no what-ifs has nowhere to
+anchor: the page still steps back around it until the region's state moves. On a screen, hovering a
+region outlines it with a chip of its counts; the chip aims the dock at that region instead of scoping
+the view to one island.
 
 - **One state per region.** Regions share nothing, so on a screen the sidebar can be in one state and
   the main region in another. Within one region a new state replaces the last one — the region is reset
@@ -823,7 +828,7 @@ So the lens now EXPOSES data and the dock renders it. The data is `sheet`, `seam
   appears only when the region has a coverage corpus (none: no section, rather than an empty tab).
 
 The rest appears where it is needed. **The island card** — *About <island>* on the voyage while
-anchored, *about* on an island in the what-ifs, or point at it on the page with ⌖ — says what that island was given, in words and with where each
+anchored, or *about* on an island in the what-ifs — says what that island was given, in words and with where each
 value came from ("Newcomers' welcome evening · chosen by event-list", "Dennis Shaw · set by the page",
 the raw value a tap away), what its outputs do, and its what-ifs. **⋯** in the masthead holds the
 view switch (only when the region offers more than one view), the page layers (coupling wires, call

@@ -365,19 +365,22 @@ a region's station and a screen differ only in how much of the application is dr
 store — so every view can show every state of every region it has on screen. The dock's **States** tab
 shows ONE region of the view at a time (pills switch between them when a screen holds several):
 
-- **now playing** — a player's front panel: the state the region is in, a flow's steps as the
-  progress bar (press a segment to go to that step), and the transport — ⏮ / ⏭ step through the
-  flow and, at either end, move to the previous or next flow, so pressing ⏭ repeatedly walks every
-  state the region declares; ↻ replays from the seed.
+- **the voyage** — where the region is, as a passage: from the seed to the flow's last step, a buoy
+  per step, the boat at the step the region is in and the wake behind it. ‹ / › sail a step at a time
+  and, past either end, to the previous or next flow, so pressing › again and again tours every state
+  the region declares; the main button sails the flow again from the seed. While a state is being
+  replayed the boat is under way ("Sailing to step 2…").
 - **the atoll** — the region drawn as a place, its islands as sand dots around the lagoon, each sized by
-  how many what-ifs it declares. Tapping one brings its album into view.
-- **flows** as a numbered tracklist, then **what-ifs** as one album per island. Under a finger an
-  album is a shelf you swipe sideways; under a mouse it is a row that opens into its tracklist, one at a
-  time. Either way the tab is as tall as its islands, not the sum of their scenarios.
+  how many what-ifs it declares. Tapping one brings its list into view.
+- **flows** (*the region gets there itself*) and **what-ifs** (*an island is told what to show*). The
+  two marks carry the difference: a flow is SAILED — the boat — because the region reached it through
+  its own declared outputs; a what-if is ANCHORED — the anchor — because one island was handed the
+  state directly, so the water stills and any key it overwrote is named as forged. Under a finger an
+  island's what-ifs are a shelf you swipe sideways; under a mouse, a row that opens into its list.
 
 Screens, regions and every state by name are in **Find** (the button beside the tabs, or Ctrl/Cmd-K):
 navigation is a search, not a column. On a phone the closed dock is a mini player — the state playing,
-the region and step with its progress along the top edge, the same ⏮ / ⏭, **Share** (copies the address of exactly this state, step
+the region and step with the water along its top edge, the same ‹ / ›, **Share** (copies the address of exactly this state, step
 included; hosted, the shell's address rather than the frame's) and the picker. On a screen, hovering a
 region outlines it with a chip of its counts; the chip, and the crosshair, aim the dock at that region
 instead of scoping the view to one island.

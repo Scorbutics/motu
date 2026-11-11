@@ -211,6 +211,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
  * off ABOVE the media queries for the same reason as the strip below. */
 #tide .rail-txt { display: none; }
 #tide .rail-progress { display: none; }
+#tide .rail-mark { display: none; }
 #tide .kbd--word { display: none; }
 #tide .motu-kbd { white-space: nowrap; }
 /* The region's name, standing up along the rail. This is the one place the dock says what it is
@@ -503,103 +504,123 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 #tide .atoll__isle[data-lit="true"] .atoll__dot { box-shadow: 0 0 0 3px var(--tide-accent); }
 #tide .atoll__isle:focus-visible, #tide .atoll__lagoon:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; border-radius: 10px; }
 
-/* NOW PLAYING — the front panel of a player. Deep water, the atoll as cover art, the state as the
- * title, its steps as the progress bar and the transport under it. The one dark surface in the tab,
- * so the eye lands on what is playing before it reads anything else. */
+/* THE VOYAGE — what the region is in, drawn as a passage on its own water. The one dark surface in
+ * the tab, so the eye lands on where the region IS before it reads anything else. */
 #tide .now {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 6px;
+  padding: 14px 14px 12px;
   border-radius: 16px;
   color: #fff;
-  background:
-    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--w-shallow) 38%, transparent), transparent 60%),
-    linear-gradient(160deg, var(--w-deep), color-mix(in srgb, var(--w-deep) 70%, #071c24));
+  background: linear-gradient(170deg, var(--w-deep), color-mix(in srgb, var(--w-deep) 70%, #06202a));
   box-shadow: 0 10px 26px color-mix(in srgb, var(--w-deep) 30%, transparent);
 }
-#tide .now__head { display: flex; align-items: center; gap: 12px; min-width: 0; }
-#tide .now__cover { width: 56px; height: 56px; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.18); }
-#tide .now__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #tide .now__kicker { font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: color-mix(in srgb, var(--w-shallow) 70%, #fff); }
 #tide .now__title { font-size: 15.5px; font-weight: 800; line-height: 1.3; color: #fff; }
-#tide .now__segs { display: flex; gap: 4px; }
-#tide .now__seg {
-  flex: 1 1 0;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  position: relative;
-}
-/* A thin bar in a tall target: the segment a thumb can hit is 22px, the one the eye reads is 6. */
-#tide .now__seg::before {
-  content: "";
+#tide .voy__route { margin: 0; font-size: 12.5px; line-height: 1.4; color: rgba(255, 255, 255, .82); }
+#tide .voy__passage { position: relative; height: 46px; margin-top: 2px; }
+#tide .voy__passage .water { position: absolute; left: 0; right: 0; top: 12px; }
+#tide .voy__buoys i {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 8px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .22);
-}
-#tide .now__seg--whole { cursor: default; }
-#tide .now__seg[data-done="true"]::before { background: var(--w-shallow); }
-#tide .now__seg[aria-current="true"]::after {
-  content: "";
-  position: absolute;
-  right: -3px;
-  top: 5px;
-  width: 12px;
-  height: 12px;
+  top: 24px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: var(--motu-sand, #e3c893);
-  box-shadow: 0 0 0 2px var(--w-deep);
+  border: 2px solid rgba(255, 255, 255, .55);
+  background: var(--w-deep);
 }
-#tide .now__seg:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 6px; }
-#tide .now__transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
-#tide .now__step { font-size: 11px; color: rgba(255, 255, 255, .78); font-variant-numeric: tabular-nums; white-space: nowrap; }
-#tide .now__step--end { text-align: right; }
-#tide .now__btns { display: flex; align-items: center; gap: 10px; }
-#tide .now__btn {
-  width: 40px;
-  height: 40px;
+#tide .voy__buoys i[data-passed="true"] { background: var(--motu-sand, #e3c893); border-color: var(--motu-sand, #e3c893); }
+/* The vessel SAILS: its position is transitioned, so a step moves the boat across the water. */
+#tide .voy__vessel { position: absolute; top: 4px; margin-left: -14px; color: #fff; transition: left 1.1s ease-in-out; }
+#tide .now[data-mode="anchored"] .voy__vessel { top: 8px; margin-left: -12px; color: var(--motu-sand, #e3c893); }
+#tide .voy__labels { display: flex; justify-content: space-between; gap: 8px; margin-top: -4px; font-size: 11px; color: rgba(255, 255, 255, .72); }
+#tide .voy__labels b { color: #fff; }
+#tide .voy__transport { display: flex; align-items: center; justify-content: center; gap: 14px; padding-top: 4px; }
+#tide .voy__btn {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 0;
+  border: 1.5px solid rgba(255, 255, 255, .35);
   border-radius: 50%;
   background: transparent;
   color: #fff;
   cursor: pointer;
 }
-#tide .now__btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
-#tide .now__btn:disabled { opacity: .35; cursor: default; }
-#tide .now__btn--main { width: 48px; height: 48px; background: var(--motu-sand, #e3c893); color: var(--motu-on-sand, #0b3d5c); }
-#tide .now__btn--main:hover:not(:disabled) { background: color-mix(in srgb, var(--motu-sand, #e3c893) 85%, #fff); }
-#tide .now__btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-#tide .now .state-forged { color: rgba(255, 255, 255, .8); padding: 0; }
-
-/* THE EQUALIZER on whatever is playing. Stills under prefers-reduced-motion with every other animation. */
-#tide .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
-#tide .eq i { display: block; width: 3px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: bottom; animation: tide-eq 900ms ease-in-out infinite; }
-#tide .eq i:nth-child(2) { animation-delay: -300ms; }
-#tide .eq i:nth-child(3) { animation-delay: -600ms; }
-@keyframes tide-eq {
-  0%, 100% { transform: scaleY(.35); }
-  50% { transform: scaleY(1); }
+#tide .voy__btn:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
+#tide .voy__btn:disabled { opacity: .35; cursor: default; }
+#tide .voy__main {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--motu-sand, #e3c893);
+  color: var(--motu-on-sand, #0b3d5c);
+  font: 800 13.5px/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
 }
+#tide .voy__main[hidden] { display: none; }
+#tide .voy__main:hover { background: color-mix(in srgb, var(--motu-sand, #e3c893) 85%, #fff); }
+#tide .voy__btn:focus-visible, #tide .voy__main:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+#tide .now .state-forged { color: rgba(255, 255, 255, .8); padding: 4px 0 0; border-top: 1px solid rgba(255, 255, 255, .15); }
+#tide .now .state-forged[hidden] { display: none; }
+#tide .voy__waiting { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; }
+#tide .voy__waiting .water { width: 100%; }
+#tide .voy__waiting small { font-size: 11px; color: rgba(255, 255, 255, .72); }
 
-/* THE FLOWS AS A TRACKLIST — numbered, the playing one with an equalizer where its number was. */
+/* WATER: a faint swell drifting one way and the lit wake drifting the other, one wavelength (24px)
+ * per loop, so it never jumps. The wake is cut to the boat's position. */
+#tide .water { display: block; position: relative; overflow: hidden; }
+#tide .water svg { position: absolute; left: -24px; top: 0; }
+#tide .water path { fill: none; stroke-linecap: round; }
+#tide .water__line--swell { animation: tide-drift 4s linear infinite reverse; }
+#tide .water__line--swell path { stroke: rgba(255, 255, 255, .2); stroke-width: 2; }
+#tide .water__wake { position: absolute; left: 0; top: 0; bottom: 0; overflow: hidden; transition: width 1.1s ease-in-out; }
+#tide .water__line--lit { animation: tide-drift 2.4s linear infinite; }
+#tide .water__line--lit path { stroke: var(--w-shallow); stroke-width: 2.5; }
+/* At anchor the water stills: nothing is under way. */
+#tide .now[data-mode="anchored"] .water svg { animation-play-state: paused; }
+@keyframes tide-drift { from { transform: translateX(0); } to { transform: translateX(24px); } }
+
+/* THE BOAT and THE ANCHOR — the two marks that carry the difference between a flow and a what-if. */
+#tide .boat { overflow: visible; animation: tide-bob 2.6s ease-in-out infinite; transform-origin: 50% 90%; }
+#tide .boat .boat__mast { fill: none; stroke: currentColor; stroke-width: 1.6; }
+#tide .boat .boat__sail { fill: currentColor; }
+#tide .boat .boat__sail--jib { opacity: .8; }
+#tide .boat .boat__hull { fill: var(--motu-sand, #e3c893); }
+#tide .boat--ink { color: var(--motu-on-sand, #0b3d5c); animation: none; }
+#tide .boat--ink .boat__hull { fill: currentColor; }
+/* Under way — a state being replayed: the boat pitches harder. */
+#tide .boat.is-sailing, #tide .now[data-pending="true"] .voy__vessel .boat, #tide .boat.is-waiting { animation: tide-bob-fast .9s ease-in-out infinite; }
+#tide .anchor { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+#tide .anchor--ink { color: var(--motu-on-sand, #0b3d5c); }
+#tide .voy__vessel .anchor { animation: tide-sway 3.2s ease-in-out infinite; transform-origin: 50% 0; }
+@keyframes tide-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-2px) rotate(2deg); } }
+@keyframes tide-bob-fast { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-3px) rotate(4deg); } }
+@keyframes tide-sway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+#tide .chevron { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* A hint beside a section's name — what KIND of state the list holds. */
+#tide .sect__hint { flex: 1 1 auto; min-width: 0; font-size: 11px; font-weight: 500; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tide .sect__hint:empty { display: none; }
+#tide .sect__head:has(.sect__hint:not(:empty)) .motu-cap { flex: 0 0 auto; }
+
+/* THE FLOWS — a buoy each, the boat on the one the region is sailing. */
 #tide .track {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 6px 10px 6px 6px;
+  padding: 6px 10px 6px 4px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -610,13 +631,20 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 }
 #tide .track + .track { box-shadow: 0 -1px 0 var(--line); }
 #tide .track:hover { background: var(--surface-row, #fff); }
-#tide .track__no { display: flex; justify-content: center; font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-faint, var(--ink-muted)); font-variant-numeric: tabular-nums; }
+#tide .track__mark { display: flex; justify-content: center; color: var(--tide-accent); }
+#tide .track__mark .boat__hull { fill: color-mix(in srgb, var(--motu-sand, #e3c893) 70%, #6b4f1d); }
+#tide .buoy { display: block; width: 9px; height: 9px; box-sizing: border-box; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--tide-accent) 45%, #fff); }
 #tide .track__name { min-width: 0; }
-#tide .track__meta { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .track__meta { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 #tide .track[aria-current="true"] { background: color-mix(in srgb, var(--tide-accent) 10%, #fff); box-shadow: none; font-weight: 700; color: var(--tide-accent); }
 #tide .track[aria-current="true"] + .track { box-shadow: none; }
-#tide .track[aria-current="true"] .track__no { color: var(--tide-accent); }
 #tide .track:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 1px; }
+
+/* The atoll's marks: the boat in the lagoon, the anchor on the island that was told its state. */
+#tide .atoll__lagoon .boat { color: var(--tide-accent); }
+#tide .atoll__lagoon .boat__hull { fill: color-mix(in srgb, var(--motu-sand, #e3c893) 70%, #6b4f1d); }
+#tide .atoll__isle { position: absolute; }
+#tide .atoll__anchor { position: absolute; top: 2px; right: 0; color: var(--w-deep); background: color-mix(in srgb, var(--surface-row, #fff) 85%, transparent); border-radius: 50%; }
 
 /* THE WHAT-IFS: one album per island. Under a finger (the default here) an album is a shelf of cards
  * you swipe sideways — one row of height whatever it holds. Under a mouse (the block after this) it is
@@ -695,14 +723,14 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   white-space: normal;
   cursor: pointer;
 }
-#tide .shelf__no { display: flex; font: 600 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: color-mix(in srgb, var(--motu-sand, #e3c893) 55%, var(--ink-muted)); }
+#tide .shelf__mark { display: flex; font-size: 11px; color: color-mix(in srgb, var(--motu-sand, #e3c893) 55%, var(--ink-muted)); }
+#tide .shelf__card[aria-current="true"] .shelf__mark, #tide .shelf__anchor { color: var(--tide-accent); }
 #tide .shelf__card:hover { border-color: var(--tide-accent); }
 #tide .shelf__card[aria-current="true"] {
   background: color-mix(in srgb, var(--tide-accent) 12%, #fff);
   border-color: var(--tide-accent);
   font-weight: 700;
 }
-#tide .shelf__card[aria-current="true"] .shelf__no { color: var(--tide-accent); }
 #tide .shelf__card:focus-visible, #tide .shelf__title:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
 
 /* UNDER A MOUSE: albums that open into tracklists, one at a time. */
@@ -731,7 +759,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   #tide .shelf__card + .shelf__card { box-shadow: 0 -1px 0 var(--line); }
   #tide .shelf__card:hover { background: color-mix(in srgb, var(--tide-accent) 6%, #fff); }
   #tide .shelf__card[aria-current="true"] { box-shadow: none; }
-  #tide .shelf__no { width: 20px; justify-content: center; }
+  #tide .shelf__mark { width: 20px; justify-content: center; }
 }
 #tide .state-forged { margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.4; color: var(--ink-muted); }
 /* A CARD PER ROW, not a dense line. These are the states somebody wrote down; a flow's name is a
@@ -1389,17 +1417,24 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   /* THE MINI PLAYER'S PROGRESS, along its top edge: the playing flow's steps, or one bar for a state
    * that simply is. Inside the rounded corners, so it reads as part of the bar and not a border. */
   #tide .rail-dock { position: relative; }
-  #tide .rail-progress {
-    position: absolute;
-    top: 0;
-    left: 16px;
-    right: 16px;
-    height: 3px;
+  #tide .rail-progress { display: block; position: absolute; top: 0; left: 0; right: 0; height: 10px; pointer-events: none; }
+  #tide .rail-progress .water { height: 10px; }
+  #tide .rail-progress .water__line--swell path { stroke: color-mix(in srgb, var(--motu-on-primary, #fff) 24%, transparent); stroke-width: 1.6; }
+  #tide .rail-progress .water__line--lit path { stroke: var(--motu-sand, #e3c893); stroke-width: 2; }
+  /* The boat (or the anchor) on a tile of the region's water, where the atoll mark is on the rail. */
+  #tide .rail-dock .atoll-mark { display: none; }
+  #tide .rail-mark {
     display: flex;
-    gap: 3px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--motu-on-primary, #fff) 16%, transparent);
+    color: var(--motu-on-primary, #fff);
   }
-  #tide .rail-progress i { flex: 1 1 0; border-radius: 0 0 2px 2px; background: color-mix(in srgb, var(--motu-on-primary, #fff) 22%, transparent); }
-  #tide .rail-progress i[data-done="true"] { background: var(--motu-sand, #e3c893); }
+  #tide .rail-mark .anchor { color: var(--motu-sand, #e3c893); }
   #tide .rail-chip svg { display: block; }
 
   /* The note rises above the bar, full width, where the thumb that pressed Share already is. */
@@ -1734,8 +1769,10 @@ function motuMountDock(opts) {
    */
   var stepPrev = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Previous' });
   var stepNext = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Next' });
-  /** The playing flow's progress, along the bar's top edge — the line every mini player has. */
+  /** The passage along the bar's top edge — water, and the wake filled to where the boat is. */
   var railProgress = el('div', { class: 'rail-progress', 'aria-hidden': 'true' });
+  /** The bar's own mark on a phone: the boat (or the anchor) on a tile of the region's water. */
+  var railMark = el('span', { class: 'rail-mark', 'aria-hidden': 'true' });
   var railShare = el('button', {
     class: 'rail-chip rail-chip--share', type: 'button', 'aria-label': 'Copy a link to this state', title: 'Copy a link to this state',
   }, [shareIcon()]);
@@ -2152,13 +2189,14 @@ function motuMountDock(opts) {
   var section = function (cap, host) {
     var count = el('span', { class: 'count' }, ['0']);
     var capEl = el('span', { class: 'motu-cap' }, [cap]);
+    var hint = el('span', { class: 'sect__hint' });
     var list = el('div', { class: 'list', role: 'listbox', 'aria-label': cap });
     var box = el('div', { class: 'sect' }, [
-      el('div', { class: 'sect__head' }, [el('span', { class: 'motu-dot' }), capEl, count]),
+      el('div', { class: 'sect__head' }, [el('span', { class: 'motu-dot' }), capEl, hint, count]),
       list,
     ]);
     (host || scroll).appendChild(box);
-    return { list: list, count: count, box: box, cap: capEl };
+    return { list: list, count: count, box: box, cap: capEl, hint: hint };
   };
 
   // ── THE STATES TAB: ONE REGION, AS A PLACE ──────────────────────────────────────────────────
@@ -2281,21 +2319,105 @@ function motuMountDock(opts) {
     return i ? i.slot || i.tag : tag;
   };
 
+  // ── THE SAILING PICTURES ────────────────────────────────────────────────────────────────────
+  //
+  // The dock behaves like a player — one thing under way, a step at a time, the next flow after the
+  // last step, again from the seed — and LOOKS like the lagoon it lives on. motu's nouns stay (flow,
+  // step, seed, what-if, island), because they are what the evidence files and the addresses say;
+  // sailing lends only the verbs and the pictures, and the two marks carry a real distinction:
+  //   the BOAT is a flow — the region SAILED there, through its own declared outputs;
+  //   the ANCHOR is a what-if — one island was TOLD the state, nothing was reached.
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  var svgOf = function (w, h, viewBox, parts, cls) {
+    var svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('viewBox', viewBox);
+    svg.setAttribute('width', String(w));
+    svg.setAttribute('height', String(h));
+    svg.setAttribute('aria-hidden', 'true');
+    if (cls) svg.setAttribute('class', cls);
+    parts.forEach(function (p) {
+      var n = document.createElementNS(SVGNS, p.circle ? 'circle' : 'path');
+      if (p.circle) { n.setAttribute('cx', p.circle[0]); n.setAttribute('cy', p.circle[1]); n.setAttribute('r', p.circle[2]); }
+      else n.setAttribute('d', p.d);
+      if (p.cls) n.setAttribute('class', p.cls);
+      svg.appendChild(n);
+    });
+    return svg;
+  };
+  /** The boat: sails in currentColor, the hull in sand. */
+  var boat = function (size, cls) {
+    return svgOf(size, Math.round(size * 0.92), '0 0 26 24', [
+      { d: 'M13 2v14', cls: 'boat__mast' },
+      { d: 'M14 3l8 12h-8z', cls: 'boat__sail' },
+      { d: 'M12 6l-6 9h6z', cls: 'boat__sail boat__sail--jib' },
+      { d: 'M2 17h22l-4 5H6z', cls: 'boat__hull' },
+    ], 'boat' + (cls ? ' ' + cls : ''));
+  };
+  var anchorIcon = function (size, cls) {
+    return svgOf(size, size, '0 0 24 24', [
+      { circle: [12, 5, 2] },
+      { d: 'M12 7v13M5 13a7 7 0 0 0 14 0M8 10h8' },
+    ], 'anchor' + (cls ? ' ' + cls : ''));
+  };
+  var chevron = function (dir) {
+    // NOT `.chev`: that is the rail's own opening arrow, which the phone layout hides.
+    return svgOf(20, 20, '0 0 24 24', [{ d: dir === 'back' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7' }], 'chevron');
+  };
+  /** A wave line long enough to drift a full wavelength in any container up to ~1100px. */
+  var waveD = function (y, amp) {
+    return 'M0 ' + y + ' q6 -' + amp + ' 12 0' + new Array(95).join(' t12 0');
+  };
+  /** Water: a faint swell drifting one way, and the WAKE — the same line, lit, cut to the boat's position. */
+  var water = function (h, y, amp, cls) {
+    var d = waveD(y, amp);
+    var line = function (c) {
+      var s = svgOf(1140, h, '0 0 1140 ' + h, [{ d: d }], c);
+      return s;
+    };
+    var wake = el('span', { class: 'water__wake' }, [line('water__line water__line--lit')]);
+    var node = el('span', { class: 'water' + (cls ? ' ' + cls : ''), 'aria-hidden': 'true' }, [line('water__line water__line--swell'), wake]);
+    node.style.height = h + 'px';
+    return { node: node, wake: wake };
+  };
+  /** Where waypoint k of `legs` sits along the water, inside a 16px harbour at each end. */
+  var along = function (k, legs) {
+    return 'calc(16px + (100% - 32px) * ' + (legs ? k / legs : 0).toFixed(4) + ')';
+  };
+
+  /**
+   * WHAT IS UNDER WAY, as far as the dock knows. Set when a person asks for a state; cleared when the
+   * lagoon reports a different state than the one in force at the click (the replay landed) or after
+   * a few seconds (it refused, or it landed on the same state). Until then the boat sails and the
+   * status says where to — a flow takes as long as its steps take, and a still screen for that second
+   * reads as a click that missed.
+   */
+  var pending = null;
+  var stateSig = '';
+  var underWay = function (label, run) {
+    return function () {
+      pending = { label: label, sig: stateSig };
+      paint();
+      run();
+      setTimeout(function () { if (pending) { pending = null; paint(); } }, 6000);
+    };
+  };
+
   /**
    * THE ATOLL. The region's islands around its lagoon — the one picture in the dock that shows the
-   * region's SHAPE rather than a list of its parts. Dots are sand, the icon's own, and sized by the
-   * island's what-if count, so the island with the most states to look at is the biggest thing to tap.
-   * Names stand under the dots up to eight islands; past that they would collide, and the shelves
-   * below name every island anyway.
+   * region's SHAPE rather than a list of its parts. Dots are sand, sized by the island's what-if count.
+   * The boat sits in the lagoon while the region sails a flow (or lies in harbour); while a what-if
+   * holds, it is gone and the island that was told the state carries the anchor.
    */
   var drawAtoll = function (aim) {
     var isl = aim.reg.islands || [];
     var nFlows = (aim.reg.flows || []).length;
     var nodes = [el('span', { class: 'atoll__ring', 'aria-hidden': 'true' })];
+    var lagoonKids = [];
+    if (!aim.activeScenario) lagoonKids.push(boat(22, pending ? 'is-sailing' : ''));
+    lagoonKids.push(el('b', {}, [nFlows + (nFlows === 1 ? ' flow' : ' flows')]));
     var lagoon = el('button', {
-      class: 'atoll__lagoon', type: 'button', 'aria-pressed': String(!aimIsland),
-      title: "The region's flows",
-    }, [el('small', {}, ['lagoon']), el('b', {}, [nFlows + (nFlows === 1 ? ' flow' : ' flows')])]);
+      class: 'atoll__lagoon', type: 'button', 'aria-pressed': String(!aimIsland), title: "The region's flows",
+    }, lagoonKids);
     lagoon.addEventListener('click', function () { aimIsland = null; revealShelf = 'flows'; paint(); });
     nodes.push(lagoon);
     var named = isl.length <= 8;
@@ -2307,13 +2429,16 @@ function motuMountDock(opts) {
       var dot = el('span', { class: 'atoll__dot' }, [n ? String(n) : '']);
       dot.style.width = size + 'px';
       dot.style.height = size + 'px';
+      var kids = [dot];
+      if (named) kids.push(el('span', { class: 'atoll__name' }, [i.slot || i.tag]));
+      if (lit) kids.push(anchorIcon(14, 'atoll__anchor'));
       var b = el('button', {
         class: 'atoll__isle', type: 'button',
-        title: (i.slot || i.tag) + ' — ' + n + ' what-if' + (n === 1 ? '' : 's'),
-        'aria-label': (i.slot || i.tag) + ', ' + n + ' what-if' + (n === 1 ? '' : 's'),
+        title: (i.slot || i.tag) + ' — ' + n + ' what-if' + (n === 1 ? '' : 's') + (lit ? ', anchored here' : ''),
+        'aria-label': (i.slot || i.tag) + ', ' + n + ' what-if' + (n === 1 ? '' : 's') + (lit ? ', anchored here' : ''),
         'aria-pressed': String(aimIsland === i.tag),
         'data-lit': lit ? 'true' : 'false',
-      }, named ? [dot, el('span', { class: 'atoll__name' }, [i.slot || i.tag])] : [dot]);
+      }, kids);
       b.style.left = (50 + 36 * Math.cos(angle)).toFixed(2) + '%';
       b.style.top = (50 + 30 * Math.sin(angle)).toFixed(2) + '%';
       b.addEventListener('click', function () {
@@ -2327,160 +2452,195 @@ function motuMountDock(opts) {
     atoll.replaceChildren.apply(atoll, nodes);
   };
 
-  /** A small icon from paths — `fill` for the transport's triangles, a stroke for everything else. */
-  var icon = function (paths, size) {
-    var NS = 'http://www.w3.org/2000/svg';
-    var svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', String(size || 18));
-    svg.setAttribute('height', String(size || 18));
-    svg.setAttribute('aria-hidden', 'true');
-    paths.forEach(function (p) {
-      var n = document.createElementNS(NS, 'path');
-      n.setAttribute('d', p.d);
-      n.setAttribute('fill', p.fill ? 'currentColor' : 'none');
-      n.setAttribute('stroke', 'currentColor');
-      n.setAttribute('stroke-width', p.fill ? '1' : '2.2');
-      n.setAttribute('stroke-linecap', 'round');
-      n.setAttribute('stroke-linejoin', 'round');
-      svg.appendChild(n);
-    });
-    return svg;
-  };
-  var ICON_PREV = [{ d: 'M6 5v14' }, { d: 'M19 5.5L9 12l10 6.5z', fill: true }];
-  var ICON_NEXT = [{ d: 'M18 5v14' }, { d: 'M5 5.5L15 12 5 18.5z', fill: true }];
-  var ICON_REPLAY = [{ d: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3' }, { d: 'M4 4.5V9h4.5' }];
-  // The bar's transport was built before these existed; it wears the same glyphs as the panel's.
-  stepPrev.appendChild(icon(ICON_PREV, 20));
-  stepNext.appendChild(icon(ICON_NEXT, 20));
-
-  /** The playing track's equalizer — three bars, still under reduced motion (the global rule). */
-  var equalizer = function () {
-    return el('span', { class: 'eq', 'aria-hidden': 'true' }, [el('i'), el('i'), el('i')]);
-  };
+  // The bar's two chevrons were built before these existed; they wear the panel's glyphs.
+  stepPrev.appendChild(chevron('back'));
+  stepNext.appendChild(chevron('on'));
+  // And the bar's own passage and mark, for the same reason.
+  var railWater = water(10, 5, 3, 'water--bar');
+  railProgress.appendChild(railWater.node);
+  railOpen.insertBefore(railMark, railLabel);
 
   /**
-   * THE TRANSPORT, as a music player does it: ⏮ and ⏭ step through the flow that is playing, and at
-   * either end they move to the previous or next track — "As seeded", then the region's flows in
-   * declared order. So the two buttons are never dead, and pressing ⏭ over and over walks every state
-   * the region declares, one after another, which is the tour a person giving a review actually wants.
-   * ↻ plays the current track again from its seed.
+   * THE TRANSPORT — the player's, in sailing words. ‹ and › move a step at a time through the flow
+   * under way, and past either end to the neighbouring flow ("As seeded", then the region's flows in
+   * declared order), so neither is ever dead and pressing › again and again tours every state the
+   * region declares. The main button sails the current flow again from the seed — or, in harbour, sets
+   * sail on the first one; at anchor, it drops anchor again.
    */
   var transport = function (aim) {
     var tracks = [null].concat(aim.reg.flows || []);
     var cur = aim.activeScenario ? -1 : tracks.indexOf(aim.activeFlow || null);
     var st = aim.steps;
-    var name = function (t) { return t === null ? 'As seeded' : t; };
+    var flowTo = function (t, verb) {
+      return t === null
+        ? { label: 'Back to the seed', sailing: 'Making for harbour…', run: playIn(aim, null) }
+        : { label: verb + ': ' + t, sailing: 'Setting sail…', run: playIn(aim, t) };
+    };
     var prev = null;
     var next = null;
-    if (st && st.at > 1) prev = { label: 'Step ' + (st.at - 1) + ' of ' + st.of, run: playIn(aim, aim.activeFlow, st.at - 1) };
-    else if (cur > 0) prev = { label: 'Previous: ' + name(tracks[cur - 1]), run: playIn(aim, tracks[cur - 1]) };
-    else if (cur === -1) prev = { label: 'Back to As seeded', run: playIn(aim, null) };
-    if (st && st.at < st.of) next = { label: 'Step ' + (st.at + 1) + ' of ' + st.of, run: playIn(aim, aim.activeFlow, st.at + 1) };
-    else if (cur === -1 && tracks.length > 1) next = { label: 'Next: ' + name(tracks[1]), run: playIn(aim, tracks[1]) };
-    else if (cur >= 0 && cur + 1 < tracks.length) next = { label: 'Next: ' + name(tracks[cur + 1]), run: playIn(aim, tracks[cur + 1]) };
-    var replay = aim.activeScenario
-      ? { label: 'Play this what-if again', run: drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: aim.activeScenario.island, name: aim.activeScenario.name }); }) }
-      : { label: aim.activeFlow ? 'Play this flow again from its seed' : 'Back to the seed', run: playIn(aim, aim.activeFlow || null) };
-    return { prev: prev, next: next, replay: replay };
+    if (aim.activeScenario) prev = { label: 'Weigh anchor — back to the seed', sailing: 'Weighing anchor…', run: playIn(aim, null) };
+    else if (st && st.at > 1) prev = { label: 'Back to step ' + (st.at - 1), sailing: 'Sailing to step ' + (st.at - 1) + '…', run: playIn(aim, aim.activeFlow, st.at - 1) };
+    else if (cur > 0) prev = flowTo(tracks[cur - 1], 'Previous');
+    if (st && st.at < st.of) next = { label: 'On to step ' + (st.at + 1), sailing: 'Sailing to step ' + (st.at + 1) + '…', run: playIn(aim, aim.activeFlow, st.at + 1) };
+    else if (cur === -1 && tracks.length > 1) next = flowTo(tracks[1], 'Sail');
+    else if (cur >= 0 && cur + 1 < tracks.length) next = flowTo(tracks[cur + 1], 'Next');
+    var main;
+    if (aim.activeScenario) {
+      var sc = aim.activeScenario;
+      main = { text: 'Drop anchor again', label: 'Tell ' + slotOf(aim.reg, sc.island) + ' this state again', sailing: 'Dropping anchor…', run: drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: sc.island, name: sc.name }); }) };
+    } else if (aim.activeFlow) {
+      main = { text: 'Sail again', label: 'Sail this flow again from the seed', sailing: 'Setting sail…', run: playIn(aim, aim.activeFlow) };
+    } else if (tracks.length > 1) {
+      main = { text: 'Set sail', label: 'Sail the first flow: ' + tracks[1], sailing: 'Setting sail…', run: playIn(aim, tracks[1]) };
+    } else {
+      main = null;
+    }
+    return { prev: prev, next: next, main: main };
   };
 
   /** Point a transport button at what it does now — or disable it, with the reason in its name. */
   var aimButton = function (b, act, idle) {
     b.disabled = !act;
-    b.onclick = act ? act.run : null;
+    b.onclick = act ? underWay(act.sailing, act.run) : null;
     b.setAttribute('aria-label', act ? act.label : idle);
     b.title = act ? act.label : idle;
   };
 
   /**
-   * NOW PLAYING — the region's state as a player's front panel: the atoll as cover art, what is
-   * playing and where, its progress (a flow's steps as segments you can press), and the transport.
+   * THE VOYAGE — what the aimed region is in, drawn as a passage: from the seed to the flow's last
+   * step, a buoy per step, the wake filling behind the boat. Built ONCE and updated in place, so the
+   * boat SAILS from one buoy to the next instead of being redrawn at its new position.
    */
-  var drawNow = function (aim, labelOf) {
-    var kind = 'as seeded';
-    var name = 'As seeded';
-    if (aim.activeScenario) {
-      kind = 'what-if · ' + slotOf(aim.reg, aim.activeScenario.island);
-      name = aim.activeScenario.name;
-    } else if (aim.activeFlow) {
-      kind = 'flow';
-      name = aim.activeFlow;
-    }
-    var playing = !!(aim.activeFlow || aim.activeScenario);
-    var kids = [
-      el('div', { class: 'now__head' }, [
-        el('span', { class: 'atoll-mark now__cover', 'aria-hidden': 'true' }),
-        el('span', { class: 'now__txt' }, [
-          el('small', { class: 'now__kicker' }, [(playing ? 'now playing · ' : '') + labelOf(aim.regId) + ' · ' + kind]),
-          el('b', { class: 'now__title' }, [name]),
-        ]),
-      ]),
-    ];
-    // THE PROGRESS. A flow's steps as segments; anything else is one bar, full — a state that simply
-    // IS has nothing left to play, and an empty bar would read as "not started".
-    var segs = el('div', { class: 'now__segs', role: 'group', 'aria-label': aim.steps ? 'Steps of this flow' : 'Progress' });
-    if (aim.steps) {
-      for (var k = 1; k <= aim.steps.of; k++) {
-        var seg = el('button', {
-          class: 'now__seg', type: 'button', 'aria-label': 'Step ' + k + ' of ' + aim.steps.of,
-          'aria-current': String(k === aim.steps.at), 'data-done': String(k <= aim.steps.at),
-        });
-        seg.addEventListener('click', playIn(aim, aim.activeFlow, k));
-        segs.appendChild(seg);
-      }
-    } else {
-      segs.appendChild(el('span', { class: 'now__seg now__seg--whole', 'data-done': 'true' }));
-    }
-    kids.push(segs);
-    var tp = transport(aim);
-    var prevB = el('button', { class: 'now__btn', type: 'button' }, [icon(ICON_PREV, 18)]);
-    var replayB = el('button', { class: 'now__btn now__btn--main', type: 'button' }, [icon(ICON_REPLAY, 20)]);
-    var nextB = el('button', { class: 'now__btn', type: 'button' }, [icon(ICON_NEXT, 18)]);
-    aimButton(prevB, tp.prev, 'Nothing before this');
-    aimButton(replayB, tp.replay, '');
-    aimButton(nextB, tp.next, 'Nothing after this');
-    kids.push(el('div', { class: 'now__transport' }, [
-      el('small', { class: 'now__step' }, [aim.steps ? 'step ' + aim.steps.at + ' of ' + aim.steps.of : playing ? 'complete' : 'seed']),
-      el('span', { class: 'now__btns' }, [prevB, replayB, nextB]),
-      el('small', { class: 'now__step now__step--end' }, [(aim.reg.flows || []).length + ' flows']),
-    ]));
-    if (aim.act && aim.act.forged && aim.act.forged.length) {
-      kids.push(el('p', { class: 'state-forged' }, [
-        'forged: ' + aim.act.forged.map(function (f) { return f.key + ' (owned by ' + f.owner + ')'; }).join(', '),
-      ]));
-    }
-    nowBox.replaceChildren.apply(nowBox, kids);
+  var voyage = null;
+  var buildVoyage = function () {
+    var v = {};
+    v.kicker = el('small', { class: 'now__kicker' });
+    v.title = el('b', { class: 'now__title' });
+    v.route = el('p', { class: 'voy__route' });
+    v.sea = water(30, 15, 5);
+    v.buoys = el('span', { class: 'voy__buoys', 'aria-hidden': 'true' });
+    v.boat = boat(28);
+    v.anchor = anchorIcon(24);
+    v.vessel = el('span', { class: 'voy__vessel', 'aria-hidden': 'true' }, [v.boat, v.anchor]);
+    v.passage = el('div', { class: 'voy__passage' }, [v.sea.node, v.buoys, v.vessel]);
+    v.from = el('span');
+    v.status = el('b', { role: 'status' });
+    v.to = el('span');
+    v.back = el('button', { class: 'voy__btn', type: 'button' }, [chevron('back')]);
+    v.mainText = el('span');
+    v.main = el('button', { class: 'voy__main', type: 'button' }, [boat(18, 'boat--ink'), v.mainText]);
+    v.fwd = el('button', { class: 'voy__btn', type: 'button' }, [chevron('on')]);
+    v.forged = el('p', { class: 'state-forged' });
+    nowBox.replaceChildren(
+      v.kicker, v.title, v.route, v.passage,
+      el('div', { class: 'voy__labels' }, [v.from, v.status, v.to]),
+      el('div', { class: 'voy__transport' }, [v.back, v.main, v.fwd]),
+      v.forged,
+    );
+    return v;
   };
 
-  /** One track of the flows list: its number (an equalizer while it plays), its name, its progress. */
-  var track = function (no, name, on, meta, run) {
+  var drawNow = function (aim, labelOf) {
+    if (!voyage || voyage.title.parentNode !== nowBox) voyage = buildVoyage();
+    var v = voyage;
+    var region = labelOf(aim.regId);
+    var flows = aim.reg.flows || [];
+    var anchored = !!aim.activeScenario;
+    var seed = !anchored && !aim.activeFlow;
+    // A flow the region view runs itself has no step control (it remounts whole): one leg, arrived.
+    var legs = aim.steps ? aim.steps.of : 1;
+    var at = seed ? 0 : aim.steps ? aim.steps.at : 1;
+    if (anchored) {
+      var slot = slotOf(aim.reg, aim.activeScenario.island);
+      v.kicker.textContent = region + ' · what-if · ' + slot;
+      v.title.textContent = aim.activeScenario.name;
+      v.route.textContent = 'Anchored off ' + slot + ' — the island was told this state; the region did not sail here.';
+      v.from.textContent = '';
+      v.to.textContent = '';
+      v.status.textContent = pending ? pending.label : 'At anchor';
+    } else if (seed) {
+      v.kicker.textContent = region + ' · in harbour';
+      v.title.textContent = 'As seeded';
+      v.route.textContent = flows.length ? 'Moored at the seed. Pick a flow to set sail.' : 'Moored at the seed. This region declares no flows.';
+      v.from.textContent = 'the seed';
+      v.to.textContent = '';
+      v.status.textContent = pending ? pending.label : 'In harbour';
+    } else {
+      var k = flows.indexOf(aim.activeFlow);
+      v.kicker.textContent = region + ' · flow ' + (k + 1) + ' of ' + flows.length;
+      v.title.textContent = aim.activeFlow;
+      v.route.textContent = 'Sail from the seed to ' + (aim.steps ? 'step ' + legs : 'the end of the flow') + '.';
+      v.from.textContent = 'the seed';
+      v.to.textContent = aim.steps ? 'step ' + legs : 'the end';
+      v.status.textContent = pending ? pending.label : at >= legs ? 'Arrived' : 'At step ' + at + ' of ' + legs;
+    }
+    nowBox.dataset.mode = anchored ? 'anchored' : seed ? 'harbour' : 'sailing';
+    nowBox.dataset.pending = pending ? 'true' : 'false';
+    // The passage: buoys for the steps (none at anchor — there was no passage), the boat at its buoy.
+    var buoys = [];
+    if (!anchored) {
+      for (var b = 0; b <= legs; b++) {
+        var buoy = el('i', { 'data-passed': String(!seed && b <= at) });
+        buoy.style.left = along(b, legs);
+        buoys.push(buoy);
+      }
+    }
+    v.buoys.replaceChildren.apply(v.buoys, buoys);
+    v.vessel.style.left = along(anchored || seed ? 0 : at, legs);
+    v.sea.wake.style.width = anchored || seed ? '0px' : along(at, legs);
+    v.boat.style.display = anchored ? 'none' : '';
+    v.anchor.style.display = anchored ? '' : 'none';
+    var tp = transport(aim);
+    aimButton(v.back, tp.prev, 'Nothing before this');
+    aimButton(v.fwd, tp.next, 'Nothing after this');
+    v.main.hidden = !tp.main;
+    if (tp.main) {
+      // The main button wears the mark of what it does: the boat sails, the anchor drops.
+      v.main.replaceChildren(anchored ? anchorIcon(18, 'anchor--ink') : boat(18, 'boat--ink'), v.mainText);
+      v.mainText.textContent = tp.main.text;
+      aimButton(v.main, tp.main, '');
+    }
+    var forged = aim.act && aim.act.forged && aim.act.forged.length
+      ? 'Forged: ' + aim.act.forged.map(function (f) { return f.key + ' (owned by ' + f.owner + ')'; }).join(', ')
+      : '';
+    v.forged.textContent = forged;
+    v.forged.hidden = !forged;
+  };
+
+  /** While the lagoon is not there yet: the boat, waiting on the water. */
+  var drawWaiting = function () {
+    voyage = null;
+    var sea = water(16, 8, 4);
+    nowBox.dataset.mode = 'waiting';
+    nowBox.replaceChildren(
+      el('div', { class: 'voy__waiting' }, [boat(40, 'is-waiting'), sea.node, el('b', {}, ['Setting sail…']), el('small', {}, ['waiting for the lagoon'])]),
+    );
+  };
+
+  /** One flow in the list: a buoy, or the boat when the region is sailing it. */
+  var track = function (name, on, meta, run, label) {
+    var sailingHere = !!pending && pending.target === name;
     var b = el('button', { class: 'track', type: 'button', role: 'option', 'aria-current': on ? 'true' : 'false' }, [
-      el('span', { class: 'track__no' }, on ? [equalizer()] : [no]),
+      el('span', { class: 'track__mark' }, on || sailingHere ? [boat(20, sailingHere ? 'is-sailing' : '')] : [el('i', { class: 'buoy' })]),
       el('span', { class: 'track__name' }, [name]),
       meta ? el('span', { class: 'track__meta' }, [meta]) : null,
     ].filter(Boolean));
     b.addEventListener('click', function () {
-      // LIT ON PRESS — a flow takes as long as its steps take.
-      var all = b.parentNode ? b.parentNode.children : [];
-      for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-current', 'false');
-      b.setAttribute('aria-current', 'true');
-      run();
+      var go = underWay(label || 'Setting sail…', run);
+      go();
+      if (pending) { pending.target = name; paint(); }
     });
     return b;
   };
 
   /**
-   * THE WHAT-IFS, one ALBUM per island — the island is the album, its scenarios the tracks.
+   * THE WHAT-IFS, one ALBUM per island — the island, and the states it can be TOLD to show.
    *
-   * Two shapes from one tree, chosen by the pointer rather than the width. Under a finger an album is
-   * a shelf of cards you swipe sideways, which costs one row of height whatever it holds. Under a
-   * mouse sideways scrolling is the worst gesture there is, so an album is a row that opens into its
-   * tracklist — one open at a time (the one aimed at, else the one playing), so the tab is still as
-   * tall as its islands plus one list, never the sum of every list.
-   *
-   * An island scenario played inside its region sets that island's inputs directly — a what-if, not a
-   * state the app is known to reach — which is why the albums sit under the flows rather than among them.
+   * Two shapes from one tree, chosen by the pointer rather than the width. Under a finger an island is
+   * a shelf of cards you swipe sideways, which costs one row of height whatever it holds. Under a mouse
+   * sideways scrolling is the worst gesture there is, so an island is a row that opens into its list —
+   * one open at a time (the one aimed at, else the one at anchor), so the tab is still as tall as its
+   * islands plus one list, never the sum of every list.
    */
   var drawShelves = function (aim, now) {
     var nodes = [];
@@ -2491,28 +2651,26 @@ function motuMountDock(opts) {
       if (!i.scenarios.length) return;
       total += i.scenarios.length;
       var lit = litIsland === i.tag ? aim.activeScenario.name : null;
-      var track2 = el('div', { class: 'shelf__track', role: 'listbox', 'aria-label': (i.slot || i.tag) + ' what-ifs' });
-      i.scenarios.forEach(function (name, n) {
+      var list = el('div', { class: 'shelf__track', role: 'listbox', 'aria-label': (i.slot || i.tag) + ' what-ifs' });
+      i.scenarios.forEach(function (name) {
         var card = el('button', { class: 'shelf__card', type: 'button', role: 'option', 'aria-current': String(lit === name) }, [
-          el('span', { class: 'shelf__no' }, lit === name ? [equalizer()] : [String(n + 1).padStart(2, '0')]),
+          el('span', { class: 'shelf__mark' }, lit === name ? [anchorIcon(14)] : ['◇']),
           el('span', { class: 'shelf__name' }, [name]),
         ]);
-        card.addEventListener('click', function () {
-          var all = shelves.querySelectorAll('.shelf__card');
-          for (var m = 0; m < all.length; m++) all[m].setAttribute('aria-current', 'false');
-          card.setAttribute('aria-current', 'true');
+        card.addEventListener('click', underWay('Dropping anchor…', function () {
           drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: i.tag, name: name }); })();
-        });
-        track2.appendChild(card);
+        }));
+        list.appendChild(card);
       });
       var open = openTag === i.tag && !closedAll;
       var title = el('button', { class: 'shelf__title', type: 'button', 'aria-expanded': String(open) }, [
-        el('span', { class: 'shelf__cover', 'aria-hidden': 'true' }, [lit ? equalizer() : String(i.scenarios.length)]),
+        el('span', { class: 'shelf__cover', 'aria-hidden': 'true' }, [String(i.scenarios.length)]),
         el('span', { class: 'shelf__slot' }, [i.slot || i.tag]),
+        lit ? anchorIcon(14, 'shelf__anchor') : null,
         el('span', { class: 'shelf__count' }, [i.scenarios.length + ' what-if' + (i.scenarios.length === 1 ? '' : 's')]),
-      ]);
+      ].filter(Boolean));
       title.addEventListener('click', function () {
-        // Closing the open album shows none, rather than falling back to the one that is playing.
+        // Closing the open island shows none, rather than falling back to the one at anchor.
         closedAll = open;
         aimIsland = open ? null : i.tag;
         paint();
@@ -2526,13 +2684,15 @@ function motuMountDock(opts) {
         head.push(alone);
       }
       nodes.push(el('section', {
-        class: 'shelf', 'data-tag': i.tag, 'data-aimed': String(aimIsland === i.tag),
-        'data-open': String(open),
-      }, [el('div', { class: 'shelf__head' }, head), track2]));
+        class: 'shelf', 'data-tag': i.tag, 'data-aimed': String(aimIsland === i.tag), 'data-open': String(open),
+      }, [el('div', { class: 'shelf__head' }, head), list]));
     });
     if (total) {
       nodes.unshift(el('div', { class: 'sect__head' }, [
-        el('span', { class: 'motu-dot' }), el('span', { class: 'motu-cap' }, ['What-ifs']), el('span', { class: 'count' }, [String(total)]),
+        el('span', { class: 'motu-dot' }),
+        el('span', { class: 'motu-cap' }, ['What-ifs']),
+        el('span', { class: 'sect__hint' }, ['an island is told what to show']),
+        el('span', { class: 'count' }, [String(total)]),
       ]));
     }
     shelves.replaceChildren.apply(shelves, nodes);
@@ -2549,7 +2709,7 @@ function motuMountDock(opts) {
     return total;
   };
   var lastLitCard = null;
-  /** The reader closed the open album; stays closed until they open one (or aim at an island). */
+  /** The reader closed the open island; stays closed until they open one (or aim at an island). */
   var closedAll = false;
 
   var paint = function () {
@@ -2564,6 +2724,7 @@ function motuMountDock(opts) {
       aimRow.hidden = true;
       atoll.hidden = true;
       flowsSect.box.hidden = true;
+      drawWaiting();
       bayTitle.textContent = 'waiting for the lagoon…';
       baySub.textContent = '';
       railTitle.textContent = 'waiting for the lagoon…';
@@ -2589,6 +2750,9 @@ function motuMountDock(opts) {
     var onIsland = !!now.island;
     var info = !onIsland && ctl.states ? ctl.states() : null;
     var aim = info ? aimAt(info, now) : null;
+    // THE STATE IN FORCE, as one string: when it changes, whatever was under way has landed.
+    stateSig = JSON.stringify([now.region, now.flow, now.scenario, info ? info.active : null]);
+    if (pending && pending.sig !== stateSig) pending = null;
     var nStates = 0;
     var showingName;
     var where;
@@ -2607,10 +2771,11 @@ function motuMountDock(opts) {
       drawAtoll(aim);
       drawNow(aim, labelOf);
       flowsSect.cap.textContent = 'Flows';
-      var flowRows = [track('00', 'As seeded', !aim.activeFlow && !aim.activeScenario, null, playIn(aim, null))];
-      (aim.reg.flows || []).forEach(function (name, k) {
+      flowsSect.hint.textContent = 'the region gets there itself';
+      var flowRows = [track('As seeded', !aim.activeFlow && !aim.activeScenario, null, playIn(aim, null), 'Making for harbour\u2026')];
+      (aim.reg.flows || []).forEach(function (name) {
         var on = aim.activeFlow === name;
-        flowRows.push(track(String(k + 1).padStart(2, '0'), name, on, on && aim.steps ? aim.steps.at + '/' + aim.steps.of : null, playIn(aim, name)));
+        flowRows.push(track(name, on, on && aim.steps ? 'step ' + aim.steps.at + '/' + aim.steps.of : null, playIn(aim, name)));
       });
       flowsSect.count.textContent = String((aim.reg.flows || []).length);
       flowsSect.list.replaceChildren.apply(flowsSect.list, flowRows);
@@ -2618,21 +2783,25 @@ function motuMountDock(opts) {
       (info.regions || []).forEach(function (r) {
         nStates += (r.flows || []).length + (r.islands || []).reduce(function (s, i) { return s + i.scenarios.length; }, 0);
       });
-      showingName = aim.activeScenario ? '◇ ' + aim.activeScenario.name : aim.activeFlow || 'As seeded';
+      showingName = aim.activeScenario ? aim.activeScenario.name : aim.activeFlow || 'As seeded';
       // The screen, then the region — once, when a screen is named after the region it is built on.
       where = onScreen && onScreen.label !== labelOf(aim.regId) ? onScreen.label + ' \u203a ' + labelOf(aim.regId) : labelOf(aim.regId);
 
-      // THE BAR'S TRANSPORT is the panel's: the same ⏮ / ⏭, the same progress.
+      // THE BAR'S TRANSPORT is the panel's: the same chevrons, the same water along its top edge.
       var st = aim.steps;
-      if (st) where += ' \u00b7 step ' + st.at + '/' + st.of;
+      if (aim.activeScenario) where = 'At anchor \u00b7 ' + where;
+      else if (!aim.activeFlow) where = 'In harbour \u00b7 ' + where;
+      else if (st) where += ' \u00b7 step ' + st.at + '/' + st.of;
+      if (pending) where = pending.label + ' ' + where;
       var tp = transport(aim);
       stepPrev.hidden = false;
       stepNext.hidden = false;
       aimButton(stepPrev, tp.prev, 'Nothing before this');
       aimButton(stepNext, tp.next, 'Nothing after this');
-      railProgress.replaceChildren.apply(railProgress, st
-        ? Array.from({ length: st.of }, function (_, k) { return el('i', { 'data-done': String(k < st.at) }); })
-        : [el('i', { 'data-done': String(!!(aim.activeFlow || aim.activeScenario)) })]);
+      var legs = st ? st.of : 1;
+      var at = aim.activeScenario || !aim.activeFlow ? 0 : st ? st.at : 1;
+      railWater.wake.style.width = at ? along(at, legs) : '0px';
+      railMark.replaceChildren(aim.activeScenario ? anchorIcon(20) : boat(24, pending ? 'is-sailing' : ''));
 
       // THE PAGE POINTED AT SOMETHING: aim at it and open on it. Once per pointing — `n` changes each
       // time — so the panel does not keep yanking itself back to a region the reader has left.
@@ -2674,7 +2843,8 @@ function motuMountDock(opts) {
       where = onIsland ? scopedTag + ' · alone' : (onScreen ? onScreen.label : now.region || 'lagoon');
       stepPrev.hidden = true;
       stepNext.hidden = true;
-      railProgress.replaceChildren();
+      railWater.wake.style.width = '0px';
+      railMark.replaceChildren(boat(24));
     }
 
     // THE MINI PLAYER: what is playing, where, and whether the lens is waiting on a decision.

@@ -144,6 +144,18 @@ function regionIdsByName(screensSf) {
 }
 
 /** Findings for the screens section, or null when the project declares no screens. */
+/**
+ * The screens this project declares, as `motu lagoon states` lists them: `{ screens, unread }`, or
+ * null when there is no screens module. `unread` counts the `screen(...)` calls whose id or path is
+ * not a string literal — said by the caller, never dropped.
+ */
+export function declaredScreens() {
+  const file = screensFile();
+  if (!existsSync(file)) return null;
+  const all = readScreens(sourceFileAt(file, { allowJs: true, jsx: 4 }));
+  return { screens: all.filter((s) => !s.unread), unread: all.filter((s) => s.unread).length };
+}
+
 export function screenFindings() {
   const file = screensFile();
   if (!existsSync(file)) return null;

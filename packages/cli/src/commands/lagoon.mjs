@@ -1072,6 +1072,7 @@ export async function lagoonStatesCommand(argv) {
   const { readScenarios } = await import('./verify.mjs');
   const { listIslands } = await import('../lib/islands.mjs');
   const { readRegions } = await import('../lib/eject.mjs');
+  const { declaredScreens } = await import('../lib/screens.mjs');
 
   const base = typeof argv.base === 'string' ? argv.base.replace(/\/$/, '') : '';
   const only = argv._[0];
@@ -1128,9 +1129,18 @@ export async function lagoonStatesCommand(argv) {
     })
     .filter((i) => i.states.length);
 
+  // Every island's scenarios by TAG, unfiltered: a region plays its members' what-ifs whether or not
+  // the island itself was the target asked for.
+  const scenariosByTag = new Map(
+    listIslands(paths.islandsDir).map(({ kebab }) => {
+      const file = paths.fixturesFile(kebab);
+      return [names(kebab).tag, existsSync(file) ? readScenarios(file) : []];
+    }),
+  );
+
   const regions = readRegions(paths.archipelagosDir)
     .filter(({ id }) => !only || id === only)
-    .map(({ id }) => {
+    .map(({ id, islands: members }) => {
       const file = paths.archipelagoEvidence(id);
       const flows = existsSync(file) ? readScenarios(file) : [];
       const address = addressFor(flows);
@@ -1156,20 +1166,64 @@ export async function lagoonStatesCommand(argv) {
             url: `${base}/?${q({ region: id, flow: address(name, i) })}`,
           };
         }),
+        // WHAT-IFS, PLAYED IN THE REGION — what the dock calls dropping anchor at an island, and what
+        // its Share copies. An island's scenario forged into this region's keys, the rest of the
+        // region live around it. Addressed by `state=`, the one form the dock writes, so a URL
+        // printed here and a URL copied off the dock are the same string. Planned islands are not
+        // built yet, so they have nothing to play.
+        //
+        // ONLY THE ONES THE REGION CAN PLAY. A scenario that sets a prop this region does not bind
+        // has no region key to forge — the lagoon refuses it ("this scenario only exists for the
+        // island alone"), and it is already listed under the island's own address above.
+        whatIfs: (members ?? [])
+          .filter((m) => !m.planned && m.element)
+          .flatMap((m) =>
+            (scenariosByTag.get(m.element) ?? []).flatMap((s, i) => {
+              if (!Object.keys(s.seed ?? {}).every((prop) => prop in (m.bind ?? {}))) return [];
+              const name = s.name ?? `#${i + 1}`;
+              return [{
+                island: m.element,
+                slot: m.slot,
+                name,
+                // `region` TOO, and it is not redundant: a `state=` applies to a region IN VIEW, and a
+                // bare address opens the first screen — where most regions are not. Measured: without
+                // it, 88 of 94 of these refused with "region is not on this view".
+                url: `${base}/?${q({ region: id, state: `${id}.scenario.${m.element}.${slug(name) || `#${i + 1}`}` })}`,
+              }];
+            }),
+          ),
       };
     })
-    .filter((r) => r.states.length || r.page);
+    .filter((r) => r.states.length || r.page || r.whatIfs.length);
+
+  // SCREENS — a route, the app's layout, a region per slot. The bare address opens the first one, so
+  // these are the addresses a person lands on before they pick anything.
+  const declared = only ? null : declaredScreens();
+  const screens = (declared?.screens ?? []).map((sc) => ({
+    id: sc.id,
+    path: sc.path,
+    url: `${base}/?${q({ screen: sc.id })}`,
+  }));
 
   if (argv.json) {
-    console.log(JSON.stringify({ islands, regions }, null, 2));
+    console.log(JSON.stringify({ screens, islands, regions }, null, 2));
     return;
   }
-  if (!islands.length && !regions.length) {
+  if (!islands.length && !regions.length && !screens.length) {
     console.log(color.dim(only ? `no declared states for "${only}"` : 'no island scenarios and no region flows yet'));
     console.log(color.dim('  an island declares `scenarios` in <kebab>.evidence.ts; a region declares flows in <id>.evidence.ts'));
     return;
   }
-  for (const { target, states, page } of [...islands, ...regions]) {
+  if (screens.length) {
+    console.log(color.bold('screens') + color.dim(' · the bare address opens the first'));
+    for (const sc of screens) {
+      console.log(`  ${sc.id}${color.dim(` · ${sc.path}`)}`);
+      console.log(color.dim(`    ${sc.url}`));
+    }
+  }
+  if (declared?.unread)
+    console.log(color.yellow(`  ! ${declared.unread} screen(...) call(s) not read — write \`id\` and \`path\` as string literals`));
+  for (const { target, states, page, whatIfs } of [...islands, ...regions]) {
     console.log(color.bold(target));
     if (page) {
       console.log(`  the application's own page${color.dim(' · what the page renders, not the region')}`);
@@ -1179,6 +1233,15 @@ export async function lagoonStatesCommand(argv) {
       const steps = s.steps === undefined ? '' : color.dim(` · ${s.steps} step(s), &step=<n> stops earlier`);
       console.log(`  ${s.name}${steps}`);
       console.log(color.dim(`    ${s.url}`));
+    }
+    let lastIsland = null;
+    for (const w of whatIfs ?? []) {
+      if (w.island !== lastIsland) {
+        lastIsland = w.island;
+        console.log(`  ${color.dim('what-ifs ·')} ${w.island}${color.dim(` (slot ${w.slot})`)}`);
+      }
+      console.log(`    ${w.name}`);
+      console.log(color.dim(`      ${w.url}`));
     }
   }
   if (!base) console.log(color.dim('\n  paths are relative to a running lagoon — pass --base http://localhost:8817 for full URLs'));

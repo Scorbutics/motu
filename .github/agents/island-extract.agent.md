@@ -217,7 +217,7 @@ mount when iterating, but let the real-browser check be the gate before you inte
 Fix every `✗` and re-run until it prints **PASS**. For visual iteration, run the lagoon and open it:
 
 ```bash
-motu lagoon dev                         # the gallery: every archipelago + a switcher, mock data
+motu lagoon serve --watch                         # the gallery: every archipelago + a switcher, mock data
 motu lagoon serve --watch --host        # ...as one self-contained page, reloading, openable on a phone
 # the single-island focus (what verify drives) is lagoon.html with MOTU_TARGET=island:x-<name>
 ```
@@ -229,7 +229,7 @@ Do not proceed while verify is red. `--json` gives a machine-readable report if 
 Pick (or create) the archipelago for the page:
 
 ```bash
-motu archipelago create <page-id>                   # if the page has no archipelago yet
+motu archipelago init <page-id>                   # if the page has no archipelago yet
 motu island integrate <name> --archipelago <page-id> [--slot <slot>]
 ```
 
@@ -288,7 +288,7 @@ a frame), migrate one region to `root` when you already have a reason to open it
 the two hazards a migration carries that no check sees. A frame that genuinely must draw says so
 once with `inventedArrangement('why', <…/>)` — a warning, and warnings do not fail `motu check`.
 
-`motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
+`motu archipelago init <id>` without `--page` is the opposite case and scaffolds `root` first: a NEW region has no page to
 restructure, so the safe shape is free there.
 
 **If the region ALREADY declares a `root`**, `motu island integrate` adds the slot to `slots` for you

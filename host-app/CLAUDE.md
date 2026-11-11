@@ -42,7 +42,7 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    fails `data-flow` — that check exists because fake evidence is worse than none.
  - Declare only what you DECIDED. An island file is `island('x-tag', Component)` — its props, its
    callback-events and the host modules it reaches are read from the component into
-   `islands/contracts.generated.ts` by `motu island sync`, and a stale one is a build error. What stays
+   `islands/contracts.generated.ts` by `motu sync`, and a stale one is a build error. What stays
    hand-written is the decision: an event whose region name differs from the callback's
    (`{ events: { onProgress: 'week-progress' } }`), and in the archipelago the `writes`, the `slots`
    and any renamed `bind`.
@@ -119,8 +119,10 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    states` lists them (`--json`, `--base <url>`): an island's scenario is
    `/?target=island:<tag>&scenario=<name-or-slug>`, a region's flow is
    `/?region=<id>&flow=<name>&step=<n>`, with `step` stopping the replay early so the states BETWEEN
-   the steps are reachable too. BOTH are the gallery — the entry `serve` and `publish` build and the
-   one a person opens. An island opens ALONE there, through the same one-slot mount `island verify`
+   the steps are reachable too. A WHAT-IF — an island's scenario played INSIDE its region, the rest
+   live — is `/?region=<id>&state=<id>.scenario.<tag>.<slug>`, the same string the dock's Share
+   copies, and a screen is `/?screen=<id>`. ALL are the gallery — the entry `serve` and `publish`
+   build and the one a person opens. An island opens ALONE there, through the same one-slot mount `island verify`
    drives, so a standalone island (in no region) is addressable too. That is how you
    look at the state you are about to change, and how you hand someone a link to it. A name that
    resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
@@ -132,8 +134,8 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    archipelago; it is the same declaration, proved by the region that is running. Below the sheet,
    FEEDS is the channels and ASKED FOR is every outbound ask through all three doors — contract,
    traced host module, wire — each row naming the door and the owner (`island:<tag>` / `source:<id>`).
-   WHERE IT EXISTS MATTERS: the dock is drawn by whoever HOSTS the lagoon — `motu lagoon serve` /
-   `lagoon dev`, or the motu host, which wraps every published lagoon in a shell — so the GALLERY and
+   WHERE IT EXISTS MATTERS: the dock is drawn by whoever HOSTS the lagoon — `motu lagoon serve`, or the
+   motu host, which wraps every published lagoon in a shell — so the GALLERY and
    any hosted lagoon URL have it, while the focused standalone entry (`lagoon.html`, what
    `motu island verify` drives) does not, and neither does `/__motu_frame`, the artifact by itself.
    Ctrl/Cmd-Shift-G is the OLD standalone debug overlay (`mountDebugOverlay`), which the gallery does
@@ -144,10 +146,10 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    --remote` (no argument — the URL and token live in `~/.config/motu/host.json`) uploads the
    self-contained page and prints two URLs: `latest`, which follows every publish, and an immutable
    one keyed by the commit. That is how a human looks at what you built without your process staying
-   alive. The rule is ONE long-running host plus occasional spawns: `motu lagoon dev` /
+   alive. The rule is ONE long-running host plus occasional spawns: `motu lagoon serve --watch` /
    `lagoon serve --watch` while you iterate, killed when you stop. A second permanent preview
    server is what the host replaces.
-   Absolute asset paths (`/images/…`) work under `lagoon dev` and 404 once hosted — the publish output
+   Absolute asset paths (`/images/…`) work on a local lagoon and 404 once hosted — the publish output
    warns about them, and the warning is a finding.
 
 ## A UI that lives in the database, not the repository
@@ -347,7 +349,7 @@ These bind you whether or not someone launched you as part of a fan-out.
   is invisible to whoever reads only your diff.
 
 The files several agents WILL collide in: `islands/registry.ts` and `islands/contracts.generated.ts`
-(generated — regenerate with `motu island sync`, never hand-merge), the shared stylesheet (append-only,
+(generated — regenerate with `motu sync`, never hand-merge), the shared stylesheet (append-only,
 keep both sides), and the archipelago (one entry each, so a line-level merge is usually right). In a
 lagoon frame, prefer an append-only LOOKUP over a ternary chain: two people extending one chain cannot
 both win, and the loser's island renders someone else's data.

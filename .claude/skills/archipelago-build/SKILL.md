@@ -50,7 +50,7 @@ only the slot. Do not tell an agent about the others' internals; the archipelago
 > three scenarios that render visibly differently.
 > Add a coverage step to the region's evidence asserting text YOUR island alone produces.
 > Remove `planned: true` from your entry only.
-> Run `motu island sync`, then `motu island verify <name> --fast` while you iterate (happy-dom, no
+> Run `motu sync`, then `motu island verify <name> --fast` while you iterate (happy-dom, no
 > browser), then `motu island verify <name> --runtime` ONCE when it looks right, then the project's
 > typecheck.
 > Exit codes: 0 pass · 1 a real finding, fix it · 2 could not run, retry or report — never "fix" code
@@ -63,7 +63,7 @@ only the slot. Do not tell an agent about the others' internals; the archipelago
 
 Expect every shared file to conflict. Resolve by kind, not by hand:
 
-- `islands/registry.ts`, `islands/contracts.generated.ts` — **regenerate** (`motu island sync`). Never
+- `islands/registry.ts`, `islands/contracts.generated.ts` — **regenerate** (`motu sync`). Never
   hand-merge a generated file.
 - the shared stylesheet — append-only, keep both sides.
 - the archipelago — one entry each, so a line-level merge is usually right. Afterwards check that
@@ -103,7 +103,7 @@ module always does.
 
 ## 5 — Look at it, then hand over
 
-Open the lagoon (`motu lagoon dev --archipelago <id>`) and DRIVE it: click, type, toggle, and check
+Open the lagoon (`motu lagoon serve --watch --archipelago <id>`) and DRIVE it: click, type, toggle, and check
 that a change in one island moves what a different island renders. A region can pass every check while
 nobody has ever used it.
 
@@ -124,7 +124,7 @@ You built this region, so you are the one reader who cannot see an invention in 
 vocabulary, a state the app never enters, a label nobody uses. It is in your context as a premise.
 Spawn a subagent and hand it THREE things and nothing else:
 
-- the state URLs (`motu lagoon states --json`),
+- the state URLs (`motu lagoon states --json` — flows, and each island's what-ifs played in the region),
 - where the application's own vocabulary lives — the region's types, the modules it names,
 - the question: *does this screen belong to THIS application? Does anything render a word, a state
   or a shape the app never uses?*
@@ -183,7 +183,7 @@ the arrangement genuinely cannot be expressed by the app's own components yet, w
 `motu check`. It is a HOLD, not an answer — the reason string is what a later reader uses to decide
 whether it is still true.
 
-`motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
+`motu archipelago init <id>` without `--page` is the opposite case and scaffolds `root` first: a NEW region has no page to
 restructure, so the safe shape is free there. `motu archipelago adopt-root <id>` does the derivable
 half of stage 2 — frame's host component to `root`, each `island('x')` and the prop it sits in to
 `slots` — and REFUSES rather than guessing when the frame nests two host components.
@@ -234,7 +234,7 @@ needs unit tests in the host's own runner, and do not present a green `motu chec
 A person has to be able to OPEN what you built. Start (or confirm) the detached lagoon, which
 announces itself to the shared host under a slug scoped to your branch:
 
-    motu lagoon dev --detach
+    motu lagoon serve --watch --detach
     motu lagoon states          # the address of each declared state
 
 **End your report with the live URL and the one or two states you want looked at.** A passing check

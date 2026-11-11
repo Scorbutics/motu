@@ -73,7 +73,7 @@ unknown tag is a runtime warning; narrowed it is a compile error, and the tag st
 without which nothing downstream can look the island up to check the events an entry wires
 (`packages/core/src/archipelago.ts:37-45`).
 
-Prefer the MAP: `ElementTypes` (the interface `motu island sync` generates beside the registry), or a
+Prefer the MAP: `ElementTypes` (the interface `motu sync` generates beside the registry), or a
 `Pick<ElementTypes, 'x-a' | 'x-b'>` when the region should only admit its own islands' tags. A bare
 union `'x-a' | 'x-b'` narrows the tags exactly as well, and it carries nothing else — so a region
 declared that way cannot state `wiring`, whose check needs each tag's contract to look its events up.
@@ -623,7 +623,7 @@ source of truth.
 — must be one the island's own contract declares (`EventsOf`, `:432`). This is the last silently-dead
 declaration: `writes: { 'week-progres': 'x' }` is a well-typed mapping onto a well-typed key, and
 nothing about it is wrong except that no island will ever dispatch it. It needs the project's tag →
-element-spec map, which `motu island sync` generates beside the registry; pass it as `TElements`. It
+element-spec map, which `motu sync` generates beside the registry; pass it as `TElements`. It
 is type-only, so the archipelago gains no runtime dependency on the island modules. Checked PER
 ISLAND only when the config is declared through `archipelago()` — see the call, above.
 

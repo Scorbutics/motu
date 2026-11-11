@@ -353,7 +353,7 @@ package is ever imported (`:699`). It lives outside `@motu/core` because core us
 `installRegionCoverage` unconditionally from `defineArchipelago`, which put the module in every
 project's graph whether or not the project had enabled anything.
 
-`motu archipelago sync` writes `archipelagos/coverage.generated.ts`
+`motu sync` writes `archipelagos/coverage.generated.ts`
 (`packages/cli/src/lib/archipelagos.mjs:25`) and ensures the hand-owned archipelago registry imports
 it FIRST (`packages/cli/src/lib/archipelagos.mjs:66`, and see the ordering bug recorded at `:80`).
 **THE IMPORT IS THE SWITCH** (`packages/cli/src/lib/archipelagos.mjs:45`): with coverage off, the file
@@ -376,7 +376,7 @@ by wiring.
 `metaContent(name)` (`packages/coverage/src/index.ts:692`) reads `<meta name="…" content="…">` from the
 document. The reasoning (`packages/coverage/src/index.ts:672`):
 
-> `motu island sync` bakes the coverage config into the generated island registry — and the LAGOON
+> `motu sync` bakes the coverage config into the generated island registry — and the LAGOON
 > imports that registry. A published lagoon is one self-contained HTML file on a host anybody can
 > reach, so anything in that config becomes a public string. Grepping a real one found exactly that:
 >
@@ -718,7 +718,7 @@ export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, Produce
 type at `packages/core/src/archipelago.ts:227`.) Everything not listed stays a category. Nothing else
 about coverage belongs here.
 
-**3. Regenerate the region-side derived files** with `motu archipelago sync`. That writes
+**3. Regenerate the region-side derived files** with `motu sync`. That writes
 `archipelagos/coverage.generated.ts` and adds the one import line to the archipelago registry
 (`packages/cli/src/lib/archipelagos.mjs:25`, `:66`). Verify it names `@motu/coverage` — if coverage is
 off, the module is an empty `export {}` by design.

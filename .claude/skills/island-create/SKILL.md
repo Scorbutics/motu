@@ -35,7 +35,7 @@ island writes a key via an `on` handler; siblings read it via `bind`) and DOM ev
 ### 1 — Identify or create the archipelago FIRST
 An island exists to sit on a page, and the archipelago IS that page. Decide which one before building.
 - Reuse the existing one if the island belongs on that page: see `demo-app/src/archipelagos/`.
-- Otherwise scaffold one: `pnpm motu archipelago create <id>`.
+- Otherwise scaffold one: `pnpm motu archipelago init <id>`.
 
 Scope it to the PAGE, never to a DOM subtree: the islands are referenced by slot and scattered
 wherever the page puts them. Scoping to a container puts a boundary through the middle of any coupling
@@ -151,7 +151,7 @@ no member island changed, the ARRANGEMENT moved — check the frame before blami
 **The final look is a FRESH agent's.** You built this island, so you are the one reader who cannot see
 an invention in it — a fixture's vocabulary, a label nobody uses, a state the app never enters. It is
 in your context as a premise. Spawn a subagent and hand it THREE things and nothing else: the state
-URLs (`motu lagoon states --json`), where the application's own vocabulary lives (the island's types,
+URLs (`motu lagoon states --json` — the island alone, and its what-ifs in its region), where the application's own vocabulary lives (the island's types,
 the modules it names), and the question — *does this belong to THIS application? Does anything render a
 word, a state or a shape the app never uses?* Do NOT pass the diff, the plan, the transcript or your
 reasoning; that contamination is the whole reason to spend a subagent. Its answer is a finding: every
@@ -188,7 +188,7 @@ a frame), migrate one region to `root` when you already have a reason to open it
 the two hazards a migration carries that no check sees. A frame that genuinely must draw says so
 once with `inventedArrangement('why', <…/>)` — a warning, and warnings do not fail `motu check`.
 
-`motu archipelago create` is the opposite case and scaffolds `root` first: a NEW region has no page to
+`motu archipelago init <id>` without `--page` is the opposite case and scaffolds `root` first: a NEW region has no page to
 restructure, so the safe shape is free there.
 
 **If the region ALREADY declares a `root`**, `motu island integrate` adds the slot to `slots` for you
@@ -230,7 +230,7 @@ needs unit tests in the host's own runner, and do not present a green `motu chec
 A person has to be able to OPEN what you built. Start (or confirm) the detached lagoon, which
 announces itself to the shared host under a slug scoped to your branch:
 
-    motu lagoon dev --detach
+    motu lagoon serve --watch --detach
     motu lagoon states          # the address of each declared state
 
 **End your report with the live URL and the one or two states you want looked at.** A passing check

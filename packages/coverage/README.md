@@ -46,12 +46,12 @@ means *"the declared state space is fully previewed"* — never *"the screen is 
 
 ## Turning it on
 
-Nothing in your application calls this package. `motu archipelago sync` writes the switch into a
+Nothing in your application calls this package. `motu sync` writes the switch into a
 generated module beside your archipelago registry, and `defineArchipelago` picks each region up as it
 mounts:
 
 ```jsonc
-// motu.config.json — NO ADDRESSES. This file is read by `archipelago sync` and baked into a
+// motu.config.json — NO ADDRESSES. This file is read by `motu sync` and baked into a
 // generated module the lagoon imports and publishes as a public page.
 "coverage": {
   "enabled": true,
@@ -212,7 +212,7 @@ question a person standing in front of the lagoon actually has: **does this stat
 
 ```
 motu archipelago coverage actions --save        # writes <lagoon>/src/coverage/actions.json
-motu lagoon dev                            # the build bakes it in
+motu lagoon serve --watch                            # the build bakes it in
 ```
 
 The lens (Ctrl/Cmd-Shift-G) then carries a COVERAGE section under the region sheet:

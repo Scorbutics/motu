@@ -67,7 +67,7 @@ Scaffolding is non-destructive per file: anything that already exists is reporte
 (`init.mjs:132-141`).
 
 **What it deliberately does NOT write:** `index.html`, the lagoon entries, and `src/fixtures.ts`.
-Those are rendered into `.motu/cache` by `motu lagoon dev|build` instead. The reason is a name
+Those are rendered into `.motu/cache` by `motu lagoon serve --watch|build` instead. The reason is a name
 collision the old layout could not survive — the focus entry wanted `src/lagoon.tsx` and so do the
 overrides, and writing `index.html` makes the project "own" its lagoon, which turns materialization
 off, so the scaffold produced a lagoon that served the overrides file as its entry and rendered an
@@ -87,7 +87,7 @@ override. The key was removed entirely; a config that still carries it gets a de
 [Configuration](04-configuration.md).
 
 Init ends by printing your next two commands:
-`motu archipelago create <id>` then `motu island create <name>` (`init.mjs:351`).
+`motu archipelago init <id>` then `motu island create <name>` (`init.mjs:351`).
 
 ---
 
@@ -139,7 +139,7 @@ compile time and the app ships byte-identical output without motu (`packages/typ
 ## 2. Declare the region
 
 ```sh
-motu archipelago create signin
+motu archipelago init signin
 ```
 
 Writes `<archipelagos>/signin/signin.archipelago.ts` with `id` and an empty `islands: []`, registers
@@ -213,13 +213,13 @@ motu island integrate github-sign-in --archipelago signin --slot signin-form
 
 ---
 
-## 4. `motu lagoon dev` — the iteration loop
+## 4. `motu lagoon serve --watch` — the iteration loop
 
 ```sh
-motu lagoon dev                          # the gallery: every archipelago, with a switcher
-motu lagoon dev week-actions             # focused on one island — open /lagoon.html
-motu lagoon dev --archipelago signin     # focused on one region
-motu lagoon dev --port 5180
+motu lagoon serve --watch                          # the gallery: every archipelago, with a switcher
+motu lagoon serve --watch week-actions             # focused on one island — open /lagoon.html
+motu lagoon serve --watch --archipelago signin     # focused on one region
+motu lagoon serve --watch --port 5180
 ```
 
 Vite with HMR, materialising the entries into `.motu/cache` first. It prints the lagoon directory and
@@ -323,7 +323,7 @@ roots/lagoon/
   src/lagoon.tsx             the overrides map (layout, seed, channels)
 ```
 
-Generated files are never hand-edited; `motu island sync` and `motu archipelago sync` regenerate them
+Generated files are never hand-edited; `motu sync` and `motu sync` regenerate them
 from disk, and a stale one is a `motu check` failure
 (`packages/cli/src/commands/defaults.mjs:138-144`).
 

@@ -113,7 +113,7 @@ cause is classified — are in [checks and verification](07-checks-and-verificat
 
 | Writes files | Read-only |
 | --- | --- |
-| `init`, `island create`, `island sync`, `island integrate`, `island snapshot --update`, `archipelago init`, `archipelago create`, `archipelago sync`, `archipelago adopt-root`, `archipelago record-frame`, `fixtures record`, `lagoon eject`, `lagoon publish`, `codegen`, `skills install` | `check`, `island verify`, `island defaults`, `archipelago verify`, `integrate check`, `lagoon dev`, `lagoon serve`, `lagoon states`, `archipelago coverage` (unless `--save`), `skills list` |
+| `init`, `island create`, `motu sync`, `island integrate`, `island snapshot --update`, `archipelago init`, `archipelago adopt-root`, `fixtures record`, `lagoon eject`, `lagoon publish`, `codegen`, `skills install` | `check`, `island verify`, `island defaults`, `archipelago verify`, `integrate check`, `lagoon serve`, `lagoon states`, `archipelago coverage` (unless `--save`), `skills list` |
 
 Two that need a footnote. `removal-check` **temporarily** deletes and rewrites host files, then always
 restores them from a backup in a `finally` block (`packages/cli/src/commands/removal-check.mjs:512-526`);
@@ -159,7 +159,7 @@ pnpm/npm workspace, which decides whether `@motu/*` dependencies are declared at
 `.gitignore` (`commands/init.mjs:239-250`); and under the lagoon root `lagoon.config.json` and
 `src/lagoon.tsx`, plus `src/next-stubs.tsx`, `src/env.ts` and `tailwind.config.ts` for a Next host
 (`:321-331`). Entries, `index.html` and the Vite config are **not** scaffolded — they are rendered into
-`.motu/cache` by `lagoon dev|build`, or onto disk by `lagoon eject` (`:300-319`). Existing files are
+`.motu/cache` by `lagoon serve|publish`, or onto disk by `lagoon eject` (`:300-319`). Existing files are
 kept, never overwritten, and reported as `(kept)`.
 
 It also writes the shipped host-rules block into `CLAUDE.md`, `AGENTS.md` and
@@ -311,18 +311,22 @@ is a sound empty state or a stand-in for data is a domain judgement (`:14-16`). 
 
 > `--json` is undocumented in `USAGE`.
 
-### `motu island sync`
+### `motu sync`
 
-Regenerate the element registry and `contracts.generated.ts` from the files on disk.
+Regenerate every file motu derives: the element registry and `contracts.generated.ts` (island side),
+and the generated coverage module beside the archipelagos (region side), adding its import to
+`<archipelagos>/registry.ts` when missing.
 
 ```console
-motu island sync
+motu sync
 ```
 
-Takes no flags — `islandSyncCommand()` ignores its argument entirely
-(`commands/defaults.mjs:138`). **Writes** `islands/registry.ts` and `islands/contracts.generated.ts`,
-printing the island and contract counts. Static imports rather than a glob, because the barrel is
-consumed by the host's bundler (`:133-136`). Always exits `0`.
+Takes no flags (`commands/sync.mjs`). Static imports rather than a glob, because the barrel is
+consumed by the host's bundler. Warns when there is no archipelago registry, because nothing would
+import the region module. Always exits `0`.
+
+`motu island sync` and `motu archipelago sync` still answer and run the whole thing — they were the two
+halves, and running only one left `motu check` red with a message naming the other.
 
 ### `motu island integrate <name> --archipelago <id>`
 
@@ -442,7 +446,7 @@ new one inherits this project's `transport` and `useHost` rather than answering 
 questions a second way (`:51-74`, `:163-170`).
 
 **Writes** — `<page dir>/<id>-region.ts` (the app's own type, no motu import); the archipelago via
-`archipelago create`, re-declared as `ArchipelagoConfig<PascalRegion>` (`:107-126`);
+`archipelago init`'s page-less form, re-declared as `ArchipelagoConfig<PascalRegion>` (`:107-126`);
 `<lagoon>/src/regions/<id>.tsx`; `<id>-region.tsx` (or `<id>-binding.tsx` when that name would collide
 with the type module — a real collision that makes the composition root unreachable, `:155-162`); and
 entries spliced into `<lagoon>/src/lagoon.tsx` when its maps are uncommented, else a printed
@@ -455,23 +459,26 @@ listed as `(exists, untouched)`.
 motu archipelago init client-portfolio --page app/portfolio/page.tsx
 ```
 
-### `motu archipelago create <id>`
+### `motu archipelago init <id>` (no page yet)
+
+A NEW region whose page does not exist yet: the archipelago alone, with `root` declared first.
 
 ```console
-motu archipelago create <id> [--force]
+motu archipelago init <id> [--force]
 ```
 
 | Flag | Meaning | Default |
 | --- | --- | --- |
 | `<id>` positional | Region id; kebab-cased from any input (`commands/archipelago.mjs:14-26`) | required |
-| `--force` | Proceed even though the file exists | off (`:69`) |
+| `--force` | Proceed even though the file exists | off |
 
 **Writes** `<archipelagos>/<id>/<id>.archipelago.ts` with an empty `islands: []` and commented
 `root`/`slots`/`hostSlots`/`layout` templates, then AST-edits `<archipelagos>/registry.ts` (import +
-`ARCHIPELAGOS` entry) and the app barrel (`:84-104`). **Exit** — `2` with no id; `0` and "nothing to do"
-when the file exists without `--force`.
+`ARCHIPELAGOS` entry) and the app barrel. Re-run with `--page <file>` once the page exists; the
+archipelago is kept. **Exit** — `2` with no id; `0` and "nothing to do" when the file exists without
+`--force`.
 
-> `--force` is undocumented in `USAGE`.
+This was `motu archipelago create`, which now refuses with the replacement and exits `1`.
 
 ### `motu archipelago verify <id|--all>`
 
@@ -552,35 +559,6 @@ to picture, `0` otherwise (`LOOK` instead of `PASS` when shots are new).
 ```console
 motu archipelago snapshot --all --remote
 ```
-
-### `motu archipelago record-frame <id> --url <u>`
-
-Capture each mountpoint's real callsite geometry from the live embedded ocean, so the lagoon's
-mountpoint gallery mimics the real placement offline.
-
-```console
-motu archipelago record-frame <id> --url <embedded-url> [--out <path>] [--headless]
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `<id>` positional | Region id | required (`commands/record-frame.mjs:40`) |
-| `--url` | A page of the running ocean where this archipelago's islands are placed | required (`:41`) |
-| `--headless` | Run without a visible browser | off — headed by default, so you can log in and navigate once (`:50`) |
-| `--out` | Where to write the stylesheet | `<lagoon>/src/frames/<id>.frame.css` (`:66-68`) |
-
-The browser profile is persisted at `node_modules/.cache/motu-record-profile` so the login survives
-across runs (`:14`). **Exit** — `2` with a missing id or url; `1` when Chromium is missing, the capture
-throws, or the page had no `<motu-island slot>` mountpoints.
-
-> `--out` and `--headless` are undocumented in `USAGE`.
-
-### `motu archipelago sync`
-
-Regenerate the region-side derived file — today, coverage's deployment config
-(`commands/archipelago-sync.mjs:13-28`). Takes no flags. **Writes** the generated coverage module under
-`<archipelagos>/`, and adds its import to `registry.ts` when missing; warns when there is no registry,
-because nothing would import it. Always exits `0`.
 
 ### `motu archipelago adopt-root <id>`
 
@@ -681,30 +659,10 @@ motu fixtures record week-actions --transport http
 
 ## `motu lagoon`
 
-Target resolution is shared by `dev`, `serve` and `publish` (`commands/lagoon.mjs:36-70`): a bare
+Target resolution is shared by `serve` and `publish` (`commands/lagoon.mjs:36-70`): a bare
 positional is an island; `--archipelago <id>` (or `--archipelago` with a positional) is a region; no
 target at all builds the switcher gallery over every archipelago. An unknown island or archipelago is an
 error before anything is built.
-
-### `motu lagoon dev [island]`
-
-The iteration loop: the lagoon served by Vite with HMR, in this process.
-
-```console
-motu lagoon dev [island] [--archipelago <id>] [--port <n>] [--fit native|legacy] [--allow-any-host]
-```
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `[island]` / `--archipelago` | Focus target | the gallery (`:649`) |
-| `--port` | Vite's port | Vite's own default (`:663`) |
-| `--fit` | Legacy-fit strategy, passed through as `MOTU_FIT` | unset (`:659`) |
-| `--allow-any-host` | Accept any `Host` header. Explicit, because it lowers a real protection (`:660-661`) | off |
-
-Runs in the foreground; Ctrl-C stops it. Materialises the lagoon entries into `.motu/cache` rather than
-into the project. See [lagoon](08-lagoon.md).
-
-> Every flag here is undocumented in `USAGE`, which lists only `motu lagoon dev [island]`.
 
 ### `motu lagoon states [island|region]`
 
@@ -718,12 +676,23 @@ motu lagoon states [island|region] [--base <url>] [--json]
 | --- | --- | --- |
 | positional | Filter to one island (kebab or tag) or one region (`:739`, `:763`) | everything |
 | `--base` | Print absolute URLs against a running lagoon | paths only (`:714`, `:806`) |
-| `--json` | `{ islands, regions }` | off (`:789`) |
+| `--json` | `{ screens, islands, regions }` | off |
 
-Addresses are `?target=island:<tag>&scenario=<name-or-slug>` and `?region=<id>&flow=<name>`, both
-against the **gallery** — the entry `serve` and `publish` build (`:751-755`, `:775-782`). States are
-addressed by slug where that is unambiguous and by exact name where it is not (`:733-736`). Reads the
-same loader the runtime checks use; writes nothing; always exits `0`.
+Four kinds of address, all against the **gallery** — the entry `serve` and `publish` build:
+
+| Address | What opens |
+| --- | --- |
+| `?screen=<id>` | A declared screen. The bare address opens the first one |
+| `?target=island:<tag>&scenario=<name-or-slug>` | An island alone, in one of its scenarios |
+| `?region=<id>&flow=<name>` | A region, replaying one flow (`&step=<n>` stops earlier) |
+| `?region=<id>&state=<id>.scenario.<tag>.<slug>` | A **what-if**: an island's scenario played inside its region, the rest live — the dock's "anchored", and the URL its Share copies |
+
+A what-if is listed only when the region can play it: a scenario that seeds a prop the region does not
+bind has no region key to forge, so the lagoon refuses it there, and it stays under the island's own
+address. `region=` is part of the what-if address, not decoration — a `state=` applies to a region in
+view, and the bare address opens the first screen. States are addressed by slug where that is
+unambiguous and by exact name where it is not. Reads the same loaders the runtime checks use; writes
+nothing; always exits `0`.
 
 ```console
 motu lagoon states week-actions --base http://localhost:8817
@@ -743,6 +712,16 @@ island:x-corpus-states
     /?target=island%3Ax-corpus-states&scenario=a-corpus-with-a-finding-in-it
   nothing recorded yet
     /?target=island%3Ax-corpus-states&scenario=nothing-recorded-yet
+```
+
+and, for a region, its what-ifs grouped by island:
+
+```console
+archipelago:events
+  …flows…
+  what-ifs · x-event-detail (slot event-detail)
+    full
+      /?region=events&state=events.scenario.x-event-detail.full
 ```
 
 Names are slugified into the URL, so a scenario called `nothing recorded yet` is addressable as
@@ -785,8 +764,8 @@ The build is always `MOTU_TRANSPORT=mock` and a single chunk: an artifact has no
 `/assets/` behind it (`:77-86`). Anything that could not be inlined is a hard error rather than a
 silently blank page (`:132-133`). The upload happens **after** the local write, never instead of it, so
 a host being down does not cost you the build (`:203-208`). The immutable URL is keyed by the commit;
-the `latest` URL follows every publish. Host-side warnings — origin-absolute asset paths that work under
-`lagoon dev` and 404 once hosted — are printed as findings (`:284`).
+the `latest` URL follows every publish. Host-side warnings — origin-absolute asset paths that work on a
+local lagoon and 404 once hosted — are printed as findings (`:284`).
 
 **Exit** — `1` on an unknown target, an unusable `--remote` URL, or a repo name that cannot be derived;
 `0` otherwise.
@@ -797,12 +776,15 @@ motu lagoon publish --remote --json
 
 ### `motu lagoon serve [island]`
 
-Build the same artifact and serve it over HTTP — the check nothing else performs, because `dev` serves
-source through Vite and never proves the inlined, mock-backed page works.
+Build the same artifact `publish` uploads and serve it over HTTP. With `--watch` it is the iteration
+loop — rebuild on save, reload every viewer — and the only one: `motu lagoon dev` is gone, and refuses
+with this replacement.
 
 ```console
 motu lagoon serve [island] [--archipelago <id>] [--fit native|legacy]
-                  [--port <n>] [--host] [--no-build] [--watch]
+                  [--port <n>] [--host] [--no-build] [--watch] [--no-live] [--as <slug>]
+motu lagoon serve --watch --detach      # keep running after this shell exits
+motu lagoon serve --stop                # stop the detached one
 ```
 
 | Flag | Meaning | Default |
@@ -810,12 +792,17 @@ motu lagoon serve [island] [--archipelago <id>] [--fit native|legacy]
 | `--port` | Port to listen on; validated 1–65535 | `8817` (`:410-414`) |
 | `--host` | Also bind `0.0.0.0` and print the LAN address, for a phone on the same wifi | loopback only (`:416-417`) |
 | `--no-build` | Serve the last published artifact instead of rebuilding (`:426-432`) | off |
-| `--watch` | Rebuild on every source change and live-reload open viewers (`:419`, `:564-630`) | off |
+| `--watch` | Rebuild on every source change and live-reload open viewers | off |
+| `--detach` | Re-run this command as a detached child (pidfile and log in the cache dir, `lagoon-serve.log`) and return | off |
+| `--stop` | Stop the detached lagoon and deregister it from the host | — |
+| `--no-live` | Do not announce this lagoon to the host — for a shared machine that should not become the team's address | announces when a host is configured |
+| `--as <slug>` | The member slug to announce as | the published slug, suffixed with the branch off `main` |
 
 Every path serves the page, so deep links work (`:449-450`). Under `--watch` an SSE live-reload client
 is injected — only there, never into a published artifact (`:310-347`) — and a failed rebuild keeps the
 last good bytes on the wire (`:586-588`). With a host configured it registers itself as a **live**
-member of the gallery every 30s and deregisters on exit (`:516-556`).
+member of the gallery every 30s, records the member URL for `motu check`'s "look at it" line, and
+deregisters on exit.
 
 `serve` accepts no `--json`, `--out`, `--title`, `--remote` or `--token`.
 

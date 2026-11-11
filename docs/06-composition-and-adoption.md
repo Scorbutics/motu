@@ -245,7 +245,7 @@ editing it.
 | you are… | shape |
 |---|---|
 | adopting motu into pages that already exist | `.Island` + frame — stage 1 |
-| building a new region from nothing (`archipelago create`) | `root`, scaffolded for you; the safe shape is free here |
+| building a new region from nothing (`archipelago init` without `--page`) | `root`, scaffolded for you; the safe shape is free here |
 | extracting one island from a live page | `.Island` — do not couple the extraction to a page refactor |
 | already editing a region's page for other reasons | `root` — take the migration now |
 | finished migrating every region | `root` + `regionRoot: "required"` |

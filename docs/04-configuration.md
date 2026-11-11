@@ -95,24 +95,24 @@ resolves against.
 | `hostSources` | string[], relative to `hostRoot` | *unset* → the host's tsconfig, then a guess (`host-sources.mjs:97-109`) | Overrides both, for a layout neither gets right. | `removal-check` and `integrate check`, both through `hostSourceFiles()` (`lib/host-sources.mjs`) |
 | `islands` | string, app root | `"src/islands"` (`config.mjs:33`) | Island mount points + `registry.ts` + `contracts.generated.ts`. | `island create/sync/verify/snapshot`, `check`, `changed` |
 | `ui` | string, app root | `"src/ui"` (`config.mjs:38`) | `ui/<kebab>/<Pascal>.tsx` — the components islands mount, kept OUTSIDE `islands/` so mount points cannot import each other (`util.mjs:29-31`). | `island create`, `verify`, `integrate check` |
-| `archipelagos` | string, app root | `"src/archipelagos"` (`config.mjs:43`) | Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. | `archipelago create/verify/sync/snapshot`, `archipelago coverage`, `lagoon` |
+| `archipelagos` | string, app root | `"src/archipelagos"` (`config.mjs:43`) | Regions: `<id>.archipelago.ts`, `<id>.evidence.ts`, `registry.ts`, `coverage.generated.ts`. | `archipelago init/verify/snapshot`, `motu sync`, `archipelago coverage`, `lagoon` |
 | `shared` | string, app root | `"src/shared"` (`config.mjs:47`) | Only `<shared>/styles.css`, the one shared island stylesheet (`util.mjs:110-111`). | lagoon build (`lagoon-vite.mjs`) |
-| `barrel` | string, app root | `"src/index.ts"` (`config.mjs:52`) | The module exporting `ELEMENT_REGISTRY`. | runtime harness (`runtime-harness.mjs`), lagoon alias, `island sync`, `archipelago`, `init` |
+| `barrel` | string, app root | `"src/index.ts"` (`config.mjs:52`) | The module exporting `ELEMENT_REGISTRY`. | runtime harness (`runtime-harness.mjs`), lagoon alias, `motu sync`, `archipelago`, `init` |
 | `contract` | string, app root | `"contract/src"` (`config.mjs:56`) | Output directory of `motu codegen`; `contract/src/index.ts` is the contract entry (`util.mjs:78`). | `motu codegen` (`codegen.mjs:10`) — see [docs/11-contract-and-backend.md](11-contract-and-backend.md) |
 | `lagoon` | string, app root | `"roots/lagoon"` (`config.mjs:61`) | The lagoon root: its entries, `lagoon.config.json` (viewports + a11y policy, `util.mjs:255-275`), the vite install search starts here (`util.mjs:309-317`). | every `lagoon` command, all `--runtime` checks, `archipelago coverage` |
 | `bridge` | string, app root | `"roots/bridge"` (`config.mjs:71`) | Resolved to `paths.bridgeDir`; declared for the layout's sake, read by no CLI command (`config.mjs:62-71`). | — |
 | `manifest` | string, **relative to project root** | `"target/motu-manifest.json"` (`config.mjs:76`, `:337`) | Default input to `motu codegen` — the backend build output, which usually sits outside the frontend app. | `motu codegen` (`codegen.mjs:9`) |
 | `appPackage` | string | `basename(appRoot)` (`config.mjs:205`) | The npm package name whose barrel exports `ELEMENT_REGISTRY`. | runtime harness, lagoon alias (`lagoon-vite.mjs`), `archipelago init` (`archipelago-init.mjs`), `init` |
 | `tagPrefix` | string | `"x-"` (`config.mjs:85`) | Prefix of every custom element tag: `names(x).tag = tagPrefix + kebab` (`util.mjs:359`). | `island create`, `verify`, lagoon materialize, `init` |
-| `isolation` | `"shadow" \| "light"` | `"shadow"`; anything not `"light"` becomes `"shadow"` (`config.mjs:207`) | Baked into the generated island registry as `setDefaultIsolation(...)` (`islands.mjs:78-92`). | `island sync`, lagoon, `create`, `defaults`, `archipelago-element.ts:63-66` |
+| `isolation` | `"shadow" \| "light"` | `"shadow"`; anything not `"light"` becomes `"shadow"` (`config.mjs:207`) | Baked into the generated island registry as `setDefaultIsolation(...)` (`islands.mjs:78-92`). | `motu sync`, lagoon, `create`, `defaults`, `archipelago-element.ts:63-66` |
 | `regionRoot` | `"encouraged" \| "required"` | `"encouraged"`; anything but `"required"` is `"encouraged"` (`config.mjs:229`) | Whether a hand-written lagoon frame is a nudge or an error. | `archipelago verify` (`verify/region-flows.mjs:285-291`) |
 | `removable` | boolean | `true`; only an explicit `false` opts out (`config.mjs:265`) | Whether this project CLAIMS motu is deletable. `false` turns `removal-check` into a visible SKIP. | `removal-check` (`removal-check.mjs:285-292`), `check` (`check.mjs:218-228`) |
 | `legacyFit` | boolean | `host === 'angularjs'` (`config.mjs:136`, `:297`) | Whether `legacy` is a required fit strategy and a verified runtime mount. | `island create` (`create.mjs:50`), `island verify` (`verify/island-static.mjs:251, 1130`) |
 | `publishAs.repo` | string | `null` → the git remote (`config.mjs:277`) | The repository identity used on a lagoon host. | `lagoon publish` (`lagoon.mjs:250, 525`), `archipelago coverage` (`region-coverage.mjs:384, 415`) |
 | `publishAs.slug` | string | `null` → derived (`config.mjs:278`) | The project slug on the lagoon host. | `lagoon publish/serve` (`lagoon.mjs:159, 407`) |
-| `coverage.enabled` | boolean | **`false`**; only `true` enables (`config.mjs:243`) | Whether the coverage fold runs at all. Emits `configureCoverage(...)` into `archipelagos/coverage.generated.ts`; off emits an empty module (`archipelagos.mjs:30-65`). | `archipelago sync`, `check` (`check.mjs:46-52, 190`) |
+| `coverage.enabled` | boolean | **`false`**; only `true` enables (`config.mjs:243`) | Whether the coverage fold runs at all. Emits `configureCoverage(...)` into `archipelagos/coverage.generated.ts`; off emits an empty module (`archipelagos.mjs:30-65`). | `motu sync`, `check` (`check.mjs:46-52, 190`) |
 | `coverage.corpusUrl` | string | `null` (`config.mjs:248`) | Where `motu archipelago coverage <id>` fetches the corpus from, on a DEVELOPER's machine. Never reaches a browser. | `archipelago coverage` (`region-coverage.mjs:214-223`) |
-| `coverage.regions` | string[] | `null` → every region (`config.mjs:249`) | Region ids to watch. `"*"` also means every region (`packages/coverage/src/index.ts:744-746`). | `archipelago sync` (`archipelago-sync.mjs:15-18`), baked into `coverage.generated.ts` |
+| `coverage.regions` | string[] | `null` → every region (`config.mjs:249`) | Region ids to watch. `"*"` also means every region (`packages/coverage/src/index.ts:744-746`). | `motu sync` (`archipelago-sync.mjs:15-18`), baked into `coverage.generated.ts` |
 
 Derived values, not settable: `root`, `appRoot`, `cacheDir` (`resolve(root, '.motu/cache')`, gitignored —
 `config.mjs:309-310`), `configPath`, and the resolved `*Dir` paths.
@@ -340,7 +340,7 @@ encoded in the loader:
 
 **1. `enabled` defaults to FALSE.** `cfg.coverage?.enabled === true` — anything else is off
 (`config.mjs:243`). "A thing that runs in production is a thing somebody switched on." With coverage off,
-`motu archipelago sync` writes an *empty* `coverage.generated.ts`, so nothing in the project names
+`motu sync` writes an *empty* `coverage.generated.ts`, so nothing in the project names
 `@motu/coverage` and no bundler ships it, while the registry's import line stays constant
 (`archipelagos.mjs:18-22, 36-42`).
 

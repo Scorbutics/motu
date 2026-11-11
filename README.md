@@ -334,10 +334,10 @@ cd motu && ./install.sh          # deps + link `motu` onto PATH + install the ag
 
 cd ~/dev/my-app
 motu init . --host next          # scaffolds into a subfolder; nothing else changes
-motu archipelago create directory
+motu archipelago init directory
 motu island create phone-display --from '@/components/phone-display'
 motu island verify phone-display --runtime
-motu lagoon dev
+motu lagoon serve --watch
 ```
 
 `--from` takes the specifier **the app itself uses**, aliases included, and writes only a mount

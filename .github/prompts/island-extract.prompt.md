@@ -44,8 +44,8 @@ are not obvious.
 6. **Verify:** `motu island verify <name>` — boots the focused lagoon in a real browser
    (Playwright/Chromium; one-time `cd packages/cli && npx playwright install chromium`). Fix every `✗`,
    re-run until **PASS**. `--fast` uses happy-dom for quick iteration; look at it with
-   `motu lagoon dev`.
-7. **Integrate:** `motu archipelago create <page-id>` (if needed) →
+   `motu lagoon serve --watch`.
+7. **Integrate:** `motu archipelago init <page-id>` (if needed) →
    `motu island integrate <name> --archipelago <page-id>`; fill the `TODO(motu:wiring)`
    bindings/handlers, place the region in the page (`createRegion` + `useRegion` on a React host, a
    `<motu-island slot="…">` marker in a legacy template), then `motu integrate check`.

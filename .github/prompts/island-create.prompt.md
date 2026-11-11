@@ -14,7 +14,7 @@ work; you own the judgement and the sequence. This is the workflow the
 ## Workflow (in order)
 
 1. **Archipelago first** — decide the page/region the island lives on. Reuse one under
-   `demo-app/src/archipelagos/`, or `pnpm motu archipelago create <id>`. Know which store keys it
+   `demo-app/src/archipelagos/`, or `pnpm motu archipelago init <id>`. Know which store keys it
    reads/writes and which sibling islands it coordinates with.
 2. **Build in the lagoon:** `pnpm motu island create <name>` (scaffolds `ui/<kebab>/` component +
    `islands/<kebab>/` mount point). Write the mode-agnostic component (no fetch/history/document, all

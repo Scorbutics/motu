@@ -444,14 +444,14 @@ than what it replaces: it is what the island actually needs, at the granularity 
 | artifact | what it describes | produced by | committed? |
 |---|---|---|---|
 | `@motu/contract` (`<app>/contract/src/index.ts`) | the **backend's callable surface**, as typed TS functions over `call()` | `motu codegen` from `motu-manifest.json` (Jakarta hosts) — or, on a TS host, hand-written as `createContract<AppServices>()` with no generator at all | yes |
-| `contracts.generated.ts` (in `islands/`) | each **island's** boundary: `input`, `output`, `effects`, read from the component it mounts | `motu island sync` → `syncContracts()` (`packages/cli/src/lib/contracts.mjs:177-184`) | yes |
+| `contracts.generated.ts` (in `islands/`) | each **island's** boundary: `input`, `output`, `effects`, read from the component it mounts | `motu sync` → `syncContracts()` (`packages/cli/src/lib/contracts.mjs:177-184`) | yes |
 
 `motu check` gates *drift* of `contracts.generated.ts` against the components
 (`packages/cli/src/commands/check.mjs:26-31`, using `contractsDrift()` at
 `packages/cli/src/lib/contracts.mjs:186-192`). A stale `contracts.generated.ts` is *also* a compile
 error: the file emits a
 `ContractFitsComponent<...>` assertion per island whose failure message is `'contract is stale — run
-motu island sync; the component has no such prop:'` (`contracts.mjs:136-154`).
+motu sync; the component has no such prop:'` (`contracts.mjs:136-154`).
 
 `contracts.generated.ts` is derived, never authored: "Each island's boundary, READ from the component
 it mounts… Editing the component changes this file; editing this file changes nothing"
@@ -512,7 +512,7 @@ The safety net is that failure mode, not a deploy-time gate (`README.md`, "Backe
 |---|---|
 | every `Service.method` wrapper and its types | the `@BrowserCallable` annotations that decide the surface |
 | `__roles` | fixtures (`fixtures.mock.ts`), scenarios, roles |
-| `contracts.generated.ts` (`motu island sync`) | the island file's `tag`, `component`, and event-name overrides |
+| `contracts.generated.ts` (`motu sync`) | the island file's `tag`, `component`, and event-name overrides |
 
 **On a TypeScript host there is no codegen at all.** "The Java seam needs an annotation processor
 because it has to DISCOVER which methods are callable across a whole compiled codebase. TypeScript

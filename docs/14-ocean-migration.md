@@ -171,17 +171,18 @@ on the page keeps its stylesheet fallback.
 Note where that knowledge lives: the SELECTORS are project knowledge and stay in the composition
 root, not in the framework.
 
-## 6 — Previewing real placement: `record-frame`
+## 6 — Previewing real placement: frame stylesheets
 
 The lagoon has no ocean, so an island previewed there sits in a container the legacy page never gave
-it. `motu archipelago record-frame <id> --url <embedded>` opens a headed, persistent browser — you log
-in and navigate once — measures each `<motu-island slot>`'s container box and inherited typography,
-and writes a frame stylesheet keyed by `[data-motu-arch][data-motu-slot]`
-(`packages/cli/src/commands/record-frame.mjs:1-6`).
+it. A frame stylesheet under the lagoon root's `src/frames/*.css`, keyed by
+`[data-motu-arch][data-motu-slot]`, gives each mountpoint the width, padding and typography of its
+real callsite in the mountpoints view.
 
-It is the record/replay analogue of `motu fixtures record`, but for **placement** instead of backend
-responses, and it replaced hand-authored frame CSS. The login session persists across runs, so the
-human authenticates once.
+Write it by hand, from the legacy page's own CSS. There used to be a capture command
+(`archipelago record-frame`) that measured the live ocean in a headed browser; it is gone, because a
+captured frame is a second copy of the arrangement that drifts as the page does — the same reason a
+region's `root` names the application's own layout instead of redrawing it. When a slot's container
+changes, the page's stylesheet is what changed, and that is the file to read.
 
 ## 7 — The end: the ocean recedes
 

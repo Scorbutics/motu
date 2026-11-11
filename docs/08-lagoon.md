@@ -525,30 +525,24 @@ months later into a lagoon that has grown another region since
 
 ---
 
-## `dev` vs `serve` vs `publish`
+## `serve` vs `publish`
 
-| | `lagoon dev` | `lagoon serve` | `lagoon publish` |
-|---|---|---|---|
-| Builds | a Vite dev server, in-process, with HMR (`lagoon.mjs:648-670`) | one self-contained page, held in memory | one self-contained page |
-| Writes | nothing | nothing (unless `--no-build`, which reads) | `.motu/publish/lagoon-<slug>.html` (`:143-145`) |
-| Transport | whatever `lagoon.config.json` says | forced `mock` (`:81-84`) | forced `mock` (`:81-84`) |
-| Reload | HMR | `--watch` only (SSE, `:318-347`) | never — a published artifact that dials home is a lie about what the artifact is |
-| Proves the artifact | no | **yes** | yes |
-
-Use **`dev`** to iterate: it is the fastest loop and the only one with HMR. Use **`serve`** to look at
-what you are about to publish, and as the only check that exercises the artifact rather than the
-source — `dev` serves through Vite with the dev proxy, so it never proves the inlining worked or that
-the page survives with no `/assets/` and no backend behind it. Use **`publish`**
-for a link that outlives your process.
-
-### `motu lagoon dev [island]`
-
-| Flag | Meaning | Default |
+| | `lagoon serve` | `lagoon publish` |
 |---|---|---|
-| `[island]` / `--island <n>` / `--archipelago <id>` | sets `MOTU_TARGET`; prints "open /lagoon.html" (`lagoon.mjs:658`, `:668`) | none = the gallery |
-| `--fit <native\|legacy>` | sets `MOTU_FIT` (`:659`) | unset |
-| `--port <n>` | `config.server.port` (`:663`) | 5173 (`packages/cli/src/lib/lagoon-vite.mjs:320`) |
-| `--allow-any-host` | accept any `Host` header; explicit because it lowers a real protection (`:661-662`) | off |
+| Builds | one self-contained page, held in memory | one self-contained page |
+| Writes | nothing (unless `--no-build`, which reads) | `.motu/publish/lagoon-<slug>.html` |
+| Transport | forced `mock` | forced `mock` |
+| Reload | `--watch` only (SSE) | never — a published artifact that dials home is a lie about what the artifact is |
+
+Use **`serve --watch`** to iterate: it rebuilds on save and reloads every viewer, phones included, and
+what it serves is the artifact `publish` uploads, so the loop and the check are one thing. Use
+**`publish`** for a link that outlives your process.
+
+There used to be a third, `lagoon dev`: a Vite dev server with HMR. It was faster per save and served
+the SOURCE, not the artifact — so it never proved the inlining worked or that the page survives with no
+`/assets/` and no backend behind it, and two servers for one loop meant two sets of flags to keep in
+step. It is gone; `motu lagoon dev` refuses and names `serve --watch`. The Vite server itself lives on
+inside `island verify` / `archipelago verify`, which boot it privately.
 
 ### `motu lagoon serve [island]`
 
@@ -558,6 +552,8 @@ for a link that outlives your process.
 | `--host` | also bind `0.0.0.0`, for a phone on the same wifi (`:416-417`) | loopback |
 | `--no-build` | serve the last published artifact as-is (`:426-432`) | rebuilds |
 | `--watch` | rebuild on save and live-reload open viewers; conflicts with `--no-build` (`:419-423`) | off |
+| `--detach` / `--stop` | keep it running after the shell exits; stop it (see below) | |
+| `--no-live` | do not announce it to the lagoon host | announces when a host is configured |
 | target flags, `--fit` | same as `publish` (`:399-408`) | |
 
 It serves the same bytes at **every path**, `cache-control: no-store`
@@ -797,7 +793,7 @@ sampled and hoped for (`packages/cli/src/playwright-lagoon.mjs:882-884`, `:1035-
 ## The lens
 
 **Ctrl/Cmd-K, then the `Seams` tab.** The lens is a tab of the DOCK, and the dock is drawn by whoever
-HOSTS the lagoon (`@motu/chrome/dock`, mounted by `motu lagoon serve` / `lagoon dev`, and by the motu
+HOSTS the lagoon (`@motu/chrome/dock`, mounted by `motu lagoon serve`, and by the motu
 host in the shell it wraps every lagoon in). So it is on the gallery and on any hosted lagoon URL, and
 it is NOT on the focused standalone entry `motu island verify` drives, nor on `/__motu_frame`, which is
 the artifact by itself. Its own keycap says which chord: `⌘K` / `Ctrl K`
@@ -911,7 +907,7 @@ server has announced itself, the host proxies that URL to it and a viewer sees w
 when none has, it falls back to the last published bytes. Immutable commit URLs are never live, on
 purpose: a URL keyed by content must keep meaning what it meant.
 
-`motu lagoon dev` announces automatically:
+`motu lagoon serve --watch` announces automatically:
 
     live at: http://<host>/<repo>/latest/<slug>
     the host will fetch it from: http://127.0.0.1:5173
@@ -925,7 +921,7 @@ A live member expires after 90 seconds and the CLI heartbeats every 30, so a dev
 decays back to the last publish on its own rather than leaving a dead address. Stopping the server
 deregisters immediately.
 
-**Live is HOT.** The member's path is a PREFIX: `motu lagoon dev` sets Vite's `base` to it, so every
+**Live is HOT.** The member's path is a PREFIX: `motu lagoon serve --watch` sets Vite's `base` to it, so every
 URL the dev server emits already carries it, and the host forwards everything under that prefix —
 the page, the module graph, and the HMR WebSocket upgrade at `…/__motu_hmr`. A viewer sees your edits
 without refreshing.
@@ -943,10 +939,10 @@ Three things about this are easy to get backwards, and each cost a debugging rou
 
 ### Outliving the shell that started it
 
-    motu lagoon dev --detach     # runs on, logs to .motu/cache/lagoon-dev.log
-    motu lagoon dev --stop       # signals it and deregisters the member at once
+    motu lagoon serve --watch --detach     # runs on, logs to .motu/cache/lagoon-serve.log
+    motu lagoon serve --stop                # signals it and deregisters the member at once
 
-An agent's dev server dies with its session, which is exactly when someone wants to keep watching.
+An agent's lagoon dies with its session, which is exactly when someone wants to keep watching.
 `--detach` reparents it; `--stop` signals it AND tells the host directly, because a signal handler
 racing an async POST against process exit is not reliable — measured, the process died and the host
 listed the member for another 54 seconds. A second `--detach` refuses while one is running, and a
@@ -954,8 +950,8 @@ crash needs no cleanup: the member expires on its own after 90 seconds.
 
 ## Known traps
 
-**Absolute asset paths.** `/images/…` works under `lagoon dev`, because Vite serves it, and 404s the
-moment the page is hosted (`.github/host-rules.md:133-134`). Hosting is the
+**Absolute asset paths.** `/images/…` resolves on a local lagoon at the root of its own origin, and
+404s the moment the page is hosted (`.github/host-rules.md:133-134`). Hosting is the
 first place that difference is visible, so the host says it: an upload is **refused (422)** when the
 fragment still references `/assets/` — that build's inlining did not happen — and anything else
 absolute is a **warning**, printed by the CLI and returned in the JSON

@@ -268,7 +268,7 @@ Expect every shared file to conflict. Resolve **by kind, not by hand**
 
 | File | Resolution |
 | --- | --- |
-| `islands/registry.ts`, `islands/contracts.generated.ts` | **regenerate** with `motu island sync` — never hand-merge a generated file |
+| `islands/registry.ts`, `islands/contracts.generated.ts` | **regenerate** with `motu sync` — never hand-merge a generated file |
 | the shared stylesheet | append-only, keep both sides |
 | the archipelago | one entry each, so a line-level merge is usually right — then check that exactly the built islands lost `planned` |
 | a lagoon frame | if two agents extended a slot→data lookup, take **both** |
@@ -351,7 +351,7 @@ draw its own markup says why, **once**, with `inventedArrangement('why', <…/>)
 error to a warning, and it is a HOLD, not an answer (`SKILL.md:179-184`;
 `packages/react/src/index.ts:17`).
 
-`motu archipelago create` is the opposite case and scaffolds `root` first: a new region has no page to
+`motu archipelago init <id>` without `--page` is the opposite case and scaffolds `root` first: a new region has no page to
 restructure, so the safe shape is free there. `motu archipelago adopt-root <id>` does the derivable half
 of stage 2 and **refuses rather than guessing** when the frame nests two host components
 (`SKILL.md:186-189`; `packages/cli/src/commands/adopt-root.mjs`).

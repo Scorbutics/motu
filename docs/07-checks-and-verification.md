@@ -234,7 +234,7 @@ signal narrow enough to be an error rather than a warning.
 | Row | Proves | Severity | Affects `pass`? | Line |
 |---|---|---|---|---|
 | `strict-boundaries` | The host tsconfig enables `noUncheckedIndexedAccess` — `list[0].x` on a possibly-empty list compiles under plain `strict` and throws in the browser. The mechanical half of `default-props`. **Audited, never enforced**; unknown tsconfig prints nothing. | `✓` / `!` | No | `check.mjs:164`, `:172` |
-| `generated` | `islands/contracts.generated.ts` exists and matches every component. Fix with `motu island sync`. | `✓` / `✗` | Yes | `check.mjs:177` |
+| `generated` | `islands/contracts.generated.ts` exists and matches every component. Fix with `motu sync`. | `✓` / `✗` | Yes | `check.mjs:177` |
 | `region-generated` | `coverage.generated.ts` matches `motu.config.json`. A stale one still compiles, still imports, and configures the wrong thing — the symptom is coverage that never records, which looks exactly like a region nobody visited. | `✓` / `✗` | Yes | `check.mjs:186` |
 | `skipped` | removal-check did not run because structure checks failed first. | `–` | (already failing) | `check.mjs:216` |
 | `removable` | The host compiles with motu removed. Prints `N deleted, N unwrapped, N ejected`, and `· unchanged since the last proof` when the verdict came from the fingerprint cache. | `✓` / `–` | Yes | `check.mjs:221`, `:225` |

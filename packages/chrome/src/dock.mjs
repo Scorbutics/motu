@@ -2610,6 +2610,14 @@ function motuMountDock(opts) {
    * region declares. The main button sails the current flow again from the seed — or, in harbour, sets
    * sail on the first one; at anchor, it drops anchor again.
    */
+  /** The anchored island's what-ifs, and which of them the region is at. */
+  var anchorage = function (aim) {
+    var tag = aim.activeScenario.island;
+    var isl = (aim.reg.islands || []).filter(function (i) { return i.tag === tag; })[0];
+    var names = isl ? isl.scenarios : [];
+    return { tag: tag, names: names, at: names.indexOf(aim.activeScenario.name) };
+  };
+
   var transport = function (aim) {
     var tracks = [null].concat(aim.reg.flows || []);
     var cur = aim.activeScenario ? -1 : tracks.indexOf(aim.activeFlow || null);
@@ -2621,11 +2629,24 @@ function motuMountDock(opts) {
     };
     var prev = null;
     var next = null;
-    if (aim.activeScenario) prev = { label: 'Weigh anchor — back to the seed', sailing: 'Weighing anchor…', run: playIn(aim, null) };
-    else if (st && st.at > 1) prev = { label: 'Back to step ' + (st.at - 1), sailing: 'Sailing to step ' + (st.at - 1) + '…', run: playIn(aim, aim.activeFlow, st.at - 1) };
+    // AT ANCHOR, THE TRANSPORT MOVES BETWEEN ANCHORAGES — the island's other what-ifs — not into a flow.
+    // What is under way is the island's set of told states; › used to set sail on the region's first
+    // flow, a different kind of state from the one being looked at. Past the first what-if is the seed
+    // (weigh anchor); past the last there is nothing, and the button says so.
+    if (aim.activeScenario) {
+      var here = anchorage(aim);
+      var anchorAt = function (name) {
+        return {
+          label: 'Anchor at: ' + name, sailing: 'Dropping anchor…',
+          run: drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: here.tag, name: name }); }),
+        };
+      };
+      prev = here.at > 0 ? anchorAt(here.names[here.at - 1]) : { label: 'Weigh anchor — back to the seed', sailing: 'Weighing anchor…', run: playIn(aim, null) };
+      next = here.at >= 0 && here.at < here.names.length - 1 ? anchorAt(here.names[here.at + 1]) : null;
+    } else if (st && st.at > 1) prev = { label: 'Back to step ' + (st.at - 1), sailing: 'Sailing to step ' + (st.at - 1) + '…', run: playIn(aim, aim.activeFlow, st.at - 1) };
     else if (cur > 0) prev = flowTo(tracks[cur - 1], 'Previous');
-    if (st && st.at < st.of) next = { label: 'On to step ' + (st.at + 1), sailing: 'Sailing to step ' + (st.at + 1) + '…', run: playIn(aim, aim.activeFlow, st.at + 1) };
-    else if (cur === -1 && tracks.length > 1) next = flowTo(tracks[1], 'Sail');
+    if (aim.activeScenario) { /* set above */ }
+    else if (st && st.at < st.of) next = { label: 'On to step ' + (st.at + 1), sailing: 'Sailing to step ' + (st.at + 1) + '…', run: playIn(aim, aim.activeFlow, st.at + 1) };
     else if (cur >= 0 && cur + 1 < tracks.length) next = flowTo(tracks[cur + 1], 'Next');
     var main;
     if (aim.activeScenario) {
@@ -2700,7 +2721,10 @@ function motuMountDock(opts) {
       v.route.textContent = 'Anchored off ' + slot + ' — the island was told this state; the region did not sail here.';
       v.from.textContent = '';
       v.to.textContent = '';
-      v.status.textContent = pending ? pending.label : 'At anchor';
+      var ah = anchorage(aim);
+      v.status.textContent = pending ? pending.label : ah.names.length > 1 && ah.at >= 0 ? 'At anchor \u00b7 ' + (ah.at + 1) + ' of ' + ah.names.length : 'At anchor';
+      v.from.textContent = ah.names.length > 1 ? ah.names[0] : '';
+      v.to.textContent = ah.names.length > 1 ? ah.names[ah.names.length - 1] : '';
     } else if (seed) {
       v.kicker.textContent = region + ' · in harbour';
       v.title.textContent = 'As seeded';
@@ -2721,15 +2745,18 @@ function motuMountDock(opts) {
     nowBox.dataset.pending = pending ? 'true' : 'false';
     // The passage: buoys for the steps (none at anchor — there was no passage), the boat at its buoy.
     var buoys = [];
-    if (!anchored) {
-      for (var b = 0; b <= legs; b++) {
-        var buoy = el('i', { 'data-passed': String(!seed && b <= at) });
-        buoy.style.left = along(b, legs);
+    // At anchor the buoys are the island's anchorages, and the anchor sits at the one in force.
+    var moor = anchored ? anchorage(aim) : null;
+    var marks = moor ? Math.max(moor.names.length - 1, 0) : legs;
+    if (!anchored || moor.names.length > 1) {
+      for (var b = 0; b <= marks; b++) {
+        var buoy = el('i', { 'data-passed': String(anchored ? b === moor.at : !seed && b <= at) });
+        buoy.style.left = along(b, marks);
         buoys.push(buoy);
       }
     }
     v.buoys.replaceChildren.apply(v.buoys, buoys);
-    v.vessel.style.left = along(anchored || seed ? 0 : at, legs);
+    v.vessel.style.left = anchored ? along(Math.max(moor.at, 0), marks || 1) : along(seed ? 0 : at, legs);
     v.sea.wake.style.width = anchored || seed ? '0px' : along(at, legs);
     v.boat.style.display = anchored ? 'none' : '';
     v.anchor.style.display = anchored ? '' : 'none';

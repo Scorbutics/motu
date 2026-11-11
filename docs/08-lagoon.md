@@ -369,7 +369,10 @@ shows ONE region of the view at a time (pills switch between them when a screen 
   per step, the boat at the step the region is in and the wake behind it. ‹ / › sail a step at a time
   and, past either end, to the previous or next flow, so pressing › again and again tours every state
   the region declares; the main button sails the flow again from the seed. While a state is being
-  replayed the boat is under way ("Sailing to step 2…").
+  replayed the boat is under way ("Sailing to step 2…"). AT ANCHOR (a what-if) the same ‹ / › move
+  between the island's what-ifs instead — its anchorages, shown as buoys with the anchor at the one in
+  force ("At anchor · 2 of 3") — ‹ past the first weighs anchor back to the seed, and › stops at the
+  last rather than setting sail into a flow.
 - **the atoll** — the region drawn as a place, its islands as sand dots around the lagoon, each sized by
   how many what-ifs it declares. Tapping one brings its list into view.
 - **flows** (*the region gets there itself*) and **what-ifs** (*an island is told what to show*). The

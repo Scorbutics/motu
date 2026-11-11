@@ -2874,6 +2874,57 @@ function motuMountDock(opts) {
     return line('na', ['not charted'], w.reason || '');
   };
 
+  /**
+   * AT ANCHOR, THE REST OF THE PAGE STEPS BACK. A what-if is about ONE island — it was told a state —
+   * so everything else on the page drops to 80% opacity and the eye goes where the change is.
+   *
+   * By marking, not by overlay: the island and every element on the way down to it stay as they are,
+   * and each SIBLING along that path is dimmed — so the island's own subtree is untouched and nothing
+   * covers the page (it stays usable). An island's wrapper is `display: contents` and has no box, so
+   * opacity on it does nothing: dimming looks THROUGH such wrappers to the boxes inside them. The dock
+   * and everything else marked `data-motu-chrome` is never dimmed. Off while the checks drive the
+   * lagoon (`dockInset=off`): a dimmed page would be a picture of the dock, not of the application.
+   */
+  var DIM = 'data-motu-dim';
+  var clearDim = function () {
+    try {
+      var marked = lagoonWindow().document.querySelectorAll('[' + DIM + ']');
+      for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(DIM);
+    } catch (e) { /* the lagoon reloaded under us; nothing left to clear */ }
+  };
+  var dimAround = function (regId, tag) {
+    var w;
+    try { w = lagoonWindow(); } catch (e) { return; }
+    var d = w && w.document;
+    if (!d || !d.body) return;
+    clearDim();
+    if (!tag || harness()) return;
+    var target = d.querySelector('[data-motu-island="' + tag + '"][data-motu-region="' + regId + '"]') ||
+      d.querySelector('[data-motu-island="' + tag + '"]');
+    if (!target) return;
+    if (!d.getElementById('motu-dim-style')) {
+      var st = d.createElement('style');
+      st.id = 'motu-dim-style';
+      st.textContent = '[' + DIM + ']{opacity:.8;transition:opacity .25s ease}';
+      (d.head || d.documentElement).appendChild(st);
+    }
+    var dimIn = function (n) {
+      if (!n || n.nodeType !== 1) return;
+      if (n.id === 'tide' || n.id === 'tide-calls' || n.hasAttribute('data-motu-chrome')) return;
+      if (/^(SCRIPT|STYLE|LINK|META|TITLE|TEMPLATE|NOSCRIPT)$/.test(n.tagName)) return; // nothing to see
+      if (w.getComputedStyle(n).display === 'contents') {
+        for (var c = 0; c < n.children.length; c++) dimIn(n.children[c]);
+        return;
+      }
+      n.setAttribute(DIM, '');
+    };
+    for (var node = target; node && node !== d.body && node.parentElement; node = node.parentElement) {
+      var siblings = node.parentElement.children;
+      for (var i = 0; i < siblings.length; i++) if (siblings[i] !== node) dimIn(siblings[i]);
+    }
+  };
+  var lastDim = '';
+
   /** The island whose card is open, by tag — set by the atoll, an island's row, or the page's ⌖. */
   var cardTag = null;
   var openCard = function (tag) { cardTag = tag; paint(); if (scroll.scrollTo) scroll.scrollTo(0, 0); };
@@ -3213,6 +3264,18 @@ function motuMountDock(opts) {
       railWater.wake.style.width = '0px';
       railMark.replaceChildren(boat(24));
     }
+
+    // AT ANCHOR: the rest of the page steps back. Re-marked on every paint (cheap: one path), and once
+    // more shortly after a change — a what-if remounts the region's islands, so the nodes it marked may
+    // be replaced a moment after the state is reported.
+    var dimKey = aim && aim.activeScenario ? aim.regId + '\u0000' + aim.activeScenario.island : '';
+    if (dimKey) dimAround(aim.regId, aim.activeScenario.island);
+    else if (lastDim) clearDim();
+    if (dimKey && dimKey !== lastDim) {
+      var again = { reg: aim.regId, tag: aim.activeScenario.island };
+      setTimeout(function () { if (lastDim === again.reg + '\u0000' + again.tag) dimAround(again.reg, again.tag); }, 400);
+    }
+    lastDim = dimKey;
 
     // THE MINI PLAYER: what is playing, where, and whether the lens is waiting on a decision.
     railTitle.textContent = showingName;

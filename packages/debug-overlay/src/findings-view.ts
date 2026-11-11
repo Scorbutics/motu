@@ -23,10 +23,11 @@ import {
   regionIdOfStore,
   archipelagoConfigs,
 } from '@motu/core';
+import type { Store } from '@motu/core';
 import { readWireCalls, subscribeWireCalls } from '@motu/runtime/postgrest-fetch';
 import { corpusFor, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
 import { lens } from './store';
-import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, type Verdict } from './model';
+import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, plainValue, keyOrigins, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';
 import { toggleDebugOverlay, isDebugOverlayOpen } from './overlay';
 
@@ -228,8 +229,21 @@ export function currentCoupling() {
  * given. The same key answers both, from opposite ends — the sheet says who reads `shots`, this says
  * whether shot-list got it or is sitting at its default.
  */
+/** Where each key of the region on `store` comes from — its writing island, its source, or the page. */
+function originsOf(store: Store) {
+  const config = archipelagoConfigs().find((c) => c.id === regionIdOfStore(store));
+  const islands = (config?.islands ?? []).map((i) => ({ slot: i.slot ?? String(i.element), keys: writtenKeys(i) }));
+  const sources: Record<string, readonly string[]> = {};
+  for (const [name, src] of Object.entries(config?.sources ?? {})) {
+    sources[name] = (src as { produces?: readonly string[] })?.produces ?? [];
+  }
+  return keyOrigins(islands, sources);
+}
+
 export function currentIslands() {
   return getMountedIslands().map((info) => {
+    const origins = originsOf(info.store);
+    const region = info.store.snapshot();
     const def = getIslandDefinition(info.element);
     const props = computeProps(info, def);
     return {
@@ -244,7 +258,21 @@ export function currentIslands() {
         state: r.state,
         storeKey: r.storeKey ?? '',
         value: preview(r.value),
+        /** The value as a person would say it — an id as the record it names, a list by its count. */
+        plain: r.state === 'default' ? 'its default' : plainValue(r.value, region),
+        /** Where it came from: "chosen by event-list", "fed by source:events", "set by the page". */
+        from: r.storeKey ? origins.get(r.storeKey)?.said ?? 'set by the page' : r.state === 'static' ? 'fixed by the region' : 'not wired',
       })),
+      /** What its outputs do: write a key, ask the page (an intent), or run the page's own handler. */
+      does: [
+        ...Object.entries((info.spec as { writes?: Record<string, unknown> }).writes ?? {}).map(([event, to]) => ({
+          event, what: 'sets ' + (typeof to === 'string' ? to : Object.values(to as Record<string, string>).join(', ')),
+        })),
+        ...Object.entries((info.spec as { intents?: Record<string, string> }).intents ?? {}).map(([event, intent]) => ({
+          event, what: 'asks the page' + (intent !== event ? ` (${intent})` : ''),
+        })),
+        ...Object.entries(info.spec.on ?? {}).filter(([, h]) => h).map(([event]) => ({ event, what: "runs the page's handler" })),
+      ],
       reads: bindKeys(info),
       writes: lens.islandWrites(info),
       emits: Object.entries(info.spec.on ?? {}).filter(([, h]) => h).map(([e]) => e),
@@ -425,13 +453,15 @@ export function currentSheet() {
   const suspects = new Map(launderingSuspects().map((x) => [x.key, x]));
   const keys = [...new Set([...readers.keys(), ...owner.keys()])].sort();
 
+  const origins = originsOf(store);
   const rows = keys.map((key) => {
     const from = owner.get(key) ?? null;
     const m = moves.get(key);
     const suspect = suspects.get(key);
     return {
       key,
-      owner: from ?? 'host',
+      // A key a declared source produces is the SOURCE's, and saying "host" hid which one.
+      owner: from ?? (origins.get(key)?.owner.startsWith('source:') ? origins.get(key)!.owner : 'host'),
       islandOwned: Boolean(from),
       readers: readers.get(key) ?? [],
       value: preview(store.get(key)),

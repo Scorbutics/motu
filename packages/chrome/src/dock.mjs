@@ -1224,81 +1224,134 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 #tide .seam-find__t i { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: currentColor; opacity: .5; }
 #tide .seam-find__d { color: var(--ink-muted); font-size: 11.5px; line-height: 1.45; font-weight: 500; }
 
-/* ── the rig ───────────────────────────────────────────────────────────────────────────────── */
-#tide .rig {
+/* ── the ⋯ menu: views, page layers, recording, the artifact's chips ─────────────────────────── */
+#tide .bay-tools {
   flex: 0 0 auto;
-  border-top: 1px solid var(--line);
-  padding: 10px 14px 12px;
-  background: var(--surface-panel);
-}
-#tide .rig__head { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
-#tide .rig__head .motu-cap { flex: 1 1 auto; }
-#tide .rig__step {
-  width: 24px;
-  height: 22px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink-muted);
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 7px;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
+  background: rgba(255,255,255,.18);
+  color: inherit;
 }
-#tide .rig__step:hover { border-color: var(--tide-accent); color: var(--tide-accent); }
-#tide .rig__step:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
-/* The chips the toolbar mounts land in here beside the dock's own, so a control added by another
- * package is styled and reachable with no registration. */
-#tide .rig__pills {
+#tide .bay-tools:hover { background: rgba(255,255,255,.32); }
+#tide .bay-tools[aria-expanded="true"] { background: var(--motu-on-primary, #fff); color: var(--motu-primary-deep, #0b5b55); }
+#tide .bay-tools:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: 2px; }
+#tide .tools {
+  position: absolute;
+  top: 58px;
+  right: 10px;
+  z-index: 6;
+  width: min(300px, calc(100% - 20px));
+  max-height: calc(100% - 70px);
+  overflow: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-#tide .rig__pills .slot { display: contents; }
-/* ONE FAMILY OF PILLS, whoever mounted them. The transport and fit chips come from @motu/core's
- * toolbar and the Baselines link and the lens are the dock's own, so without this the rig is three
- * different button designs in one row. Styled by POSITION rather than by class for the same reason
- * the palette reads the chips rather than registering them: a control another package adds later
- * should look right without this file being told about it. */
-#tide .rig__pills > button,
-#tide .rig__pills > a,
-#tide .rig__pills .slot > button,
-#tide .rig__pills .slot > a {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
-  border-radius: 9999px;
-  border: 1px solid var(--line);
-  background: #fff;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 14px;
+  /* OPAQUE: the panel's row surface is translucent, and a menu over the voyage card read through it. */
+  background: color-mix(in srgb, var(--w-shallow) 4%, #fff);
   color: var(--ink);
-  font: 600 11.5px/1 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-  letter-spacing: .01em;
-  text-decoration: none;
+  box-shadow: 0 18px 44px color-mix(in srgb, var(--w-deep) 28%, transparent), 0 0 0 1px var(--line);
+}
+#tide .tools[hidden] { display: none; }
+#tide .tools__cap { padding: 8px 8px 2px; font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+#tide .tools__views.motu-segmented { margin: 2px 6px 0; background: color-mix(in srgb, var(--w-shallow) 12%, #fff); border: 1px solid var(--line); }
+#tide .tools__views.motu-segmented button { flex: 1 1 0; }
+#tide .tools__views.motu-segmented button[aria-current="true"] { background: var(--tide-accent); color: var(--motu-on-primary, #fff); border-radius: 8px; }
+#tide .tools__hint { margin: 2px 10px 4px; font-size: 11.5px; color: var(--ink-muted); }
+#tide .tools__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  white-space: nowrap;
 }
-#tide .rig__pills > button:hover,
-#tide .rig__pills > a:hover,
-#tide .rig__pills .slot > button:hover,
-#tide .rig__pills .slot > a:hover { border-color: var(--tide-accent); color: var(--tide-accent); }
-#tide .rig__pills [aria-pressed="true"],
-#tide .rig__pills [aria-current="true"] {
-  background: var(--tide-accent);
-  border-color: var(--tide-accent);
-  color: var(--motu-on-primary, #fff);
-}
-/* The view toggle keeps its sliding thumb — it is a fixed pair, which is what a segmented control is
- * for — but it has to read at the same weight as the pills beside it. */
-#tide .rig__pills .motu-segmented { background: #fff; border: 1px solid var(--line); }
-#tide .rig__pills .motu-segmented button { color: var(--ink-muted); font-weight: 600; }
-#tide .rig__pills .motu-segmented button[aria-current="true"] { color: var(--motu-on-primary, #fff); }
+#tide .tools__row:hover { background: color-mix(in srgb, var(--tide-accent) 8%, #fff); }
+#tide .tools__row:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: -2px; }
+#tide .tools__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+#tide .tools__txt b { font-size: 13px; }
+#tide .tools__txt small { font-size: 11.5px; color: var(--ink-muted); line-height: 1.35; }
+#tide .tools__switch { flex: 0 0 auto; position: relative; width: 36px; height: 20px; border-radius: 999px; background: color-mix(in srgb, var(--ink-muted) 35%, #fff); transition: background 140ms ease; }
+#tide .tools__switch i { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 140ms ease; }
+#tide .tools__row[aria-checked="true"] .tools__switch { background: var(--tide-accent); }
+#tide .tools__row[aria-checked="true"] .tools__switch i { left: 19px; }
+#tide .tools__rec { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: var(--motu-caution, #b45309); }
+#tide .tools__row[aria-pressed="true"] .tools__rec { border-radius: 2px; }
+#tide .tools__status { margin: 0 10px 4px; font-size: 11.5px; color: var(--ink-muted); }
+#tide .tools__status:empty { display: none; }
+#tide .tools__chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 8px 4px; margin-top: 4px; border-top: 1px solid var(--line); }
 #tide .hint { color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
-#tide .rig__status:empty { display: none; }
-#tide .rig__status {
-  margin: 7px 0 0; font: 500 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--ink-muted); overflow-wrap: anywhere;
+
+/* ── the island card: over the tab, not a tab ──────────────────────────────────────────────────── */
+#tide .card { display: none; }
+#tide .panel[data-card="true"] .card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 16px;
 }
+#tide .panel[data-card="true"] .find,
+#tide .panel[data-card="true"] .scroll,
+#tide .panel[data-card="true"] .seams { display: none !important; }
+#tide .card > * { flex: 0 0 auto; }
+#tide .card__head { display: flex; align-items: center; gap: 10px; }
+#tide .card__back { flex: 0 0 auto; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; background: color-mix(in srgb, var(--w-shallow) 18%, #fff); color: var(--ink); cursor: pointer; }
+#tide .card__dot { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--motu-sand, #e3c893); color: var(--motu-on-sand, #0b3d5c); font-weight: 800; font-size: 12.5px; }
+#tide .card__name { min-width: 0; display: flex; flex-direction: column; }
+#tide .card__name b { font: 600 15px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; }
+#tide .card__name small { font-size: 11.5px; color: var(--ink-muted); }
+#tide .card__acts { display: flex; gap: 8px; }
+#tide .card__act { flex: 1 1 0; min-height: 38px; border: 1px solid color-mix(in srgb, var(--tide-accent) 40%, transparent); border-radius: 10px; background: var(--surface-row, #fff); color: var(--tide-accent); font: 700 12.5px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+#tide .card__cap { padding-top: 8px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+#tide .card__cap small { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11.5px; }
+#tide .given { border-bottom: 1px solid var(--line); }
+#tide .given > summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 10px;
+  padding: 7px 2px;
+}
+#tide .given > summary::-webkit-details-marker { display: none; }
+#tide .given__plain { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+#tide .given__from { font-size: 11px; color: var(--ink-muted); text-align: right; }
+#tide .given__key { grid-column: 1 / -1; font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--tide-accent); }
+#tide .given[data-state="default"] .given__plain, #tide .given[data-state="bound-empty"] .given__plain { color: var(--motu-caution, #b45309); }
+#tide .given__raw { display: block; margin: 0 2px 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--w-shallow) 10%, #fff); font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-muted); overflow-wrap: anywhere; }
+#tide .does { display: flex; gap: 10px; align-items: baseline; font-size: 13px; padding: 2px; }
+#tide .does__ev { flex: 0 0 auto; min-width: 96px; font: 500 11.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--tide-accent); }
+#tide .card__whatifs { display: flex; flex-direction: column; gap: 2px; }
+#tide .card__whatifs .shelf__item { width: auto; }
+#tide .card__whatifs .shelf__card { width: auto; min-height: 40px; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; border: 0; background: transparent; padding: 6px 4px; }
+#tide .card__whatifs .shelf__card[aria-current="true"] { background: color-mix(in srgb, var(--tide-accent) 10%, #fff); }
+#tide .card__whatifs .shelf__item + .shelf__item { box-shadow: 0 -1px 0 var(--line); }
+#tide .card__whatifs .shelf__card + .reach { margin: -2px 0 6px 28px; }
+#tide .shelf__about {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  min-height: 26px;
+  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  color: var(--tide-accent);
+  cursor: pointer;
+}
+
+/* PRODUCTION lives inside Seams now, after the findings — and only when there is a corpus. */
+#tide .seams .coverage { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
 /* ── mobile: a sheet from the bottom, and a handle to pull it ─────────────────────────────── */
 /*
@@ -1906,28 +1959,54 @@ function motuMountDock(opts) {
     applyPin();
   });
 
+  /**
+   * ⋯ — THE TOOLS: views, the page layers, recording, the artifact's own chips. They were the RIG, a
+   * strip at the foot of every tab: ~90px of a phone sheet, permanently, for switches set once in a
+   * while. Behind one button they cost nothing until they are wanted.
+   */
+  var toolsBtn = el('button', {
+    class: 'bay-tools', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+    title: 'Views, coupling, recording', 'aria-label': 'Views, coupling, recording',
+  });
+  (function () {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '16'); svg.setAttribute('height', '16');
+    svg.setAttribute('fill', 'currentColor'); svg.setAttribute('aria-hidden', 'true');
+    [5, 12, 19].forEach(function (cx) {
+      var c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', String(cx)); c.setAttribute('cy', '12'); c.setAttribute('r', '2');
+      svg.appendChild(c);
+    });
+    toolsBtn.appendChild(svg);
+  })();
+  var toolsMenu = el('div', { class: 'tools', role: 'menu', 'aria-label': 'Lagoon tools', hidden: '' });
+  var setTools = function (on) {
+    toolsMenu.hidden = !on;
+    toolsBtn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  };
+  toolsBtn.addEventListener('click', function (e) { e.stopPropagation(); setTools(toolsMenu.hidden); });
+  document.addEventListener('pointerdown', function (e) {
+    if (toolsMenu.hidden) return;
+    if (toolsMenu.contains(e.target) || toolsBtn.contains(e.target)) return;
+    setTools(false);
+  }, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !toolsMenu.hidden) setTools(false); });
+
   // SHARE, beside the pin: the panel's copy of the bar's act, for the width where there is no bar.
   var bayShare = el('button', {
     class: 'bay-pin bay-share', type: 'button', title: 'Copy a link to this state', 'aria-label': 'Copy a link to this state',
   }, [shareIcon()]);
   var masthead = el('div', { class: 'motu-bay', 'data-shape': 'masthead' }, [
     grab,
-    el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), bayShare, pin, fold]),
+    el('div', { class: 'bay-row' }, [el('span', { class: 'bay-txt' }, [bayTitle, baySub]), bayShare, toolsBtn, pin, fold]),
   ]);
   /** What Share just did — the address it copied, or the address to copy by hand when it could not. */
   var shareNote = el('div', { class: 'share-note', role: 'status', hidden: '' });
 
   var scroll = el('div', { class: 'scroll' });
-  // THE RIG: what is a MODE rather than a place. The view toggle is the dock's own; the transport and
-  // fit chips belong to whoever mounted them and are read rather than reimplemented, so a control a
-  // future package appends shows up here with nothing to keep in sync.
-  var rigPills = el('div', { class: 'rig__pills' });
-  var recStatus = el('p', { class: 'rig__status' });
-  var rig = el('div', { class: 'rig' }, [
-    el('div', { class: 'rig__head' }, [el('span', { class: 'motu-cap' }, ['Rig'])]),
-    rigPills,
-    recStatus,
-  ]);
+  // What Record just did — shown under it in the ⋯ menu (the rig that used to hold it is gone).
+  var recStatus = el('p', { class: 'tools__status' });
   // STATES is where the region is; SEAMS is what the lens has noticed about it. The same region
   // looked at two ways, which is why they are tabs in one panel rather than two surfaces.
   var tabs = el('div', { class: 'motu-segmented tabs', role: 'tablist' });
@@ -1948,10 +2027,15 @@ function motuMountDock(opts) {
   // Same region, a different world to measure it against, so it earns its own place rather than
   // another block of rows under a heading that promises something else.
   var coverageTab = el('button', { type: 'button', role: 'tab', 'aria-current': 'false' }, ['Coverage']);
-  tabs.append(tabThumb, statesTab, seamsTab, islandsTab, coverageTab);
+  // TWO TABS. States is where the region is; Seams is whether it is wired right. What the Islands tab
+  // said now answers the moment you point at an island (the island card), and Coverage became a
+  // Production section inside Seams that exists only when there is a corpus to show — a tab that is
+  // empty on every region without one was a place to go and be told nothing.
+  tabs.append(tabThumb, statesTab, seamsTab);
   var seams = el('div', { class: 'seams' });
-  var islandsPane = el('div', { class: 'islands' });
   var coveragePane = el('div', { class: 'coverage' });
+  /** The island card — what one island was given, what it does, its what-ifs. Over the tab, not a tab. */
+  var cardBox = el('div', { class: 'card', role: 'region', 'aria-label': 'Island' });
   // FIND IS THE ONE PLACE EVERYTHING IS LISTED \u2014 screens, regions, every state of every region in
   // view. The States tab used to stack all of that above the states themselves, and a list that holds
   // everything grows with the project; a search does not. On a keyboard it is still Ctrl/Cmd-K; on a
@@ -1966,9 +2050,8 @@ function motuMountDock(opts) {
     el('div', { class: 'find' }, [tabs, kbd]),
     scroll,
     seams,
-    islandsPane,
-    coveragePane,
-    rig,
+    toolsMenu,
+    cardBox,
   ]);
   var scrim = el('div', { class: 'scrim' });
   // AFTER the panel, so the chip stacks above the sliding surface rather than under it. A sibling of
@@ -2501,11 +2584,11 @@ function motuMountDock(opts) {
       }, kids);
       b.style.left = (50 + 36 * Math.cos(angle)).toFixed(2) + '%';
       b.style.top = (50 + 30 * Math.sin(angle)).toFixed(2) + '%';
+      // AN ISLAND OPENS ITS CARD — what it was given, what it does, its what-ifs.
       b.addEventListener('click', function () {
-        aimIsland = aimIsland === i.tag ? null : i.tag;
+        aimIsland = i.tag;
         closedAll = false;
-        revealShelf = aimIsland;
-        paint();
+        openCard(i.tag);
       });
       nodes.push(b);
     });
@@ -2738,6 +2821,106 @@ function motuMountDock(opts) {
     return line('na', ['not charted'], w.reason || '');
   };
 
+  /** The island whose card is open, by tag — set by the atoll, an island's row, or the page's ⌖. */
+  var cardTag = null;
+  var openCard = function (tag) { cardTag = tag; paint(); if (scroll.scrollTo) scroll.scrollTo(0, 0); };
+
+  /** Outline an island on the page and bring it into view — the card's "Show on page". */
+  var showOnPage = function (slot) {
+    try {
+      var node = lagoonWindow().document.querySelector('[data-motu-slot="' + slot + '"]');
+      if (!node) return;
+      if (isPhone()) open(false);
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      var was = node.style.outline;
+      node.style.outline = '3px solid var(--motu-sand, #e3c893)';
+      node.style.outlineOffset = '3px';
+      setTimeout(function () { node.style.outline = was; node.style.outlineOffset = ''; }, 1800);
+    } catch (e) { /* another document's page: nothing to point at from here */ }
+  };
+
+  /**
+   * THE ISLAND CARD. What the Islands tab listed for every island at once, said for ONE — the one you
+   * pointed at — in words: what it was given (as a person would say it, and where it came from), what
+   * its outputs do, and its what-ifs with how the flows reach them. The raw value is a tap away.
+   */
+  var islandCard = function (isl, aim, now) {
+    var kids = [];
+    var back = el('button', { class: 'card__back', type: 'button', 'aria-label': 'Back' }, [chevron('back')]);
+    back.addEventListener('click', function () { cardTag = null; paint(); });
+    var regIsl = aim ? (aim.reg.islands || []).filter(function (i) { return i.tag === isl.tag; })[0] : null;
+    var nScen = regIsl ? regIsl.scenarios.length : scenarioCount(isl.tag);
+    kids.push(el('div', { class: 'card__head' }, [
+      back,
+      el('span', { class: 'card__dot' }, [String(nScen)]),
+      el('span', { class: 'card__name' }, [
+        el('b', {}, [isl.slot]),
+        el('small', {}, [isl.tag + (aim ? ' \u00b7 in ' + aim.regId : '')]),
+      ]),
+    ]));
+    var acts = [];
+    if (aim && aim.own && !now.island) {
+      var alone = el('button', { class: 'card__act', type: 'button' }, ['Open alone \u2197']);
+      alone.addEventListener('click', drive(function (c) { cardTag = null; c.openIsland(isl.tag); }));
+      acts.push(alone);
+    }
+    var find = el('button', { class: 'card__act', type: 'button' }, ['\u2316 Show on page']);
+    find.addEventListener('click', function () { showOnPage(isl.slot); });
+    acts.push(find);
+    kids.push(el('div', { class: 'card__acts' }, acts));
+    if (isl.risk) kids.push(el('p', { class: 'seam-notice' }, ['\u26a0 ' + isl.risk]));
+
+    // WHAT IT WAS GIVEN — each value in words; the raw value under it, one tap away.
+    kids.push(el('div', { class: 'card__cap' }, ['What it was given']));
+    if (!isl.props.length) kids.push(el('p', { class: 'motu-empty' }, ['It declares no props.']));
+    isl.props.forEach(function (pr) {
+      var d = el('details', { class: 'given', 'data-state': pr.state }, [
+        el('summary', {}, [
+          el('span', { class: 'given__plain' }, [pr.plain || pr.value]),
+          el('span', { class: 'given__from' }, [pr.from || '']),
+          el('span', { class: 'given__key' }, [pr.storeKey || pr.name]),
+        ]),
+        el('code', { class: 'given__raw' }, [pr.value]),
+      ]);
+      kids.push(d);
+    });
+
+    // WHAT IT DOES — each output, and where it goes.
+    kids.push(el('div', { class: 'card__cap' }, ['What it does']));
+    var does = isl.does || [];
+    if (!does.length) kids.push(el('p', { class: 'motu-empty' }, ['Nothing — it only reads.']));
+    does.forEach(function (d) {
+      kids.push(el('div', { class: 'does' }, [el('span', { class: 'does__ev' }, [d.event]), el('span', {}, [d.what])]));
+    });
+
+    // ITS WHAT-IFS — and, once charted, which flow reaches each.
+    if (regIsl && regIsl.scenarios.length) {
+      var liveCtl = control();
+      var chart = liveCtl && liveCtl.chartOf ? liveCtl.chartOf(aim.regId) : null;
+      var lit = aim.activeScenario && aim.activeScenario.island === isl.tag ? aim.activeScenario.name : null;
+      var reached = 0;
+      var rows = regIsl.scenarios.map(function (name) {
+        var w = chart ? chart.whatIfs.filter(function (x) { return x.island === isl.tag && x.name === name; })[0] : null;
+        if (w && w.status === 'reached') reached++;
+        var card = el('button', { class: 'shelf__card', type: 'button', 'aria-current': String(lit === name) }, [
+          el('span', { class: 'shelf__mark' }, lit === name ? [anchorIcon(14)] : ['\u25c7']),
+          el('span', { class: 'shelf__name' }, [name]),
+        ]);
+        card.addEventListener('click', underWay('Dropping anchor\u2026', function () {
+          drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: isl.tag, name: name }); })();
+        }));
+        var reach = reachLine(aim, w);
+        return el('div', { class: 'shelf__item' }, reach ? [card, reach] : [card]);
+      });
+      kids.push(el('div', { class: 'card__cap' }, [
+        'Its what-ifs ',
+        el('small', {}, [chart ? reached + ' of ' + regIsl.scenarios.length + ' sailed to' : String(regIsl.scenarios.length)]),
+      ]));
+      kids.push(el('div', { class: 'card__whatifs' }, rows));
+    }
+    return kids;
+  };
+
   var drawShelves = function (aim, now) {
     var nodes = [];
     var total = 0;
@@ -2783,7 +2966,9 @@ function motuMountDock(opts) {
         aimIsland = open ? null : i.tag;
         paint();
       });
-      var head = [title];
+      var about = el('button', { class: 'shelf__about', type: 'button', title: 'What ' + (i.slot || i.tag) + ' was given, and what it does' }, ['about \u203a']);
+      about.addEventListener('click', function () { openCard(i.tag); });
+      var head = [title, about];
       // ALONE only where the view can do it: opening an island scopes the REGION STATION, so on a
       // screen (several regions, none of them the station) the act has nowhere to land.
       if (aim.own && !now.island) {
@@ -2937,6 +3122,8 @@ function motuMountDock(opts) {
         railPick = now.focus.region;
         aimIsland = now.focus.island && now.focus.island !== '*' ? now.focus.island : null;
         revealShelf = now.focus.island === '*' ? 'shelves' : aimIsland || 'top';
+        // Pointed at ONE island: its card is the answer to "what is this".
+        if (aimIsland) cardTag = aimIsland;
         open(true);
         showTab('states'); // repaints, aimed
         return;
@@ -2995,68 +3182,65 @@ function motuMountDock(opts) {
     }
     syncBottomReserve();
 
-    // ── the rig ──────────────────────────────────────────────────────────────────────────────
-    var pills = [];
-    // ASK THE PAGE WHICH VIEWS IT HAS. Two were hard-coded here because two were all there were; a
-    // region may now also declare a `page` — the application's own page module — and most do not.
-    // Falling back to the pair keeps a lagoon published before this dock existed working unchanged.
+    // ── the tools (⋯) ────────────────────────────────────────────────────────────────────────
+    var toolsNodes = [];
+    var group = function (title) { toolsNodes.push(el('div', { class: 'tools__cap' }, [title])); };
+    // VIEWS — asked of the page, because a region may declare a `page` and most do not.
     var VIEW_LABELS = { region: 'Region', mountpoints: 'Mountpoints', page: 'Page' };
+    var VIEW_SAYS = {
+      region: "The app's arrangement of the region.",
+      mountpoints: 'Every slot framed on its own.',
+      page: "The application's own page, not the region.",
+    };
     var available = (ctl.views && ctl.views()) || ['region', 'mountpoints'];
-    available.forEach(function (v) {
-      var b = el('button', {
-        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
-        title: v === 'page' ? "the application's own page, not the region" : '',
-        'aria-current': now.view === v ? 'true' : 'false',
-      }, [VIEW_LABELS[v] || v]);
-      b.addEventListener('click', drive(function (c) { c.setView(v); }));
-      pills.push(b);
-    });
-    // RECORDING IS AN ACT, so it sits with the other controls rather than in a tab. It is the one
-    // thing here that changes the lagoon instead of reporting on it, and stopping is what writes the
-    // fixtures out — so the label says which of those pressing it will do.
-    // NO SEAM LENS PILL. The layer is a means, not a thing to manage: everything that needs it opens
-    // it — the crosshair to aim with, Coupling to draw on — and the crosshair now puts it away again
-    // when it has picked. A switch for a layer that turns itself on and off is one more pressed-looking
-    // control saying nothing about the region, in a rig whose other chips all change what you see.
-    //
-    // Everything the lens used to SAY lives in the tabs above; only the outlines and wires over the
-    // running page are still its own, and those arrive with whatever asked for them.
-
-    // The coupling graph, beside the layer it draws on. Two islands sharing a region key is the one
-    // thing on this page that no list shows as well as a line does, so it stays a page-layer switch
-    // rather than becoming a tab.
-    if (ctl.toggleCoupling) {
-      var cplPill = el('button', {
-        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
-        'aria-pressed': ctl.couplingOn && ctl.couplingOn() ? 'true' : 'false',
-        title: 'Draw a wire between islands that share a region key',
-      }, ['\u2325 Coupling']);
-      cplPill.addEventListener('click', drive(function (c) { c.toggleCoupling(); paint(); }));
-      pills.push(cplPill);
+    // A SWITCH WITH ONE POSITION IS NOT A CONTROL. A lagoon that offers a single view showed a lone,
+    // lit "Region" pill that did nothing when pressed — so the group exists only when there is a choice.
+    if (available.length > 1) {
+      group('View');
+      toolsNodes.push(el('div', { class: 'motu-segmented tools__views', role: 'group', 'aria-label': 'View' }, available.map(function (v) {
+        var b = el('button', { type: 'button', 'aria-current': now.view === v ? 'true' : 'false' }, [VIEW_LABELS[v] || v]);
+        b.addEventListener('click', drive(function (c) { c.setView(v); }));
+        return b;
+      })));
+      toolsNodes.push(el('p', { class: 'tools__hint' }, [VIEW_SAYS[now.view] || '']));
     }
-
+    // ON THE PAGE — layers drawn over the region, and the call cards.
+    group('On the page');
+    var toggle = function (label, hint, on, act) {
+      var b = el('button', { class: 'tools__row', type: 'button', role: 'menuitemcheckbox', 'aria-checked': on ? 'true' : 'false' }, [
+        el('span', { class: 'tools__txt' }, [el('b', {}, [label]), el('small', {}, [hint])]),
+        el('span', { class: 'tools__switch', 'aria-hidden': 'true' }, [el('i')]),
+      ]);
+      b.addEventListener('click', act);
+      return b;
+    };
+    if (ctl.toggleCoupling) {
+      toolsNodes.push(toggle('Coupling wires', 'A line between islands that share a key', !!(ctl.couplingOn && ctl.couplingOn()),
+        drive(function (c) { c.toggleCoupling(); paint(); })));
+    }
+    toolsNodes.push(toggle('Call cards', 'A card for each request as it lands', !muted, function () { setMuted(!muted); paint(); }));
+    // CAPTURE — the one act here that changes the lagoon rather than showing it.
     var rec = ctl.recordingState ? ctl.recordingState() : null;
     if (rec) {
-      var recPill = el('button', {
-        class: 'motu-btn', 'data-shape': 'pill', type: 'button',
-        'aria-pressed': rec.recording ? 'true' : 'false',
-        title: rec.recording
-          ? 'Stop capturing and write fixtures.recorded.ts'
-          : 'Capture the calls and host-fed writes this region makes',
-      }, [rec.recording ? '\u25a0 Stop & export' : '\u25cf Record']);
-      recPill.addEventListener('click', function () {
+      group('Capture');
+      var recRow = el('button', { class: 'tools__row', type: 'button', role: 'menuitem', 'aria-pressed': rec.recording ? 'true' : 'false' }, [
+        el('span', { class: 'tools__rec', 'aria-hidden': 'true' }),
+        el('span', { class: 'tools__txt' }, [
+          el('b', {}, [rec.recording ? 'Stop & export' : 'Record']),
+          el('small', {}, [rec.recording ? 'Write what was captured to fixtures.recorded.ts' : 'Capture the calls and host-fed writes this region makes']),
+        ]),
+      ]);
+      recRow.addEventListener('click', function () {
         var live = control();
-        if (!live) return; // the artifact reloaded under us; the next paint rebinds
+        if (!live) return;
         var next = live.toggleRecording();
-        // Say what came out. A capture that produced nothing is the case worth reporting loudest —
-        // it looks identical to success from the button alone.
-        if (next && next.status) recStatus.textContent = next.status;
-        else recStatus.textContent = '';
+        recStatus.textContent = next && next.status ? next.status : '';
         paint();
       });
-      pills.push(recPill);
+      toolsNodes.push(recRow, recStatus);
     }
-
+    // THE ARTIFACT'S OWN CHIPS (transport, fit…) — read, never reimplemented, still pressable.
+    var chipNodes = [];
     (ctl.chips ? ctl.chips() : []).forEach(function (c) {
       if (!c.label) return;
       var b = el('button', {
@@ -3064,9 +3248,10 @@ function motuMountDock(opts) {
         title: c.title || '', 'aria-pressed': c.pressed ? 'true' : 'false',
       }, [c.label]);
       b.addEventListener('click', drive(function (live) { live.pressChip(c.index); }));
-      pills.push(b);
+      chipNodes.push(b);
     });
-    rigPills.replaceChildren.apply(rigPills, pills);
+    if (chipNodes.length) toolsNodes.push(el('div', { class: 'tools__chips' }, chipNodes));
+    toolsMenu.replaceChildren.apply(toolsMenu, toolsNodes);
 
     // ── seams ────────────────────────────────────────────────────────────────────────────────
     // COUNTS, AND THE FINDINGS THEMSELVES. No headline over them: a sentence summarising a region
@@ -3102,11 +3287,12 @@ function motuMountDock(opts) {
           }
           var row = el('div', {
             class: 'sheet__row',
-            title: r.key + ' \u2014 ' + (r.islandOwned ? 'written by ' + r.owner : 'fed by the host') +
+            title: r.key + ' \u2014 ' + (r.islandOwned ? 'written by ' + r.owner : r.owner.indexOf('source:') === 0 ? 'fed by ' + r.owner : 'set by the page') +
               '; read by ' + (r.readers.join(', ') || 'nobody') + '\n' + r.value,
           }, [
             el('span', { class: 'sheet__k' }, [r.key]),
-            el('span', { class: 'sheet__own', 'data-kind': r.islandOwned ? 'island' : 'host' }, [r.owner]),
+            // The page is "the page", and a source says which: "host" named neither.
+            el('span', { class: 'sheet__own', 'data-kind': r.islandOwned ? 'island' : r.owner.indexOf('source:') === 0 ? 'source' : 'host' }, [r.owner === 'host' ? 'the page' : r.owner]),
             el('span', { class: 'sheet__rd' }, [r.readers.length ? r.readers.join(', ') : '\u2205 nobody']),
             el('span', { class: 'sheet__val' }, [r.value]),
             el('span', { class: 'sheet__moved', 'data-moved': r.moved ? 'true' : 'false' }, [r.moved || 'seed']),
@@ -3376,69 +3562,26 @@ function motuMountDock(opts) {
       }
     }
 
-    // ── islands ──────────────────────────────────────────────────────────────────────────────
-    if (panel.dataset.tab === 'islands') {
-      var mounted = ctl.islands ? ctl.islands() : null;
-      if (!mounted) {
-        islandsPane.replaceChildren(el('p', { class: 'motu-empty' },
-          ['This lagoon ships no seam lens, so there is nothing to inspect.']));
-      } else if (!mounted.length) {
-        islandsPane.replaceChildren(el('p', { class: 'motu-empty' }, ['No island is mounted.']));
-      } else {
-        islandsPane.replaceChildren.apply(islandsPane, mounted.map(function (isl) {
-          // THE HEAD IS A BUTTON, because inspecting an island and OPENING one were split across two
-          // halves of the panel that could not reach each other: this pane could say what a region had
-          // mounted, and the states list shows an island's scenarios only on an island target — which
-          // nothing here could reach. `?target=island:<tag>` typed by hand was the only way in.
-          var head = el('button', {
-            class: 'isl__head', type: 'button',
-            title: 'Open ' + isl.tag + ' on its own — its scenarios appear under States',
-          }, [
-            el('i', { class: 'isl__dot', 'data-tone': isl.verdict }),
-            el('span', { class: 'isl__slot' }, [isl.slot]),
-            el('span', { class: 'isl__tag' }, [isl.tag]),
-            el('span', { class: 'isl__meta' }, [isl.isolation]),
-            // HOW MUCH IS BEHIND SCOPING THIS, before you spend a click finding out. Without it every
-            // island looks equally worth opening, and most have nothing but their default mount.
-            scenarioCount(isl.tag)
-              ? el('span', { class: 'isl__scn', title: scenarioCount(isl.tag) + ' declared scenario(s)' }, [String(scenarioCount(isl.tag))])
-              : el('span', { class: 'isl__scn isl__scn--none', title: 'no declared scenarios' }, ['—']),
-          ]);
-          head.addEventListener('click', drive(function (c) { if (c.openIsland) c.openIsland(isl.tag); }));
-          var body = el('div', { class: 'isl__body' });
-          if (isl.risk) body.appendChild(el('p', { class: 'seam-notice' }, ['\u26a0 ' + isl.risk]));
-          if (!isl.props.length) {
-            body.appendChild(el('p', { class: 'motu-empty' }, ['No declared props.']));
-          } else {
-            isl.props.forEach(function (pr) {
-              body.appendChild(el('div', { class: 'isl__prop', title: pr.name + ' = ' + pr.value }, [
-                el('span', { class: 'isl__pn' }, [pr.name]),
-                el('span', { class: 'isl__ps', 'data-state': pr.state }, [pr.state]),
-                el('span', { class: 'isl__pv' }, [pr.storeKey ? pr.storeKey + ' = ' + pr.value : pr.value]),
-              ]));
-            });
-          }
-          // The counts, because "what did this island actually do" is the other half of "what was it
-          // given", and it is one line rather than another table.
-          var did = [];
-          if (isl.writes.length) did.push('writes ' + isl.writes.join(', '));
-          if (isl.emits.length) did.push('emits ' + isl.emits.join(', '));
-          if (isl.calls) did.push(isl.calls + ' call' + (isl.calls === 1 ? '' : 's'));
-          if (isl.intents) did.push(isl.intents + ' intent' + (isl.intents === 1 ? '' : 's'));
-          body.appendChild(el('p', { class: 'isl__did' }, [did.length ? did.join(' \u00b7 ') : 'reads only']));
-          return el('div', { class: 'isl' }, [head, body]);
-        }));
-      }
+    // ── the island card ──────────────────────────────────────────────────────────────────────
+    var cardIsland = null;
+    if (cardTag) {
+      var allIslands = (ctl.islands ? ctl.islands() : null) || [];
+      cardIsland = allIslands.filter(function (x) { return x.tag === cardTag; })[0] || null;
+      if (!cardIsland) cardTag = null; // gone from the view: the card goes with it
     }
+    panel.dataset.card = cardIsland ? 'true' : 'false';
+    if (cardIsland) cardBox.replaceChildren.apply(cardBox, islandCard(cardIsland, aim, now));
 
-    // ── coverage ─────────────────────────────────────────────────────────────────────────────
-    if (panel.dataset.tab === 'coverage') {
+    // PRODUCTION, inside Seams — and only when there is a corpus. Without one the Coverage tab said
+    // one sentence on every region, which is a tab you learn not to open.
+    if (panel.dataset.tab === 'seams') {
       var cov = ctl.coverage ? ctl.coverage() : null;
-      if (!cov) {
-        coveragePane.replaceChildren(el('p', { class: 'motu-empty' },
-          ['No corpus for this region \u2014 nothing has reported what production does with it.']));
-      } else {
+      if (cov) {
         var nodes = [el('div', { class: 'sect__head' }, [
+          el('span', { class: 'motu-dot' }),
+          el('span', { class: 'motu-cap' }, ['Production']),
+          el('span', { class: 'sect__hint' }, ['what production has been recorded doing']),
+        ]), el('div', { class: 'sect__head' }, [
           el('span', { class: 'motu-cap' }, ['On screen now']),
           el('span', { class: 'count' }, [cov.states + ' recorded state' + (cov.states === 1 ? '' : 's') +
             ' \u00b7 ' + cov.occurrences + ' occurrence' + (cov.occurrences === 1 ? '' : 's')]),
@@ -3480,6 +3623,7 @@ function motuMountDock(opts) {
           });
         }
         coveragePane.replaceChildren.apply(coveragePane, nodes);
+        seams.appendChild(coveragePane);
       }
     }
 

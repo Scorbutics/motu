@@ -157,3 +157,98 @@ ${rows.join('\n')}
 ];
 ${seedBlock}`;
 }
+
+// ── values in plain words ────────────────────────────────────────────────────────────────────
+//
+// The island card says what an island was GIVEN, and `[{"id":"00000000-0000-4000-9000-0000000…`
+// says nothing to a person looking at a screen. So a value is said the way the screen would say it:
+// a record by its title or name, an id by the record it names (looked up in the region's own lists —
+// `selectedEventId` becomes "Newcomers' welcome evening"), a list by its count and first entries, an
+// object with nothing set as "nothing set". The raw value stays one tap away; this is the headline.
+
+const LABEL_FIELDS = ['title', 'name', 'label', 'displayName'] as const;
+
+/** A person's name, the ways records spell it: firstname + surname, firstName + lastName, first_name + last_name. */
+const NAME_PAIRS = [['firstname', 'surname'], ['firstname', 'lastname'], ['firstName', 'lastName'], ['first_name', 'last_name'], ['givenName', 'familyName']] as const;
+
+function labelOf(v: unknown): string | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+  for (const f of LABEL_FIELDS) {
+    const x = r[f];
+    if (typeof x === 'string' && x.trim()) return x;
+  }
+  for (const [a, b] of NAME_PAIRS) {
+    const name = [r[a], r[b]].filter((x) => typeof x === 'string' && x.trim()).join(' ');
+    if (name) return name;
+  }
+  return null;
+}
+
+/** The record in any of the region's lists whose `id` is this one — said by its label. */
+function recordNamed(id: string, region: Record<string, unknown>): string | null {
+  for (const value of Object.values(region)) {
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (item && typeof item === 'object' && (item as { id?: unknown }).id === id) return labelOf(item);
+    }
+  }
+  return null;
+}
+
+const isUnset = (x: unknown) => x === null || x === undefined || x === false || x === '' || (Array.isArray(x) && !x.length);
+
+/**
+ * A value the way a person would say it. `region` is the store's snapshot, so an id can be said as
+ * the record it names. Pure, and never throws on a shape it does not know — it falls back to the
+ * short JSON the inspector always showed.
+ */
+export function plainValue(v: unknown, region: Record<string, unknown> = {}, depth = 0): string {
+  if (v === undefined) return 'not given';
+  if (v === null) return 'nothing';
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'string') {
+    const named = recordNamed(v, region);
+    if (named) return named;
+    return v.length > 48 ? v.slice(0, 45) + '…' : v;
+  }
+  if (Array.isArray(v)) {
+    if (!v.length) return 'none';
+    const labels = v
+      .map((x) => (typeof x === 'string' ? recordNamed(x, region) : labelOf(x)))
+      .filter((x): x is string => !!x);
+    if (!labels.length) return `${v.length} ${v.length === 1 ? 'item' : 'items'}`;
+    return `${v.length} — ${labels.slice(0, 2).join(', ')}${v.length > 2 ? ', …' : ''}`;
+  }
+  if (typeof v === 'object') {
+    const label = labelOf(v);
+    if (label) return label;
+    // An `id` says nothing to a person reading the screen; the fields beside it do.
+    const set = Object.entries(v as Record<string, unknown>).filter(([k, x]) => k !== 'id' && !isUnset(x));
+    if (!set.length) return 'nothing set';
+    if (depth > 0) return `${set.length} field${set.length === 1 ? '' : 's'}`;
+    const parts = set.slice(0, 3).map(([k, x]) => `${k}: ${plainValue(x, region, depth + 1)}`);
+    return parts.join(', ') + (set.length > 3 ? ', …' : '');
+  }
+  return preview(v);
+}
+
+/**
+ * Where each region key comes from, in words: the island that writes it, the declared source that
+ * produces it, or — neither — the page. The region sheet's OWNER column and the island card's "from"
+ * read the same answer.
+ */
+export function keyOrigins(
+  islands: readonly { slot: string; keys: readonly string[] }[],
+  sources: Readonly<Record<string, readonly string[]>>,
+): Map<string, { owner: string; said: string }> {
+  const out = new Map<string, { owner: string; said: string }>();
+  for (const island of islands) {
+    for (const key of island.keys) if (!out.has(key)) out.set(key, { owner: island.slot, said: `chosen by ${island.slot}` });
+  }
+  for (const [id, keys] of Object.entries(sources)) {
+    for (const key of keys) if (!out.has(key)) out.set(key, { owner: `source:${id}`, said: `fed by source:${id}` });
+  }
+  return out;
+}

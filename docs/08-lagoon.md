@@ -811,13 +811,25 @@ rather than bundled into the artifact (`packages/debug-overlay/src/overlay.ts:35
 NOT move is the PAGE layer — outlines, wires, hit-testing, the crosshair — because it measures the
 host's live DOM sixty times a second and only means anything over the running region.
 
-So the lens now EXPOSES data and the sidebar renders it. The tabs are `sheet`, `seams`, `islands`,
+So the lens now EXPOSES data and the dock renders it. The data is `sheet`, `seams`, `islands`,
 `coupling`, `coverage`, `findings`, plus fixture recording
-(`packages/react/src/lagoon-gallery.ts:821-835`).
+(`packages/react/src/lagoon-gallery.ts:821-835`) — and the dock shows it in **two tabs**:
+
+- **States** — where the region is (the voyage, the atoll, flows, what-ifs).
+- **Seams** — whether it is wired right: findings, the region sheet, and a **Production** section that
+  appears only when the region has a coverage corpus (none: no section, rather than an empty tab).
+
+The rest appears where it is needed. **The island card** — tap an island on the atoll, its *about* in
+the what-ifs, or point at it with ⌖ — says what that island was given, in words and with where each
+value came from ("Newcomers' welcome evening · chosen by event-list", "Dennis Shaw · set by the page",
+the raw value a tap away), what its outputs do, and its what-ifs. **⋯** in the masthead holds the
+view switch (only when the region offers more than one view), the page layers (coupling wires, call
+cards), recording, and the artifact's own chips — what used to be the rig, a strip at the foot of every
+tab.
 
 The **region sheet — one row per key**: who owns it, who reads it, what it holds, whether it has moved
 (`currentSheet()`, `packages/debug-overlay/src/findings-view.ts:298-340`). Columns are the key, its
-owner (a slot, or `host`), its readers, a value preview, and either `<slot> · <n>× · <ago>` or `seed`
+owner (a slot, `source:<id>` for a key a declared source produces, or `host` — shown as "the page"), its readers, a value preview, and either `<slot> · <n>× · <ago>` or `seed`
 — "the honest word for a key nothing has been seen to move: it holds what the page established, and no
 declared write has fired" (`findings-view.ts:325-327`) — plus a flag where a declared write has never
 fired or the host answered an island.

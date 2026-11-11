@@ -40,9 +40,9 @@ ids:
 
 | check id | what it rejects | source |
 |---|---|---|
-| `no-bare-fetch` | `fetch(...)` and `XMLHttpRequest` in the island's component FILE | `packages/cli/src/commands/verify.mjs:151-162` |
-| `contract-only-io` | importing `axios`/`ky`/`superagent`/`node-fetch`/`got`, or importing `configure` / `HttpTransport` / `MockTransport` from `@motu/runtime` | `packages/cli/src/commands/verify.mjs:190-206` |
-| `contract-only-io` (second half) | calling a `service.method` that does not exist in the generated contract | `packages/cli/src/commands/verify.mjs:222-240`, resolved against `paths.contract` by `contractPairs()` at `verify.mjs:517-523` |
+| `no-bare-fetch` | `fetch(...)` and `XMLHttpRequest` in the island's component FILE | `packages/cli/src/commands/verify/report.mjs:104` |
+| `contract-only-io` | importing `axios`/`ky`/`superagent`/`node-fetch`/`got`, or importing `configure` / `HttpTransport` / `MockTransport` from `@motu/runtime` | `packages/cli/src/commands/verify/island-static.mjs:48-64` |
+| `contract-only-io` (second half) | calling a `service.method` that does not exist in the generated contract | `packages/cli/src/commands/verify/island-static.mjs:80-98`, resolved against `paths.contract` by `contractPairs()` at `verify/island-static.mjs:375-381` |
 
 Note what `contract-only-io` bans: an island may not import `configure` or a transport class *at
 all*. The transport is not the island's business, and the check makes that structural rather than
@@ -50,7 +50,7 @@ cultural.
 
 **Read the rule as narrowly as the checks state it.** It used to say "all island I/O goes through the
 contract", and that claimed more than motu enforces or wants. `no-bare-fetch` reads ONE FILE —
-`sourceFileAt(componentPath)` at `verify.mjs:145`, the island's component, not its import graph — so an
+`sourceFileAt(componentPath)` at `verify/report.mjs:98`, the island's component, not its import graph — so an
 island that imports `@/lib/services/shots` and calls it passes clean, and that service's PostgREST read
 never goes near `call()`. That is not a hole the checks failed to close. `Effect`
 (`packages/types/src/index.ts:62-65`) has `{ table }`, `{ rpc }`, `{ fn }` and `{ route }` as
@@ -353,7 +353,7 @@ from stubs and only surfaced because the lagoon BUILD happened to import them �
 luck" (`packages/cli/src/lib/stubs.mjs:3-7`). `stubParity()` walks the import graph from each island's
 component and compares each stub against **what the islands actually reach for** — not the module's
 whole surface, which would be noise (`stubs.mjs:9-12`, `59-94`, `102-113`). It reports as the
-`host-stubs` check id (`packages/cli/src/commands/verify.mjs:2494-2512`). Type-only imports are
+`host-stubs` check id (`packages/cli/src/commands/verify/region-flows.mjs:535`). Type-only imports are
 exempt (`stubs.mjs:50-51`).
 
 `stubParity` keeps a module swap honest; §4 is the other answer to the same problem — do not swap the
@@ -597,7 +597,7 @@ you, and the three signals to read:
 - the shape changed → `tsc` fails where the contract's return type is consumed (the codegen/`tsc`
   loop, `packages/codegen/src/cli.mjs:5-6`);
 - the *method* went away → `contract-only-io` errors on a call not in the generated contract
-  (`packages/cli/src/commands/verify.mjs:222-240`);
+  (`packages/cli/src/commands/verify/island-static.mjs:80-98`);
 
 What none of them catch is a fixture whose *values* no longer resemble the backend's. That is the
 adapter gap of §3, and re-running `motu fixtures record --transport http` against the real backend is
@@ -789,7 +789,7 @@ export const Directory = createRegion(directoryArchipelago, {
 `DirectTransport` when the app reads from the browser under row-level security;
 `HttpTransport('/api/motu')` + `createMotuRoute` when the work must run on a server. The composition
 root is the only file that knows, and `contract-only-io` makes sure it stays that way
-(`packages/cli/src/commands/verify.mjs:190-206`).
+(`packages/cli/src/commands/verify/island-static.mjs:48-64`).
 
 **4 — Stub it in the lagoon.** `fixtures.mock.ts` beside the island: `fixtures`, `roles`, and at least
 one `scenario` — two scenarios whose distinct output proves inputs actually reach the render
@@ -821,7 +821,7 @@ motu check                            # contracts.generated.ts matches the compo
 
 Step 6 is where widening shows up. `contract-only-io` fails on a call the generated contract does not
 carry, so a method that was never exposed cannot be reached from an island
-(`packages/cli/src/commands/verify.mjs:222-240`).
+(`packages/cli/src/commands/verify/island-static.mjs:80-98`).
 
 ---
 

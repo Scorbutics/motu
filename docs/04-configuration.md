@@ -105,9 +105,9 @@ resolves against.
 | `appPackage` | string | `basename(appRoot)` (`config.mjs:205`) | The npm package name whose barrel exports `ELEMENT_REGISTRY`. | runtime harness, lagoon alias (`lagoon-vite.mjs`), `archipelago init` (`archipelago-init.mjs`), `init` |
 | `tagPrefix` | string | `"x-"` (`config.mjs:85`) | Prefix of every custom element tag: `names(x).tag = tagPrefix + kebab` (`util.mjs:359`). | `island create`, `verify`, lagoon materialize, `init` |
 | `isolation` | `"shadow" \| "light"` | `"shadow"`; anything not `"light"` becomes `"shadow"` (`config.mjs:207`) | Baked into the generated island registry as `setDefaultIsolation(...)` (`islands.mjs:78-92`). | `island sync`, lagoon, `create`, `defaults`, `archipelago-element.ts:63-66` |
-| `regionRoot` | `"encouraged" \| "required"` | `"encouraged"`; anything but `"required"` is `"encouraged"` (`config.mjs:229`) | Whether a hand-written lagoon frame is a nudge or an error. | `archipelago verify` (`verify.mjs:2244-2250`) |
+| `regionRoot` | `"encouraged" \| "required"` | `"encouraged"`; anything but `"required"` is `"encouraged"` (`config.mjs:229`) | Whether a hand-written lagoon frame is a nudge or an error. | `archipelago verify` (`verify/region-flows.mjs:285-291`) |
 | `removable` | boolean | `true`; only an explicit `false` opts out (`config.mjs:265`) | Whether this project CLAIMS motu is deletable. `false` turns `removal-check` into a visible SKIP. | `removal-check` (`removal-check.mjs:285-292`), `check` (`check.mjs:218-228`) |
-| `legacyFit` | boolean | `host === 'angularjs'` (`config.mjs:136`, `:297`) | Whether `legacy` is a required fit strategy and a verified runtime mount. | `island create` (`create.mjs:50`), `island verify` (`verify.mjs:393, 1130`) |
+| `legacyFit` | boolean | `host === 'angularjs'` (`config.mjs:136`, `:297`) | Whether `legacy` is a required fit strategy and a verified runtime mount. | `island create` (`create.mjs:50`), `island verify` (`verify/island-static.mjs:251, 1130`) |
 | `publishAs.repo` | string | `null` → the git remote (`config.mjs:277`) | The repository identity used on a lagoon host. | `lagoon publish` (`lagoon.mjs:250, 525`), `archipelago coverage` (`region-coverage.mjs:384, 415`) |
 | `publishAs.slug` | string | `null` → derived (`config.mjs:278`) | The project slug on the lagoon host. | `lagoon publish/serve` (`lagoon.mjs:159, 407`) |
 | `coverage.enabled` | boolean | **`false`**; only `true` enables (`config.mjs:243`) | Whether the coverage fold runs at all. Emits `configureCoverage(...)` into `archipelagos/coverage.generated.ts`; off emits an empty module (`archipelagos.mjs:30-65`). | `archipelago sync`, `check` (`check.mjs:46-52, 190`) |
@@ -270,7 +270,7 @@ legacy-fit gate applies:
 
 `legacyFit` derives from it — `true` only for `angularjs` (`config.mjs:136`, `:297`) — and controls whether
 `island create` scaffolds `legacy: 'fill'` (`create.mjs:50`) and whether `island verify` requires the
-`legacy` strategy and drives a second runtime mount (`verify.mjs:393, 1130`). Override it explicitly only
+`legacy` strategy and drives a second runtime mount (`verify/island-static.mjs:251, 1130`). Override it explicitly only
 when your host has a legacy skin motu does not know about.
 
 `motu init` accepts `angularjs | next | none | vite` (`init.mjs:121`); `vite` was supported everywhere
@@ -319,7 +319,7 @@ pins both, for a monorepo publishing several lagoons from one remote.
 A region composes either from its archipelago's `root`, which is safe by construction, or from a
 hand-written lagoon frame, which is a second description of the page and only as safe as the checks
 comparing it (`config.mjs:218-228`). Both work. The default SAYS SO and passes; a project that has
-finished migrating sets `"required"` and the frame becomes an error (`verify.mjs:2244-2250`) — which is
+finished migrating sets `"required"` and the frame becomes an error (`verify/region-flows.mjs:285-291`) — which is
 what stops the old shape creeping back in. Setting it before you have migrated fails a project on its
 first day, which is "a tool nobody adopts".
 

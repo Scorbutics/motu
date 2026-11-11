@@ -25,7 +25,7 @@ in parallel, both islands correct, and the *merge* broke it — each had extende
 slot→row ternary whose fallback was another island's row, so resolving the conflict naively made one
 agent's widget render as the other's. `archipelago verify --runtime` was byte-identical between the
 correct and the broken resolution, because arrangement is not declared and therefore not checked
-(`packages/cli/src/commands/verify.mjs:1495`, `.github/host-rules.md:252`).
+(`packages/cli/src/commands/verify/report.mjs:185`, `.github/host-rules.md:252`).
 
 **A region ships flows.** A flow is a seed, an act, and what the region holds afterwards
 (`packages/runtime/src/mock.ts:102`). The act is an island's *declared* output or the host feeding a
@@ -34,8 +34,8 @@ harness accepts arbitrary DOM scripting it is a second, untyped test suite and s
 from the archipelago (`packages/runtime/src/mock.ts:96`).
 
 **Evidence is read, not run.** The same files are consumed by three different readers: node-side
-checks that spawn `tsx` (`packages/cli/src/commands/verify.mjs:806`), a plain `import()` in the same
-process (`packages/cli/src/commands/verify.mjs:1336`), and a Vite `import.meta.glob` that bundles them
+checks that spawn `tsx` (`packages/cli/src/commands/verify/reach.mjs:87`), a plain `import()` in the same
+process (`packages/cli/src/commands/verify/island-runtime.mjs:359`), and a Vite `import.meta.glob` that bundles them
 into the lagoon so `?scenario=` and `?flow=` become addresses
 (`packages/cli/src/lib/scaffold.mjs:228`, `packages/cli/src/lib/scaffold.mjs:240`). Three readers with
 three module-resolution postures is why the file-layout rules below are not style.
@@ -74,7 +74,7 @@ by construction rather than by trusting tree-shaking
 tells you.**
 
 Two of the three readers are plain node. `islandScenarios` does `await import('file://…')` and catches
-everything (`packages/cli/src/commands/verify.mjs:1336`); `regionFlowCheck` does the same
+everything (`packages/cli/src/commands/verify/island-runtime.mjs:359`); `regionFlowCheck` does the same
 (`packages/cli/src/commands/verify.mjs:1764`); `snapshot`'s `scenariosFor` does the same
 (`packages/cli/src/commands/snapshot.mjs:34`). An aliased import throws inside that `import()`, the
 `catch` returns `[]`, and the island quietly has zero scenarios. Nothing is reported, because "no
@@ -83,7 +83,7 @@ scenarios declared" is a legal state.
 The half-failure is worse than the full one. The two loaders **disagree**: `data-flow` loads through
 `tsx` and saw five scenarios while `responsive` — loading through plain node — reported one. Both
 call sites now cross-check and take the fuller answer
-(`packages/cli/src/commands/verify.mjs:1343`, `packages/cli/src/commands/snapshot.mjs:39`). That
+(`packages/cli/src/commands/verify/island-runtime.mjs:366`, `packages/cli/src/commands/snapshot.mjs:39`). That
 mitigation is real but it is not a fix: on the snapshot path, four islands were baselined at half
 their coverage before the shot count gave it away
 (`packages/cli/src/commands/snapshot.mjs:39`). The same trap has a second face — a `.js` specifier
@@ -126,7 +126,7 @@ The actions module says the negative form outright: "A VALUE import of an `@/` m
 those loaders, so there is none" (`acme/motu/src/shared/actions-evidence.ts:9`).
 
 The same erasure principle is used by the `effects` check, which strips `import type` lines before
-deciding what a component actually reaches for (`packages/cli/src/commands/verify.mjs:467`).
+deciding what a component actually reaches for (`packages/cli/src/commands/verify/island-static.mjs:325`).
 
 ---
 
@@ -191,7 +191,7 @@ A `Set`, `Map`, function or `Date` in a seed arrives as `{}`. When the island th
 `favoriteIds.has(...)` the mount dies and **every** scenario renders empty — which `data-flow` reports
 as "scenarios rendered identically" and `responsive` as "renders nothing": three misleading findings,
 none naming the cause. `seed-transport` names it once, before those checks run
-(`packages/cli/src/commands/verify.mjs:1243`). The fix is always at the component: take the iterable,
+(`packages/cli/src/commands/verify/island-runtime.mjs:266`). The fix is always at the component: take the iterable,
 rebuild the `Set` inside. The corpus records the same lesson at the seed
 (`acme/motu/src/islands/member-results.evidence.ts:26`).
 
@@ -296,13 +296,13 @@ against `"CHANGED"` (`packages/cli/src/playwright-lagoon.mjs:708-712`). `notText
 This is the load-bearing rule of the whole page. Every green flow in the project has, at some point,
 been a tautology — the worst asserted that providing `editingWidgetId` made one island render "editing"
 and the other "idle", and passed for hours against stand-in components that printed those words
-because the author had written them (`packages/cli/src/commands/verify.mjs:1594`).
+because the author had written them (`packages/cli/src/commands/verify/island-runtime.mjs:412`).
 
 `flow-mutation` applies two rules:
 
 **By construction.** A step whose `expect` names *only* keys that same step `provide`d asserts that
 the lagoon stored what it was handed. Decidable without a browser, and always an error
-(`packages/cli/src/commands/verify.mjs:1633`). What it looks like:
+(`packages/cli/src/commands/verify/island-runtime.mjs:451`). What it looks like:
 
 ```ts
 // CANNOT FAIL — expect names exactly what provide just wrote.
@@ -310,31 +310,31 @@ the lagoon stored what it was handed. Decidable without a browser, and always an
 ```
 
 The message says what to do instead: "End on a key another island produces, or on `expectRender` of an
-island that is not the one driven" (`packages/cli/src/commands/verify.mjs:1640`).
+island that is not the one driven" (`packages/cli/src/commands/verify/island-runtime.mjs:458`).
 
 **By mutation.** Every assertion-bearing step is re-run with its stimulus changed to a value the region
 cannot mistake for the real one — `provide` values become `null` (or the string `'__motu_mutant__'`
 when already nullish), an `emit` detail becomes `null`
-(`packages/cli/src/commands/verify.mjs:1676`). Deliberately crude: subtlety would let a mutant
+(`packages/cli/src/commands/verify/island-runtime.mjs:494`). Deliberately crude: subtlety would let a mutant
 reproduce the original behaviour by accident, turning a tautology into a pass. If the assertion still
 holds under mutation, it does not depend on the input and is asserting a constant — an error
-(`packages/cli/src/commands/verify.mjs:1727`).
+(`packages/cli/src/commands/verify/island-runtime.mjs:545`).
 
 Three things the mutation report gets deliberately right, each from a real miss:
 
 - A mutant that **broke** the region proves nothing and is reported as a warning, not a kill. Counting
   crashes as kills was hiding exactly the tautology the check exists to find
-  (`packages/cli/src/commands/verify.mjs:1712`).
+  (`packages/cli/src/commands/verify/island-runtime.mjs:530`).
 - The check **counts what came back, not what was sent**. Reporting `mutants.length` killed regardless
   of results printed a confident green for work it never saw
-  (`packages/cli/src/commands/verify.mjs:1717`).
+  (`packages/cli/src/commands/verify/island-runtime.mjs:535`).
 - Mutants ride along with the real flows in one lagoon boot, because booting is most of what a flow
-  check costs (`packages/cli/src/commands/verify.mjs:1622`).
+  check costs (`packages/cli/src/commands/verify/island-runtime.mjs:440`).
 
 **Know the limit.** An assertion on a stand-in's invented vocabulary is perfectly sensitive to its
 stimulus and mutates correctly. Neither rule can see it. Only rendering the application's own component
 makes it visible — which is why an island on a host that owns the component *is* that component
-(`packages/cli/src/commands/verify.mjs:1609`, `.github/host-rules.md:246`).
+(`packages/cli/src/commands/verify/island-runtime.mjs:427`, `.github/host-rules.md:246`).
 
 **A step may assert with no stimulus at all.** Some islands take no input, so `provide`ing something
 just to have a stimulus produces a constant that `flow-mutation` will correctly reject. Write the bare
@@ -381,29 +381,29 @@ a `PAGE_SEED` constant and spread it into every flow.
 
 `report.ok(check, msg, seen)` takes what it examined. `seen: 0` — or an empty array — is converted to a
 `skip` automatically, with the message `nothing to look at (no <thing>) — "<claim>" is not a result
-this run can claim` (`packages/cli/src/commands/verify.mjs:107`). Every call site gets the invariant
+this run can claim` (`packages/cli/src/commands/verify/report.mjs:60`). Every call site gets the invariant
 whether or not its author thought about emptiness.
 
 This exists because `removal-check` printed "no motu references in the host application" over a fully
 integrated app: it scanned the wrong directories, examined zero files, and reported that as success
-(`packages/cli/src/commands/verify.mjs:101`, `.github/host-rules.md:205`).
+(`packages/cli/src/commands/verify/report.mjs:54`, `.github/host-rules.md:205`).
 
 For evidence specifically, the empty-assertion failure mode has four shapes, and each has its own
 guard:
 
 | Shape | What happens |
 |---|---|
-| No evidence file at all | `region-flow` warns "no declared flows"; it does not pass quietly (`packages/cli/src/commands/verify.mjs:1759`) |
-| File present, `scenarios` unreadable or empty | `region-flow` warns "declared flows could not be read, or none are declared" (`packages/cli/src/commands/verify.mjs:1773`) |
-| Flows declared, no steps | `region-flow` warns "a flow is a seed, an emit and an expectation" (`packages/cli/src/commands/verify.mjs:1778`) |
-| Steps present, none can fail | `flow-mutation` errors or, with nothing to mutate, `skip`s (`packages/cli/src/commands/verify.mjs:1698`) |
+| No evidence file at all | `region-flow` warns "no declared flows"; it does not pass quietly (`packages/cli/src/commands/verify/island-runtime.mjs:577`) |
+| File present, `scenarios` unreadable or empty | `region-flow` warns "declared flows could not be read, or none are declared" (`packages/cli/src/commands/verify/reach.mjs:231`) |
+| Flows declared, no steps | `region-flow` warns "a flow is a seed, an emit and an expectation" (`packages/cli/src/commands/verify/reach.mjs:236`) |
+| Steps present, none can fail | `flow-mutation` errors or, with nothing to mutate, `skip`s (`packages/cli/src/commands/verify/island-runtime.mjs:516`) |
 
 The differentiation check applies the same discipline in the opposite direction. **An empty scenario is
 not an identical one**: a scenario that renders nothing sinks the comparison, and reporting "rendered
 identically" would point at the wrong thing entirely — so `data-flow` names the empty scenarios and
 tells the author that an island whose empty state *is* its correct answer cannot take part in the check
-at all (`packages/cli/src/commands/verify.mjs:883`). Duplicate renders are a warning, not a pass:
-"N of them show nothing the others do not" (`packages/cli/src/commands/verify.mjs:871`).
+at all (`packages/cli/src/commands/verify/reach.mjs:164`). Duplicate renders are a warning, not a pass:
+"N of them show nothing the others do not" (`packages/cli/src/commands/verify/reach.mjs:152`).
 
 **What "rendered" means: the island's own DOM plus what its own mount PORTALED.** A dialog or sheet built
 on a portal (Radix Dialog, vaul Drawer) lands on `<body>`, outside the island's subtree — and `data-flow`
@@ -417,8 +417,8 @@ The seen-count names it (`· 4 portals in 2 of 2 scenario(s)`). `responsive` mea
 chrome hidden (`packages/cli/src/lib/island-render.mjs`).
 
 `report.skip` and `report.inconclusive` are the other two honest outcomes: a rule that does not apply to
-this posture, and a check that could not look (`packages/cli/src/commands/verify.mjs:121`,
-`packages/cli/src/commands/verify.mjs:129`). See
+this posture, and a check that could not look (`packages/cli/src/commands/verify/report.mjs:74`,
+`packages/cli/src/commands/verify/report.mjs:82`). See
 [07 — Checks and verification](07-checks-and-verification.md) for the exit codes.
 
 ---
@@ -441,19 +441,19 @@ point — while the checks that ask "does it exist, does it mount, is it placed"
 
 - `islands-registered` filters planned tags out of the set it resolves against the registry, and when
   *every* declared island is planned it reports `skip` with "nothing to look for yet" rather than the
-  false "archipelago declares no islands" (`packages/cli/src/commands/verify.mjs:2533`,
-  `packages/cli/src/commands/verify.mjs:2557`).
+  false "archipelago declares no islands" (`packages/cli/src/commands/verify/report.mjs:270`,
+  `packages/cli/src/commands/verify/report.mjs:294`).
 - `render-coverage` excludes planned slots from the set a flow must assert
-  (`packages/cli/src/commands/verify.mjs:1513`).
+  (`packages/cli/src/commands/verify/report.mjs:203`).
 - The integration checks exclude them too (`packages/cli/src/commands/integration.mjs:139`,
-  `packages/cli/src/commands/verify.mjs:3164`).
+  `packages/cli/src/commands/verify/region-config.mjs:192`).
 - A `planned` **warning** keeps the backlog visible: "N island(s) declared but not built … their
   ownership is being enforced, their existence is not checked"
-  (`packages/cli/src/commands/verify.mjs:2548`).
+  (`packages/cli/src/commands/verify/report.mjs:285`).
 
 **The flag removes itself.** Once the island is registered, `planned: true` is an **error** — "drop the
 flag; the checks that skip a planned island are exactly the ones it now needs"
-(`packages/cli/src/commands/verify.mjs:2540`). A survey that quietly becomes a list of things nobody
+(`packages/cli/src/commands/verify/report.mjs:277`). A survey that quietly becomes a list of things nobody
 built is worse than no survey (`packages/core/src/archipelago.ts:84`,
 `.github/host-rules.md:282`).
 
@@ -547,34 +547,34 @@ evidence artefact each one consumes.
 
 | Evidence artefact | Checks that read it | Where |
 |---|---|---|
-| island `scenarios` (≥ 2, opt-in) | `data-flow` | `packages/cli/src/commands/verify.mjs:832` |
-| island `scenarios` — seed value types | `seed-transport` | `packages/cli/src/commands/verify.mjs:1254` |
-| island `scenarios` — seeded prop *values* | `input-coverage` | `packages/cli/src/commands/verify.mjs:1296` |
-| island `scenarios` — per scenario × viewport | `responsive` (`--audit`) | `packages/cli/src/commands/verify.mjs:1363` |
-| island `scenarios` — axe per scenario | `a11y` (`--audit`) | `packages/cli/src/commands/verify.mjs:1221` |
+| island `scenarios` (≥ 2, opt-in) | `data-flow` | `packages/cli/src/commands/verify/reach.mjs:113` |
+| island `scenarios` — seed value types | `seed-transport` | `packages/cli/src/commands/verify/island-runtime.mjs:277` |
+| island `scenarios` — seeded prop *values* | `input-coverage` | `packages/cli/src/commands/verify/island-runtime.mjs:319` |
+| island `scenarios` — per scenario × viewport | `responsive` (`--audit`) | `packages/cli/src/commands/verify/island.mjs:22` |
+| island `scenarios` — axe per scenario | `a11y` (`--audit`) | `packages/cli/src/commands/verify/report.mjs:153` |
 | island `scenarios` — one shot each | `motu island snapshot` | `packages/cli/src/commands/snapshot.mjs:52` |
 | island `scenarios` — drives the recorder | `motu fixtures record` | `packages/cli/src/commands/fixtures.mjs:49` |
 | island `fixtures` | replayed by `MockTransport` under every lagoon mount (`lagoon-render`, `data-flow`, `responsive`, `a11y`, region flows) | `packages/cli/src/lib/scaffold.mjs:212`, `packages/runtime/src/mock.ts:157` |
 | island `roles` | the lagoon's role selector; fixture `roles` gates | `packages/cli/src/lib/scaffold.mjs:214`, `packages/runtime/src/mock.ts:178` |
-| region `scenarios` (flows) — run | `region-flow` | `packages/cli/src/commands/verify.mjs:1753` |
-| region flows — mutated | `flow-mutation` | `packages/cli/src/commands/verify.mjs:1628` |
+| region `scenarios` (flows) — run | `region-flow` | `packages/cli/src/commands/verify/island-runtime.mjs:571` |
+| region flows — mutated | `flow-mutation` | `packages/cli/src/commands/verify/island-runtime.mjs:446` |
 | region flows — `expectRender` slots | `render-coverage` | `packages/cli/src/commands/verify.mjs:1511` |
-| region flows — `emit` slot+event pairs | `writes-covered` | `packages/cli/src/commands/verify.mjs:1571` |
-| region flows — observed during the run | `provenance`, `sources-live`, `emitted-live`, `laundering` | `packages/cli/src/commands/verify.mjs:1795` |
+| region flows — `emit` slot+event pairs | `writes-covered` | `packages/cli/src/commands/verify/island-runtime.mjs:389` |
+| region flows — observed during the run | `provenance`, `sources-live`, `emitted-live`, `laundering` | `packages/cli/src/commands/verify/reach.mjs:253` |
 | region flows — seeds, deduped | `motu archipelago snapshot` | `packages/cli/src/commands/snapshot.mjs:265` |
-| region `capture = { universe, present }` | `catalogue` | `packages/cli/src/commands/verify.mjs:1424` |
-| `planned: true` on an island entry | `planned`, `islands-registered`, `render-coverage` | `packages/cli/src/commands/verify.mjs:2532` |
+| region `capture = { universe, present }` | `catalogue` | `packages/cli/src/commands/verify/island.mjs:83` |
+| `planned: true` on an island entry | `planned`, `islands-registered`, `render-coverage` | `packages/cli/src/commands/verify/report.mjs:269` |
 | island + region evidence, bundled | `?scenario=` / `?flow=` addresses | `packages/cli/src/lib/scaffold.mjs:228` |
 
 Two notes on the table.
 
 `data-flow` is **opt-in**: fewer than two scenarios and it is silent
-(`packages/cli/src/commands/verify.mjs:834`). Almost every runtime check above is gated behind
+(`packages/cli/src/commands/verify/reach.mjs:115`). Almost every runtime check above is gated behind
 `--runtime` or `--audit`, because "has this island drifted from what it declares?" is static and
 "does it still behave?" costs a browser per scenario × viewport
-(`packages/cli/src/commands/verify.mjs:1115`).
+(`packages/cli/src/commands/verify/island-runtime.mjs:197`).
 
-`input-coverage` reads `sc.seed ?? sc.props` (`packages/cli/src/commands/verify.mjs:1300`) although
+`input-coverage` reads `sc.seed ?? sc.props` (`packages/cli/src/commands/verify/island-runtime.mjs:323`) although
 `Scenario` declares only `seed` (`packages/runtime/src/mock.ts:85`). Write `seed`.
 
 ---
@@ -584,7 +584,7 @@ Two notes on the table.
 **Vary one key at a time, and say what that key makes exist.** `input-coverage` reads the *values*, not
 the types, and reports two specific holes: a prop always given a non-empty array (the empty case is the
 one components forget), and a boolean prop that only ever takes one value (the other branch is never
-rendered) (`packages/cli/src/commands/verify.mjs:1281`).
+rendered) (`packages/cli/src/commands/verify/island-runtime.mjs:304`).
 
 **Know what per-prop coverage cannot see.** An unguarded array access reachable only with
 `compactMode: true` *and* an empty list survived `input-coverage`, and rightly — each prop was well
@@ -599,7 +599,7 @@ the app cannot be in — "a flow that seeds an index past the end is testing a s
 in" (`acme/motu/src/archipelagos/actions/actions.evidence.ts:52`).
 
 **End on something you did not just write.** A key another island produces, or `expectRender` of an
-island that is not the one being driven (`packages/cli/src/commands/verify.mjs:1640`).
+island that is not the one being driven (`packages/cli/src/commands/verify/island-runtime.mjs:458`).
 
 **Invent the data.** The lagoon publishes as a shareable artifact, so real people do not belong in it,
 screenshots included (`acme/motu/src/shared/directory-evidence.ts:74`).
@@ -612,13 +612,13 @@ screenshots included (`acme/motu/src/shared/directory-evidence.ts:74`).
   (`.github/host-rules.md:278`, `.github/host-rules.md:335`). The check that would have caught the
   outcome is `render-coverage`, and it is a *warning* on purpose: the rule is new, and turning every
   pre-existing region red teaches people to ignore the report rather than fix it
-  (`packages/cli/src/commands/verify.mjs:1507`). `writes-covered` is a warning for the same reason
-  (`packages/cli/src/commands/verify.mjs:1552`).
+  (`packages/cli/src/commands/verify/report.mjs:197`). `writes-covered` is a warning for the same reason
+  (`packages/cli/src/commands/verify/report.mjs:242`).
 - **A driven coupling is not an exercised one.** Silencing a component's `onProgress` in a real region
   changed nothing at any tier, even though a flow drove `week-progress` — because both `wiring-live`
   and a flow's `emit` go through the lagoon's emit seam, not through the component. `writes-covered`
   answers the narrower question ("is this coupling exercised at all?") and does not claim the other
-  (`packages/cli/src/commands/verify.mjs:1543`).
+  (`packages/cli/src/commands/verify/report.mjs:233`).
 - **Providers, layout and seed are three different things.** What an island cannot render without is
   `providers` in the lagoon overrides; the arrangement is `layout`; the row or props are `seed` data.
   Getting this wrong is invisible in the region view and fatal in the mountpoints view — which is the

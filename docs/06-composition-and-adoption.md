@@ -116,7 +116,7 @@ of the page, and every copy drifted.
 ## How `motu check` grades each shape
 
 The check is **`region-root`**, implemented at
-[`packages/cli/src/commands/verify.mjs:2130`](../packages/cli/src/commands/verify.mjs).
+[`packages/cli/src/commands/verify/region-flows.mjs:172`](../packages/cli/src/commands/verify/region-flows.mjs).
 
 | your region | grade |
 |---|---|
@@ -128,7 +128,7 @@ The check is **`region-root`**, implemented at
 | `.Island` + no frame at all | **error** (a region with no islands yet gets a **warn**) |
 | declares `root` *and* still has a `layout` frame | **error** — two arrangements for one region |
 
-Only errors fail a run: `motu check` exits on `errors.length === 0` (`verify.mjs:1063`), so warnings
+Only errors fail a run: `motu check` exits on `errors.length === 0` (`verify/island-runtime.mjs:145`), so warnings
 are green. See [07 — Checks and verification](07-checks-and-verification.md) for the full catalogue.
 
 The default is `regionRoot: "encouraged"`, and the source says why

@@ -64,7 +64,7 @@ import and it erases at runtime, so removing motu leaves it and the page that us
 (`packages/core/src/archipelago.ts:161-170`). `motu archipelago verify` requires the parameter under
 a modern host and reports it as `region-type`; on an ocean the check is skipped, because there is no
 app-side type to reference — region state lives in `$scope` and motu declares it
-(`packages/cli/src/commands/verify.mjs:2267-2296`).
+(`packages/cli/src/commands/verify/region-flows.mjs:308-337`).
 
 `TElements` narrows `element` to the project's tags, and it takes either of two forms — `TagsOf<T>`
 resolves a bare union to itself and an ELEMENTS MAP to its keys
@@ -91,7 +91,7 @@ under which `defineArchipelago` files the store, the config and the slot list
 `seedArchipelago` (`:683`, `:725`), the name `<motu-archipelago name="id">` resolves, and the `region`
 parameter in a lagoon address. `motu archipelago verify <id>` also requires the file to live at
 `<archipelagosDir>/<id>/<id>.archipelago.ts` and to be imported by the generated registry — the
-`registered` check (`packages/cli/src/commands/verify.mjs:2515-2524`), and the directory layout
+`registered` check (`packages/cli/src/commands/verify/report.mjs:252-261`), and the directory layout
 `readRegions` walks (`packages/cli/src/lib/eject.mjs:32-57`).
 
 ## `islands`
@@ -158,7 +158,7 @@ baselines", "load more" — where the result is whatever the host then says the 
 instance, `packages/core/src/archipelago.ts:802`); unanswered intents fall through to the host bridge,
 which is what a navigate is. Leaving a store write inside an `on` body still works and is reported:
 an opaque write cannot be drawn before it fires and cannot be materialised on eject
-(`packages/cli/src/commands/verify.mjs:2481-2491`).
+(`packages/cli/src/commands/verify/region-flows.mjs:522-532`).
 
 ### `reads` — a claim about a store motu does not own
 
@@ -167,7 +167,7 @@ host's own store hands them over directly — Twenty's side panel subscribing to
 (`packages/core/src/archipelago.ts:55-70`). `bind` is the only reader motu can see by itself; without
 `reads`, such a key is written by an island, read by nobody motu knows about, and the `coupling`
 check reports a real coupling as one that escapes the archipelago
-(`packages/cli/src/commands/verify.mjs:2333-2339`). It is a CLAIM, not a wire — motu cannot enforce a
+(`packages/cli/src/commands/verify/region-flows.mjs:374-380`). It is a CLAIM, not a wire — motu cannot enforce a
 store it does not own (`packages/core/src/foreign-store.ts`).
 
 ### `planned: true`
@@ -182,11 +182,11 @@ work safe: an agent branches from an archipelago that already carries everyone e
 second claim on a key fails in their own branch instead of at merge. The cost, before the flag
 existed, was that the region was RED in every branch until the last island landed. With it,
 **ownership still counts the entry** — that is the point — while the checks that ask "does it exist
-and mount?" skip it (`packages/cli/src/commands/verify.mjs:2526-2553`).
+and mount?" skip it (`packages/cli/src/commands/verify/report.mjs:263-290`).
 
 The flag REMOVES ITSELF: once the island is registered, `planned: true` is an ERROR, not a courtesy,
 so a survey cannot quietly become a list of things nobody built
-(`packages/cli/src/commands/verify.mjs:2536-2545`).
+(`packages/cli/src/commands/verify/report.mjs:273-282`).
 
 ### `props` and island-level `slots`
 
@@ -214,7 +214,7 @@ be one this region declares, or the `composition` check errors
 (`packages/core/src/archipelago.ts:46-54`). It defaults to `slot` when the two coincide. Keeping them
 separate is what makes `checkCatalogue` possible: it compares declarations against captured rows and a
 codegen'd enum, and neither has ever heard of a motu slot
-(`packages/core/src/catalogue.ts`, `packages/cli/src/commands/verify.mjs:1428-1432`).
+(`packages/core/src/catalogue.ts`, `packages/cli/src/commands/verify/island.mjs:87-91`).
 
 ## `root`, `slots`, `hostSlots` — the arrangement, declared once
 
@@ -341,7 +341,7 @@ What stays checkable is the CONTRACT: every type the layout may contain declares
 writes, and ownership still has exactly one owner per key. `catalogueCheck` compares the declared
 `member` values against the app's own captured payloads and the enum its codegen emits, supplied by
 `<id>.evidence.ts` as `export const capture = { universe, present }`
-(`packages/cli/src/commands/verify.mjs:1420-1432`); a catalogue region where no island declares a
+(`packages/cli/src/commands/verify/island.mjs:79-91`); a catalogue region where no island declares a
 `member` is a warning, because nothing ties a declaration to a data row (`:1431`). Evidence files are
 [10 — Evidence and testing](10-evidence-and-testing.md).
 

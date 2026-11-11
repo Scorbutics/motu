@@ -67,7 +67,7 @@ The start directory is `$MOTU_PROJECT_ROOT` when set, otherwise `process.cwd()`
 with its cwd inside the CLI package — it has to be, or `--import tsx` does not resolve — so without it
 a `--runtime` verify in someone else's project walked up into motu's own config
 (`packages/cli/src/lib/config.mjs:139-146`). The CLI sets it on every child it spawns
-(`packages/cli/src/commands/verify.mjs:746`, `:764`, `:820`, `:1447`).
+(`packages/cli/src/commands/verify/reach.mjs:27`, `reach.mjs:45`, `reach.mjs:101`, `island.mjs:106`).
 
 If no config is found anywhere above the cwd, the cwd itself becomes the root and every path falls back
 to the reference layout (`packages/cli/src/lib/config.mjs:23-109`, `:179`). See
@@ -98,8 +98,8 @@ environment → `~/.config/motu/host.json` (`packages/cli/src/lib/baselines.mjs:
 
 Set by the CLI for its own build/harness children, not user-facing input: `MOTU_SINGLEFILE`,
 `MOTU_TRANSPORT`, `MOTU_TARGET`, `MOTU_FIT`, `MOTU_NO_SSL` (`commands/lagoon.mjs:77-86`),
-`MOTU_ALLOW_ANY_HOST` (`commands/lagoon.mjs:661`), `MOTU_NODE_ALIASES` (`commands/verify.mjs:764`),
-`MOTU_CATALOGUE_DECLARED` (`commands/verify.mjs:1447`). Two are read from your environment by the
+`MOTU_ALLOW_ANY_HOST` (`commands/lagoon.mjs:661`), `MOTU_NODE_ALIASES` (`commands/verify/reach.mjs:45`),
+`MOTU_CATALOGUE_DECLARED` (`commands/verify/island.mjs:106`). Two are read from your environment by the
 Vite runners as an escape hatch: `MOTU_VITE_LOGLEVEL` (`src/lagoon-build.mjs:24`,
 `src/lagoon-dev.mjs:28`) and `MOTU_DEBUG` (`lib/scaffold.mjs:479`).
 
@@ -223,7 +223,7 @@ motu island verify <name|--all> [--runtime] [--audit] [--fast] [--standalone] [-
 | Flag | Meaning | Default |
 | --- | --- | --- |
 | `<name>` positional | One island (any casing) | — |
-| `--all` | Every island in the project, sequentially (one lagoon port each) | off (`commands/verify.mjs:1054`) |
+| `--all` | Every island in the project, sequentially (one lagoon port each) | off (`commands/verify/island-runtime.mjs:136`) |
 | `--runtime` | Add the lagoon checks: mount, error resilience, seed transport, data-flow | off (`:1121`) |
 | `--audit` | Implies `--runtime` and adds `responsive` + `a11y`; without it a `skip` line says they were not run | off (`:1149-1153`) |
 | `--fast` | In-process happy-dom mount instead of Playwright. Skips the browser-only checks | off (`:1131`) |
@@ -233,15 +233,15 @@ motu island verify <name|--all> [--runtime] [--audit] [--fast] [--standalone] [-
 
 > `USAGE` documents `--all --runtime --verbose --fast --standalone --json` (`run.mjs:108-115`) but not
 > `--audit`, which the implementation reads here and in `motu check`. The command's own usage string
-> (`commands/verify.mjs:1046`) advertises `[--no-runtime]`, which is a no-op: runtime is opt-in, so
+> (`commands/verify/island-runtime.mjs:128`) advertises `[--no-runtime]`, which is a no-op: runtime is opt-in, so
 > negating it changes nothing.
 
 **Reads** — the island's mount point and component, `contracts.generated.ts`, the islands registry, the
 archipelagos, the island's `<kebab>.evidence.ts`, `lagoon.config.json` (viewports, a11y policy), and any
-adapter that ships a verify contribution (`commands/verify.mjs:1024-1044`). **Writes** nothing.
+adapter that ships a verify contribution (`commands/verify/island-runtime.mjs:106-126`). **Writes** nothing.
 
 **Exit** — a single island: `0` pass, `1` an error finding, `2` when any finding is `inconclusive`
-(`commands/verify.mjs:1173-1176`). A `--all` sweep carries its **worst member's** verdict via
+(`commands/verify/island-runtime.mjs:255`). A `--all` sweep carries its **worst member's** verdict via
 `sweepExitCode` (`:1063`, `:1189`) — so an inconclusive run exits `2` there too. It used to gate on
 `errors.length` alone, which made a sweep with no Chromium exit `0`. The check inventory
 lives in [checks and verification](07-checks-and-verification.md).

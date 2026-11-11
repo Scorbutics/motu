@@ -68,9 +68,16 @@ function collect() {
   // looking when it matters.
   const stores = new Set(lens.activeStores());
   const channelKeys = new Set<string>();
+  const sourceReaders = new Map<string, Set<string>>();
   for (const channel of getChannels()) {
     if (stores.size && !stores.has(channel.store)) continue;
     for (const key of channel.keys) channelKeys.add(key);
+    // What a source READS is read: see `sourceReaders` in findings.ts.
+    for (const key of channel.reads?.keys ?? []) {
+      const set = sourceReaders.get(key) ?? new Set<string>();
+      set.add(`source:${channel.reads!.source}`);
+      sourceReaders.set(key, set);
+    }
   }
   const sources = new Map<string, string[]>();
   for (const config of archipelagoConfigs()) {
@@ -86,7 +93,7 @@ function collect() {
     }
   }
 
-  return { islands, writes, verdicts, calls: lens.calls.length, traced, sources, channelKeys };
+  return { islands, writes, verdicts, calls: lens.calls.length, traced, sources, channelKeys, sourceReaders };
 }
 
 /**
@@ -407,6 +414,12 @@ export function currentSheet() {
   for (const info of here) {
     for (const key of writtenKeys(info.spec)) owner.set(key, info.slot);
     for (const key of bindKeys(info)) readers.set(key, [...(readers.get(key) ?? []), info.slot]);
+  }
+  // A SOURCE READS TOO — its declared inputs. The sheet named only islands, so a key the region's own
+  // source consumes showed "read by nobody" right beside the source that was reading it.
+  for (const channel of getChannels()) {
+    if (channel.store !== store) continue;
+    for (const key of channel.reads?.keys ?? []) readers.set(key, [...(readers.get(key) ?? []), `source:${channel.reads!.source}`]);
   }
   const moves = lens.moves.get(store) ?? new Map();
   const suspects = new Map(launderingSuspects().map((x) => [x.key, x]));

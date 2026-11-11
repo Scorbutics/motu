@@ -35,6 +35,12 @@ export interface ChannelInfo {
   store: Store;
   /** Store keys it has written (its "connected" sink side). */
   keys: Set<string>;
+  /**
+   * Store keys it READS — a source's declared `inputs` — and the source's id. A key only a source
+   * reads is still read: without this the lens reported "goes nowhere" over a key the region's own
+   * source consumes, because only islands' binds counted as readers.
+   */
+  reads?: { source: string; keys: string[] };
   fireCount: number;
   lastKey?: string;
   lastValue?: unknown;
@@ -61,6 +67,16 @@ function notifyChannels(): void {
 }
 
 const RAW = Symbol('motu.rawStore');
+const READS = Symbol('motu.channelReads');
+
+/**
+ * Tell the debug registry which region keys this channel reads. A no-op outside DEBUG, where the
+ * channel's store is the plain store and carries no registry entry to write to.
+ */
+export function noteChannelReads(store: Store, source: string, keys: readonly string[]): void {
+  const note = (store as unknown as Record<symbol, ((s: string, k: readonly string[]) => void) | undefined>)[READS];
+  if (note) note(source, keys);
+}
 
 /**
  * The store a channel's (possibly instrumented) store stands for. Anything keyed by store IDENTITY —
@@ -77,6 +93,12 @@ function instrumentStore(store: Store, info: ChannelInfo): Store {
   return new Proxy(store, {
     get(target, prop, receiver) {
       if (prop === RAW) return rawStore(target);
+      if (prop === READS) {
+        return (source: string, keys: readonly string[]) => {
+          info.reads = { source, keys: [...keys] };
+          notifyChannels();
+        };
+      }
       if (prop === 'set') {
         return (key: string, value: unknown) => {
           info.keys.add(key);

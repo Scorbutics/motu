@@ -38,6 +38,18 @@ test('a key with a reader is not reported as unread', () => {
   assert.equal(find(out, 'unread:passwordChanged'), undefined);
 });
 
+test('a key only a SOURCE reads is read — not "goes nowhere"', () => {
+  // My club: the page seeds `selectedEventId` for the events source (its declared input); no island
+  // on that page binds it. The lens asked a person to decide about a key that was doing its job.
+  const writes = new Map([['selectedEventId', new Set(['seed'])]]);
+  const sourceReaders = new Map([['selectedEventId', new Set(['source:events'])]]);
+  const out = findingsOf({ ...base, islands: [island('my-events', { events: 'events' })], writes, sourceReaders });
+  assert.equal(find(out, 'unread:selectedEventId'), undefined);
+  // And without the source, the same key is still the defect it always was.
+  const bare = findingsOf({ ...base, islands: [island('my-events', { events: 'events' })], writes });
+  assert.ok(find(bare, 'unread:selectedEventId'));
+});
+
 test('keys with one reader and no island writer are collapsed into ONE finding', () => {
   // One finding for the region, not one per key: listing four would bury the one that names a defect.
   const out = findingsOf({

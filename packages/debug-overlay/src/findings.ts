@@ -51,6 +51,12 @@ export interface FindingsInput {
   sources?: Map<string, string[]>;
   /** Keys an installed channel has actually written — the runtime half of the promise above. */
   channelKeys?: Set<string>;
+  /**
+   * key -> the sources that READ it (`source:<id>`), from their declared `inputs`. A key only a source
+   * reads is not unread: My club seeds `selectedEventId` for the events source, which no island there
+   * binds, and the lens called it "goes nowhere" — a decision asked of nobody, about nothing wrong.
+   */
+  sourceReaders?: Map<string, Set<string>>;
   /** key -> who has been seen writing it ('host' and 'channel' are the ocean, not islands). */
   writes: Map<string, Set<string>>;
   /** How many host calls the islands actually made. */
@@ -91,12 +97,13 @@ export function findingsOf(input: FindingsInput): Finding[] {
 
     // WRITTEN AND UNREAD. This one is a real defect in a lagoon as much as in an application: the
     // declaration says something produces the key and nothing consumes it, and no amount of
-    // sandboxing makes that intentional.
-    if (wr.size && !rd.size) {
+    // sandboxing makes that intentional. A source that reads it is a consumer.
+    const bySources = input.sourceReaders?.get(key)?.size ?? 0;
+    if (wr.size && !rd.size && !bySources) {
       out.push({
         id: `unread:${key}`,
         title: `${key} goes nowhere`,
-        detail: `${[...wr].join(', ')} writes it; no mounted island reads it. Either an island should bind it, or whatever writes it should stop.`,
+        detail: `${[...wr].join(', ')} writes it; no mounted island reads it, and no source declares it as an input. Either an island should bind it, or whatever writes it should stop.`,
         tone: 'broken',
         seam: 'sheet',
         decision: true,

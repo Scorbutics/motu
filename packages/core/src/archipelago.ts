@@ -3,7 +3,7 @@
 // <motu-island slot="…"> markers; all composition lives here, shipped in the composition root.
 
 import { Store, declareProducers, declareReaders, noteIslandOutput } from './store';
-import { installChannels, rawStore, type Channel } from './channel';
+import { installChannels, noteChannelReads, rawStore, type Channel } from './channel';
 import { offerRegionToCoverage } from './sandbox';
 import { runWithWriteSource, currentWriteSource } from './store';
 import { runWithSource } from './provenance';
@@ -1319,6 +1319,9 @@ export function channelFrom<
 
     let unsubscribe = () => {};
     const inputs = source.inputs;
+    // The lens counts a source as a READER of its inputs — on a page where no island binds a key the
+    // source consumes, that key is not "going nowhere", it is going here.
+    if (inputs?.length) noteChannelReads(store, spec.id, inputs);
     if (inputs?.length && source.applyInputs) {
       let last = '';
       const onRegionChange = () => {

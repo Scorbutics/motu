@@ -210,6 +210,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 /* The mini player's two lines are the phone's; the desktop rail keeps its standing label. Declared
  * off ABOVE the media queries for the same reason as the strip below. */
 #tide .rail-txt { display: none; }
+#tide .rail-progress { display: none; }
 #tide .kbd--word { display: none; }
 #tide .motu-kbd { white-space: nowrap; }
 /* The region's name, standing up along the rail. This is the one place the dock says what it is
@@ -502,11 +503,27 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 #tide .atoll__isle[data-lit="true"] .atoll__dot { box-shadow: 0 0 0 3px var(--tide-accent); }
 #tide .atoll__isle:focus-visible, #tide .atoll__lagoon:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; border-radius: 10px; }
 
-/* NOW PLAYING. */
-#tide .now { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
-#tide .now__kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--tide-accent); }
-#tide .now__title { font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--ink); }
-#tide .now__segs { display: flex; gap: 4px; padding-top: 6px; }
+/* NOW PLAYING — the front panel of a player. Deep water, the atoll as cover art, the state as the
+ * title, its steps as the progress bar and the transport under it. The one dark surface in the tab,
+ * so the eye lands on what is playing before it reads anything else. */
+#tide .now {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--w-shallow) 38%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--w-deep), color-mix(in srgb, var(--w-deep) 70%, #071c24));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--w-deep) 30%, transparent);
+}
+#tide .now__head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+#tide .now__cover { width: 56px; height: 56px; border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.18); }
+#tide .now__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#tide .now__kicker { font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: color-mix(in srgb, var(--w-shallow) 70%, #fff); }
+#tide .now__title { font-size: 15.5px; font-weight: 800; line-height: 1.3; color: #fff; }
+#tide .now__segs { display: flex; gap: 4px; }
 #tide .now__seg {
   flex: 1 1 0;
   height: 22px;
@@ -516,42 +533,129 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   cursor: pointer;
   position: relative;
 }
-/* A thin bar in a tall target: the segment a thumb can hit is 22px, the one the eye reads is 8. */
+/* A thin bar in a tall target: the segment a thumb can hit is 22px, the one the eye reads is 6. */
 #tide .now__seg::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 7px;
-  height: 8px;
+  top: 8px;
+  height: 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--w-shallow) 22%, var(--surface-row, #fff));
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: rgba(255, 255, 255, .22);
 }
-#tide .now__seg[data-done="true"]::before { background: var(--tide-accent); box-shadow: none; }
+#tide .now__seg--whole { cursor: default; }
+#tide .now__seg[data-done="true"]::before { background: var(--w-shallow); }
 #tide .now__seg[aria-current="true"]::after {
   content: "";
   position: absolute;
-  right: -2px;
+  right: -3px;
   top: 5px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--motu-sand, #e3c893);
-  box-shadow: 0 0 0 2px var(--surface-row, #fff);
+  box-shadow: 0 0 0 2px var(--w-deep);
 }
-#tide .now__seg:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 1px; border-radius: 6px; }
-#tide .now__step { font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .now__seg:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 6px; }
+#tide .now__transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+#tide .now__step { font-size: 11px; color: rgba(255, 255, 255, .78); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#tide .now__step--end { text-align: right; }
+#tide .now__btns { display: flex; align-items: center; gap: 10px; }
+#tide .now__btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+#tide .now__btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+#tide .now__btn:disabled { opacity: .35; cursor: default; }
+#tide .now__btn--main { width: 48px; height: 48px; background: var(--motu-sand, #e3c893); color: var(--motu-on-sand, #0b3d5c); }
+#tide .now__btn--main:hover:not(:disabled) { background: color-mix(in srgb, var(--motu-sand, #e3c893) 85%, #fff); }
+#tide .now__btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+#tide .now .state-forged { color: rgba(255, 255, 255, .8); padding: 0; }
 
-/* THE WHAT-IFS: one shelf per island, scrolling sideways. An island costs one row of height whatever
- * it declares — this, not a cap or a fold, is what keeps the tab from growing with the project. */
+/* THE EQUALIZER on whatever is playing. Stills under prefers-reduced-motion with every other animation. */
+#tide .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+#tide .eq i { display: block; width: 3px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: bottom; animation: tide-eq 900ms ease-in-out infinite; }
+#tide .eq i:nth-child(2) { animation-delay: -300ms; }
+#tide .eq i:nth-child(3) { animation-delay: -600ms; }
+@keyframes tide-eq {
+  0%, 100% { transform: scaleY(.35); }
+  50% { transform: scaleY(1); }
+}
+
+/* THE FLOWS AS A TRACKLIST — numbered, the playing one with an equalizer where its number was. */
+#tide .track {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: 500 13px/1.35 ui-sans-serif, system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+#tide .track + .track { box-shadow: 0 -1px 0 var(--line); }
+#tide .track:hover { background: var(--surface-row, #fff); }
+#tide .track__no { display: flex; justify-content: center; font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-faint, var(--ink-muted)); font-variant-numeric: tabular-nums; }
+#tide .track__name { min-width: 0; }
+#tide .track__meta { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .track[aria-current="true"] { background: color-mix(in srgb, var(--tide-accent) 10%, #fff); box-shadow: none; font-weight: 700; color: var(--tide-accent); }
+#tide .track[aria-current="true"] + .track { box-shadow: none; }
+#tide .track[aria-current="true"] .track__no { color: var(--tide-accent); }
+#tide .track:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 1px; }
+
+/* THE WHAT-IFS: one album per island. Under a finger (the default here) an album is a shelf of cards
+ * you swipe sideways — one row of height whatever it holds. Under a mouse (the block after this) it is
+ * a row that opens into its tracklist, because sideways scrolling with a wheel is the worst gesture
+ * there is. */
 #tide .shelves { display: flex; flex-direction: column; gap: 12px; }
 #tide .shelf { display: flex; flex-direction: column; gap: 6px; scroll-margin-top: 8px; }
-#tide .shelf__head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
-#tide .shelf__slot { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
+#tide .shelf__head { display: flex; align-items: center; gap: 8px; }
+#tide .shelf__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#tide .shelf__cover {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--motu-sand, #e3c893);
+  color: var(--motu-on-sand, #0b3d5c);
+  font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+}
+#tide .shelf__slot { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
 #tide .shelf[data-aimed="true"] .shelf__slot { color: var(--tide-accent); }
-#tide .shelf__head .count { font-size: 10.5px; font-weight: 700; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+#tide .shelf__count { flex: 0 0 auto; font-size: 11px; color: var(--ink-muted); }
 #tide .shelf__alone {
+  flex: 0 0 auto;
   border: 1px solid var(--line);
   background: var(--surface-row, #fff);
   border-radius: 999px;
@@ -569,15 +673,18 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   scroll-snap-type: x proximity;
   scroll-padding-inline: 2px;
   padding: 2px 2px 6px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
+#tide .shelf__track::-webkit-scrollbar { display: none; }
 #tide .shelf__card {
   flex: 0 0 auto;
   width: 136px;
-  min-height: 60px;
+  min-height: 64px;
   scroll-snap-align: start;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
   padding: 8px 10px;
   border-radius: 12px;
   border: 1px solid var(--line);
@@ -587,17 +694,45 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   text-align: left;
   white-space: normal;
   cursor: pointer;
-  position: relative;
 }
-/* The what-if mark, top-left: the same lozenge the palette and the Seams sheet use for a forged key. */
-#tide .shelf__card::before { content: "\\25c7"; position: absolute; top: 6px; left: 9px; font-size: 11px; color: color-mix(in srgb, var(--motu-sand, #e3c893) 80%, var(--ink-muted)); }
+#tide .shelf__no { display: flex; font: 600 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: color-mix(in srgb, var(--motu-sand, #e3c893) 55%, var(--ink-muted)); }
 #tide .shelf__card:hover { border-color: var(--tide-accent); }
 #tide .shelf__card[aria-current="true"] {
   background: color-mix(in srgb, var(--tide-accent) 12%, #fff);
   border-color: var(--tide-accent);
   font-weight: 700;
 }
-#tide .shelf__card:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
+#tide .shelf__card[aria-current="true"] .shelf__no { color: var(--tide-accent); }
+#tide .shelf__card:focus-visible, #tide .shelf__title:focus-visible { outline: 2px solid var(--tide-accent); outline-offset: 2px; }
+
+/* UNDER A MOUSE: albums that open into tracklists, one at a time. */
+@media (hover: hover) and (pointer: fine) {
+  #tide .shelves { gap: 2px; }
+  #tide .shelf { gap: 0; border-radius: 12px; }
+  #tide .shelf[data-open="true"] { background: var(--surface-row, #fff); box-shadow: 0 0 0 1px var(--line); padding-bottom: 4px; }
+  #tide .shelf__head { padding: 6px 8px 6px 6px; border-radius: 12px; }
+  #tide .shelf__head:hover { background: var(--surface-row, #fff); }
+  #tide .shelf__title::after { content: "\\25B8"; font-size: 10px; color: var(--ink-muted); transition: transform 150ms ease; }
+  #tide .shelf__title[aria-expanded="true"]::after { transform: rotate(90deg); }
+  #tide .shelf__track { display: none; flex-direction: column; gap: 0; overflow: visible; padding: 0 6px; scroll-snap-type: none; }
+  #tide .shelf[data-open="true"] .shelf__track { display: flex; }
+  #tide .shelf__card {
+    width: auto;
+    min-height: 36px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+  }
+  #tide .shelf__card + .shelf__card { box-shadow: 0 -1px 0 var(--line); }
+  #tide .shelf__card:hover { background: color-mix(in srgb, var(--tide-accent) 6%, #fff); }
+  #tide .shelf__card[aria-current="true"] { box-shadow: none; }
+  #tide .shelf__no { width: 20px; justify-content: center; }
+}
 #tide .state-forged { margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.4; color: var(--ink-muted); }
 /* A CARD PER ROW, not a dense line. These are the states somebody wrote down; a flow's name is a
  * sentence and needs to wrap rather than be clipped to a chip. */
@@ -1251,6 +1386,21 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   #tide .rail-chip:focus-visible { outline: 2px solid var(--motu-on-primary, #fff); outline-offset: -2px; }
   #tide .rail-chip--step:disabled { opacity: .4; cursor: default; }
   #tide .rail-dock .chev { display: none; }
+  /* THE MINI PLAYER'S PROGRESS, along its top edge: the playing flow's steps, or one bar for a state
+   * that simply is. Inside the rounded corners, so it reads as part of the bar and not a border. */
+  #tide .rail-dock { position: relative; }
+  #tide .rail-progress {
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 16px;
+    height: 3px;
+    display: flex;
+    gap: 3px;
+  }
+  #tide .rail-progress i { flex: 1 1 0; border-radius: 0 0 2px 2px; background: color-mix(in srgb, var(--motu-on-primary, #fff) 22%, transparent); }
+  #tide .rail-progress i[data-done="true"] { background: var(--motu-sand, #e3c893); }
+  #tide .rail-chip svg { display: block; }
 
   /* The note rises above the bar, full width, where the thumb that pressed Share already is. */
   #tide .share-note { top: auto; left: 10px; right: 10px; width: auto; bottom: calc(var(--motu-dock-handle, 60px) + 10px); }
@@ -1582,13 +1732,15 @@ function motuMountDock(opts) {
    *
    * Hidden outright on desktop, where the panel sits beside the page and carries the same acts.
    */
-  var stepPrev = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Previous step' }, ['‹']);
-  var stepNext = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Next step' }, ['›']);
+  var stepPrev = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Previous' });
+  var stepNext = el('button', { class: 'rail-chip rail-chip--step', type: 'button', 'aria-label': 'Next' });
+  /** The playing flow's progress, along the bar's top edge — the line every mini player has. */
+  var railProgress = el('div', { class: 'rail-progress', 'aria-hidden': 'true' });
   var railShare = el('button', {
     class: 'rail-chip rail-chip--share', type: 'button', 'aria-label': 'Copy a link to this state', title: 'Copy a link to this state',
   }, [shareIcon()]);
   var railStates = el('div', { class: 'rail-states', role: 'group', 'aria-label': 'Step and share' }, [stepPrev, stepNext, railShare]);
-  var rail = el('div', { class: 'rail-dock' }, [railOpen, railStates, pick]);
+  var rail = el('div', { class: 'rail-dock' }, [railProgress, railOpen, railStates, pick]);
 
   var bayTitle = el('b', {}, ['—']);
   var baySub = el('small', {}, ['']);
@@ -1649,10 +1801,15 @@ function motuMountDock(opts) {
     else root.style.removeProperty('--motu-dock-panel');
     // OUT OF THE TRANSFORMED SUBTREE while pinned, back where it was otherwise. A live subtree keeps
     // its listeners and its state across a move, so this costs nothing but the reparent.
-    var host = tide.parentElement;
-    if (!host) return;
-    if (on && host.parentElement !== root) root.appendChild(host);
-    else if (!on && host.parentElement === root && mountEl && mountEl !== root) mountEl.appendChild(host);
+    //
+    // THE DOCK ITSELF, NOT ITS PARENT. This used to move `tide.parentElement`, which is right only
+    // where the dock is mounted in a wrapper — `lagoon serve`'s. The host mounts it on the body
+    // directly, so the "parent" was the very element being transformed, its parent was already the
+    // root, and nothing moved: pinned on a hosted lagoon, the panel was laid out inside the shrunken
+    // body and covered the page it had just reserved room beside.
+    if (!tide.parentElement) return;
+    if (on && tide.parentElement !== root) root.appendChild(tide);
+    else if (!on && tide.parentElement === root && mountEl && mountEl !== root) mountEl.appendChild(tide);
   };
   pin.addEventListener('click', function () {
     pinned = !pinned;
@@ -2023,7 +2180,8 @@ function motuMountDock(opts) {
   var aimRow = el('div', { class: 'aim', role: 'group', 'aria-label': 'Region on screen' });
   var atoll = el('div', { class: 'atoll' });
   var nowBox = el('div', { class: 'now' });
-  scroll.append(aimRow, atoll, nowBox);
+  // NOW PLAYING FIRST: it is what you are watching. The atoll is how you browse, so it follows.
+  scroll.append(aimRow, nowBox, atoll);
   var flowsSect = section('Flows');
   var shelves = el('div', { class: 'shelves' });
   scroll.appendChild(shelves);
@@ -2160,6 +2318,7 @@ function motuMountDock(opts) {
       b.style.top = (50 + 30 * Math.sin(angle)).toFixed(2) + '%';
       b.addEventListener('click', function () {
         aimIsland = aimIsland === i.tag ? null : i.tag;
+        closedAll = false;
         revealShelf = aimIsland;
         paint();
       });
@@ -2168,7 +2327,76 @@ function motuMountDock(opts) {
     atoll.replaceChildren.apply(atoll, nodes);
   };
 
-  /** NOW PLAYING — the state the aimed region is in, its kind, and its steps as pressable segments. */
+  /** A small icon from paths — `fill` for the transport's triangles, a stroke for everything else. */
+  var icon = function (paths, size) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', String(size || 18));
+    svg.setAttribute('height', String(size || 18));
+    svg.setAttribute('aria-hidden', 'true');
+    paths.forEach(function (p) {
+      var n = document.createElementNS(NS, 'path');
+      n.setAttribute('d', p.d);
+      n.setAttribute('fill', p.fill ? 'currentColor' : 'none');
+      n.setAttribute('stroke', 'currentColor');
+      n.setAttribute('stroke-width', p.fill ? '1' : '2.2');
+      n.setAttribute('stroke-linecap', 'round');
+      n.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(n);
+    });
+    return svg;
+  };
+  var ICON_PREV = [{ d: 'M6 5v14' }, { d: 'M19 5.5L9 12l10 6.5z', fill: true }];
+  var ICON_NEXT = [{ d: 'M18 5v14' }, { d: 'M5 5.5L15 12 5 18.5z', fill: true }];
+  var ICON_REPLAY = [{ d: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3' }, { d: 'M4 4.5V9h4.5' }];
+  // The bar's transport was built before these existed; it wears the same glyphs as the panel's.
+  stepPrev.appendChild(icon(ICON_PREV, 20));
+  stepNext.appendChild(icon(ICON_NEXT, 20));
+
+  /** The playing track's equalizer — three bars, still under reduced motion (the global rule). */
+  var equalizer = function () {
+    return el('span', { class: 'eq', 'aria-hidden': 'true' }, [el('i'), el('i'), el('i')]);
+  };
+
+  /**
+   * THE TRANSPORT, as a music player does it: ⏮ and ⏭ step through the flow that is playing, and at
+   * either end they move to the previous or next track — "As seeded", then the region's flows in
+   * declared order. So the two buttons are never dead, and pressing ⏭ over and over walks every state
+   * the region declares, one after another, which is the tour a person giving a review actually wants.
+   * ↻ plays the current track again from its seed.
+   */
+  var transport = function (aim) {
+    var tracks = [null].concat(aim.reg.flows || []);
+    var cur = aim.activeScenario ? -1 : tracks.indexOf(aim.activeFlow || null);
+    var st = aim.steps;
+    var name = function (t) { return t === null ? 'As seeded' : t; };
+    var prev = null;
+    var next = null;
+    if (st && st.at > 1) prev = { label: 'Step ' + (st.at - 1) + ' of ' + st.of, run: playIn(aim, aim.activeFlow, st.at - 1) };
+    else if (cur > 0) prev = { label: 'Previous: ' + name(tracks[cur - 1]), run: playIn(aim, tracks[cur - 1]) };
+    else if (cur === -1) prev = { label: 'Back to As seeded', run: playIn(aim, null) };
+    if (st && st.at < st.of) next = { label: 'Step ' + (st.at + 1) + ' of ' + st.of, run: playIn(aim, aim.activeFlow, st.at + 1) };
+    else if (cur === -1 && tracks.length > 1) next = { label: 'Next: ' + name(tracks[1]), run: playIn(aim, tracks[1]) };
+    else if (cur >= 0 && cur + 1 < tracks.length) next = { label: 'Next: ' + name(tracks[cur + 1]), run: playIn(aim, tracks[cur + 1]) };
+    var replay = aim.activeScenario
+      ? { label: 'Play this what-if again', run: drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: aim.activeScenario.island, name: aim.activeScenario.name }); }) }
+      : { label: aim.activeFlow ? 'Play this flow again from its seed' : 'Back to the seed', run: playIn(aim, aim.activeFlow || null) };
+    return { prev: prev, next: next, replay: replay };
+  };
+
+  /** Point a transport button at what it does now — or disable it, with the reason in its name. */
+  var aimButton = function (b, act, idle) {
+    b.disabled = !act;
+    b.onclick = act ? act.run : null;
+    b.setAttribute('aria-label', act ? act.label : idle);
+    b.title = act ? act.label : idle;
+  };
+
+  /**
+   * NOW PLAYING — the region's state as a player's front panel: the atoll as cover art, what is
+   * playing and where, its progress (a flow's steps as segments you can press), and the transport.
+   */
   var drawNow = function (aim, labelOf) {
     var kind = 'as seeded';
     var name = 'As seeded';
@@ -2179,12 +2407,20 @@ function motuMountDock(opts) {
       kind = 'flow';
       name = aim.activeFlow;
     }
+    var playing = !!(aim.activeFlow || aim.activeScenario);
     var kids = [
-      el('small', { class: 'now__kicker' }, [labelOf(aim.regId) + ' · ' + kind]),
-      el('b', { class: 'now__title' }, [name]),
+      el('div', { class: 'now__head' }, [
+        el('span', { class: 'atoll-mark now__cover', 'aria-hidden': 'true' }),
+        el('span', { class: 'now__txt' }, [
+          el('small', { class: 'now__kicker' }, [(playing ? 'now playing · ' : '') + labelOf(aim.regId) + ' · ' + kind]),
+          el('b', { class: 'now__title' }, [name]),
+        ]),
+      ]),
     ];
+    // THE PROGRESS. A flow's steps as segments; anything else is one bar, full — a state that simply
+    // IS has nothing left to play, and an empty bar would read as "not started".
+    var segs = el('div', { class: 'now__segs', role: 'group', 'aria-label': aim.steps ? 'Steps of this flow' : 'Progress' });
     if (aim.steps) {
-      var segs = el('div', { class: 'now__segs', role: 'group', 'aria-label': 'Steps of this flow' });
       for (var k = 1; k <= aim.steps.of; k++) {
         var seg = el('button', {
           class: 'now__seg', type: 'button', 'aria-label': 'Step ' + k + ' of ' + aim.steps.of,
@@ -2193,8 +2429,22 @@ function motuMountDock(opts) {
         seg.addEventListener('click', playIn(aim, aim.activeFlow, k));
         segs.appendChild(seg);
       }
-      kids.push(segs, el('small', { class: 'now__step' }, ['step ' + aim.steps.at + ' of ' + aim.steps.of]));
+    } else {
+      segs.appendChild(el('span', { class: 'now__seg now__seg--whole', 'data-done': 'true' }));
     }
+    kids.push(segs);
+    var tp = transport(aim);
+    var prevB = el('button', { class: 'now__btn', type: 'button' }, [icon(ICON_PREV, 18)]);
+    var replayB = el('button', { class: 'now__btn now__btn--main', type: 'button' }, [icon(ICON_REPLAY, 20)]);
+    var nextB = el('button', { class: 'now__btn', type: 'button' }, [icon(ICON_NEXT, 18)]);
+    aimButton(prevB, tp.prev, 'Nothing before this');
+    aimButton(replayB, tp.replay, '');
+    aimButton(nextB, tp.next, 'Nothing after this');
+    kids.push(el('div', { class: 'now__transport' }, [
+      el('small', { class: 'now__step' }, [aim.steps ? 'step ' + aim.steps.at + ' of ' + aim.steps.of : playing ? 'complete' : 'seed']),
+      el('span', { class: 'now__btns' }, [prevB, replayB, nextB]),
+      el('small', { class: 'now__step now__step--end' }, [(aim.reg.flows || []).length + ' flows']),
+    ]));
     if (aim.act && aim.act.forged && aim.act.forged.length) {
       kids.push(el('p', { class: 'state-forged' }, [
         'forged: ' + aim.act.forged.map(function (f) { return f.key + ' (owned by ' + f.owner + ')'; }).join(', '),
@@ -2203,30 +2453,71 @@ function motuMountDock(opts) {
     nowBox.replaceChildren.apply(nowBox, kids);
   };
 
+  /** One track of the flows list: its number (an equalizer while it plays), its name, its progress. */
+  var track = function (no, name, on, meta, run) {
+    var b = el('button', { class: 'track', type: 'button', role: 'option', 'aria-current': on ? 'true' : 'false' }, [
+      el('span', { class: 'track__no' }, on ? [equalizer()] : [no]),
+      el('span', { class: 'track__name' }, [name]),
+      meta ? el('span', { class: 'track__meta' }, [meta]) : null,
+    ].filter(Boolean));
+    b.addEventListener('click', function () {
+      // LIT ON PRESS — a flow takes as long as its steps take.
+      var all = b.parentNode ? b.parentNode.children : [];
+      for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-current', 'false');
+      b.setAttribute('aria-current', 'true');
+      run();
+    });
+    return b;
+  };
+
   /**
-   * THE WHAT-IFS: one shelf per island, scrolling sideways. An island scenario played inside its
-   * region sets that island's inputs directly — a what-if, not a state the app is known to reach —
-   * which is why they sit under the flows rather than among them.
+   * THE WHAT-IFS, one ALBUM per island — the island is the album, its scenarios the tracks.
+   *
+   * Two shapes from one tree, chosen by the pointer rather than the width. Under a finger an album is
+   * a shelf of cards you swipe sideways, which costs one row of height whatever it holds. Under a
+   * mouse sideways scrolling is the worst gesture there is, so an album is a row that opens into its
+   * tracklist — one open at a time (the one aimed at, else the one playing), so the tab is still as
+   * tall as its islands plus one list, never the sum of every list.
+   *
+   * An island scenario played inside its region sets that island's inputs directly — a what-if, not a
+   * state the app is known to reach — which is why the albums sit under the flows rather than among them.
    */
   var drawShelves = function (aim, now) {
     var nodes = [];
     var total = 0;
+    var litIsland = aim.activeScenario ? aim.activeScenario.island : null;
+    var openTag = aimIsland || litIsland;
     (aim.reg.islands || []).forEach(function (i) {
       if (!i.scenarios.length) return;
       total += i.scenarios.length;
-      var lit = aim.activeScenario && aim.activeScenario.island === i.tag ? aim.activeScenario.name : null;
-      var track = el('div', { class: 'shelf__track', role: 'listbox', 'aria-label': (i.slot || i.tag) + ' what-ifs' });
-      i.scenarios.forEach(function (name) {
-        var card = el('button', { class: 'shelf__card', type: 'button', role: 'option', 'aria-current': String(lit === name) }, [name]);
+      var lit = litIsland === i.tag ? aim.activeScenario.name : null;
+      var track2 = el('div', { class: 'shelf__track', role: 'listbox', 'aria-label': (i.slot || i.tag) + ' what-ifs' });
+      i.scenarios.forEach(function (name, n) {
+        var card = el('button', { class: 'shelf__card', type: 'button', role: 'option', 'aria-current': String(lit === name) }, [
+          el('span', { class: 'shelf__no' }, lit === name ? [equalizer()] : [String(n + 1).padStart(2, '0')]),
+          el('span', { class: 'shelf__name' }, [name]),
+        ]);
         card.addEventListener('click', function () {
           var all = shelves.querySelectorAll('.shelf__card');
-          for (var n = 0; n < all.length; n++) all[n].setAttribute('aria-current', 'false');
+          for (var m = 0; m < all.length; m++) all[m].setAttribute('aria-current', 'false');
           card.setAttribute('aria-current', 'true');
           drive(function (c) { c.playState({ region: aim.regId, kind: 'scenario', island: i.tag, name: name }); })();
         });
-        track.appendChild(card);
+        track2.appendChild(card);
       });
-      var head = [el('span', { class: 'shelf__slot' }, [i.slot || i.tag]), el('span', { class: 'count' }, [String(i.scenarios.length)])];
+      var open = openTag === i.tag && !closedAll;
+      var title = el('button', { class: 'shelf__title', type: 'button', 'aria-expanded': String(open) }, [
+        el('span', { class: 'shelf__cover', 'aria-hidden': 'true' }, [lit ? equalizer() : String(i.scenarios.length)]),
+        el('span', { class: 'shelf__slot' }, [i.slot || i.tag]),
+        el('span', { class: 'shelf__count' }, [i.scenarios.length + ' what-if' + (i.scenarios.length === 1 ? '' : 's')]),
+      ]);
+      title.addEventListener('click', function () {
+        // Closing the open album shows none, rather than falling back to the one that is playing.
+        closedAll = open;
+        aimIsland = open ? null : i.tag;
+        paint();
+      });
+      var head = [title];
       // ALONE only where the view can do it: opening an island scopes the REGION STATION, so on a
       // screen (several regions, none of them the station) the act has nowhere to land.
       if (aim.own && !now.island) {
@@ -2234,10 +2525,10 @@ function motuMountDock(opts) {
         alone.addEventListener('click', drive(function (c) { c.openIsland(i.tag); }));
         head.push(alone);
       }
-      nodes.push(el('section', { class: 'shelf', 'data-tag': i.tag, 'data-aimed': String(aimIsland === i.tag) }, [
-        el('div', { class: 'shelf__head' }, head),
-        track,
-      ]));
+      nodes.push(el('section', {
+        class: 'shelf', 'data-tag': i.tag, 'data-aimed': String(aimIsland === i.tag),
+        'data-open': String(open),
+      }, [el('div', { class: 'shelf__head' }, head), track2]));
     });
     if (total) {
       nodes.unshift(el('div', { class: 'sect__head' }, [
@@ -2245,19 +2536,21 @@ function motuMountDock(opts) {
       ]));
     }
     shelves.replaceChildren.apply(shelves, nodes);
-    // The lit card, in view — once per change, so a reader scrolling a shelf is not dragged back.
+    // The lit card, in view on a shelf — once per change, so a reader swiping is not dragged back.
     var litCard = shelves.querySelector('.shelf__card[aria-current="true"]');
     var litKey = litCard ? litCard.textContent : null;
     if (litKey !== lastLitCard) {
       lastLitCard = litKey;
       if (litCard && litCard.parentNode) {
         var t = litCard.parentNode;
-        t.scrollLeft = Math.max(0, litCard.offsetLeft - t.offsetLeft - 16);
+        if (t.scrollWidth > t.clientWidth) t.scrollLeft = Math.max(0, litCard.offsetLeft - t.offsetLeft - 16);
       }
     }
     return total;
   };
   var lastLitCard = null;
+  /** The reader closed the open album; stays closed until they open one (or aim at an island). */
+  var closedAll = false;
 
   var paint = function () {
     var cat = catalogue();
@@ -2314,9 +2607,10 @@ function motuMountDock(opts) {
       drawAtoll(aim);
       drawNow(aim, labelOf);
       flowsSect.cap.textContent = 'Flows';
-      var flowRows = [row('As seeded', !aim.activeFlow && !aim.activeScenario, playIn(aim, null))];
-      (aim.reg.flows || []).forEach(function (name) {
-        flowRows.push(row(name, aim.activeFlow === name, playIn(aim, name)));
+      var flowRows = [track('00', 'As seeded', !aim.activeFlow && !aim.activeScenario, null, playIn(aim, null))];
+      (aim.reg.flows || []).forEach(function (name, k) {
+        var on = aim.activeFlow === name;
+        flowRows.push(track(String(k + 1).padStart(2, '0'), name, on, on && aim.steps ? aim.steps.at + '/' + aim.steps.of : null, playIn(aim, name)));
       });
       flowsSect.count.textContent = String((aim.reg.flows || []).length);
       flowsSect.list.replaceChildren.apply(flowsSect.list, flowRows);
@@ -2328,17 +2622,17 @@ function motuMountDock(opts) {
       // The screen, then the region — once, when a screen is named after the region it is built on.
       where = onScreen && onScreen.label !== labelOf(aim.regId) ? onScreen.label + ' \u203a ' + labelOf(aim.regId) : labelOf(aim.regId);
 
-      // The bar's step buttons step the same flow the segments do.
+      // THE BAR'S TRANSPORT is the panel's: the same ⏮ / ⏭, the same progress.
       var st = aim.steps;
-      stepPrev.hidden = !st;
-      stepNext.hidden = !st;
-      if (st) {
-        where += ' · step ' + st.at + '/' + st.of;
-        stepPrev.disabled = st.at <= 0;
-        stepNext.disabled = st.at >= st.of;
-        stepPrev.onclick = playIn(aim, aim.activeFlow, Math.max(0, st.at - 1));
-        stepNext.onclick = playIn(aim, aim.activeFlow, Math.min(st.of, st.at + 1));
-      }
+      if (st) where += ' \u00b7 step ' + st.at + '/' + st.of;
+      var tp = transport(aim);
+      stepPrev.hidden = false;
+      stepNext.hidden = false;
+      aimButton(stepPrev, tp.prev, 'Nothing before this');
+      aimButton(stepNext, tp.next, 'Nothing after this');
+      railProgress.replaceChildren.apply(railProgress, st
+        ? Array.from({ length: st.of }, function (_, k) { return el('i', { 'data-done': String(k < st.at) }); })
+        : [el('i', { 'data-done': String(!!(aim.activeFlow || aim.activeScenario)) })]);
 
       // THE PAGE POINTED AT SOMETHING: aim at it and open on it. Once per pointing — `n` changes each
       // time — so the panel does not keep yanking itself back to a region the reader has left.
@@ -2380,6 +2674,7 @@ function motuMountDock(opts) {
       where = onIsland ? scopedTag + ' · alone' : (onScreen ? onScreen.label : now.region || 'lagoon');
       stepPrev.hidden = true;
       stepNext.hidden = true;
+      railProgress.replaceChildren();
     }
 
     // THE MINI PLAYER: what is playing, where, and whether the lens is waiting on a decision.

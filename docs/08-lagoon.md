@@ -365,15 +365,19 @@ a region's station and a screen differ only in how much of the application is dr
 store — so every view can show every state of every region it has on screen. The dock's **States** tab
 shows ONE region of the view at a time (pills switch between them when a screen holds several):
 
+- **now playing** — a player's front panel: the state the region is in, a flow's steps as the
+  progress bar (press a segment to go to that step), and the transport — ⏮ / ⏭ step through the
+  flow and, at either end, move to the previous or next flow, so pressing ⏭ repeatedly walks every
+  state the region declares; ↻ replays from the seed.
 - **the atoll** — the region drawn as a place, its islands as sand dots around the lagoon, each sized by
-  how many what-ifs it declares. Tapping one brings its shelf into view.
-- **now playing** — the state the region is in, and a flow's steps as segments you can press.
-- **flows** as a list, then **what-ifs** as one shelf per island that scrolls sideways — so an island
-  costs one row of height however many scenarios it carries, and the tab does not grow with the project.
+  how many what-ifs it declares. Tapping one brings its album into view.
+- **flows** as a numbered tracklist, then **what-ifs** as one album per island. Under a finger an
+  album is a shelf you swipe sideways; under a mouse it is a row that opens into its tracklist, one at a
+  time. Either way the tab is as tall as its islands, not the sum of their scenarios.
 
 Screens, regions and every state by name are in **Find** (the button beside the tabs, or Ctrl/Cmd-K):
 navigation is a search, not a column. On a phone the closed dock is a mini player — the state playing,
-the region and step, step back/forward, **Share** (copies the address of exactly this state, step
+the region and step with its progress along the top edge, the same ⏮ / ⏭, **Share** (copies the address of exactly this state, step
 included; hosted, the shell's address rather than the frame's) and the picker. On a screen, hovering a
 region outlines it with a chip of its counts; the chip, and the crosshair, aim the dock at that region
 instead of scoping the view to one island.

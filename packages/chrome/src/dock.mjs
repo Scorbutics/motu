@@ -1715,7 +1715,9 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   box-shadow:
     0 10px 28px color-mix(in srgb, var(--w-deep) 35%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--motu-sand, #e3c893) 30%, transparent);
-  color: #fff;
+  /* THE RAIL'S INK, not white: a light palette (Peps is gold) derives a dark --motu-on-primary, and
+   * hard-coded white on its water was the one unreadable thing on the page. */
+  color: var(--motu-on-primary, #fff);
   animation: tide-call-in 220ms cubic-bezier(.22,.9,.3,1) both;
 }
 #tide-calls .sig[data-tone="undeclared"] {
@@ -1772,7 +1774,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 /* TWO LINES, NOT AN ELLIPSIS: the answer ("failed, 500") is at the END of this line. */
 #tide-calls .sig__txt small {
   font-size: 11.5px;
-  color: color-mix(in srgb, #fff 78%, transparent);
+  color: color-mix(in srgb, currentColor 78%, transparent);
   overflow: hidden;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -1791,7 +1793,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   white-space: nowrap;
 }
 /* REPEATS COUNT RATHER THAN STACK. A save fans out into a write and its refetches. */
-#tide-calls .sig__n { flex: none; font-size: 11px; font-weight: 800; color: color-mix(in srgb, #fff 80%, transparent); }
+#tide-calls .sig__n { flex: none; font-size: 11px; font-weight: 800; color: color-mix(in srgb, currentColor 80%, transparent); }
 #tide-calls .sig__n[hidden] { display: none; }
 #tide-calls .sig__x {
   all: unset;
@@ -1803,10 +1805,10 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   height: 32px;
   border-radius: 9px;
   cursor: pointer;
-  color: color-mix(in srgb, #fff 75%, transparent);
+  color: color-mix(in srgb, currentColor 75%, transparent);
 }
-#tide-calls .sig__x:hover { background: color-mix(in srgb, #fff 12%, transparent); color: #fff; }
-#tide-calls .sig__why { margin: 0 0 0 48px; font-size: 12.5px; line-height: 1.45; color: color-mix(in srgb, #fff 90%, transparent); }
+#tide-calls .sig__x:hover { background: color-mix(in srgb, currentColor 12%, transparent); color: inherit; }
+#tide-calls .sig__why { margin: 0 0 0 48px; font-size: 12.5px; line-height: 1.45; color: color-mix(in srgb, currentColor 90%, transparent); }
 #tide-calls .sig__acts { margin-left: 48px; display: flex; gap: 8px; }
 #tide-calls .sig__read {
   all: unset;

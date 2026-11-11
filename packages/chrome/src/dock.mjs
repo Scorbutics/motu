@@ -2295,6 +2295,14 @@ function motuMountDock(opts) {
   };
   window.addEventListener('resize', function () { syncBottomReserve(); applyPin(); });
 
+  // SCENARIOS DECLARED FOR A TAG — the Islands tab's count of what opening an island alone buys.
+  // (Removed once with the old islands picker; the Islands tab still needs it, and threw without it.)
+  var scenarioCount = function (tag) {
+    var cat = catalogue();
+    var list = cat && cat.scenarios ? cat.scenarios[tag] : null;
+    return list ? list.length : 0;
+  };
+
   var row = function (label, on, run) {
     var b = el('button', { class: 'motu-opt', type: 'button', role: 'option', 'aria-current': on ? 'true' : 'false' }, [
       el('span', { class: 'lamp' }),

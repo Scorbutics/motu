@@ -309,7 +309,7 @@ export class MockTransport implements Transport {
     // A DECLARED failure. Thrown the way the real transport throws, so the island takes the same code
     // path it will take in the ocean — not a special "mock is sad" path it would never otherwise run.
     if (isFailure(fixture)) {
-      throw new MotuError(fixture.status, fixture.message ?? `mock: declared ${fixture.status} for ${service}/${method}`);
+      throw new MotuError(fixture.status, fixture.message ?? `mock: declared ${fixture.status} for ${service}/${method}`, true);
     }
     // A function response derives the result from the args (a stub filter) so reactive behaviour works
     // for any input; a value response is a static replay.

@@ -331,6 +331,12 @@ export interface LiveCall {
   ms: number;
   /** The failure in words, when there is one. A summary, never a body. */
   error?: string;
+  /**
+   * A FAILURE SOMEBODY ASKED FOR. A fixture that answers 500 on purpose -- the state "a failing
+   * search reports its failure" -- is the state working, not the lagoon breaking, and chrome must not
+   * raise the same alarm for it as for a call nothing answered. Absent means nobody declared it.
+   */
+  declared?: boolean;
 }
 
 /** What a caller knows when the request LEAVES. The rest is filled in when it lands. */
@@ -346,6 +352,7 @@ export interface LiveCallEnd {
   status: number;
   ok: boolean;
   error?: string;
+  declared?: boolean;
 }
 
 const live: LiveCall[] = [];
@@ -379,6 +386,7 @@ export function beginCall(start: LiveCallStart): (end: LiveCallEnd) => void {
       ok: end.ok,
       ms: Date.now() - t0,
       ...(end.error ? { error: end.error } : {}),
+      ...(end.declared ? { declared: true } : {}),
     };
     live.push(call);
     if (live.length > MAX_LIVE) live.splice(0, live.length - MAX_LIVE);

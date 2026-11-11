@@ -140,7 +140,12 @@ export function call<T>(service: string, method: string, args: unknown[]): Promi
       const status = err instanceof MotuError ? err.status : undefined;
       // A THROW THAT IS NOT A STATUS still landed, and 0 is how the feed spells "never got one" —
       // dropping it would make a transport that rejected look like a call that is still in flight.
-      landed({ status: status ?? 0, ok: false, error: err instanceof Error ? err.message : String(err) });
+      landed({
+        status: status ?? 0,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+        ...(err instanceof MotuError && err.declared ? { declared: true } : {}),
+      });
       emitCall({
         id,
         service,
@@ -169,7 +174,12 @@ if (DEBUG && typeof globalThis !== 'undefined') {
 }
 
 export class MotuError extends Error {
-  constructor(public readonly status: number, message: string) {
+  /**
+   * `declared` is true when a fixture ASKED for this failure. The application never reads it -- it
+   * takes the same path either way, which is the point of throwing the real error -- but the lagoon's
+   * call feed does, so a failure the state declares is not shown as one nobody expected.
+   */
+  constructor(public readonly status: number, message: string, public readonly declared = false) {
     super(message);
     this.name = 'MotuError';
   }

@@ -854,35 +854,48 @@ and answers it only to somebody who already suspected there was something to ask
 is the hard half: the fake fetch replies without touching the network, so a screen that fired nine
 requests and one that fired none look identical in every instrument a browser has.
 
-So a call that LANDS draws a small card on the dock's edge: the address it went to, the verb, and the
-status in the colour of its verdict — teal for ok, amber for a call that never got a status at all (a
-throw, an abort), red for 4xx/5xx, with the failure's own words under it. Press the card and the panel
-opens on `Seams` at the section that door reports into — `Network` for a wire call, `Asked for` for a
-contract one — where the same call is waiting with its payload. The card is the notice; the panel is
-the log.
+So a call that LANDS says so — as a SIGNAL off the dock's bar (beside the rail on a wider screen),
+in words rather than as a log line. There are three shapes, because there are three facts:
 
-    ┌─────────────────────────────────────────────┐
-    │ ▌ POST  /rest/v1/rpc/save_member        404 │
-    │   motu: no fixture for save_member/rpc      │
-    └─────────────────────────────────────────────┘
+- **An answer that went fine** is not news. It never becomes a card. It counts on the wave
+  (`3 answered`), and the count fades once the calls stop.
+- **A failure a fixture declared** is the state working. The mock's `{ status: 500 }` in "a failing
+  search reports its failure" is supposed to fail. It shows in sand, marked `as declared`, and leaves
+  after a few seconds.
+- **A failure nobody declared** is the alarm: a 404 no fixture answers, a throw, an abort. It shows
+  in coral, with one line on what it means ("Nothing answers it — no fixture, no wire route…"), and it
+  stays until you dismiss it. Even after you dismiss it, a coral pennant stays on the bar until you
+  open Seams.
 
-Both doors that have an address record into one feed (`beginCall` in `@motu/core`), which the lagoon
-publishes on its control surface (`calls()`, `onCall()`) for chrome drawn outside the artifact. A
-TRACED HOST MODULE is deliberately absent: a stubbed export has no URL and no status, and a card whose
-status column said `—` would report an absence in the shape of a result. It stays in `Asked for`,
-which can describe it honestly.
+    ┌──────────────────────────────────────────────┐
+    │ ⚑  Asked to search                [as declared] │
+    │    MemberService · search — failed, 500       │
+    └┬─────────────────────────────────────────────┘
+     │   (the mast: it hangs off the bar it came from)
 
-Where a contract call's address comes from is the transport's business — `Transport.endpoint?()`,
-which `HttpTransport` answers and an in-process transport does not. No address, no verb: the card
-falls back to the declaration's own name for the call (`MemberService.search`) rather than dressing a
-service method up as an endpoint.
+Pressing a signal opens the panel on `Seams`, at the section its door reports into: `Network` for a
+wire call, `Asked for` for a contract call. The same call is waiting there with its payload.
 
-Cards repeat by COUNTING (`×3`), never by stacking — a save fans out into a write and every refetch it
-causes, and nine cards for one press is a wall. Four at a time, ~4s each and ~9s for a failure, and
-they are gone while the panel is open, which stands in the same strip and says all of it at length.
-`Mute call cards` in the palette turns them off for good; `dockInset=off` — the flag the checks
-already set to take the dock's strip back — suppresses them, so no baseline moves with the timing of
-a fetch.
+The feed tells the two kinds of failure apart with `declared` on the call. `MockTransport` throws a
+declared failure as a `MotuError` with `declared: true`, and the wire records the same thing beside
+the response, never in it. The application takes the same code path either way. Only the dock reads
+the difference.
+
+Both doors that have an address record into one feed (`beginCall` in `@motu/core`). The lagoon
+publishes that feed on its control surface (`calls()`, `onCall()`) for chrome drawn outside the
+artifact. A TRACED HOST MODULE is deliberately absent: a stubbed export has no status, so it stays in
+`Asked for`, which can describe it honestly.
+
+Where a contract call's address comes from is the transport's business: `Transport.endpoint?()`, which
+`HttpTransport` answers and an in-process transport does not.
+
+Signals repeat by COUNTING (`×3`), never by stacking. A phone shows one signal at a time, a wider
+screen two. A signal never shows while the panel is open, because the panel says all of it at
+length.
+
+`Signals` in the ⋯ menu has three settings: on, failures only, and off. It is also in the palette,
+and the choice is remembered. `dockInset=off`, the flag the checks already set to take the dock's
+strip back, suppresses signals, so no baseline moves with the timing of a fetch.
 
 ---
 

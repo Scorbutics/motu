@@ -14,6 +14,7 @@ const { liveCalls, resetLiveCalls, subscribeCalls, runWithSource, runWithIsland 
 // install (CI). Runtime's own `@motu/core` resolves to this package's files, so the ledger is shared.
 const { createPostgrestFetch } = await import('../../runtime/dist/postgrest-fetch.js');
 const { configure, call, MotuError } = await import('../../runtime/dist/index.js');
+const { MockTransport } = await import('../../runtime/dist/mock.js');
 
 let pass = 0, fail = 0;
 const t = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' -> ' + detail : ''}`); };
@@ -84,6 +85,29 @@ const fake = createPostgrestFetch({
   configure({ call: async () => ({}) });
   await call('MemberService', 'search', []);
   t('a transport that cannot say leaves the address empty', liveCalls()[0]?.url === '', JSON.stringify(liveCalls()[0]?.url));
+}
+
+// 5. A FAILURE SOMEBODY ASKED FOR is not an alarm. A fixture that answers 500 on purpose is the state
+//    "a failing search" working; a 404 nothing answers is the lagoon missing something. The dock draws
+//    the two differently, so the feed has to tell them apart -- through both doors.
+{
+  resetLiveCalls();
+  const mock = new MockTransport([{ service: 'MemberService', method: 'search', status: 500 }]);
+  configure({ call: (s, m, a) => mock.call(s, m, a) });
+  await call('MemberService', 'search', []).catch(() => {});
+  await call('MemberService', 'nothingAnswers', []).catch(() => {});
+  const [asked, missing] = liveCalls();
+  t('a declared failure lands marked declared', asked?.status === 500 && asked?.declared === true, JSON.stringify(asked));
+  t('a missing fixture does not', missing?.status === 404 && !missing?.declared, JSON.stringify(missing));
+
+  resetLiveCalls();
+  const wire = createPostgrestFetch({ baseUrl: 'https://db.example', fixtures: [{ service: 'save', method: 'rpc', status: 503 }] });
+  const res = await wire('https://db.example/rest/v1/rpc/save', { method: 'POST', body: '{}' });
+  await wire('https://db.example/rest/v1/rpc/nobody', { method: 'POST', body: '{}' });
+  const [w, u] = liveCalls();
+  t('over the wire too', w?.status === 503 && w?.declared === true, JSON.stringify(w));
+  t('and the wire does not mark what nothing answered', u && !u.declared, JSON.stringify(u));
+  t('without telling the application', !res.headers.has('x-motu-declared') && [...res.headers.keys()].every((k) => !k.includes('motu')), [...res.headers.keys()].join(','));
 }
 
 console.log(`\n${fail ? 'FAIL' : 'PASS'}  ${pass} passed, ${fail} failed`);

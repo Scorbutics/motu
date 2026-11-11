@@ -643,7 +643,7 @@ export function createPostgrestFetch(options: PostgrestFetchOptions = {}): typeo
     const landed = beginCall({ via: 'wire', url, method: req.method, label: target });
     const res = await dispatch(req);
     const response = await responseOf(res);
-    landed({ status: res.status, ok: res.ok, ...(res.ok ? {} : { error: response ?? '' }) });
+    landed({ status: res.status, ok: res.ok, ...(res.ok ? {} : { error: response ?? '' }), ...(declaredFailures.has(res) ? { declared: true } : {}) });
     recordCall({
       target,
       method: req.method,
@@ -834,10 +834,18 @@ function isNoFixture(err: unknown): boolean {
   return err instanceof MotuError && err.status === 404 && err.message.startsWith('mock: no fixture for');
 }
 
+/**
+ * Responses a fixture asked to fail. Remembered BESIDE the response rather than written into it: a
+ * header would be one more thing the application could see that the real backend never sends.
+ */
+const declaredFailures = new WeakSet<Response>();
+
 function fromTransportError(err: unknown, ctx: Omit<UnscopedRequest, 'reason'>): Response {
   if (err instanceof MotuError) {
     if (isNoFixture(err)) recordUnscoped({ ...ctx, reason: err.message });
-    return postgrestError(err.status, err.message);
+    const res = postgrestError(err.status, err.message);
+    if (err.declared) declaredFailures.add(res);
+    return res;
   }
   recordUnscoped({ ...ctx, reason: err instanceof Error ? err.message : String(err) });
   return postgrestError(500, 'motu: fake fetch fixture threw an unexpected error');

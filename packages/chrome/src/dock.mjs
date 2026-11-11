@@ -1508,6 +1508,21 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
     line-height: 16px;
   }
   #tide .rail-txt__flag[hidden] { display: none; }
+  #tide .rail-txt__signal {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--motu-coral, #f08068);
+    color: var(--motu-on-sand, #0b3d5c);
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 16px;
+  }
+  #tide .rail-txt__signal svg { fill: currentColor; stroke: currentColor; stroke-width: 2; }
+  #tide .rail-txt__signal[hidden] { display: none; }
 
   #tide .rail-states {
     grid-area: states;
@@ -1641,141 +1656,199 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   #tide *, #tide *::before { animation: none !important; transition: none !important; }
 }
 
-/* ── THE CALL TOASTER: a call, the moment it lands ─────────────────────────────────────────── */
+/* ── SIGNALS: a call, the moment it lands ──────────────────────────────────────────────────── */
 /*
  * WHY IT EXISTS AT ALL. The lagoon answers requests without touching the network, so the browser's
  * own Network panel is empty by construction -- a screen can fire nine calls and look, to every
- * instrument a person has, like a screen that did nothing. The Network list under Seams says what
- * happened, and says it only to somebody who already suspected something and went looking. This is
- * the same fact delivered unprompted: you pressed save, a card slid in saying POST /rest/v1/rpc/save
- * -> 200, and the question never had to be asked.
+ * instrument a person has, like a screen that did nothing. Seams says what happened, and says it only
+ * to somebody who already suspected something and went looking. This says it unprompted.
  *
- * SMALL, AND ON THE DOCK'S OWN EDGE. It is chrome over an application it is only looking at, so it
- * claims the strip the dock already claimed and nothing else. It never takes the pointer except on
- * the cards themselves, and a card is a button: pressing it opens the panel on Seams, where the
- * whole run is, with its payload.
+ * IN THE DOCK'S OWN LANGUAGE, NOT A SYSTEM TOAST. The first version was a stack of grey cards with a
+ * monospace URL and a red edge -- the vocabulary of a log viewer laid over somebody's application,
+ * and it alarmed on the one failure a flow was MEANT to show. A signal is the bar's own water, says
+ * the call in words, and rides off the bar it came from. Three tones, because there are three facts:
+ *
+ *   - an answer that went fine never becomes a card: it counts on the wave ("3 answered");
+ *   - a failure a fixture DECLARED is the state working: sand, "as declared", and it leaves;
+ *   - a failure nobody declared is coral, says what it means, and stays until it is read.
  */
 #tide-calls {
   position: fixed;
   bottom: 14px;
   z-index: 2147483001;
   display: flex;
-  /* NEWEST NEAREST THE DOCK. The stack is anchored to the bottom edge and grows upward, so appending
-   * puts the card that just landed where the eye already is and pushes the older ones away. */
+  /* NEWEST NEAREST THE DOCK: anchored to the bottom edge and growing upward. */
   flex-direction: column;
-  gap: 6px;
-  width: min(320px, 76vw);
-  /* THE STRIP IS THE RAIL'S, so the cards stand beside it rather than on it. */
-  margin-inline: 8px;
+  gap: 8px;
+  width: min(330px, 76vw);
+  margin-inline: 10px;
   pointer-events: none;
-  font: 500 11px/1.4 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  font: 500 13px/1.35 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
 }
-#tide-calls[data-edge="right"] { right: 46px; }
-#tide-calls[data-edge="left"] { left: 46px; }
-/* On a phone the dock IS the bottom edge, so the cards rise above the bar instead of beside it. */
+#tide-calls[data-edge="right"] { right: 46px; align-items: stretch; }
+#tide-calls[data-edge="left"] { left: 46px; align-items: stretch; }
+/* On a phone the dock IS the bottom edge, so the signal rises off the bar, attached by its mast. */
 @media (max-width: 760px) {
-  #tide-calls { left: 8px; right: 8px; width: auto; bottom: 74px; }
+  #tide-calls { left: 12px; right: 12px; width: auto; margin: 0; bottom: 74px; }
 }
-/* NOTHING TO SAY, NO SURFACE. An empty stack with padding is a permanent smudge on the page. */
 #tide-calls:empty { display: none; }
-/* ABOVE THE SCOPE CHIP when there is one. The chip is fixed to the same corner, so a card landing on
- * an island-scoped lagoon sat on top of "x-member-results ×" -- the one control that says how to get
- * back to the whole region. */
 #tide-calls[data-scoped="true"] { bottom: 54px; }
-/* AND NOTHING WHILE THE PANEL IS OPEN, which stands in the same strip and says all of this at
- * length. See the open() handler for why that is a rule rather than an offset. */
+@media (max-width: 760px) {
+  /* The scope chip stands on the bar's right end; the signal clears it, and so loses its mast. */
+  #tide-calls[data-scoped="true"] { bottom: 112px; }
+  #tide-calls[data-scoped="true"] .sig::after { display: none; }
+  #tide-calls[data-scoped="true"] .sig-answered { position: static; order: 1; }
+}
+/* AND NOTHING WHILE THE PANEL IS OPEN, which stands in the same strip and says all of this at length. */
 #tide-calls[data-open="true"] { display: none; }
 
-#tide-calls .call {
+#tide-calls .sig {
   pointer-events: auto;
-  display: grid;
-  grid-template-columns: 3px minmax(0, 1fr) auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 10px 10px;
+  border-radius: 16px;
+  /* THE BAR'S OWN WATER, deep to mid: white type stays legible on every palette the host can feed. */
+  background: linear-gradient(135deg, var(--w-deep), var(--w-mid));
+  box-shadow:
+    0 10px 28px color-mix(in srgb, var(--w-deep) 35%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--motu-sand, #e3c893) 30%, transparent);
+  color: #fff;
+  animation: tide-call-in 220ms cubic-bezier(.22,.9,.3,1) both;
+}
+#tide-calls .sig[data-tone="undeclared"] {
+  box-shadow:
+    0 10px 28px color-mix(in srgb, var(--w-deep) 40%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--motu-coral, #f08068) 70%, transparent);
+}
+/* THE MAST, phone only: the signal hangs off the bar's water rather than floating over the page. Only
+ * the one nearest the bar has it -- a mast through another signal would be a line through text. */
+@media (max-width: 760px) {
+  #tide-calls .sig:last-of-type::after {
+    content: "";
+    position: absolute;
+    left: 27px;
+    bottom: -14px;
+    width: 2px;
+    height: 14px;
+    border-radius: 1px;
+    background: var(--motu-sand, #e3c893);
+  }
+  #tide-calls .sig[data-tone="undeclared"]:last-of-type::after { background: var(--motu-coral, #f08068); }
+}
+#tide-calls .sig svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#tide-calls .sig__main {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
   align-items: center;
-  gap: 0 9px;
-  width: 100%;
-  padding: 7px 9px 7px 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-page);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--w-deep, #0b6f68) 18%, transparent);
-  color: var(--ink);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  overflow: hidden;
-  animation: tide-call-in 200ms cubic-bezier(.22,.9,.3,1) both;
-}
-#tide-calls .call:hover { background: var(--surface-row, var(--surface-page)); }
-#tide-calls .call:focus-visible { outline: 2px solid var(--motu-primary, #0f766e); outline-offset: 2px; }
-/* THE TONE IS A BAND DOWN THE EDGE, not a tinted card: the URL has to stay as readable at 500 as it
- * is at 200, and a red wash behind monospace text is the first thing to go. */
-#tide-calls .call__tone {
-  grid-row: 1 / span 2;
-  align-self: stretch;
-  background: var(--motu-neutral, #8d8578);
-}
-#tide-calls .call[data-tone="ok"] .call__tone { background: var(--motu-ok, #0f766e); }
-#tide-calls .call[data-tone="warn"] .call__tone { background: var(--motu-caution, #b45309); }
-#tide-calls .call[data-tone="broken"] .call__tone { background: var(--motu-danger, #b91c1c); }
-/* THE ADDRESS, WHOLE OR NOT AT ALL UP TO TWO LINES. A query string is where the answer usually is
- * ("it asked for the wrong club"), so this wraps rather than truncating at the query string. */
-#tide-calls .call__url {
-  grid-column: 2;
+  gap: 12px;
   min-width: 0;
-  font: 600 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+  border-radius: 10px;
+}
+#tide-calls .sig__main:focus-visible,
+#tide-calls .sig button:focus-visible { outline: 2px solid var(--motu-sand, #e3c893); outline-offset: 2px; }
+#tide-calls .sig__mark {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--motu-sand, #e3c893) 18%, transparent);
+  color: var(--motu-sand, #e3c893);
+}
+#tide-calls .sig[data-tone="undeclared"] .sig__mark {
+  background: color-mix(in srgb, var(--motu-coral, #f08068) 20%, transparent);
+  color: var(--motu-coral, #f08068);
+}
+#tide-calls .sig[data-tone="undeclared"] .sig__mark path:last-child { fill: currentColor; }
+#tide-calls .sig__txt { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#tide-calls .sig__txt b { font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* TWO LINES, NOT AN ELLIPSIS: the answer ("failed, 500") is at the END of this line. */
+#tide-calls .sig__txt small {
+  font-size: 11.5px;
+  color: color-mix(in srgb, #fff 78%, transparent);
+  overflow: hidden;
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
 }
-#tide-calls .call__verb {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  background: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  color: var(--ink-muted);
-}
-/* THE STATUS, in the tone's own colour and in the corner the eye lands on. */
-#tide-calls .call__status {
-  grid-column: 3;
-  grid-row: 1;
-  align-self: center;
-  font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--motu-neutral, #8d8578);
-}
-#tide-calls .call[data-tone="ok"] .call__status { color: var(--motu-ok, #0f766e); }
-#tide-calls .call[data-tone="warn"] .call__status { color: var(--motu-caution, #b45309); }
-#tide-calls .call[data-tone="broken"] .call__status { color: var(--motu-danger, #b91c1c); }
-#tide-calls .call__meta {
-  grid-column: 2 / span 2;
-  color: var(--ink-faint);
-  font-size: 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+#tide-calls .sig__chip {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--motu-sand, #e3c893);
+  color: var(--motu-on-sand, #0b3d5c);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .02em;
   white-space: nowrap;
 }
-/* REPEATS COUNT RATHER THAN STACK. A save fans out into a write and its refetches; nine cards for
- * one press is a wall, and the ninth pushes the first off before it can be read. */
-#tide-calls .call__n {
-  grid-column: 3;
-  grid-row: 2;
-  justify-self: end;
-  color: var(--ink-muted);
-  font-size: 10px;
+/* REPEATS COUNT RATHER THAN STACK. A save fans out into a write and its refetches. */
+#tide-calls .sig__n { flex: none; font-size: 11px; font-weight: 800; color: color-mix(in srgb, #fff 80%, transparent); }
+#tide-calls .sig__n[hidden] { display: none; }
+#tide-calls .sig__x {
+  all: unset;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  cursor: pointer;
+  color: color-mix(in srgb, #fff 75%, transparent);
+}
+#tide-calls .sig__x:hover { background: color-mix(in srgb, #fff 12%, transparent); color: #fff; }
+#tide-calls .sig__why { margin: 0 0 0 48px; font-size: 12.5px; line-height: 1.45; color: color-mix(in srgb, #fff 90%, transparent); }
+#tide-calls .sig__acts { margin-left: 48px; display: flex; gap: 8px; }
+#tide-calls .sig__read {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: var(--motu-coral, #f08068);
+  color: var(--motu-on-sand, #0b3d5c);
+  font-size: 12.5px;
   font-weight: 700;
+}
+/* ANSWERS THAT WENT FINE: a count on the wave, never a card. Above the stack on a screen, riding the
+ * wave's right end on a phone. It ripples when it moves and rests when the calls stop. */
+#tide-calls .sig-answered {
+  all: unset;
+  pointer-events: auto;
+  cursor: pointer;
+  order: -1;
+  align-self: flex-end;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--motu-sand, #e3c893) 92%, transparent);
+  color: var(--motu-on-sand, #0b3d5c);
+  font-size: 10.5px;
+  font-weight: 700;
+  transition: opacity .4s ease;
+}
+#tide-calls .sig-answered[data-rest="true"] { opacity: 0; pointer-events: none; }
+#tide-calls .sig-answered[data-ripple="true"] { animation: tide-ripple 520ms ease-out; }
+@media (max-width: 760px) {
+  #tide-calls .sig-answered { position: absolute; right: 2px; bottom: -32px; order: 0; }
 }
 @keyframes tide-call-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes tide-ripple {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--motu-sand, #e3c893) 70%, transparent); }
+  100% { box-shadow: 0 0 0 9px transparent; }
+}
 @media (prefers-reduced-motion: reduce) {
-  #tide-calls .call { animation: none; }
+  #tide-calls .sig, #tide-calls .sig-answered { animation: none; transition: none; }
 }
 
 /* ── drag targets: two bands, one per edge ────────────────────────────────────────────────── */
@@ -1862,7 +1935,9 @@ function motuMountDock(opts) {
   var railTitle = el('b', { class: 'rail-txt__title' }, ['']);
   var railSub = el('small', { class: 'rail-txt__sub' }, ['']);
   var railFlag = el('span', { class: 'rail-txt__flag', hidden: '' }, ['']);
-  var railTxt = el('span', { class: 'rail-txt' }, [railTitle, el('span', { class: 'rail-txt__line' }, [railSub, railFlag])]);
+  // THE CORAL PENNANT: calls nobody declared that failed, kept on the bar until read in Seams.
+  var railSignal = el('span', { class: 'rail-txt__signal', hidden: '' }, ['']);
+  var railTxt = el('span', { class: 'rail-txt' }, [railTitle, el('span', { class: 'rail-txt__line' }, [railSub, railFlag, railSignal])]);
   var railOpen = el('button', {
     class: 'rail-open', type: 'button', 'aria-label': 'Lagoon controls', 'aria-expanded': 'false',
   }, [el('span', { class: 'atoll-mark', 'aria-hidden': 'true' }), railLabel, railTxt, el('span', { class: 'chev' }, ['‹'])]);
@@ -2334,6 +2409,8 @@ function motuMountDock(opts) {
       : which === 'islands' ? islandsTab
       : coverageTab;
     placeThumb(on);
+    // READ IN SEAMS is what retires an undeclared signal and the bar's coral pennant.
+    if (which === 'seams' && markRead) markRead();
     // The panel is a different width on Seams; the reserve follows the tab.
     applyPin();
     watchWhileLooking(which);
@@ -3402,7 +3479,7 @@ function motuMountDock(opts) {
       })));
       toolsNodes.push(el('p', { class: 'tools__hint' }, [VIEW_SAYS[now.view] || '']));
     }
-    // ON THE PAGE — layers drawn over the region, and the call cards.
+    // ON THE PAGE — layers drawn over the region.
     group('On the page');
     var toggle = function (label, hint, on, act) {
       var b = el('button', { class: 'tools__row', type: 'button', role: 'menuitemcheckbox', 'aria-checked': on ? 'true' : 'false' }, [
@@ -3416,7 +3493,20 @@ function motuMountDock(opts) {
       toolsNodes.push(toggle('Coupling wires', 'A line between islands that share a key', !!(ctl.couplingOn && ctl.couplingOn()),
         drive(function (c) { c.toggleCoupling(); paint(); })));
     }
-    toolsNodes.push(toggle('Call cards', 'A card for each request as it lands', !muted, function () { setMuted(!muted); paint(); }));
+    // SIGNALS: three positions, because "only tell me when something failed" is the common wish.
+    group('Signals');
+    var SIGNAL_MODES = [['on', 'On'], ['failures', 'Failures only'], ['off', 'Off']];
+    var SIGNALS_SAY = {
+      on: 'Each call as it lands; answers count on the wave.',
+      failures: 'Only calls that failed.',
+      off: 'Nothing over the page. Seams still has every call.',
+    };
+    toolsNodes.push(el('div', { class: 'motu-segmented tools__views', role: 'group', 'aria-label': 'Signals' }, SIGNAL_MODES.map(function (m) {
+      var b = el('button', { type: 'button', 'aria-current': signals === m[0] ? 'true' : 'false' }, [m[1]]);
+      b.addEventListener('click', function () { setSignals(m[0]); paint(); });
+      return b;
+    })));
+    toolsNodes.push(el('p', { class: 'tools__hint' }, [SIGNALS_SAY[signals]]));
     // CAPTURE — the one act here that changes the lagoon rather than showing it.
     var rec = ctl.recordingState ? ctl.recordingState() : null;
     if (rec) {
@@ -3854,29 +3944,26 @@ function motuMountDock(opts) {
     }
   };
 
-  // ── THE CALL TOASTER ─────────────────────────────────────────────────────────────────────────
+  // ── SIGNALS: a call, the moment it lands ─────────────────────────────────────────────────────
   //
-  // EVERY OTHER SURFACE HERE IS SOMETHING YOU OPEN. The Network list under Seams answers "what did
-  // this screen send" perfectly, and answers it only to somebody who already suspected there was
-  // something to ask -- which, in a lagoon, is the hard half: the fake fetch answers without touching
-  // the network, so a screen that fired nine requests and one that fired none look identical in every
-  // instrument a browser has. This says it unprompted, the moment a call lands, and then gets out of
-  // the way.
+  // EVERY OTHER SURFACE HERE IS SOMETHING YOU OPEN. Seams answers "what did this screen send"
+  // perfectly, and answers it only to somebody who already suspected there was something to ask --
+  // which, in a lagoon, is the hard half: the fake fetch answers without touching the network, so a
+  // screen that fired nine requests and one that fired none look identical in every instrument a
+  // browser has. This says it unprompted, the moment a call lands, and then gets out of the way.
   //
-  // WHAT IT SHOWS is the address and the status, because those are the two facts that decide what to
-  // do next: a 404 on a path nobody expected is a missing fixture, a 200 on a URL carrying the wrong
-  // filter is the bug you were hunting, and the declaration's own spelling (`table:shots(select)`)
-  // can tell you neither. Pressing a card opens the panel on Seams at the Network list, where the
-  // same call is waiting with its payload -- the card is the notice, not the report.
+  // THREE FACTS, THREE SHAPES. An answer that went fine is not news: it counts on the wave. A failure
+  // a fixture DECLARED (`declared` on the call) is the state doing what it says -- "a failing search
+  // reports its failure" is supposed to 500 -- so it gets sand and "as declared", and leaves. Only a
+  // failure nobody declared is an alarm, and only that one stays until it has been read: the version
+  // that drew all three as the same grey card with a red edge raised the alarm on every failure flow.
   //
-  // HOST-MODULE CALLS ARE ABSENT by construction: a stubbed export has no URL and no status, and a
-  // card whose status column said "--" would be reporting an absence in the shape of a result.
+  // HOST-MODULE CALLS ARE ABSENT by construction: a stubbed export has no status to report.
   var toasts = el('div', {
     id: 'tide-calls',
     'data-motu-chrome': '',
-    // POLITE, and the whole point of saying so: a call landing is not an interruption, and a live
-    // region that spoke over whatever the person was reading would make the toaster the loudest
-    // thing on a screen it is only annotating.
+    // POLITE: a call landing is not an interruption, and a live region that spoke over whatever the
+    // person was reading would make the signal the loudest thing on a screen it is only annotating.
     role: 'log', 'aria-live': 'polite', 'aria-label': 'Calls that have landed',
   });
   toasts.dataset.edge = tide.dataset.edge || 'right';
@@ -3886,9 +3973,8 @@ function motuMountDock(opts) {
    * NOT WHILE THE CHECKS ARE DRIVING.
    *
    * `dockInset=off` is the harness saying it is measuring the APPLICATION -- responsive measures it
-   * at each declared viewport and the snapshots picture it -- and a card sliding in over the corner
-   * of that is a baseline that changes with the timing of a fetch. The same flag already takes the
-   * dock's strip back for exactly this reason; this is the other thing the dock does to the page.
+   * at each declared viewport and the snapshots picture it -- and a signal sliding in over the corner
+   * of that is a baseline that changes with the timing of a fetch.
    *
    * BOTH DOCUMENTS, because the dock is mounted in the lagoon's own document by `lagoon serve` and in
    * the host's when a published artifact is framed. The flag rides on the lagoon's URL either way.
@@ -3901,76 +3987,92 @@ function motuMountDock(opts) {
     try { return off(lagoonWindow()); } catch (e) { return false; }
   };
 
-  // MUTED IS REMEMBERED, for the reason the pin is: somebody who does not want cards over their
-  // application does not want them again after the reload that is part of using this.
-  var MUTE_KEY = 'motu:dock:calls-muted';
-  var muted = false;
-  try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { muted = false; }
-  var setMuted = function (on) {
-    muted = on;
-    try { localStorage.setItem(MUTE_KEY, on ? '1' : '0'); } catch (e) { /* a page that cannot remember still obeys */ }
-    if (on) toasts.replaceChildren();
+  // ON, FAILURES ONLY, OFF -- remembered, for the reason the pin is: somebody who does not want
+  // signals over their application does not want them again after the reload that is part of using
+  // this. The old on/off switch's "muted" carries over as off.
+  var SIGNALS_KEY = 'motu:dock:signals';
+  var signals = 'on';
+  try {
+    var savedSignals = localStorage.getItem(SIGNALS_KEY);
+    if (savedSignals === 'on' || savedSignals === 'failures' || savedSignals === 'off') signals = savedSignals;
+    else if (localStorage.getItem('motu:dock:calls-muted') === '1') signals = 'off';
+  } catch (e) { signals = 'on'; }
+
+  /** How long a signal stays when it is not an alarm. An undeclared failure stays until read. */
+  var SIGNAL_TTL = 6000;
+  /** How long the answered count rests on the wave after the last answer. */
+  var ANSWERED_TTL = 5000;
+  /** One at a time on a phone, where the bar is the whole bottom edge; two beside a rail. */
+  var maxSignals = function () { return isPhone() ? 1 : 2; };
+
+  // ── saying a call in words ──
+  var words = function (s) {
+    return String(s || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_\-/]+/g, ' ').toLowerCase().trim();
   };
-
-  /** How long a card stays. A failure lingers: it is the one you were not watching for. */
-  var CALL_TTL_OK = 4200;
-  var CALL_TTL_BAD = 9000;
-  /** Four at once. The fifth pushes the first off before it can be read, which is a wall, not a feed. */
-  var MAX_CARDS = 4;
-
-  var toneOf = function (c) {
-    if (c.ok) return 'ok';
-    // 0 IS NOT A STATUS, it is the absence of one -- a throw, an abort, a transport that never
-    // answered. Amber rather than red: something went wrong, and "the server said no" is a different
-    // fact from "nothing came back", which the card must not merge.
-    return c.status >= 400 ? 'broken' : 'warn';
+  var TABLE_VERB = { GET: 'read', HEAD: 'read', POST: 'add to', PATCH: 'change', PUT: 'save', DELETE: 'remove from' };
+  /** WHAT WAS ASKED, as a person says it: "Asked to search", "Asked to read shots". */
+  var askedFor = function (c) {
+    var l = String(c.label || '');
+    var m = /^table:([^(]+)/.exec(l);
+    if (m) return 'Asked to ' + (TABLE_VERB[c.method] || 'reach') + ' ' + words(m[1]);
+    if ((m = /^rpc:(.+)$/.exec(l))) return 'Asked to ' + words(m[1]);
+    if ((m = /^fn:(.+)$/.exec(l))) return 'Asked to run ' + words(m[1]);
+    if ((m = /^auth:(.+)$/.exec(l))) return 'Asked auth for ' + words(m[1]);
+    if ((m = /^[\w$]+\.([\w$]+)$/.exec(l))) return 'Asked to ' + words(m[1]);
+    return 'Asked for ' + (c.url || l || 'something');
+  };
+  /** HOW IT WAS ANSWERED, in words first and the number second. */
+  var answeredAs = function (c) {
+    if (c.ok) return 'answered, ' + c.status;
+    if (!c.status) return 'never answered';
+    if (c.status === 404) return 'nothing there, 404';
+    return (c.status >= 500 ? 'failed, ' : 'refused, ') + c.status;
+  };
+  /** WHERE it went: the contract's own name, or the wire's address. */
+  var whereTo = function (c) {
+    if (c.via === 'contract' || !c.url) return String(c.label || '').replace('.', ' · ');
+    return c.method + ' ' + c.url;
+  };
+  /** WHY AN UNDECLARED FAILURE MATTERS, which a status code alone never says. */
+  var whyItMatters = function (c) {
+    var e = String(c.error || '');
+    if (/no fixture|does not recognize|no baseUrl match/.test(e)) {
+      return 'Nothing answers it — no fixture, no wire route. What the page shows now is not a state anyone declared.';
+    }
+    if (!c.status) return 'It never came back' + (e ? ': ' + e.slice(0, 110) : '.');
+    return 'No fixture asked for this failure' + (e ? ': ' + e.slice(0, 110) : '.');
   };
 
   /**
-   * Open the panel on the Network list, where this call is waiting with its payload.
+   * Open the panel on Seams, scrolled to where this call is waiting with its payload.
    *
-   * SCROLLED TO, not just shown. Seams opens on the region sheet and the Network list is several
-   * sections down it, so a card that only opened the tab would hand somebody the right panel and
-   * leave them to find the row -- which is most of the work it was meant to save.
+   * THE DOOR DECIDES WHICH SECTION. Network is the WIRE's list -- a contract call is not in it, and
+   * landing somebody on "No backend call was intercepted" under a signal that just said one came
+   * back 500 is the panel contradicting the notice that sent them there.
    */
   var showSeamsFor = function (c) {
     open(true);
     showTab('seams');
-    // THE DOOR DECIDES WHICH SECTION. Network is the WIRE's list -- a contract call is not in it, and
-    // landing somebody on "No backend call was intercepted" under a card that just said one came back
-    // 500 is the panel contradicting the notice that sent them there.
     var sect = c.via === 'wire' ? 'network' : 'asked-for';
     var head = seams.querySelector('[data-sect="' + sect + '"]');
     if (head && head.scrollIntoView) head.scrollIntoView({ block: 'start' });
   };
 
-  var card = function (c) {
-    var status = c.status ? String(c.status) : '\u2014';
-    // THE ADDRESS IF THERE IS ONE, and the declaration's name for the call when there is not: a
-    // contract call answered by a mock has no URL, and `POST shots.list` would dress a service method
-    // up as an endpoint. No address, no verb -- the card says what it knows.
-    var addr = c.url || c.label;
-    var meta = [c.ms + 'ms', c.owner, c.url ? c.label : ''].filter(Boolean).join(' \u00b7 ');
-    var n = el('span', { class: 'call__n', hidden: '' }, ['']);
-    var b = el('button', {
-      class: 'call', type: 'button', 'data-tone': toneOf(c),
-      title: (c.url ? c.method + ' ' : '') + addr + ' \u2192 ' + status
-        + (c.error ? '\n' + c.error : '') + '\nOpen the Network list under Seams',
-    }, [
-      el('i', { class: 'call__tone' }),
-      el('span', { class: 'call__url' }, c.url ? [el('span', { class: 'call__verb' }, [c.method]), addr] : [addr]),
-      el('span', { class: 'call__status' }, [status]),
-      // THE FAILURE IN WORDS when there is one, because a bare 404 does not say WHICH fixture is
-      // missing and the answer is usually in the message the fake wrote.
-      el('span', { class: 'call__meta' }, [c.error ? String(c.error).slice(0, 120) : meta]),
-      n,
-    ]);
-    b.addEventListener('click', function () { showSeamsFor(c); });
-    return { node: b, count: n, key: c.method + ' ' + (c.url || c.label) + ' ' + c.status, times: 1, timer: 0 };
+  var pennant = function (size) {
+    return svgOf(size, size, '0 0 24 24', [{ d: 'M6 21V3' }, { d: 'M6 4h12l-3.5 4.5L18 13H6z' }]);
   };
 
   var live = [];
-  var dropCard = function (entry) {
+  /** Undeclared failures not yet read in Seams -- what the bar's coral pennant counts. */
+  var unread = [];
+
+  var paintUnread = function () {
+    railSignal.hidden = !unread.length || signals === 'off';
+    railSignal.replaceChildren(pennant(10), String(unread.length));
+    railSignal.title = unread.length + (unread.length === 1 ? ' call' : ' calls') + ' nobody declared failed — read in Seams';
+  };
+
+  var dropSignal = function (entry) {
     var at = live.indexOf(entry);
     if (at >= 0) live.splice(at, 1);
     clearTimeout(entry.timer);
@@ -3978,31 +4080,104 @@ function motuMountDock(opts) {
   };
   var keepFor = function (entry, ms) {
     clearTimeout(entry.timer);
-    entry.timer = setTimeout(function () { dropCard(entry); }, ms);
+    if (ms) entry.timer = setTimeout(function () { dropSignal(entry); }, ms);
+  };
+
+  /** READ means seen in Seams: every undeclared signal has done its job, and so has the pennant. */
+  var markRead = function () {
+    unread = [];
+    live.filter(function (e) { return e.tone === 'undeclared'; }).forEach(dropSignal);
+    paintUnread();
+  };
+
+  var signalFor = function (c) {
+    var tone = c.declared ? 'declared' : 'undeclared';
+    var said = askedFor(c);
+    var how = whereTo(c) + ' — ' + answeredAs(c);
+    var n = el('span', { class: 'sig__n', hidden: '' }, ['']);
+    var main = el('button', {
+      class: 'sig__main', type: 'button',
+      'aria-label': said + ', ' + how + (c.declared ? ', as this state declares' : '') + '. Open in Seams',
+    }, [
+      el('span', { class: 'sig__mark' }, [pennant(18)]),
+      el('span', { class: 'sig__txt' }, [el('b', {}, [said]), el('small', { title: how }, [how])]),
+      n,
+    ].concat(c.declared ? [el('span', { class: 'sig__chip' }, ['as declared'])] : []));
+    main.addEventListener('click', function () { showSeamsFor(c); });
+    var node = el('div', { class: 'sig', 'data-tone': tone, role: 'group' }, [main]);
+    if (tone === 'undeclared') {
+      var x = el('button', { class: 'sig__x', type: 'button', 'aria-label': 'Dismiss — it stays counted on the bar until read' },
+        [svgOf(16, 16, '0 0 24 24', [{ d: 'M6 6l12 12M18 6L6 18' }])]);
+      main.appendChild(x);
+      x.addEventListener('click', function (ev) { ev.stopPropagation(); dropSignal(entry); });
+      var read = el('button', { class: 'sig__read', type: 'button' }, ['Read in Seams ›']);
+      read.addEventListener('click', function () { showSeamsFor(c); });
+      node.appendChild(el('p', { class: 'sig__why' }, [whyItMatters(c)]));
+      node.appendChild(el('div', { class: 'sig__acts' }, [read]));
+    }
+    var entry = { node: node, count: n, tone: tone, key: c.method + ' ' + (c.url || c.label) + ' ' + c.status, times: 1, timer: 0 };
+    return entry;
+  };
+
+  // THE ANSWERED COUNT: a ripple on the wave each time one lands, at rest once they stop.
+  var answered = 0;
+  var answeredTimer = 0;
+  var answeredPill = el('button', { class: 'sig-answered', type: 'button', 'data-rest': 'true' }, ['']);
+  answeredPill.addEventListener('click', function () { showSeamsFor({ via: lastAnsweredVia }); });
+  var lastAnsweredVia = 'contract';
+  var restAnswered = function () {
+    answered = 0;
+    answeredPill.dataset.rest = 'true';
+    answeredPill.remove();
+  };
+  var onAnswered = function (c) {
+    answered++;
+    lastAnsweredVia = c.via;
+    answeredPill.textContent = answered + ' answered';
+    answeredPill.setAttribute('aria-label', answered + (answered === 1 ? ' call' : ' calls') + ' answered. Open in Seams');
+    if (!answeredPill.isConnected) toasts.appendChild(answeredPill);
+    answeredPill.dataset.rest = 'false';
+    answeredPill.dataset.ripple = 'false';
+    void answeredPill.offsetWidth;
+    answeredPill.dataset.ripple = 'true';
+    clearTimeout(answeredTimer);
+    answeredTimer = setTimeout(restAnswered, ANSWERED_TTL);
+  };
+
+  var setSignals = function (mode) {
+    signals = mode;
+    try { localStorage.setItem(SIGNALS_KEY, mode); } catch (e) { /* a page that cannot remember still obeys */ }
+    if (mode !== 'on') { clearTimeout(answeredTimer); restAnswered(); }
+    if (mode === 'off') live.slice().forEach(dropSignal);
+    paintUnread();
   };
 
   var onCallLanded = function (c) {
-    if (muted || harness() || !c) return;
-    var ttl = c.ok ? CALL_TTL_OK : CALL_TTL_BAD;
-    // ONE CARD PER REPEAT, counted. A save is a write plus every refetch it fans out into -- 22 of
-    // them on a real region -- and a stack that grew per request would be unreadable for exactly the
-    // press a person most wants to read.
+    if (signals === 'off' || harness() || !c) return;
+    if (c.ok) { if (signals === 'on') onAnswered(c); return; }
     var key = c.method + ' ' + (c.url || c.label) + ' ' + c.status;
+    var tone = c.declared ? 'declared' : 'undeclared';
+    if (tone === 'undeclared' && unread.indexOf(key) === -1) { unread.push(key); paintUnread(); }
+    // ONE SIGNAL PER REPEAT, counted. A save is a write plus every refetch it fans out into.
     for (var i = 0; i < live.length; i++) {
       if (live[i].key !== key) continue;
       live[i].times++;
       live[i].count.textContent = '×' + live[i].times;
       live[i].count.removeAttribute('hidden');
-      keepFor(live[i], ttl);
+      keepFor(live[i], tone === 'declared' ? SIGNAL_TTL : 0);
       return;
     }
-    var entry = card(c);
+    var entry = signalFor(c);
     live.push(entry);
-    // Newest nearest the bottom edge: the stack grows upward from there, so appending puts this card
-    // where the eye already is and rides the older ones up out of the way.
-    toasts.appendChild(entry.node);
-    keepFor(entry, ttl);
-    while (live.length > MAX_CARDS) dropCard(live[0]);
+    // Newest nearest the bar, which is where the eye already is.
+    toasts.insertBefore(entry.node, answeredPill.isConnected ? answeredPill : null);
+    keepFor(entry, tone === 'declared' ? SIGNAL_TTL : 0);
+    // OVER THE LIMIT, the oldest that is NOT an alarm goes first: a declared failure has said all it
+    // had to, and an undeclared one is still counted on the bar if it has to go too.
+    while (live.length > maxSignals()) {
+      var calm = live.filter(function (e) { return e.tone === 'declared'; })[0];
+      dropSignal(calm && calm !== entry ? calm : live[0]);
+    }
   };
 
   paint();
@@ -4100,13 +4275,10 @@ function motuMountDock(opts) {
       });
     }
     out.push({ label: 'As seeded', kind: 'state', run: drive(function (c) { c.runFlow(null); }) });
-    // THE WAY OUT OF THE CARDS, in the one place every other dock control is reachable from. A
-    // toaster with no off switch is a decision made for somebody about their own screen; putting it
-    // here rather than on each card keeps the cards themselves down to what they are for.
-    out.push({
-      label: muted ? 'Show call cards' : 'Mute call cards',
-      kind: 'chrome',
-      run: function () { setMuted(!muted); },
+    // THE WAY OUT OF THE SIGNALS, in the one place every other dock control is reachable from. Signals
+    // with no off switch are a decision made for somebody about their own screen.
+    [['on', 'Signals: on'], ['failures', 'Signals: failures only'], ['off', 'Signals: off']].forEach(function (m) {
+      if (m[0] !== signals) out.push({ label: m[1], kind: 'chrome', run: function () { setSignals(m[0]); } });
     });
     out.push({ label: 'Region', kind: 'view', run: drive(function (c) { c.setView('region'); }) });
     out.push({ label: 'Mountpoints', kind: 'view', run: drive(function (c) { c.setView('mountpoints'); }) });
@@ -4161,6 +4333,7 @@ function motuMountDock(opts) {
     if (stop) stop();
     if (stopCalls) stopCalls();
     live.forEach(function (entry) { clearTimeout(entry.timer); });
+    clearTimeout(answeredTimer);
     toasts.remove();
     palette.remove();
     tide.remove();

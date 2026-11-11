@@ -301,6 +301,191 @@ export const element = islandElement({ tag: ${tag}, component: Unbundlable });
   };
 }
 
+/**
+ * Which chunk a module belongs to when the lagoon is published as chunks.
+ *
+ * The lagoon imports every region EAGERLY, so the bundler on its own would make one chunk and every
+ * edit would change all of it. The cut follows how the project changes:
+ *
+ *   vendor              every dependency — changes when the lockfile does
+ *   motu                the framework — changes when motu is upgraded
+ *   region-<id>         one archipelago's folder
+ *   island-<kebab>      one island (its folder, or its flat `<kebab>.*.ts` files)
+ *   host-<dir>          the application's own code, one directory at a time
+ *   (the entry)         the generated lagoon entry
+ *
+ * so an edit inside one region re-sends that region's chunk and the small manifest, not the lagoon.
+ *
+ * NO TWO CHUNKS MAY IMPORT EACH OTHER. Chunks evaluate as whole units, so a cycle between two of them
+ * runs one before what it needs exists (`Cannot access 'n' before initialization`, first seen on the
+ * demo). Directories are therefore only the NAMES; the CUT follows evaluation order:
+ *
+ *   1. FOUNDATIONS. vendor and motu import nothing of the application. When they do — Peps aliases
+ *      `next/navigation` and its Supabase client to stubs in the lagoon's own source, so dependencies
+ *      import app code — what they import is pulled DOWN into them.
+ *   2. THE APPLICATION, in the order the browser would evaluate it (depth-first, imports in source
+ *      order). A new chunk starts where the directory changes, and never inside a module cycle. Every
+ *      import then points at an EARLIER chunk, so the chunk graph is acyclic by construction.
+ *
+ * Merging whole directories on a cycle was tried first, and is wrong for an integrated app: Peps'
+ * pages import its regions and its regions import the pages' components through different files, so
+ * every directory sat on one cycle and became one 600 kB chunk. Cutting by evaluation order keeps a
+ * region's code in its own chunk(s) however the directories interleave. A directory evaluated in
+ * several runs gets several chunks (`region-x`, `region-x.2`); a run under 4 kB folds into its
+ * neighbour, so the count stays near the number of directories.
+ */
+export function chunkOf(paths) {
+  const norm = (p) => String(p ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const motuPkgs = norm(resolve(paths.motuRoot, 'packages')) + '/';
+  const archipelagos = norm(paths.archipelagosDir) + '/';
+  const islands = norm(paths.islandsDir) + '/';
+  const host = norm(paths.hostRoot) + '/';
+  const safe = (s) => s.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'x';
+  const ENTRY = 'entry';
+  const MIN_RUN = 4 * 1024;
+  const firstGuess = (rawId) => {
+    const id = norm(rawId.split('?')[0]);
+    if (rawId.startsWith('\0') || id.includes('/node_modules/')) return 'vendor';
+    if (id.startsWith(motuPkgs)) return 'motu';
+    if (id.startsWith(archipelagos)) return 'region-' + safe(id.slice(archipelagos.length).split('/')[0].replace(/\.[^.]*$/, ''));
+    if (id.startsWith(islands)) return 'island-' + safe(id.slice(islands.length).split('/')[0].split('.')[0]);
+    if (id.startsWith(host) && !id.includes('/.motu/')) {
+      const dirs = id.slice(host.length).split('/').slice(0, -1);
+      if (dirs.length) return 'host-' + safe(dirs.join('-'));
+    }
+    return ENTRY;
+  };
+  const foundation = (g) => g === 'vendor' || g === 'motu';
+
+  let plan = null;
+  const planFor = (getModuleIds, getModuleInfo) => {
+    const ids = [...getModuleIds()];
+    const known = new Set(ids);
+    const deps = (id) => (getModuleInfo(id)?.importedIds ?? []).filter((d) => known.has(d));
+    const group = new Map(ids.map((id) => [id, firstGuess(id)]));
+
+    // 1. FOUNDATIONS pull down what they import: motu first, then vendor, which wins a module both want.
+    for (const f of ['motu', 'vendor']) {
+      const work = ids.filter((id) => group.get(id) === f);
+      while (work.length) {
+        const id = work.pop();
+        for (const d of deps(id)) {
+          const h = group.get(d);
+          if (h === f || h === 'vendor') continue;
+          group.set(d, f);
+          work.push(d);
+        }
+      }
+    }
+
+    // 2. THE APPLICATION, in evaluation order: depth-first post-order from each entry.
+    const app = (id) => !foundation(group.get(id));
+    const order = [];
+    const seen = new Set();
+    const visit = (root) => {
+      const stack = [[root, 0]];
+      seen.add(root);
+      while (stack.length) {
+        const top = stack[stack.length - 1];
+        const ds = deps(top[0]);
+        if (top[1] < ds.length) {
+          const d = ds[top[1]++];
+          if (!seen.has(d) && app(d)) {
+            seen.add(d);
+            stack.push([d, 0]);
+          }
+        } else {
+          stack.pop();
+          order.push(top[0]);
+        }
+      }
+    };
+    for (const id of ids) if (app(id) && getModuleInfo(id)?.isEntry) visit(id);
+    for (const id of ids) if (app(id) && !seen.has(id)) visit(id);
+    const pos = new Map(order.map((id, i) => [id, i]));
+
+    // Module cycles: a cut may not fall inside one. For each module, the last position of its cycle.
+    const spanEnd = new Map(order.map((id) => [id, pos.get(id)]));
+    {
+      const index = new Map();
+      const low = new Map();
+      const on = new Set();
+      const st = [];
+      let n = 0;
+      const strong = (v) => {
+        index.set(v, n);
+        low.set(v, n++);
+        st.push(v);
+        on.add(v);
+        for (const w of deps(v)) {
+          if (!pos.has(w)) continue;
+          if (!index.has(w)) {
+            strong(w);
+            low.set(v, Math.min(low.get(v), low.get(w)));
+          } else if (on.has(w)) low.set(v, Math.min(low.get(v), index.get(w)));
+        }
+        if (low.get(v) === index.get(v)) {
+          const members = [];
+          let w;
+          do {
+            w = st.pop();
+            on.delete(w);
+            members.push(w);
+          } while (w !== v);
+          if (members.length > 1) {
+            const end = Math.max(...members.map((m) => pos.get(m)));
+            for (const m of members) spanEnd.set(m, end);
+          }
+        }
+      };
+      for (const id of order) if (!index.has(id)) strong(id);
+    }
+
+    // Runs: cut where the directory changes, unless a module cycle is still open.
+    const runs = [];
+    let open = -1;
+    for (const id of order) {
+      const g = group.get(id);
+      const last = runs[runs.length - 1];
+      if (last && (last.group === g || pos.get(id) <= open)) last.ids.push(id);
+      else runs.push({ group: g, ids: [id] });
+      open = Math.max(open, spanEnd.get(id));
+    }
+    // Small runs fold into the previous one (contiguity is what keeps the graph acyclic).
+    const sizeOf = (run) => run.ids.reduce((n, id) => n + (getModuleInfo(id)?.code?.length ?? 0), 0);
+    const folded = [];
+    for (const run of runs) {
+      const prev = folded[folded.length - 1];
+      if (prev && sizeOf(run) < MIN_RUN) prev.ids.push(...run.ids);
+      else folded.push(run);
+    }
+    // The FIRST run has nothing before it, so a small one folds forward instead.
+    if (folded.length > 1 && sizeOf(folded[0]) < MIN_RUN) folded[1].ids.unshift(...folded.shift().ids);
+    // The run holding an entry module IS the entry chunk; every other run is named.
+    plan = new Map();
+    for (const id of ids) if (foundation(group.get(id))) plan.set(id, group.get(id));
+    const used = new Map();
+    for (const run of folded) {
+      const holdsEntry = run.ids.some((id) => getModuleInfo(id)?.isEntry);
+      let name;
+      if (holdsEntry) name = undefined;
+      else {
+        const k = (used.get(run.group) ?? 0) + 1;
+        used.set(run.group, k);
+        name = k === 1 ? run.group : `${run.group}.${k}`;
+      }
+      for (const id of run.ids) plan.set(id, name);
+    }
+  };
+
+  return (rawId, meta) => {
+    if (!plan && meta?.getModuleIds) planFor(meta.getModuleIds, meta.getModuleInfo);
+    if (plan?.has(rawId)) return plan.get(rawId);
+    const g = firstGuess(rawId);
+    return foundation(g) ? g : undefined;
+  };
+}
+
 export async function buildLagoonViteConfig(paths, env = process.env) {
   // `paths` must be loadMotuConfig()'s result, NOT util.mjs's curated `paths` export — that one has no
   // `host`, so the host contribution would silently return nothing and the lagoon would build with no
@@ -320,6 +505,11 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
   // MOTU_SINGLEFILE=lagoon|main builds ONE entry as ONE chunk so `motu lagoon publish` can inline the
   // whole app into a single HTML file — nothing serves /assets/* behind a static artifact.
   const singleFile = env.MOTU_SINGLEFILE === 'lagoon' ? 'lagoon' : env.MOTU_SINGLEFILE === 'main' ? 'main' : '';
+  // MOTU_CHUNKED=lagoon|main builds ONE entry as STABLY NAMED CHUNKS, for a host that stores them by
+  // content (`motu lagoon publish --remote`, `serve --live-push`). See `chunkOf` for why the names
+  // are stable and how they are cut.
+  const chunked = !singleFile && (env.MOTU_CHUNKED === 'lagoon' ? 'lagoon' : env.MOTU_CHUNKED === 'main' ? 'main' : '');
+  const oneEntry = singleFile || chunked;
 
   // `writeIfChanged` rather than the adapter reaching for `writeFileSync`: an adapter that generates
   // into `.motu/cache` is generating into a directory Vite WATCHES, and the write policy for that
@@ -350,6 +540,10 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
 
   return {
     root,
+    // RELATIVE when chunked: the page and its chunks are served under an address only the server
+    // knows (`/__motu_assets/<manifest>/` on a host), and chunks find each other relative to
+    // themselves. The HTML's own references are rewritten by the CLI to a placeholder the server fills.
+    ...(chunked ? { base: './' } : {}),
     // The whole point: no vite.config.ts on disk in the project.
     configFile: false,
     // The host's React transform wins when it has one: two JSX transforms in one pipeline is a
@@ -410,14 +604,32 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
     ...(host.css ? { css: host.css } : {}),
     build: {
       ...(singleFile ? { cssCodeSplit: false, assetsInlineLimit: 100_000_000 } : {}),
+      ...(chunked ? { cssCodeSplit: false, modulePreload: { polyfill: false } } : {}),
       rollupOptions: {
-        input: singleFile
-          ? { [singleFile]: resolve(root, singleFile === 'lagoon' ? 'lagoon.html' : 'index.html') }
+        input: oneEntry
+          ? { [oneEntry]: resolve(root, oneEntry === 'lagoon' ? 'lagoon.html' : 'index.html') }
           : {
               main: resolve(root, 'index.html'),
               lagoon: resolve(root, 'lagoon.html'),
             },
         ...(singleFile ? { output: { inlineDynamicImports: true } } : {}),
+        ...(chunked
+          ? {
+              output: {
+                // NO HASH IN A CHUNK'S NAME. Content addressing happens on the host, per file; a hash
+                // in the name would also be written into every IMPORTER of that chunk, so one edit
+                // would change the bytes of the whole chain above it and re-upload it. Stable names
+                // keep an edit in one region inside that region's chunk.
+                entryFileNames: 'assets/[name].js',
+                chunkFileNames: 'assets/[name].js',
+                // Assets import nothing, so hashing their names costs nothing and avoids collisions.
+                assetFileNames: 'assets/[name]-[hash][extname]',
+                // Mangled export names shift when a chunk gains an export, rewriting every importer.
+                minifyInternalExports: false,
+                manualChunks: chunkOf(paths),
+              },
+            }
+          : {}),
       },
     },
     server: {

@@ -1,15 +1,15 @@
 // Publishing a lagoon to a host instead of to a file.
 //
-// The artifact is unchanged — `motu lagoon publish` builds the same self-contained fragment it always
-// did, writes it to the same stable path, and `--remote` additionally POSTs those exact bytes. Local
-// and hosted therefore cannot drift: there is one build and one file, and the host is a second
-// destination for it rather than a second pipeline.
+// Two shapes. `uploadManifest` is the default: the lagoon as content-addressed chunks plus a manifest,
+// so a republish sends only what changed (lib/lagoon-bundle.mjs). `uploadLagoon` is the one-file shape
+// (`--single`): the same self-contained fragment `publish` writes for an Artifact, POSTed as is.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
+import { sendMissingChunks, MANIFEST_TYPE } from './lagoon-bundle.mjs';
 
 /**
  * ONE host for every agent on this machine.
@@ -134,4 +134,38 @@ export async function uploadLagoon({ url, token, repo, slug, title, sha, branch,
   }
 
   return { ...payload, base, sentBytes: gz.length, verified };
+}
+
+/**
+ * Publish a CHUNKED lagoon: the chunks the host lacks, then the manifest as the record.
+ *
+ * Verified the same way the single file is: the host names the content it stored, and that must be
+ * the manifest's own hash — which pins every chunk, because the manifest names each one by its hash.
+ */
+export async function uploadManifest({ url, token, repo, slug, title, sha, branch, brand, bundle, manifest }) {
+  const base = String(url).replace(/\/+$/, '');
+  const chunks = await sendMissingChunks({ base, token, files: bundle.files, hashes: manifest.hashes });
+  const qs = new URLSearchParams({ repo, slug, title });
+  if (sha) qs.set('sha', sha);
+  if (branch) qs.set('branch', branch);
+  if (brand) qs.set('brand', brand);
+  const gz = gzipSync(Buffer.from(manifest.json, 'utf8'));
+  const res = await fetch(`${base}/api/publish?${qs}`, {
+    method: 'POST',
+    headers: { 'content-type': MANIFEST_TYPE, 'content-encoding': 'gzip', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: gz,
+  });
+  const text = await res.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    /* reported below */
+  }
+  if (!res.ok) throw new Error(`host refused the manifest (${res.status}): ${payload?.error ?? text.slice(0, 200)}`);
+  const verified = payload?.hash ? payload.hash === manifest.hash : null;
+  if (verified === false) {
+    throw new Error(`host stored a different manifest than was sent (sent ${manifest.hash.slice(0, 12)}, host has ${String(payload.hash).slice(0, 12)})`);
+  }
+  return { ...payload, base, chunks, sentBytes: chunks.sentBytes + gz.length, verified };
 }

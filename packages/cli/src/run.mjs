@@ -72,7 +72,7 @@ ${color.bold('Usage:')}
   motu lagoon states [island|region]                every state the lagoon can be OPENED in, as a URL
   motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
-  motu lagoon publish --remote <url>                ...and upload it to a lagoon host (see motu-host)
+  motu lagoon publish --remote <url>                ...or upload it to a lagoon host as chunks (see motu-host)
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
   motu lagoon serve --watch [--host]                ...and keep it current: rebuild on save, reload viewers (the loop)
   motu lagoon serve --watch --detach | --stop       ...left running after the shell exits, and stopped
@@ -123,20 +123,23 @@ ${color.bold('lagoon serve flags:')}
   --watch         rebuild on every source change and live-reload open viewers (phones included)
   --live-url <url>  the address the HOST should fetch this from, when it is not on this machine
   --live-push     send the built page to the host after every save, instead of being fetched
+  --single        build one self-contained page instead of chunks (rebuilds and pushes send it whole)
   ${color.dim('takes the same target/--fit flags as publish. Ctrl-C to stop.')}
   ${color.dim('--live-url needs --host, and the host must ALLOW the name (MOTU_LIVE_ALLOW there):')}
   ${color.dim('  motu lagoon serve --watch --host --live-url http://192.168.1.20:8901')}
   ${color.dim('the address is whatever the HOST can reach: a LAN IP, a tailnet peer, a tunnel. An')}
   ${color.dim('ingress/funnel name usually is NOT — those publish one port, and not this one.')}
-  ${color.dim('--live-push needs nothing to reach you at all: it uploads the page (~0.5 MB) each')}
-  ${color.dim('save, and the host serves those bytes. Use it when there is no route back to you.')}
+  ${color.dim('--live-push needs nothing to reach you at all: each save uploads the chunks it changed')}
+  ${color.dim('and the manifest, and the host serves them. Use it when there is no route back to you.')}
 
 ${color.bold('lagoon publish flags:')}
   --archipelago <id>   publish one archipelago instead of an island
   --fit <native|legacy>  legacy-fit strategy for a single-island target
   --out <path>         write somewhere other than .motu/publish/ (keep it stable to keep one URL)
   --title <text>       name this lagoon in the host's listing (default: derived from the target)
-  --remote [url]       also upload it to a lagoon host (or $MOTU_HOST_URL) and print the URLs
+  --remote [url]       upload it to a lagoon host (or $MOTU_HOST_URL) as chunks, and print the URLs —
+                       only the chunks the host does not already have are sent
+  --single             with --remote: upload one self-contained page instead (a host without chunks)
   --token <secret>     the host's upload token (or $MOTU_HOST_TOKEN)
   --json          machine-readable report
   ${color.dim('no target => every archipelago, with the switcher. Always mock-backed: an artifact has no backend.')}

@@ -743,11 +743,11 @@ when the project already owns its lagoon, with the list of files to delete to ha
 
 ### `motu lagoon publish [island]`
 
-Build the lagoon as one self-contained page, and optionally upload it.
+Build the lagoon as one self-contained page, or upload it to a host as chunks.
 
 ```console
 motu lagoon publish [island] [--archipelago <id>] [--fit native|legacy] [--out <path>]
-                    [--title <text>] [--remote [url]] [--token <secret>] [--json]
+                    [--title <text>] [--remote [url]] [--single] [--token <secret>] [--json]
 ```
 
 | Flag | Meaning | Default |
@@ -756,12 +756,16 @@ motu lagoon publish [island] [--archipelago <id>] [--fit native|legacy] [--out <
 | `--fit` | Legacy-fit strategy for a single-island target | unset (`:168`) |
 | `--out` | Where to write the page | `.motu/publish/lagoon-<slug>.html` — stable per target, so republishing keeps one URL (`:143-145`, `:174`) |
 | `--title` | Name in the host's listing. Prefer `title` in `lagoon.config.json`: a republish that forgets the flag renames the project back (`:160-167`) | declared title, else derived |
-| `--remote [url]` | Also upload to a lagoon host | `MOTU_HOST_URL`, then `host.json` (`:184`) |
+| `--remote [url]` | Upload to a lagoon host as CHUNKS: only the chunks the host lacks are sent, then the manifest. Writes `.motu/publish/lagoon-<slug>.manifest.json` instead of the page | `MOTU_HOST_URL`, then `host.json` |
+| `--single` | With `--remote`: build and upload one self-contained page, for a host older than chunks | chunks |
 | `--token` | Upload token | `MOTU_HOST_TOKEN`, then `host.json` (`:255`) |
 | `--json` | Machine-readable report — and it is emitted **after** the upload, so `--json --remote` cannot report a success that never happened (`:180-190`) | off |
 
-The build is always `MOTU_TRANSPORT=mock` and a single chunk: an artifact has no backend and no
-`/assets/` behind it (`:77-86`). Anything that could not be inlined is a hard error rather than a
+The build is always `MOTU_TRANSPORT=mock`. Without `--remote` it is a single chunk, because an
+artifact has no backend and no `/assets/` behind it (`:77-86`). With `--remote` it is chunks: an edit in
+one region then re-sends that region's chunk, not the lagoon. See
+[publishing to a host](08-lagoon.md#a-lagoon-goes-to-a-host-as-chunks). With `--json --remote` the
+report carries `chunks: { sent, reused, total, sentBytes }`. Anything that could not be inlined is a hard error rather than a
 silently blank page (`:132-133`). The upload happens **after** the local write, never instead of it, so
 a host being down does not cost you the build (`:203-208`). The immutable URL is keyed by the commit;
 the `latest` URL follows every publish. Host-side warnings — origin-absolute asset paths that work on a
@@ -782,7 +786,7 @@ with this replacement.
 
 ```console
 motu lagoon serve [island] [--archipelago <id>] [--fit native|legacy]
-                  [--port <n>] [--host] [--no-build] [--watch] [--no-live] [--as <slug>]
+                  [--port <n>] [--host] [--no-build] [--watch] [--no-live] [--single] [--as <slug>]
 motu lagoon serve --watch --detach      # keep running after this shell exits
 motu lagoon serve --stop                # stop the detached one
 ```
@@ -796,6 +800,7 @@ motu lagoon serve --stop                # stop the detached one
 | `--detach` | Re-run this command as a detached child (pidfile and log in the cache dir, `lagoon-serve.log`) and return | off |
 | `--stop` | Stop the detached lagoon and deregister it from the host | — |
 | `--no-live` | Do not announce this lagoon to the host — for a shared machine that should not become the team's address | announces when a host is configured |
+| `--single` | Build one self-contained page instead of chunks. Chunked, a rebuild changes only the chunks an edit touched (the log names them) and `--live-push` sends only those | chunks |
 | `--as <slug>` | The member slug to announce as | the published slug, suffixed with the branch off `main` |
 
 Every path serves the page, so deep links work (`:449-450`). Under `--watch` an SSE live-reload client

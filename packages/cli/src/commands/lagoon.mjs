@@ -26,7 +26,9 @@ import { networkInterfaces } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT, APP_ROOT, paths, names, color } from '../lib/util.mjs';
-import { gitIdentity, uploadLagoon, loadHostConfig } from '../lib/remote.mjs';
+import { gitIdentity, uploadLagoon, uploadManifest, loadHostConfig } from '../lib/remote.mjs';
+import { gzipSync } from 'node:zlib';
+import { readChunkedBuild, manifestOf, placeAssets, contentTypeOf, sendMissingChunks, MANIFEST_TYPE } from '../lib/lagoon-bundle.mjs';
 
 /** The framework's own lagoon build runner — replaces the vite.config.ts each project used to carry. */
 const LAGOON_BUILD = fileURLToPath(new URL('../lagoon-build.mjs', import.meta.url));
@@ -75,12 +77,24 @@ function resolveTarget(argv) {
 
 /** Build the chosen entry as one chunk, mock-backed. Returns the built HTML path. */
 function buildSingleFile({ entry, target, fit }) {
+  return buildLagoon({ entry, target, fit, chunked: false });
+}
+
+/**
+ * Build the chosen entry as STABLY NAMED CHUNKS and read it back as `{ html, files }` — what a
+ * content-addressed host takes a piece at a time. See lib/lagoon-bundle.mjs.
+ */
+function buildChunked({ entry, target, fit, title }) {
+  return readChunkedBuild(buildLagoon({ entry, target, fit, chunked: true }), title);
+}
+
+function buildLagoon({ entry, target, fit, chunked }) {
   const res = spawnSync(process.execPath, [LAGOON_BUILD], {
     // The project root, not the lagoon: the build resolves motu.config.json by walking up from cwd.
     cwd: REPO_ROOT,
     env: {
       ...process.env,
-      MOTU_SINGLEFILE: entry,
+      ...(chunked ? { MOTU_CHUNKED: entry, MOTU_SINGLEFILE: '' } : { MOTU_SINGLEFILE: entry, MOTU_CHUNKED: '' }),
       MOTU_NO_SSL: '1',
       // Non-negotiable: an artifact has no /api proxy behind it, so `http` would render an island
       // that fails every call. Fixtures are what makes the published page work standalone.
@@ -190,6 +204,15 @@ export async function lagoonPublishCommand(argv) {
     typeof argv.title === 'string' ? argv.title.slice(0, 200) : (declaredTitle() ?? resolved.title);
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
 
+  // TO A HOST, AS CHUNKS. The host stores each chunk by its content, so a republish after an edit in
+  // one region sends that region's chunk and the manifest rather than the whole lagoon. `--single`
+  // keeps the one-file upload, for a host older than the chunk protocol.
+  const hostCfgEarly = loadHostConfig();
+  const remoteEarly = argv.remote === true ? process.env.MOTU_HOST_URL || hostCfgEarly.url : argv.remote;
+  if (remoteEarly && argv.single !== true) {
+    return publishChunked({ argv, remote: remoteEarly, entry, target, fit, slug, title, json });
+  }
+
   if (!json) console.log(color.dim(`building ${target || 'all archipelagos'} (mock fixtures, one chunk)…`));
   const built = buildSingleFile({ entry, target, fit });
   const page = inlineToArtifact(built, title);
@@ -259,6 +282,72 @@ function readLagoonConfig() {
 function declaredBrand() {
   const brand = readLagoonConfig()?.chrome?.brand;
   return typeof brand === 'string' && brand.trim() ? brand.trim() : null;
+}
+
+/**
+ * Publish to a host as chunks: build, ask which chunks it lacks, send those, then the manifest.
+ *
+ * The manifest is also written beside the single-file artifact's stable path, so what was published
+ * can be read back without the host.
+ */
+async function publishChunked({ argv, remote, entry, target, fit, slug, title, json }) {
+  const url = remote === true ? null : String(remote);
+  if (!url || !/^https?:\/\//.test(url)) {
+    console.error(color.red('✗ --remote needs a host URL — pass one, set MOTU_HOST_URL, or put {"url","token"} in ~/.config/motu/host.json'));
+    process.exit(1);
+  }
+  const id = gitIdentity(REPO_ROOT);
+  if (paths.publishAs?.repo) id.repo = paths.publishAs.repo;
+  if (!id.repo) {
+    console.error(color.red('✗ could not derive a repo name from the git remote or the directory name'));
+    process.exit(1);
+  }
+  const token = (typeof argv.token === 'string' ? argv.token : null) || process.env.MOTU_HOST_TOKEN || loadHostConfig().token || null;
+
+  if (!json) console.log(color.dim(`building ${target || 'all archipelagos'} (mock fixtures, chunked)…`));
+  let bundle;
+  try {
+    bundle = buildChunked({ entry, target, fit, title });
+  } catch (err) {
+    console.error(color.red(`✗ ${err.message}`));
+    process.exit(1);
+  }
+  const manifest = manifestOf(bundle.html, bundle.files);
+  const out = publishFile(slug).replace(/\.html$/, '.manifest.json');
+  mkdirSync(resolve(out, '..'), { recursive: true });
+  writeFileSync(out, manifest.json, 'utf8');
+  const bytes = Buffer.byteLength(bundle.html) + [...bundle.files.values()].reduce((n, b) => n + b.length, 0);
+
+  let res;
+  try {
+    res = await uploadManifest({ url, token, repo: id.repo, slug, title, sha: id.sha, branch: id.branch, brand: declaredBrand(), bundle, manifest });
+  } catch (err) {
+    if (json) {
+      console.log(JSON.stringify({ ok: false, file: out, bytes, error: err.message }, null, 2));
+      return 1;
+    }
+    console.error(color.red(`✗ ${err.message}`));
+    return 1;
+  }
+  const latest = `${res.base}${res.urls.latest}`;
+  const immutable = `${res.base}${res.urls.immutable}`;
+  const chunks = res.chunks;
+  if (json) {
+    console.log(JSON.stringify({ ok: true, file: out, bytes, repo: id.repo, slug, chunks, deduped: !!res.deduped, verified: res.verified, live: !!res.live, urls: { latest, immutable, ...(res.urls.branch ? { branch: `${res.base}${res.urls.branch}` } : {}) } }, null, 2));
+    return 0;
+  }
+  console.log('');
+  console.log(`${color.green('✓')} ${color.bold(title)} — ${(bytes / 1024).toFixed(0)} kB in ${chunks.total} chunk(s)` +
+    color.dim(` · sent ${chunks.sent}, ${chunks.reused} already on the host (${(res.sentBytes / 1024).toFixed(0)} kB gzipped)${res.deduped ? ' · unchanged, deduped' : ''}`));
+  console.log(`  ${latest}   ${color.dim('(the bookmark — always current)')}`);
+  console.log(`  ${immutable}   ${color.dim('(this build, forever)')}`);
+  if (res.live)
+    console.log(color.yellow('  a live lagoon is registered for this slug — it is what the `latest` URL serves right now.\n') +
+      color.yellow('  stop it (`motu lagoon serve --stop`) to see THIS build there, or use the immutable URL above.'));
+  if (id.dirty) console.log(color.yellow('  working tree is dirty — the immutable URL is keyed by content, not by HEAD'));
+  for (const w of res.warnings ?? []) console.log(color.yellow(`  ${w}`));
+  console.log('  ' + color.dim(paths.rel(out)));
+  return 0;
 }
 
 async function uploadPublished({ remote, token: flagToken, page, slug, title, out, bytes, json }) {
@@ -552,6 +641,11 @@ export async function lagoonServeCommand(argv) {
     process.exit(1);
   }
 
+  // CHUNKED unless asked otherwise: a rebuild then changes only the chunks an edit touched, and a
+  // pushed draft sends only those. `--single` keeps the one-file build; `--no-build` serves the
+  // single file `publish` wrote.
+  const single = argv.single === true;
+  const build = () => (single ? inlineToArtifact(buildSingleFile({ entry, target, fit }), title) : buildChunked({ entry, target, fit, title }));
   let page;
   if (argv.build === false) {
     const file = publishFile(slug);
@@ -561,18 +655,49 @@ export async function lagoonServeCommand(argv) {
     }
     page = readFileSync(file, 'utf8');
   } else {
-    console.log(color.dim(`building ${target || 'all archipelagos'} (mock fixtures, one chunk)…`));
+    console.log(color.dim(`building ${target || 'all archipelagos'} (mock fixtures, ${single ? 'one chunk' : 'chunked'})…`));
     try {
-      page = inlineToArtifact(buildSingleFile({ entry, target, fit }), title);
+      page = build();
     } catch (err) {
       console.error(color.red(`✗ ${err.message}`));
       process.exit(1);
     }
   }
 
-  // The served bytes are a VARIABLE, not a constant: --watch swaps them in place, so the funnel or
-  // LAN URL in front of this server never has to be re-pointed to see new work.
-  let body = Buffer.from(wrapForBrowser(injectDock(watching ? injectReloadClient(page) : page)), 'utf8');
+  /**
+   * The chunks of the last few builds, by manifest hash. More than the current one, because a viewer
+   * that loaded the page a moment before a rebuild still asks for ITS chunks, and answering 404 to a
+   * page that is reloading anyway would put an error in a console for nothing.
+   */
+  const recent = new Map();
+  /** What a build looks like served: the page as a document, its chunks, and its manifest. */
+  const showFrom = (built) => {
+    const raw = typeof built === 'string' ? built : built.html;
+    const html = wrapForBrowser(injectDock(watching ? injectReloadClient(raw) : raw));
+    const files = typeof built === 'string' ? new Map() : built.files;
+    const manifest = files.size ? manifestOf(html, files) : null;
+    if (manifest) {
+      recent.set(manifest.hash, files);
+      while (recent.size > 4) recent.delete(recent.keys().next().value);
+    }
+    const bytes = Buffer.byteLength(html) + [...files.values()].reduce((n, b) => n + b.length, 0);
+    return { html, files, manifest, bytes };
+  };
+  // The served build is a VARIABLE, not a constant: --watch swaps it in place, so the funnel or LAN
+  // URL in front of this server never has to be re-pointed to see new work.
+  let shown = showFrom(page);
+  /**
+   * WHERE THIS PAGE'S CHUNKS ARE, from the viewer's side. Standing alone, at this server's root. When
+   * a host PULLS this server for a live member, it forwards everything under the member's prefix and
+   * says which prefix with `x-motu-base` — so the chunks are asked for under that prefix, which the
+   * host forwards here, instead of at the host's root, where nothing would answer.
+   */
+  const pageFor = (req) => {
+    if (!shown.manifest) return Buffer.from(shown.html, 'utf8');
+    const hdr = String(req.headers['x-motu-base'] ?? '');
+    const prefix = /^\/[A-Za-z0-9._/-]*$/.test(hdr) ? hdr.replace(/\/+$/, '') : '';
+    return Buffer.from(placeAssets(shown.html, `${prefix}/__motu_assets/${shown.manifest.hash}`), 'utf8');
+  };
   /** Open live-reload streams, one per viewer (a laptop and a phone on the same URL is the point). */
   const viewers = new Set();
 
@@ -596,6 +721,24 @@ export async function lagoonServeCommand(argv) {
       req.on('close', () => viewers.delete(res));
       return;
     }
+    // A CHUNK, by the manifest it belongs to. Matched anywhere in the path, because a host pulling
+    // this server forwards it under the member's prefix.
+    const reqPath = String(req.url).split('?')[0];
+    const at = reqPath.indexOf('/__motu_assets/');
+    if (at !== -1) {
+      const [mh, ...rest] = reqPath.slice(at + '/__motu_assets/'.length).split('/');
+      const name = decodeURIComponent(rest.join('/'));
+      const bytes = recent.get(mh)?.get(name);
+      if (!bytes) return void res.writeHead(404, { 'content-type': 'text/plain' }).end('no such chunk');
+      res.writeHead(200, {
+        'content-type': contentTypeOf(name),
+        'content-length': bytes.length,
+        // Keyed by the manifest's content: these bytes can never change at this address.
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+      return void res.end(req.method === 'HEAD' ? undefined : bytes);
+    }
+    const body = pageFor(req);
     res.writeHead(200, {
       'content-type': 'text/html; charset=utf-8',
       'content-length': body.length,
@@ -614,7 +757,8 @@ export async function lagoonServeCommand(argv) {
   server.listen(port, bind, () => {
     const ip = lan ? lanAddress() : null;
     console.log('');
-    console.log(`${color.green('✓')} ${color.bold(title)} — ${(body.length / 1024).toFixed(0)} kB, self-contained, mock-backed`);
+    console.log(`${color.green('✓')} ${color.bold(title)} — ${(shown.bytes / 1024).toFixed(0)} kB` +
+      (shown.manifest ? `, ${shown.files.size} chunk(s), mock-backed` : ', self-contained, mock-backed'));
     console.log(`  http://localhost:${port}`);
     if (ip) console.log(`  http://${ip}:${port}   ${color.dim('(LAN — open this on a phone on the same wifi)')}`);
     else if (lan) console.log(color.dim('  (no LAN address found — only loopback is up)'));
@@ -680,12 +824,31 @@ export async function lagoonServeCommand(argv) {
     // SNAPSHOT THE BYTES. `body` is reassigned by every rebuild, so reading it after the await would
     // sometimes send a newer artifact under an older push's completion — harmless here, and exactly
     // the kind of thing that makes a race impossible to reason about later.
-    const bytes = body;
-    pushInFlight = fetch(`${base}/api/live/draft?${qs}`, {
-      method: 'POST',
-      headers: { 'content-type': 'text/html; charset=utf-8', authorization: `Bearer ${hostToken}` },
-      body: bytes,
-    })
+    const snap = shown;
+    // CHUNKED: the chunks the host lacks first, then the manifest as the draft — so a save sends what
+    // it changed. A host older than the chunk protocol gets the whole page, as it always did.
+    pushInFlight = (snap.manifest
+      ? sendMissingChunks({ base, token: hostToken, files: snap.files, hashes: snap.manifest.hashes }).then(
+          () =>
+            fetch(`${base}/api/live/draft?${qs}`, {
+              method: 'POST',
+              // GZIPPED: the manifest carries the page, and the page carries the dock (~240 kB raw).
+              headers: { 'content-type': MANIFEST_TYPE, 'content-encoding': 'gzip', authorization: `Bearer ${hostToken}` },
+              body: gzipSync(Buffer.from(snap.manifest.json, 'utf8')),
+            }),
+          (err) => {
+            if (err?.oldHost && !pushRefused) {
+              pushRefused = true;
+              console.error(color.red(`  ✗ ${err.message} — drafts need it; serve with --single meanwhile`));
+            }
+            throw err;
+          },
+        )
+      : fetch(`${base}/api/live/draft?${qs}`, {
+          method: 'POST',
+          headers: { 'content-type': 'text/html; charset=utf-8', authorization: `Bearer ${hostToken}` },
+          body: Buffer.from(snap.html, 'utf8'),
+        }))
       .then(async (res) => {
         if (res.ok) noteLive(`${base}/${repo}/latest/${slug}`);
         if (!res.ok && !pushRefused) {
@@ -830,11 +993,14 @@ export async function lagoonServeCommand(argv) {
       building = true;
       const started = Date.now();
       try {
-        const fresh = inlineToArtifact(buildSingleFile({ entry, target, fit }), title);
-        body = Buffer.from(wrapForBrowser(injectDock(injectReloadClient(fresh))), 'utf8');
+        const before = shown.manifest?.hashes ?? {};
+        shown = showFrom(build());
         const secs = ((Date.now() - started) / 1000).toFixed(1);
+        // WHICH CHUNKS THE EDIT TOUCHED: the number that says whether the cut is doing its job.
+        const changed = shown.manifest ? Object.entries(shown.manifest.hashes).filter(([n, h]) => before[n] !== h).map(([n]) => n) : [];
         console.log(
-          `${color.green('✓')} rebuilt in ${secs}s — ${(body.length / 1024).toFixed(0)} kB` +
+          `${color.green('✓')} rebuilt in ${secs}s — ${(shown.bytes / 1024).toFixed(0)} kB` +
+            (shown.manifest ? color.dim(` · changed: ${changed.length ? changed.join(', ') : 'nothing'}`) : '') +
             (viewers.size ? color.dim(` · reloading ${viewers.size} viewer(s)`) : ''),
         );
         for (const res of viewers) res.write('data: reload\n\n');

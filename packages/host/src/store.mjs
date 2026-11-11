@@ -1,10 +1,11 @@
 // The lagoon store: content-addressed blobs, mutable aliases on top, and a retention cap that can
 // never break a URL someone is holding.
 //
-// WHAT IS STORED is the artifact `motu lagoon publish` already produces — one self-contained HTML
-// FRAGMENT (assets inlined, mock transport, no doctype/html/head/body: see `inlineToArtifact` in
-// the CLI). The document skeleton is supplied at serve time, so the same bytes publish to a hosted
-// page here and to an Artifact, and neither host has to know about the other.
+// WHAT IS STORED is what `motu lagoon publish` produces — a self-contained HTML FRAGMENT (assets
+// inlined, mock transport, no doctype/html/head/body: see `inlineToArtifact` in the CLI), or, by
+// default with --remote, a MANIFEST naming content-addressed chunks stored beside it (manifest.mjs).
+// The document skeleton is supplied at serve time, so the same bytes publish to a hosted page here and
+// to an Artifact, and neither host has to know about the other.
 //
 // TWO AXES, deliberately:
 //   /<repo>/<sha>/<slug>     immutable — the reviewable artifact, still renders in six months
@@ -40,6 +41,14 @@ export const DEFAULT_MAX_RECORDS = 1000;
 export const DEFAULT_MAX_BYTES = 4 * 1024 * 1024 * 1024;
 
 const INDEX_VERSION = 1;
+
+/**
+ * How long a CHUNK nothing references yet is kept. Chunks arrive before the manifest that names them
+ * (a publish asks, sends, then commits), and a draft's chunks are named by no record at all — so a
+ * sweep that ran in between would delete what is about to be, or is being, served. Every time a
+ * publisher asks about a chunk its clock restarts, so a draft that keeps saving keeps its chunks.
+ */
+export const CHUNK_GRACE_MS = 6 * 60 * 60 * 1000;
 
 /**
  * One index file for the whole store, rewritten atomically.
@@ -133,7 +142,7 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
    * Returns `deduped: true` when the bytes were already here — the common case for a republish with
    * no UI change, and worth surfacing so the CLI can say so instead of implying work happened.
    */
-  function publish(repo, slug, bytes, { title = slug, sha = null, branch = null, brand = null } = {}) {
+  function publish(repo, slug, bytes, { title = slug, sha = null, branch = null, brand = null, refs = null } = {}) {
     const entry = repoEntry(repo);
     // THE PROJECT'S OWN COLOUR, on the repo rather than on the record: it is a property of the
     // project, not of one build, and a tool listing repositories should not have to fetch a record to
@@ -154,6 +163,9 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
       id: entry.nextId++,
       slug,
       hash,
+      // A CHUNKED lagoon's record is its manifest; these are the chunks it names, which must live
+      // exactly as long as the record does.
+      ...(refs?.length ? { refs: [...new Set(refs)] } : {}),
       title,
       sha: sha || hash.slice(0, 12), // no git? the content hash IS a usable immutable ref
       branch,
@@ -208,6 +220,37 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     return readFileSync(file);
   }
 
+  /**
+   * A chunk, stored by its content. Refused unless the bytes ARE that content: the hash is the
+   * address every later reader trusts, so it is checked on the way in, never assumed.
+   */
+  function putBlob(bytes, expected) {
+    const hash = hashBytes(bytes);
+    if (expected && hash !== expected) return { ok: false, hash };
+    const file = blobPath(hash);
+    if (!existsSync(file)) {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, bytes);
+    }
+    const at = nowIso();
+    index.blobs[hash] = { bytes: bytes.length, createdAt: index.blobs[hash]?.createdAt ?? at, seenAt: at };
+    save();
+    return { ok: true, hash };
+  }
+
+  /** Which of these chunks are not here — and the ones that are have just been mentioned again. */
+  function missingBlobs(hashes) {
+    const at = nowIso();
+    const missing = [];
+    for (const h of hashes) {
+      if (typeof h !== 'string' || !/^[0-9a-f]{64}$/.test(h)) continue;
+      if (index.blobs[h] && existsSync(blobPath(h))) index.blobs[h].seenAt = at;
+      else missing.push(h);
+    }
+    save();
+    return missing;
+  }
+
   /** Read a blob by hash alone — what a composed manifest serves, since members span repos. */
   function readHash(hash) {
     const file = blobPath(hash);
@@ -233,13 +276,16 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
 
     // Distinct blobs, not the sum of records: two records sharing content occupy one blob, and
     // charging the repo twice for it would evict history that costs nothing to keep.
+    // A chunked record costs its manifest AND its chunks — shared chunks once, which is the saving.
     const bytesOf = (recs) => {
       const seen = new Set();
       let total = 0;
       for (const r of recs) {
-        if (seen.has(r.hash)) continue;
-        seen.add(r.hash);
-        total += index.blobs[r.hash]?.bytes ?? 0;
+        for (const h of [r.hash, ...(r.refs ?? [])]) {
+          if (seen.has(h)) continue;
+          seen.add(h);
+          total += index.blobs[h]?.bytes ?? 0;
+        }
       }
       return total;
     };
@@ -252,8 +298,10 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
       drop.add(rec.id);
       over--;
       // Only credit the bytes back if no SURVIVING record still points at that blob.
-      const stillUsed = entry.history.some((r) => !drop.has(r.id) && r.hash === rec.hash);
-      if (!stillUsed) overBytes -= index.blobs[rec.hash]?.bytes ?? 0;
+      for (const h of [rec.hash, ...(rec.refs ?? [])]) {
+        const stillUsed = entry.history.some((r) => !drop.has(r.id) && (r.hash === h || r.refs?.includes(h)));
+        if (!stillUsed) overBytes -= index.blobs[h]?.bytes ?? 0;
+      }
     }
     if (!drop.size) return { removed: 0, blobs: gcBlobs() };
     entry.history = entry.history.filter((r) => !drop.has(r.id));
@@ -263,7 +311,17 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
   /** Delete blobs no surviving record references. Runs after any history change. */
   function gcBlobs() {
     const live = new Set();
-    for (const entry of Object.values(index.repos)) for (const r of entry.history) live.add(r.hash);
+    for (const entry of Object.values(index.repos)) {
+      for (const r of entry.history) {
+        live.add(r.hash);
+        for (const h of r.refs ?? []) live.add(h);
+      }
+    }
+    // Chunks mentioned recently are on their way into a manifest, or serving a draft.
+    const graceSince = Date.now() - CHUNK_GRACE_MS;
+    for (const [hash, b] of Object.entries(index.blobs)) {
+      if (b.seenAt && Date.parse(b.seenAt) > graceSince) live.add(hash);
+    }
     // A baseline is only meaningful while its bytes exist. ACCEPTED is pinned forever; the recent
     // history is pinned so "what did it look like before" survives long enough to be looked at.
     for (const islands of Object.values(index.baselines)) {
@@ -607,6 +665,8 @@ export function openStore({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxBytes = DE
     resolveRef,
     read,
     readHash,
+    putBlob,
+    missingBlobs,
     putShot,
     acceptShot,
     listShots,

@@ -2,7 +2,7 @@
 //
 // This exists to replace the tunnel. `motu lagoon serve --host` plus an ssh -R gives a URL that is
 // public while the tunnel runs and gone when the lid closes; a hosted lagoon is a URL you can put in
-// a PR. What it serves is the SAME artifact — one self-contained page, mock fixtures, no backend —
+// a PR. What it serves is the SAME artifact — one page (or its manifest's chunks), mock fixtures, no backend —
 // so hosting is a bucket and a route table, not a platform. There is no server-side browser here and
 // there must not be one: Playwright runs on the publisher's machine, as it already does.
 //
@@ -12,6 +12,9 @@
 //   GET  /<repo>/                                       one repo: latest per slug, plus history
 //   GET  /<repo>/<ref>/<slug>                           the lagoon: a shell, a rail, and the page framed
 //   GET  /<repo>/<ref>/<slug>/__motu_frame              the page's own bytes (the frame src)
+//   POST /api/blobs/missing        body {hashes}           which chunks of a chunked lagoon are not here
+//   PUT  /api/blobs/<sha256>       body: the chunk          store one chunk (gzip ok), checked against its hash
+//   GET  /__motu_assets/<manifest>/<file>                   one chunk of a chunked lagoon, cached forever
 //
 // WRITES ARE AUTHENTICATED, READS ARE NOT. The lagoon has no backend and no session, which is what
 // makes it safe to host at all — but its fixtures were recorded from somewhere, so a URL is unlisted
@@ -23,6 +26,8 @@ import { gunzipSync, brotliDecompressSync } from 'node:zlib';
 import { timingSafeEqual } from 'node:crypto';
 import { openStore, normalizeRepo, normalizeSegment, DEFAULT_MAX_RECORDS, DEFAULT_MAX_BYTES } from './store.mjs';
 import { wrapFragment, withRepoMeta } from './document.mjs';
+import { parseManifest, manifestPage, contentTypeOf, MANIFEST_TYPE } from './manifest.mjs';
+import { hashBytes } from './store.mjs';
 import { lagoonPage, rootIndexPage, repoIndexPage, errorPage } from './views.mjs';
 import { loadAccess, isPublic, canRead, canIngest, cookieValue, readSecretFrom, READ_COOKIE } from './access.mjs';
 
@@ -147,10 +152,10 @@ function liveRegistry(ttlMs = 90_000) {
  * uses to announce itself, and the host serves those bytes. Nothing has to be able to reach the
  * laptop, which is the whole point — a tunnel, a tailnet or a LAN route stops being a requirement.
  *
- * IT ONLY WORKS BECAUSE A LAGOON IS ONE SELF-CONTAINED FILE. Assets are inlined and `publish` refuses
- * to ship a page still pointing at /assets/, so there is nothing else for a viewer to ask for. Push
- * and proxy are therefore indistinguishable from the outside — which would be false for an ordinary
- * dev server, where you would lose asset granularity, HMR and any route the page calls.
+ * A DRAFT IS ONE PAGE OR ONE MANIFEST. A chunked draft's chunks are stored first, by content, and
+ * served from `/__motu_assets/<manifest>/` like a published lagoon's, so there is still nothing else for
+ * a viewer to ask for. Push and proxy are therefore indistinguishable from the outside — which would
+ * be false for an ordinary dev server, where you would lose HMR and any route the page calls.
  *
  * IN MEMORY, NOT IN THE STORE, and that is the decision worth defending. A draft is replaced every
  * few seconds and means nothing an hour later; putting it in the blob store would mean a record per
@@ -316,7 +321,9 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
     const target = `${String(base).replace(/\/+$/, '')}${subPath}`;
     let upstream;
     try {
-      upstream = await fetch(target, { headers: { accept: req.headers.accept ?? '*/*' } });
+      // WHERE ITS CHUNKS ARE, from the viewer's side: under this member's prefix, which the host
+      // forwards back to the dev server. Without it a chunked page asks for them at this host's root.
+      upstream = await fetch(target, { headers: { accept: req.headers.accept ?? '*/*', 'x-motu-base': `/${member.repo}/latest/${member.slug}` } });
     } catch {
       // The dev server is unreachable — it went away, or it announced an address this host cannot
       // dial (`127.0.0.1` from a remote machine). Forget it and tell the caller, which serves the
@@ -357,6 +364,28 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       res.write(Buffer.from(value));
     }
     res.end();
+  }
+
+  /**
+   * The page behind stored or drafted bytes: a single file as it is, a manifest as its HTML with the
+   * chunks' address filled in. Either is a fragment `wrapFragment` can finish.
+   */
+  function pageOf(bytes, hash) {
+    const m = parseManifest(bytes);
+    return m ? manifestPage(m, hash ?? hashBytes(bytes)) : bytes;
+  }
+
+  /** Recently read manifests, by hash — every chunk request reads one, and they never change. */
+  const manifestCache = new Map();
+  function manifestByHash(hash) {
+    if (manifestCache.has(hash)) return manifestCache.get(hash);
+    const bytes = /^[0-9a-f]{64}$/.test(hash) ? store.readHash(hash) : null;
+    const m = bytes ? parseManifest(bytes) : null;
+    if (m) {
+      manifestCache.set(hash, m);
+      if (manifestCache.size > 64) manifestCache.delete(manifestCache.keys().next().value);
+    }
+    return m;
   }
 
   async function handle(req, res) {
@@ -447,6 +476,24 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       // for a draft because there is nowhere to fetch it from.
       return json(res, 200, { live: [...live.list(), ...drafts.list().map((d) => ({ ...d, draft: true }))] });
 
+    // ONE CHUNK of a chunked lagoon. The only PUT this host takes, and the same token publishing needs:
+    // a chunk is half a publish. Refused unless the bytes hash to the address they were sent to.
+    if (req.method === 'PUT' && path.startsWith('/api/blobs/')) {
+      if (!token) return json(res, 503, { error: 'this host accepts no uploads — start it with a token' });
+      if (!adminOk) return json(res, 401, { error: 'bad or missing token' });
+      const want = path.slice('/api/blobs/'.length);
+      if (!/^[0-9a-f]{64}$/.test(want)) return json(res, 400, { error: 'a chunk is addressed by its sha256' });
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (e) {
+        return json(res, e.status ?? 400, { error: e.message });
+      }
+      const out = store.putBlob(body, want);
+      if (!out.ok) return json(res, 422, { error: `these bytes hash to ${out.hash.slice(0, 12)}, not ${want.slice(0, 12)}` });
+      return json(res, 200, { ok: true, hash: out.hash, bytes: body.length });
+    }
+
     if (req.method === 'POST') {
       // INGEST IS ITS OWN DOOR, checked before the admin gate and never falling through to it.
       //
@@ -513,6 +560,16 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       const auth = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!tokenMatches(auth, token)) return json(res, 401, { error: 'bad or missing token' });
       if (path === '/api/publish') return void (await publish(req, res, url));
+      if (path === '/api/blobs/missing') {
+        let hashes;
+        try {
+          hashes = JSON.parse((await readBody(req, 4 * 1024 * 1024)).toString('utf8'))?.hashes;
+        } catch {
+          hashes = null;
+        }
+        if (!Array.isArray(hashes)) return json(res, 400, { error: 'body must be {"hashes": [sha256, …]}' });
+        return json(res, 200, { missing: store.missingBlobs(hashes.slice(0, 20_000)) });
+      }
       if (path === '/api/baseline') return void (await baseline(req, res, url));
       if (path === '/api/baseline/accept') return void (await acceptBaseline(req, res, url));
       if (path === '/api/live/draft') {
@@ -530,12 +587,25 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
           const held = drafts.bytesFor(repo, slug);
           if (!held) return json(res, 404, { error: 'no draft to keep alive — send one first' });
           drafts.set(repo, slug, held);
+          // A CHUNKED draft's chunks are named by no record, so they live on being mentioned.
+          const heldManifest = parseManifest(held);
+          if (heldManifest) store.missingBlobs([hashBytes(held), ...Object.values(heldManifest.files)]);
           return json(res, 200, { ok: true, member: `${repo}/${slug}`, touched: true, ttlMs: 90_000 });
         }
         // The same wire limit publishing uses. A lagoon is one file and a large one is ~1 MB; the cap
         // is here so a token holder cannot push the host's memory over instead of a page.
         const body = await readBody(req, 8 * 1024 * 1024);
         if (!body?.length) return json(res, 400, { error: 'a draft needs a body' });
+        // A CHUNKED draft is a manifest whose chunks were sent first. Refuse one naming a chunk that is
+        // not here — served, it would be a page that loads and then fails on a missing module.
+        const draftManifest = parseManifest(body);
+        if (draftManifest) {
+          const missing = store.missingBlobs(Object.values(draftManifest.files));
+          if (missing.length) return json(res, 422, { error: `draft names ${missing.length} chunk(s) this host does not have — send them first`, missing });
+          store.putBlob(body);
+        } else if (String(req.headers['content-type'] ?? '').startsWith(MANIFEST_TYPE)) {
+          return json(res, 400, { error: 'not a lagoon manifest' });
+        }
         drafts.set(repo, slug, body);
         // TELL THE PEOPLE LOOKING. This is the half a proxied live lagoon gets for free, because
         // there the dev server owns the channel; pushed, the arrival of the bytes IS the event.
@@ -651,6 +721,18 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       const bytes = store.readHash(segments[1]);
       if (!bytes) return html(res, 404, errorPage(404, 'no such shot'), NO_STORE);
       return send(res, 200, 'image/png', bytes, IMMUTABLE);
+    }
+
+    // ONE CHUNK of a chunked lagoon, through the manifest that names it. Keyed by the manifest's
+    // content, so it never changes at this address and is cached for a year. Not gated by repo: the
+    // address is a 256-bit hash only a page that was allowed to load already holds.
+    if (segments[0] === '__motu_assets' && segments.length >= 3) {
+      const m = manifestByHash(segments[1]);
+      const name = segments.slice(2).join('/');
+      const h = m?.files[name];
+      const bytes = h ? store.readHash(h) : null;
+      if (!bytes) return json(res, 404, { error: 'no such chunk' });
+      return send(res, 200, contentTypeOf(name), bytes, IMMUTABLE);
     }
 
     // --- a LIVE dev server's own sub-paths ----------------------------------------------------
@@ -782,7 +864,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
             reload.open(repo, slug, res);
             return; // held open on purpose; `reloadChannels` drops it when the socket closes
           }
-          return html(res, 200, withRepoMeta(wrapFragment(draft, { title: slug }), repo), NO_STORE);
+          return html(res, 200, withRepoMeta(wrapFragment(pageOf(draft), { title: slug }), repo), NO_STORE);
         }
 
         let liveUrl = ref === 'latest' ? live.endpointFor(repo, slug) : null;
@@ -848,7 +930,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
 
         const bytes = store.read(repo, rec.id, rec.hash);
         if (!bytes) return html(res, 410, errorPage(410, 'the object behind this URL has been swept'), NO_STORE);
-        return html(res, 200, withRepoMeta(wrapFragment(bytes, { title: rec.title }), repo), rec.mutable ? NO_STORE : IMMUTABLE);
+        return html(res, 200, withRepoMeta(wrapFragment(pageOf(bytes, rec.hash), { title: rec.title }), repo), rec.mutable ? NO_STORE : IMMUTABLE);
       }
     }
 
@@ -932,6 +1014,32 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
       return json(res, e.status ?? 400, { error: e.message });
     }
     if (!body.length) return json(res, 400, { error: 'empty body — expected the published fragment' });
+
+    // A CHUNKED lagoon: the manifest is the record, and the chunks it names must already be here.
+    const manifest = parseManifest(body);
+    if (manifest) {
+      const refs = Object.values(manifest.files);
+      const missing = store.missingBlobs(refs);
+      if (missing.length) return json(res, 422, { error: `manifest names ${missing.length} chunk(s) this host does not have — send them first`, missing });
+      const out = store.publish(repo, slug, body, { title, sha, branch, brand, refs });
+      return json(res, 200, {
+        ok: true,
+        repo,
+        slug,
+        deduped: out.deduped,
+        bytes: out.bytes,
+        hash: out.hash,
+        chunks: refs.length,
+        live: !!live.endpointFor(repo, slug),
+        urls: {
+          latest: `/${repo}/latest/${slug}`,
+          immutable: `/${repo}/${out.sha}/${slug}`,
+          ...(branch ? { branch: `/${repo}/${branch}/${slug}` } : {}),
+        },
+      });
+    }
+    if (String(req.headers['content-type'] ?? '').startsWith(MANIFEST_TYPE)) return json(res, 400, { error: 'not a lagoon manifest' });
+
     // The one content check worth REFUSING on: a fragment still pointing at /assets/ is a build whose
     // inlining did not happen, and it renders blank here exactly as it would under an artifact CSP.
     const text = body.toString('utf8');

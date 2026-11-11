@@ -535,8 +535,8 @@ months later into a lagoon that has grown another region since
 
 | | `lagoon serve` | `lagoon publish` |
 |---|---|---|
-| Builds | one self-contained page, held in memory | one self-contained page |
-| Writes | nothing (unless `--no-build`, which reads) | `.motu/publish/lagoon-<slug>.html` |
+| Builds | chunks, held in memory (`--single`: one page) | one self-contained page; with `--remote`, chunks |
+| Writes | nothing (unless `--no-build`, which reads) | `.motu/publish/lagoon-<slug>.html` (or `.manifest.json` with `--remote`) |
 | Transport | forced `mock` | forced `mock` |
 | Reload | `--watch` only (SSE) | never — a published artifact that dials home is a lie about what the artifact is |
 
@@ -560,9 +560,11 @@ inside `island verify` / `archipelago verify`, which boot it privately.
 | `--watch` | rebuild on save and live-reload open viewers; conflicts with `--no-build` (`:419-423`) | off |
 | `--detach` / `--stop` | keep it running after the shell exits; stop it (see below) | |
 | `--no-live` | do not announce it to the lagoon host | announces when a host is configured |
+| `--single` | build one self-contained page instead of chunks | chunks |
 | target flags, `--fit` | same as `publish` (`:399-408`) | |
 
-It serves the same bytes at **every path**, `cache-control: no-store`
+It serves the page at **every path** and its chunks under `/__motu_assets/<manifest>/`; the page is
+`cache-control: no-store`
 (`packages/cli/src/commands/lagoon.mjs:449-474`) — which is why an address that only worked on
 `lagoon.html` used to appear to work here. It restores the `<!doctype>`/`<html>`/`<head>` skeleton
 that `publish` strips (`:297-308`); without it the page gets no viewport meta and renders
@@ -584,7 +586,8 @@ pointing it at another project is just running `serve` there. There is no
 | `--fit <native\|legacy>` | legacy-fit strategy for a single-island target (`:168`) | `''` |
 | `--out <path>` | write somewhere else (`:174`) | `.motu/publish/lagoon-<slug>.html` |
 | `--title <text>` | name in the host's listing, truncated to 200 chars (`:166-167`) | derived from the target |
-| `--remote [url]` | also upload; bare = `$MOTU_HOST_URL`, then `host.json` (`:184-185`) | off |
+| `--remote [url]` | upload as chunks instead; bare = `$MOTU_HOST_URL`, then `host.json` | off |
+| `--single` | with `--remote`: upload one self-contained page (a host without chunks) | chunks |
 | `--token <secret>` | upload token (`:255`) | `$MOTU_HOST_TOKEN`, then `host.json` |
 | `--json` | machine-readable report (`:187-190`) | off |
 
@@ -607,10 +610,48 @@ motu-host --token $(openssl rand -hex 24)      # serve on 127.0.0.1:8818
 motu lagoon publish --remote                   # any project, any agent, same host
 ```
 
-`--remote` **adds a destination**; it does not replace the artifact. The same bytes are written to
-`.motu/publish/` first, so a host that is down or a token that is wrong costs you nothing, and there is
-one build so local and hosted cannot drift
-(`packages/cli/src/commands/lagoon.mjs:185`, `:203-209`).
+### A lagoon goes to a host as CHUNKS
+
+One self-contained file meant a one-line edit re-sent, and the host re-stored, the whole lagoon. So
+`--remote` (and `serve --watch --live-push`, on every save) builds the lagoon as **stably named
+chunks**, asks the host which of them it lacks, sends only those, then sends a **manifest**:
+
+    { "motu": "lagoon-manifest/1", "html": "<the page>", "files": { "region-team.js": "<sha256>", … } }
+
+Measured on Peps (3.1 MB, 23 regions): the first upload is ~1 MB gzipped. After that, an edit to a
+region, an island or one of the app's components sends **one chunk of 3–5 kB**.
+
+How the build is cut (`chunkOf` in `packages/cli/src/lib/lagoon-vite.mjs`):
+
+- **Chunks are named, not hashed.** A hash in a chunk's name is written into every file that imports
+  it, so one edit would change the whole chain of importers above it. The host hashes each file
+  instead.
+- **`vendor` and `motu` are foundations.** Each is one chunk, and changes only when the lockfile or
+  motu does. If a dependency imports app code (Peps aliases `next/navigation` to a lagoon stub), that
+  code is pulled into vendor.
+- **The application is cut by EVALUATION ORDER**, named by directory: `region-<id>`,
+  `island-<kebab>`, `host-<dir>`. A chunk ends where the directory changes, but never inside a module
+  cycle, and runs under 4 kB fold into a neighbour. Every import therefore points at an earlier
+  chunk, so chunks cannot import each other.
+  - That matters because a cycle between chunks runs one before what it needs exists (`Cannot access
+    'n' before initialization`).
+  - Cutting whole directories failed on both test projects. In the demo, `src/` held both the UI the
+    islands import and the screens that import the regions. In Peps, the pages import the regions and
+    the regions import the pages' components, which made one 600 kB chunk.
+
+How the host serves it:
+
+- **The page does not know where its chunks live.** It names them `__MOTU_ASSETS__/<file>`, and
+  whoever serves it fills that in. The host uses `/__motu_assets/<manifest hash>/`, which is cached for
+  a year because the address is the content, so a `latest` page that moves on never mixes two builds.
+- **`lagoon serve` serves the chunks itself.** When a host pulls it (`--live-url`), the host passes the
+  member's prefix in `x-motu-base`, so the chunks are asked for through the host.
+- **A sweep never deletes a chunk a record names.** A chunk no record names yet survives 6 hours from
+  the last time a publisher asked about it. That covers a publish in progress and a draft that keeps
+  saving.
+
+The single file is still there. `publish` without `--remote` writes it for an Artifact or for opening
+from disk, `serve --no-build` serves it, and `--single` uploads it to a host older than chunks.
 
 ### Where the host lives
 

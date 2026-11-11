@@ -75,7 +75,7 @@ the person reading the reports, not by the protocol. So this is a step, not a ha
    `yarn typecheck` — and diff against the arm's recorded baseline. A region that landed on a page
    while breaking the app's build is a failed run however green motu is.
 2. **Does the lagoon still render, and does it look like the application?** Boot it
-   (`motu lagoon dev`, or `serve` when the build survives), open a state from `motu lagoon states`,
+   (`motu lagoon serve --watch`; if the self-contained build fails, that failure is the finding), open a state from `motu lagoon states`,
    and read the screen. **This must be a FRESH agent** — the one that built the region is the worst
    reader of it, for the reason CLAUDE.md gives — handed only the URL, the app's own components and
    vocabulary, and the question "does this screen belong to THIS application?".

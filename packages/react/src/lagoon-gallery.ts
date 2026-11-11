@@ -1493,6 +1493,14 @@ markSandbox();
       reportState({ ok: false, target: 'this lagoon', kind: 'none', error: `no screen "${q.get('screen')}"`, available: screens.map((x) => x.id) });
       root.replaceChildren();
     } else openScreen(q.get('path') ?? sc.example ?? sc.path);
+  } else if (screens.length && !targeted && !flowRegion && !(request.region && ids.includes(request.region)) && !new URLSearchParams(location.search).has('state')) {
+    // THE BARE ADDRESS OPENS A SCREEN, when the lagoon declares any. It used to open whichever
+    // REGION came first (or the one this browser last looked at), so the lagoon's own URL landed on
+    // a fragment — the sidebar alone, on the demo — and handed to someone else it opened something
+    // different again. A screen is the application as a person meets it; a region on its own is a
+    // place you go on purpose, and every explicit address above still goes there.
+    const first = screens[0];
+    openScreen(first.example ?? first.path);
   } else if (ids.length) {
     mount(current);
   } else {

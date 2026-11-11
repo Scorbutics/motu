@@ -293,8 +293,11 @@ screen({ id: 'chapters', path: '/chapters', layout: AppFrame,
 
 Pass `screens` to `startLagoon`, or — for a project whose gallery entry the CLI generates — export
 them from the lagoon overrides module: `export const screens = [...]` in `lagoon.tsx`. Screens appear
-in the panel above the regions (`▣`), and each is an address: `?screen=<id>`, plus
+in Find above the regions (`▣`), and each is an address: `?screen=<id>`, plus
 `&path=/member/<id>` for a route with parameters (which must declare an `example` path to open at).
+A lagoon that declares screens opens the FIRST one at its bare address — the application as a person
+meets it, the same for everyone the URL is handed to — rather than its first region (or the one this
+browser last looked at); a region alone is `?region=<id>`, a place you go on purpose.
 
 Three more fields, each found by putting screens on Peps:
 

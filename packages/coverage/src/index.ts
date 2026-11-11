@@ -626,7 +626,7 @@ export function beaconSink(url: string): (corpus: CoverageCorpus) => boolean | P
 
 /**
  * What `motu.config.json` says about coverage, baked into the generated island registry by
- * `motu island sync` and applied by IMPORTING it — the same route `setDefaultIsolation` takes, and
+ * `motu sync` and applied by IMPORTING it — the same route `setDefaultIsolation` takes, and
  * for the same reason: importing the registry is already what a host does, so no application file
  * has to mention coverage and no host's bundler has to define a constant.
  *
@@ -672,7 +672,7 @@ let coverageConfig: CoverageConfig = {};
 /**
  * WHERE THE ADDRESSES COME FROM, and why they are not in the config.
  *
- * `motu island sync` bakes the coverage config into the generated island registry — and the LAGOON
+ * `motu sync` bakes the coverage config into the generated island registry — and the LAGOON
  * imports that registry. A published lagoon is one self-contained HTML file on a host anybody can
  * reach, so anything in that config becomes a public string. Grepping a real one found exactly that:
  *

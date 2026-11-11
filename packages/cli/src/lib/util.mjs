@@ -345,7 +345,7 @@ export function lagoonA11y() {
  * Both answered the same while every matching module happened to be aliased. Move a project's mock
  * boundary — stub the Supabase client at the wire instead of each service module — and they split:
  * the generator keeps emitting a service that no longer needs standing down, and the check calls that
- * emission stale. Neither is broken on its own terms, and `island sync` cannot reconcile them.
+ * emission stale. Neither is broken on its own terms, and `motu sync` cannot reconcile them.
  *
  * The alias map wins because it is what a module effect MEANS: not "a module matching a path convention" but
  * "a capability the host must provide, which the lagoon has to stand in for". Returns null when there

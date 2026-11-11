@@ -40,7 +40,7 @@ export interface IslandSpec<TRegion = Record<string, unknown>, TTag extends stri
    * Custom element tag to instantiate.
    *
    * `TTag` defaults to `string`, which is what an ocean needs. Narrow it to `keyof ElementTypes` (the
-   * map `motu island sync` generates) and two things follow: an unknown tag is a compile error rather
+   * map `motu sync` generates) and two things follow: an unknown tag is a compile error rather
    * than a runtime warning, and the tag stays a LITERAL — without which nothing downstream can look
    * the island up to check the events this entry wires (`RegionWiringOk`).
    */
@@ -548,7 +548,7 @@ export type EventsOf<E> = E extends { options: { contract: { output: infer O } }
  * mapping onto a well-typed key — nothing about it is wrong except that no island will ever dispatch
  * it, which used to be discoverable only by running the region and noticing nothing moved.
  *
- * It needs the project's tag -> element-spec map, which `motu island sync` generates beside the
+ * It needs the project's tag -> element-spec map, which `motu sync` generates beside the
  * registry; pass it as `TElements`. Type-only, so the archipelago gains no runtime dependency on the
  * island modules:
  *

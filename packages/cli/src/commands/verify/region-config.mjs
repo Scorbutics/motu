@@ -32,7 +32,7 @@ export function archipelagoConfigChecks(report, id) {
     if (param) {
       report.ok('region-type', `bind keys are checked against \`${param[1]}\``);
     } else if (!(readRegions(paths.archipelagosDir).find((r) => r.id === id)?.islands ?? []).length) {
-      // A REGION WITH NO ISLANDS HAS NO BIND KEYS TO CHECK. `archipelago create` scaffolds exactly
+      // A REGION WITH NO ISLANDS HAS NO BIND KEYS TO CHECK. `archipelago init` (no page) scaffolds exactly
       // that, so a new project's first `motu check` — run straight after the next-step the scaffolder
       // prints — opened on an ERROR about the thing it had just been given. The demand is right the
       // moment the region has a member; before that it is the tool failing its own output.
@@ -64,7 +64,7 @@ export function archipelagoConfigChecks(report, id) {
   // A warning, not an error: under Model B the host page is a legitimate reader, so a key crossing to
   // it is a design choice the rule names rather than forbids.
   {
-    // Over CODE, not comments. `motu archipelago create` scaffolds its wiring examples as comments
+    // Over CODE, not comments. `motu archipelago init` scaffolds its wiring examples as comments
     // (`// bind: { someProp: 'someStoreKey' }`), so analysing the raw text reports a scaffolded TODO
     // as real shared state — a green light for coupling that does not exist. Blank comments out,
     // keeping newlines so any line number stays true.

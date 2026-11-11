@@ -331,5 +331,5 @@ export function printReport(report, title, errors, warns) {
 export function printLagoonAvailability() {
   const url = readLiveUrl();
   if (url) console.log(color.dim('  look at it: ') + url);
-  else console.log(color.dim('  no live lagoon — start one with: motu lagoon dev --detach'));
+  else console.log(color.dim('  no live lagoon — start one with: motu lagoon serve --watch --detach'));
 }

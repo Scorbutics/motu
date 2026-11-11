@@ -232,7 +232,7 @@ export async function regionCoverageCommand(argv) {
     process.exit(2);
   }
 
-  // A TOKEN NEVER COMES FROM CONFIG. Committed config is read by `island sync` and baked into the
+  // A TOKEN NEVER COMES FROM CONFIG. Committed config is read by `motu sync` and baked into the
   // generated registry, which the LAGOON imports — so a secret placed there would travel into a
   // published, publicly reachable page. It comes from the environment, is used for this one fetch,
   // and is never written anywhere.

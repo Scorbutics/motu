@@ -149,7 +149,7 @@ export interface StartLagoonOptions {
    */
   mount?: 'element' | 'react';
   lens?: LagoonLens;
-  /** Recorded callsite frames (`motu archipelago record-frame` output), as a Vite glob result. */
+  /** Callsite frame stylesheets (the lagoon root's `src/frames/*.css`), as a Vite glob result. */
   frames?: Record<string, string>;
   /**
    * The project's declared states, so `?flow=<name>` and `?target=island:<tag>&scenario=<name>` open

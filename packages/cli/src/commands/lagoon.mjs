@@ -301,18 +301,18 @@ async function uploadPublished({ remote, token: flagToken, page, slug, title, ou
     color.dim(` (${(res.sentBytes / 1024).toFixed(0)} kB gzipped)${res.deduped ? ' · unchanged, deduped' : ''}`));
   console.log(`  ${latest}   ${color.dim('(the bookmark — always current)')}`);
   console.log(`  ${immutable}   ${color.dim('(this build, forever)')}`);
-  // A LIVE DEV SERVER IS SERVING THAT FIRST URL, not this build. The host proxies a registered
-  // `lagoon dev` ahead of the store for `latest` — deliberately — so publishing mid-session hands
-  // back a bookmark that shows vite. Indistinguishable from a publish that never landed, until you
-  // stop the dev server. The immutable URL is never shadowed, so point at it.
+  // A LIVE LAGOON IS SERVING THAT FIRST URL, not this build. The host proxies a registered
+  // `lagoon serve --watch` ahead of the store for `latest` — deliberately — so publishing mid-session
+  // hands back a bookmark that shows the watcher's build. Indistinguishable from a publish that never
+  // landed, until you stop it. The immutable URL is never shadowed, so point at it.
   if (res.live)
-    console.log(color.yellow('  a live dev server is registered for this slug — it is what the `latest` URL serves right now.\n') +
-      color.yellow('  stop it (`motu lagoon dev --stop`) to see THIS build there, or use the immutable URL above.'));
+    console.log(color.yellow('  a live lagoon is registered for this slug — it is what the `latest` URL serves right now.\n') +
+      color.yellow('  stop it (`motu lagoon serve --stop`) to see THIS build there, or use the immutable URL above.'));
   if (res.verified === null)
     console.log(color.yellow('  host returned no content hash — it is older than this check, so nothing confirms it stored what was sent'));
   if (id.dirty) console.log(color.yellow('  working tree is dirty — the immutable URL is keyed by content, not by HEAD'));
-  // The host sees what only a host can: paths that resolve against the ORIGIN. They work in
-  // `lagoon dev` (vite serves them) and 404 once published, so this is the first place they surface.
+  // The host sees what only a host can: paths that resolve against the ORIGIN. They resolve on a
+  // local lagoon at the root of its own origin and 404 once hosted, so this is where they surface.
   for (const w of res.warnings ?? []) console.log(color.yellow(`  ${w}`));
   console.log('  ' + color.dim(paths.rel(out)));
   return 0;
@@ -444,7 +444,14 @@ function lanAddress() {
   return null;
 }
 
-export function lagoonServeCommand(argv) {
+export async function lagoonServeCommand(argv) {
+  // A LAGOON THAT OUTLIVES THE SHELL. `--detach` re-runs this same command as a detached child and
+  // returns; `--stop` ends it. They were `lagoon dev`'s, which is gone: `serve --watch` builds what
+  // `publish` ships, so it is the one lagoon to iterate in, and an agent has to be able to leave it on.
+  if (argv.stop || argv.detach) {
+    const { loadMotuConfig } = await import('../lib/config.mjs');
+    return argv.stop ? stopDetached(loadMotuConfig()) : detach(loadMotuConfig());
+  }
   let resolved;
   try {
     resolved = resolveTarget(argv);
@@ -453,9 +460,9 @@ export function lagoonServeCommand(argv) {
     process.exit(1);
   }
   const { entry, target, title } = resolved;
-  // BRANCH-SCOPED, exactly as `lagoon dev` is. `serve --watch --live-push` announces to the host too,
-  // so without this a preview of a work-in-progress branch overwrites the member a team bookmarks —
-  // the same collision the dev server already avoids. A publish is deliberate and keeps its own slug.
+  // BRANCH-SCOPED. `serve --watch` announces to the host, so without this a preview of a
+  // work-in-progress branch overwrites the member a team bookmarks. A publish is deliberate and keeps
+  // its own slug.
   const slug = liveSlugFor(paths.publishAs?.slug ?? resolved.slug, argv, REPO_ROOT);
   const fit = argv.fit === 'legacy' ? 'legacy' : argv.fit === 'native' ? 'native' : '';
 
@@ -623,7 +630,8 @@ export function lagoonServeCommand(argv) {
   });
 
   if (watching) startWatching();
-  if (watching) registerLive();
+  // `--no-live`: a lagoon on a shared machine that should not become the address a team is looking at.
+  if (watching && argv.live !== false && !argv['no-live']) registerLive();
   /**
    * Send the built artifact to the host, as the current draft for this lagoon.
    *
@@ -638,6 +646,22 @@ export function lagoonServeCommand(argv) {
   // DECLARED ABOVE THE FIRST CALL, and that is not stylistic. `function pushDraft` hoists and these
   // do not, so the startup push below — which used to sit above this block — threw
   // "Cannot access 'pushInFlight' before initialization" and took the whole server down with it.
+  /**
+   * WHERE A PERSON CAN LOOK, for every check's verdict line (`motu check` prints it). Rewritten on
+   * every beat so its mtime says how long ago it was true; an unwritable cache must not take the
+   * server down, and is said once rather than swallowed.
+   */
+  let warnedUrlFile = false;
+  const noteLive = (url) => {
+    try {
+      writeLiveUrl(url);
+    } catch (err) {
+      if (!warnedUrlFile) {
+        warnedUrlFile = true;
+        console.error(color.dim(`  (could not record the live URL for motu check: ${err?.message ?? err})`));
+      }
+    }
+  };
   let pushInFlight = null;
   let pushQueued = false;
   let pushRefused = false;
@@ -663,6 +687,7 @@ export function lagoonServeCommand(argv) {
       body: bytes,
     })
       .then(async (res) => {
+        if (res.ok) noteLive(`${base}/${repo}/latest/${slug}`);
         if (!res.ok && !pushRefused) {
           pushRefused = true;
           const why = await res.json().catch(() => null);
@@ -735,6 +760,7 @@ export function lagoonServeCommand(argv) {
         // why: the CLI is fine, the host is fine, and the page quietly serves the last publish.
         // Re-send the bytes we already have, which is exactly what a save would have done.
         if (beatRes?.status === 404) pushDraft();
+        if (beatRes?.ok) noteLive(`${base}/${repo}/latest/${slug}`);
         return;
       }
       const announceUrl = liveUrl || `http://127.0.0.1:${port}`;
@@ -755,6 +781,7 @@ export function lagoonServeCommand(argv) {
         // one depends on whether this machine can be reached at all.
         if (why?.hint) console.error(color.dim(`    ${why.hint}`));
       }
+      if (res?.ok) noteLive(`${base}/${repo}/latest/${slug}`);
       if (res?.ok && !announced) {
         announced = true;
         // ITS OWN ADDRESS, which is the only one there is now. This printed `${base}/g/<group>` — a
@@ -775,6 +802,7 @@ export function lagoonServeCommand(argv) {
       if (leaving) return;
       leaving = true;
       clearInterval(timer);
+      clearLiveUrl();
       // A DEADLINE, because shutting down must not hang on a host that has gone away. Two seconds is
       // long enough for a round trip to a machine on the same network and short enough that nobody
       // reaches for a second Ctrl-C, which would skip this entirely.
@@ -882,64 +910,6 @@ export function lagoonServeCommand(argv) {
 
 
 /**
- * `motu lagoon dev` — the iteration loop: the lagoon served by Vite with HMR.
- *
- * Replaces the per-project `npm run dev` inside roots/lagoon, which existed only because each project
- * carried its own package.json and vite.config.ts. Runs the dev server in THIS process (foreground,
- * Ctrl-C to stop) rather than spawning one, since nothing here needs to outlive the command.
- */
-/**
- * Tell the lagoon host where this dev server is, so `<host>/<repo>/latest/<slug>` serves IT.
- *
- * The host has proxied a registered live endpoint since it was written — `latest` resolves to a live
- * dev server when one is announced and falls back to the last publish when none is. What it had was
- * no announcer on this path: only `lagoon serve --watch` registered, and `lagoon dev` is what a
- * person iterating — and every agent in four bench rounds — actually runs. So the live axis existed
- * and the command that would have used it never said hello, and the gallery showed the last publish
- * with nothing to explain why.
- *
- * Pull mode only. Pushing bytes is `serve --watch --live-push`'s business, because it has bytes; a
- * dev server has a port.
- *
- * BEST EFFORT, and LOUD ON REFUSAL. A preview must never fail because a host is down — but "best
- * effort" implemented as swallowing the response is how a rejected registration produced no output
- * at all, which `serve` learned the hard way and this inherits: said once, not every beat.
- */
-/**
- * Where a viewer's HMR client should connect when the page is ALSO reachable through the lagoon host.
- *
- * Vite bakes ONE socket address into its client, so this cannot be answered per-viewer with a pinned
- * address — and pinning it at the host is what made a locally-opened lagoon unusable.
- *
- * WHAT THAT COST, because the symptom names nothing: the client is `__HMR_HOSTNAME__ ||
- * location.hostname` and `__HMR_PORT__ || location.port`. Pinning both sent a browser on
- * `localhost:5173` to `wss://<host>/…/__motu_hmr`; that handshake failed (502 — the host does not
- * proxy this socket today), and because a PORT was pinned Vite skipped its direct-connection fallback
- * and went to "server connection lost. Polling for restart…". That polls the page's OWN origin, which
- * is up, so the ping succeeds and the client calls `location.reload()` — every ~1.5s, forever. The
- * page reloaded under anyone looking at it, no motu output said anything, and the vite log stayed
- * silent because a client-side reload is not a `page reload` the server logs. Reported as "the lagoon
- * reloads every few seconds", debugged first as a file-watcher problem, which it was not.
- *
- * So pin only the PATH and let each viewer derive the rest from where they loaded the page: a local
- * viewer gets `ws://localhost:<port>/…`, served by this very dev server, and a viewer arriving through
- * the host gets exactly the address this function used to pin — the host's own origin, since that is
- * where their page came from. Nothing is lost for the remote case and the local case stops looping.
- *
- * Returns null when no host is configured, and the dev server then keeps Vite's default in full.
- */
-export function hmrForHost({ slug, repo, base }) {
-  if (!base) return null;
-  return {
-    // RELATIVE TO `base`, which is already the member's prefix. Vite concatenates the two, so giving
-    // the full path here produced `/<repo>/latest/<slug>/<repo>/latest/<slug>/__motu_hmr` — a doubled
-    // prefix the host could not route and the socket never opened, while the page and its assets were
-    // fine. The client's own module is where this is visible; nothing else reports it.
-    path: '__motu_hmr',
-  };
-}
-
-/**
  * The member a DEV SERVER announces itself as — the published slug, scoped by branch.
  *
  * One slug per project was right while a dev server was something a person started on their laptop.
@@ -967,77 +937,15 @@ export function liveSlugFor(baseSlug, argv, cwd) {
   return clean(`${baseSlug}.${branch}`) || baseSlug;
 }
 
-function announceDevServer({ slug, port, liveUrl, protocol = 'http' }) {
-  const cfg = loadHostConfig();
-  const base = (process.env.MOTU_HOST_URL || cfg.url || '').replace(/\/+$/, '');
-  const hostToken = process.env.MOTU_HOST_TOKEN || cfg.token || null;
-  if (!base || !hostToken) return () => {}; // no host configured: serving locally is the whole feature
-  // The SAME identity publishing uses, or the gallery has a live member it can match to nothing.
-  const repo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
-  const qs = `repo=${encodeURIComponent(repo)}&slug=${encodeURIComponent(slug)}`;
-  const call = (path, body) =>
-    fetch(`${base}${path}?${qs}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${hostToken}` },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    }).catch(() => null);
-
-  const announceUrl = liveUrl || `${protocol}://127.0.0.1:${port}`;
-  let announced = false;
-  let warnedUrlFile = false;
-  let refused = false;
-  const beat = async () => {
-    const res = await call('/api/live', { url: announceUrl });
-    if (res && !res.ok && !refused) {
-      refused = true;
-      const why = await res.json().catch(() => null);
-      console.error(color.red(`  ✗ the host refused this as a live member: ${why?.error ?? res.status}`));
-      console.error(color.dim(`    announced: ${announceUrl}`));
-      if (why?.hint) console.error(color.dim(`    ${why.hint}`));
-    }
-    if (res?.ok) {
-      // REWRITTEN EVERY BEAT, so the file's own mtime says how long ago this was true. A URL left on
-      // disk by a dev server that has since been killed is worse than no URL: it sends whoever reads
-      // it to a page that no longer exists, and it reads exactly like a working one.
-      try {
-        writeLiveUrl(`${base}/${repo}/latest/${slug}`);
-      } catch (err) {
-        // SAID ONCE, not swallowed. An unwritable cache dir must not take the dev server down, and a
-        // silent failure here is how the checks came to report "no live lagoon" while one was serving.
-        if (!warnedUrlFile) {
-          warnedUrlFile = true;
-          console.error(color.dim(`  (could not record the live URL for motu check: ${err?.message ?? err})`));
-        }
-      }
-    }
-    if (res?.ok && !announced) {
-      announced = true;
-      console.log(color.dim(`  live at: ${base}/${repo}/latest/${slug}`));
-      console.log(color.dim(`  the host will fetch it from: ${announceUrl}`));
-    }
-  };
-  void beat();
-  // The host expires a live member after 90s, so a dev server that dies decays back to the last
-  // publish on its own — the heartbeat is what keeps a RUNNING one from decaying with it.
-  const timer = setInterval(beat, 30_000);
-  timer.unref?.();
-  return async () => {
-    clearInterval(timer);
-    clearLiveUrl();
-    // Bounded: leaving must not hang on a host that has gone away.
-    await Promise.race([call('/api/live/off'), new Promise((r) => setTimeout(r, 2000))]);
-  };
-}
-
-/** Where a detached dev server records itself, so a later `--stop` can find it. */
-function devPidFile(cfg) {
-  return resolve(cfg.cacheDir, 'lagoon-dev.pid');
+/** Where a detached lagoon records itself, so a later `--stop` can find it. */
+function pidFile(cfg) {
+  return resolve(cfg.cacheDir, 'lagoon-serve.pid');
 }
 
 /**
  * `--detach` / `--stop` — a lagoon that outlives the shell that started it.
  *
- * An agent's dev server dies with the agent's session. Watched repeatedly across four bench rounds:
+ * An agent's lagoon dies with the agent's session. Watched repeatedly across four bench rounds:
  * the run ends, the URL a person was told to open goes dark, and the only trace is a heartbeat that
  * stops. The host degrades correctly — the member expires after 90s and `latest` falls back to the
  * last publish — so nothing is broken, but nothing is watchable either, and watching an agent work is
@@ -1046,17 +954,17 @@ function devPidFile(cfg) {
  * A pidfile rather than a daemon: the process is an ordinary detached child, so `--stop` is a signal
  * and a crash needs no cleanup beyond the host's own expiry.
  */
-function detachDevServer(cfg, argv) {
-  const file = devPidFile(cfg);
+function detach(cfg) {
+  const file = pidFile(cfg);
   const existing = readPid(file);
   if (existing) {
     console.error(color.red(`✗ a detached lagoon is already running (pid ${existing})`));
-    console.error(color.dim('  stop it first: motu lagoon dev --stop'));
+    console.error(color.dim('  stop it first: motu lagoon serve --stop'));
     process.exit(1);
   }
   // The same argv minus the flag that got us here, so the child does the ordinary thing.
   const args = process.argv.slice(2).filter((a) => a !== '--detach');
-  const out = openSync(resolve(cfg.cacheDir, 'lagoon-dev.log'), 'a');
+  const out = openSync(resolve(cfg.cacheDir, 'lagoon-serve.log'), 'a');
   // `process.argv[1]` is the CLI entry that is running us — the only path guaranteed to be the same
   // motu the caller invoked, which matters when several checkouts exist on one machine.
   const child = spawn(process.execPath, [process.argv[1], ...args], {
@@ -1068,8 +976,8 @@ function detachDevServer(cfg, argv) {
   child.unref();
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, String(child.pid));
-  console.log(color.dim(`  detached (pid ${child.pid}) — logs: ${paths.rel(resolve(cfg.cacheDir, 'lagoon-dev.log'))}`));
-  console.log(color.dim('  stop it with: motu lagoon dev --stop'));
+  console.log(color.dim(`  detached (pid ${child.pid}) — logs: ${paths.rel(resolve(cfg.cacheDir, 'lagoon-serve.log'))}`));
+  console.log(color.dim('  stop it with: motu lagoon serve --stop'));
 }
 
 /** The pid a previous `--detach` wrote, when that process is still alive. */
@@ -1084,8 +992,8 @@ function readPid(file) {
   }
 }
 
-function stopDetachedDev(cfg) {
-  const file = devPidFile(cfg);
+function stopDetached(cfg) {
+  const file = pidFile(cfg);
   const pid = readPid(file);
   if (!pid) {
     console.log(color.dim('  no detached lagoon is running'));
@@ -1094,7 +1002,7 @@ function stopDetachedDev(cfg) {
     } catch {}
     return;
   }
-  // SIGTERM, not SIGKILL: the dev server's own handler deregisters it from the host on the way out,
+  // SIGTERM, not SIGKILL: the lagoon's own handler deregisters it from the host on the way out,
   // which is the difference between `latest` falling back at once and doing it 90 seconds later.
   process.kill(pid, 'SIGTERM');
   try {
@@ -1123,80 +1031,6 @@ async function deregisterLive() {
     new Promise((r) => setTimeout(r, 2000)),
   ]);
 }
-
-export async function lagoonDevCommand(argv) {
-  if (argv.stop) {
-    const { loadMotuConfig } = await import('../lib/config.mjs');
-    return stopDetachedDev(loadMotuConfig());
-  }
-  if (argv.detach) {
-    const { loadMotuConfig } = await import('../lib/config.mjs');
-    return detachDevServer(loadMotuConfig(), argv);
-  }
-  const { entry, target } = resolveTarget(argv);
-  const { buildLagoonViteConfig, resolveVite } = await import('../lib/lagoon-vite.mjs');
-  const { loadMotuConfig } = await import('../lib/config.mjs');
-  // The FULL resolved config, not util.mjs's `paths` — that one is a curated subset for path
-  // formatting and carries no `host`/`motuRoot`, which would silently yield an alias-free lagoon.
-  const cfg = loadMotuConfig();
-  const vite = await resolveVite(cfg);
-  const hostCfg = loadHostConfig();
-  const hostBase = (process.env.MOTU_HOST_URL || hostCfg.url || '').replace(/\/+$/, '');
-  const config = await buildLagoonViteConfig(cfg, {
-    ...process.env,
-    ...(target ? { MOTU_TARGET: target } : {}),
-    ...(argv.fit ? { MOTU_FIT: String(argv.fit) } : {}),
-    // Explicit, because it lowers a real protection: only a run that ASKS accepts any Host header.
-    ...(argv.allowAnyHost || argv['allow-any-host'] ? { MOTU_ALLOW_ANY_HOST: '1' } : {}),
-  });
-  if (argv.port) config.server.port = Number(argv.port);
-  // HMR THROUGH THE HOST, when there is one and we are going to announce. Without this the page is
-  // live and never hot for anyone but the person who started the server.
-  if (hostBase && argv.live !== false && !argv['no-live']) {
-    const liveSlug = liveSlugFor(paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all', argv, REPO_ROOT);
-    const liveRepo = paths.publishAs?.repo ?? gitIdentity(REPO_ROOT).repo;
-    // THE MEMBER'S PATH IS THE BASE. A dev server emits absolute URLs (`/@vite/client`, the module
-    // graph) computed from `base`, and through the host those arrive under the member's prefix — so
-    // unless the dev server KNOWS that prefix, every asset it names resolves at the host's root, where
-    // nothing serves it. Measured: the page proxied fine and `/@vite/client` 404'd.
-    //
-    // Local viewing is unaffected: Vite serves the base path locally too, and `printUrls` shows it.
-    config.base = `/${liveRepo}/latest/${liveSlug}/`;
-    const hmr = hmrForHost({ slug: liveSlug, repo: liveRepo, base: hostBase });
-    if (hmr) config.server = { ...config.server, hmr: { ...hmr, ...(config.server?.hmr ?? {}) } };
-  }
-  config.clearScreen = false;
-  const server = await vite.createServer(config);
-  await server.listen();
-  console.log(color.dim(`  lagoon: ${paths.rel(cfg.lagoonDir)}  (host: ${cfg.host})`));
-  if (target) console.log(color.dim(`  focused on ${target} — open /lagoon.html`));
-  server.printUrls();
-
-  // ANNOUNCE, unless told not to. `--no-live` is for the case the flag exists to serve: a dev server
-  // on a shared machine that should not become the address a whole team is looking at.
-  if (argv.live !== false && !argv['no-live']) {
-    const resolvedPort = server.config.server.port ?? Number(argv.port) ?? 5173;
-    // THE PROTOCOL THE SERVER ACTUALLY SPEAKS. The announcement was always `http://`, so a lagoon on
-    // an HTTPS dev server registered an address the host could not fetch: it appeared in the gallery,
-    // said `live`, and every page under it answered 502. A project gets HTTPS from its own Vite config
-    // (a cert plugin, `server.https`) — the lagoon borrows that config, so this is not exotic.
-    //
-    // Read from Vite's resolved config rather than guessed, because that is the thing that decides it.
-    const isHttps = Boolean(server.config.server?.https);
-    const stopAnnouncing = announceDevServer({
-      slug: liveSlugFor(paths.publishAs?.slug ?? resolveTarget(argv).slug ?? 'all', argv, REPO_ROOT),
-      port: resolvedPort,
-      protocol: isHttps ? 'https' : 'http',
-      liveUrl: typeof argv.liveUrl === 'string' ? argv.liveUrl : argv['live-url'],
-    });
-    const leave = () => {
-      void stopAnnouncing().finally(() => process.exit(0));
-    };
-    process.on('SIGINT', leave);
-    process.on('SIGTERM', leave);
-  }
-}
-
 
 /**
  * `motu lagoon eject` — write the framework's lagoon entries into the project.

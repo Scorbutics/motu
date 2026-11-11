@@ -16,9 +16,8 @@
 // who can make it — not to guess and quietly edit an app component.
 import { existsSync, readFileSync } from 'node:fs';
 import { Project, SyntaxKind } from 'ts-morph';
-import { paths, color, names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
-import { listIslands, syncRegistry } from '../lib/islands.mjs';
-import { syncContracts } from '../lib/contracts.mjs';
+import { paths, color, names } from '../lib/util.mjs';
+import { listIslands } from '../lib/islands.mjs';
 
 /** Values that are neutral for their type: an empty state, not a piece of data. */
 function classifyLiteral(node) {
@@ -128,17 +127,3 @@ export function islandDefaultsCommand(argv) {
 }
 
 
-/**
- * `motu island sync` — regenerate the element registry from what is on disk.
- *
- * The registry stops being a file anyone edits: adding, renaming or deleting an island is a file
- * operation, and this reconciles. Static imports rather than a glob, because the barrel that exports
- * it is consumed by the host application's bundler, which has no `import.meta.glob`.
- */
-export function islandSyncCommand() {
-  const { path, count } = syncRegistry(paths.islandsDir, paths.isolation);
-  console.log(`${paths.rel(path)} — ${count} island(s)`);
-  // The contracts are the same kind of file: derived from what is on disk, never edited by hand.
-  const contracts = syncContracts(paths.islandsDir, { islandComponentPath, islandComponentExport, names });
-  console.log(`${paths.rel(contracts.path)} — ${contracts.count} contract(s)${contracts.changed ? '' : ' (unchanged)'}`);
-}

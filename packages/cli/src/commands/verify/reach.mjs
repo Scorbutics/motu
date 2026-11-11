@@ -31,7 +31,7 @@ export function declaredReach({ tag = null, regionId = null } = {}) {
   // ever holds module entries. A `{ table: … }` is a decision nobody can infer from an import, so it is
   // hand-written in the island file and is invisible here otherwise: this read the generated map and
   // would have reported every island's data reach as undeclared, forever, while the declaration sat in
-  // the file next to it. Caught by round-tripping one through `island sync`.
+  // the file next to it. Caught by round-tripping one through `motu sync`.
   const byTag = new Map();
   for (const i of listIslands(paths.islandsDir)) {
     const text = readFileSync(i.element, 'utf8');

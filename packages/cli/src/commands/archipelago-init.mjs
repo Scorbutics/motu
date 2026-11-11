@@ -1,4 +1,10 @@
 // `motu archipelago init <id> --page <page.tsx>` — everything a page needs before its FIRST island.
+// `motu archipelago init <id>` (no page) — a NEW region: the archipelago alone, `root` declared first.
+//
+// Two cases, one verb. They used to be `init` and `create`, and the difference is real but it is a
+// difference in INPUT, not in kind: a page that exists has a type, a composition root and a lagoon
+// module to derive; a region whose page does not exist yet has only its declaration, and the safe
+// shape (`root` first) is free there because nothing has to be restructured.
 //
 // The second island on a page is cheap. The first is not: an archipelago, an app-side region type the
 // config is declared against, a composition root that binds the region to this environment, a lagoon
@@ -16,7 +22,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { color, paths, HOST_ROOT, APP_ROOT, hostAliasSpecifier } from '../lib/util.mjs';
-import { archipelagoCreateCommand } from './archipelago.mjs';
+import { scaffoldArchipelago } from './archipelago.mjs';
 
 const written = [];
 const skipped = [];
@@ -81,10 +87,13 @@ function precedent() {
 export async function archipelagoInitCommand(argv) {
   const id = argv._[0];
   const page = argv.page ? resolve(process.cwd(), argv.page) : null;
-  if (!id || !page) {
-    console.error('usage: motu archipelago init <id> --page <path/to/page.tsx>');
+  if (!id) {
+    console.error('usage: motu archipelago init <id> [--page <path/to/page.tsx>]');
     process.exit(2);
   }
+  // NO PAGE YET: the region's declaration alone, `root` first. Everything else derives from a page,
+  // so it is written when there is one — re-run with `--page`, which keeps this archipelago.
+  if (!page) return scaffoldArchipelago(argv);
   if (!existsSync(page)) {
     console.error(color.red(`✗ no page at ${page}`));
     process.exit(2);
@@ -112,7 +121,7 @@ export type ${pascal}Region = Record<string, never>
   // 2 — the archipelago, DECLARED AGAINST that type (the shape `motu check`'s region-type rule wants).
   const archFile = paths.archipelagoFile(id);
   if (!existsSync(archFile)) {
-    await archipelagoCreateCommand({ _: [id] });
+    await scaffoldArchipelago({ _: [id] });
     written.push(archFile);
   } else {
     skipped.push(archFile);
@@ -121,7 +130,7 @@ export type ${pascal}Region = Record<string, never>
   if (!/ArchipelagoConfig<|archipelago</.test(archText)) {
     // UPGRADED TO THE CHECKED CALL, which this step is the first that can do it: the cross-checks are
     // stated against the app-side region type, and `archipelago init` is what just wrote that type.
-    // `archipelago create` cannot — there is nothing to check against yet — which is why the plain
+    // The page-less form cannot — there is nothing to check against yet — which is why the plain
     // config form still exists and why a region scaffolded that way is asserting nothing.
     //
     // `as const` is not decoration. The checks are derived from the config's LITERAL type, and `const A`

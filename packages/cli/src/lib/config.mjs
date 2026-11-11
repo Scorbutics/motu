@@ -47,7 +47,7 @@ const DEFAULTS = {
   shared: 'src/shared',
   // The module that exports ELEMENT_REGISTRY. It is the app's PUBLIC entry: the runtime harness
   // imports it by path (`runtime-harness.mjs:88`), the lagoon aliases the bare package specifier onto
-  // it (`lagoon-vite.mjs:213`), and `archipelago create` edits it to add re-exports
+  // it (`lagoon-vite.mjs:213`), and `archipelago init` edits it to add re-exports
   // (`archipelago.mjs:97`). Wrong, and every `--runtime` check fails to import the registry at all.
   barrel: 'src/index.ts',
   // Output directory of `motu codegen` — where the generated `@motu/contract` package is written, and
@@ -307,7 +307,7 @@ export function loadMotuConfig() {
      * the archipelago beside it (`coverage.enums`), where it travels with the region. What lives here
      * is whether the fold runs at all, where a corpus is posted, and which regions are watched.
      *
-     * Baked into the generated island registry by `motu island sync`, so no application file mentions
+     * Baked into the generated island registry by `motu sync`, so no application file mentions
      * coverage and no host's bundler has to define a constant. `enabled` defaults to FALSE: a thing
      * that runs in production is a thing somebody switched on.
      */
@@ -406,7 +406,7 @@ export function loadMotuConfig() {
      * `barrel` defaulted to a literal `src/index.ts` no matter where the project's motu directories
      * were, so a layout that is not `src/`-shaped pointed it at a file that does not exist. Measured
      * on a Rails application whose JS root is `app/javascript`: the adopter moved motu's directories
-     * to match, and `archipelago create` died with a raw ts-morph `File not found: …/src/index.ts` —
+     * to match, and `archipelago create` (now `archipelago init`) died with a raw ts-morph `File not found: …/src/index.ts` —
      * an exception from a library the adopter has no reason to have heard of, naming a path they had
      * deliberately not used. `barrel` was configurable all along and mentioned in no output.
      *

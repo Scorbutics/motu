@@ -97,7 +97,7 @@ export async function integrateCommand(argv) {
   const archPath = paths.archipelagoFile(archId);
   if (!existsSync(archPath)) {
     console.error(color.red(`✗ no archipelago with id '${archId}' at ${paths.rel(archPath)}`));
-    console.error(color.dim(`  create one with: motu archipelago create ${archId}`));
+    console.error(color.dim(`  create one with: motu archipelago init ${archId} --page <the page it lives on>`));
     process.exit(1);
   }
   const sf = project.addSourceFileAtPath(archPath);
@@ -134,7 +134,7 @@ export async function integrateCommand(argv) {
   // THE CHECKS THIS REGION CAN NOW MAKE, added with the member that makes them possible.
   //
   // `wiring` and `produced` are required of a region WITH islands and meaningless for one without —
-  // so `archipelago create/init` scaffolds neither, and this is the command that changes which of the
+  // so `archipelago init` scaffolds neither, and this is the command that changes which of the
   // two a region is. It did not add them, so adding your FIRST island to a freshly scaffolded region
   // stopped the project typechecking, with an error on a line motu generated and the adopter had
   // never edited. `wiring` also needs the generated elements map as the second type argument; a bare

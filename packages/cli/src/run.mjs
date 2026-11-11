@@ -14,15 +14,13 @@ import { integrateCommand } from './commands/integrate.mjs';
 import { integrateCheckCommand } from './commands/integration.mjs';
 import { archipelagoInitCommand } from './commands/archipelago-init.mjs';
 import { regionCoverageCommand } from './commands/region-coverage.mjs';
-import { archipelagoCreateCommand } from './commands/archipelago.mjs';
 import { archipelagoAdoptRootCommand } from './commands/adopt-root.mjs';
-import { archipelagoRecordFrameCommand } from './commands/record-frame.mjs';
 import { codegenCommand } from './commands/codegen.mjs';
 import { fixturesRecordCommand } from './commands/fixtures.mjs';
-import { islandDefaultsCommand, islandSyncCommand } from './commands/defaults.mjs';
-import { archipelagoSyncCommand } from './commands/archipelago-sync.mjs';
+import { islandDefaultsCommand } from './commands/defaults.mjs';
+import { syncCommand } from './commands/sync.mjs';
 import { removalCheckCommand } from './commands/removal-check.mjs';
-import { lagoonPublishCommand, lagoonServeCommand, lagoonDevCommand, lagoonEjectCommand, lagoonStatesCommand } from './commands/lagoon.mjs';
+import { lagoonPublishCommand, lagoonServeCommand, lagoonEjectCommand, lagoonStatesCommand } from './commands/lagoon.mjs';
 import { loadMotuConfig, assertProject } from './lib/config.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
@@ -60,27 +58,24 @@ ${color.bold('Usage:')}
   motu island snapshot --all --remote --changed     ...only what this branch touched
   motu island snapshot --accept <name>              move the accepted baseline — a decision, not a write
   motu island defaults [name]                       classify declared defaults: component default, or evidence?
-  motu island sync                                  regenerate the element registry from the files on disk
+  motu sync                                         regenerate every derived file (registry, contracts, region module)
   motu island integrate <name> --archipelago <id>   make the island a member of an archipelago
   motu integrate check [region]                     does the HOST compose, place and read the region?
   motu archipelago init <id> --page <file>          scaffold everything a page needs before its 1st island
-  motu archipelago create <id>                      scaffold + register a new archipelago
+  motu archipelago init <id>                        ...a NEW region with no page yet: the archipelago, root first
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
-  motu archipelago record-frame <id> --url <u>      capture per-mountpoint frames from the live ocean
-  motu archipelago sync                             regenerate the region-side derived files
   motu archipelago coverage <id> [--corpus <f>]     states production reached that no flow previews
     --json --ids --accept <id> --fail-above <n>     machine-readable · print ids · accept one · gate
     --forget <id> | --forget-all                    remove a state the instrument recorded wrongly
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
-  motu lagoon dev [island]                          serve the lagoon with HMR (the iteration loop)
-  motu lagoon dev --no-live                         ...without announcing it to the lagoon host
   motu lagoon states [island|region]                every state the lagoon can be OPENED in, as a URL
   motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
   motu lagoon publish --remote <url>                ...and upload it to a lagoon host (see motu-host)
   motu lagoon serve [island]                        build that same page and serve it (preview it in a browser)
-  motu lagoon serve --watch --host                  ...and keep it current: rebuild on save, reload viewers
+  motu lagoon serve --watch [--host]                ...and keep it current: rebuild on save, reload viewers (the loop)
+  motu lagoon serve --watch --detach | --stop       ...left running after the shell exits, and stopped
   motu removal-check [--force]                      prove motu is removable from the host app (C2)
   motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
@@ -231,6 +226,8 @@ async function main() {
 
   // `motu link` — record @motu/* in package.json so the package manager stops deleting them.
   // `--check` asserts instead of writing, which is the CI half of the same question.
+  if (group === 'sync') return syncCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
+
   if (group === 'link') {
     const { linkCommand } = await import('./commands/link.mjs');
     return linkCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
@@ -251,7 +248,9 @@ async function main() {
     if (sub === 'verify') return verifyCommand(argv);
     if (sub === 'snapshot') return snapshotCommand(argv);
     if (sub === 'defaults') return islandDefaultsCommand(argv);
-    if (sub === 'sync') return islandSyncCommand(argv);
+    // The two halves of what is now `motu sync`. Kept answering, because every generated file in an
+    // adopting repo carried "run `motu island sync`" in its header until it was regenerated.
+    if (sub === 'sync') return syncCommand(argv);
     if (sub === 'integrate') return integrateCommand(argv);
     console.error(color.red(`unknown: motu island ${sub ?? ''}`));
     console.log(USAGE);
@@ -261,7 +260,10 @@ async function main() {
   if (group === 'archipelago') {
     // `snapshot` takes an id positional, so re-parse with `rest` shifted.
     if (sub === 'snapshot') return archipelagoSnapshotCommand(parse(rest));
-    if (sub === 'create') return archipelagoCreateCommand(argv);
+    if (sub === 'create') {
+      console.error(color.red('`motu archipelago create` is now `motu archipelago init <id>`') + color.dim(' — add --page <file> when the region has a page'));
+      process.exit(1);
+    }
     // Everything a page needs before its FIRST island — the step that makes adoption feel expensive.
     if (sub === 'init') return archipelagoInitCommand(argv);
     // What the region DOES, against what it previews. The only check here that compares motu to
@@ -270,9 +272,7 @@ async function main() {
     // The migration `region-root` points at: derive `root` + `slots` from the frame, hand back the rest.
     if (sub === 'adopt-root') return archipelagoAdoptRootCommand(parse(rest));
     if (sub === 'verify') return archipelagoVerifyCommand(argv);
-    if (sub === 'record-frame') return archipelagoRecordFrameCommand(argv);
-    // The region-side counterpart to `island sync`. See the command's own header for why it exists.
-    if (sub === 'sync') return archipelagoSyncCommand(argv);
+    if (sub === 'sync') return syncCommand(argv);
     console.error(color.red(`unknown: motu archipelago ${sub ?? ''}`));
     console.log(USAGE);
     process.exit(2);
@@ -295,7 +295,12 @@ async function main() {
   }
 
   if (group === 'lagoon') {
-    if (sub === 'dev') return lagoonDevCommand(argv);
+    // REMOVED, and said so with the replacement rather than as an unknown verb: two servers for one
+    // loop was one too many, and `serve --watch` is the one that builds what `publish` ships.
+    if (sub === 'dev') {
+      console.error(color.red('`motu lagoon dev` is gone — use `motu lagoon serve --watch`') + color.dim(' (--detach / --stop / --no-live / --as carry over)'));
+      process.exit(1);
+    }
     if (sub === 'states') return lagoonStatesCommand(argv);
     if (sub === 'eject') return lagoonEjectCommand(argv);
     if (sub === 'publish') return lagoonPublishCommand(argv);

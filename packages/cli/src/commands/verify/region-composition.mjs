@@ -284,7 +284,7 @@ export function frameIsPageCheck(report, id, region) {
     return;
   }
   if (!module) {
-    // A REGION WITH NO ISLANDS HAS NOTHING TO COMPOSE YET. `archipelago create` scaffolds exactly
+    // A REGION WITH NO ISLANDS HAS NOTHING TO COMPOSE YET. `archipelago init` (no page) scaffolds exactly
     // that, so demanding a root here would open a new project's first `motu check` on an error about
     // the thing it had just been handed — the same mistake `region-type` already records. The demand
     // is right the moment the region has a member.

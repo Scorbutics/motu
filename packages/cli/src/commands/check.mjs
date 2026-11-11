@@ -54,11 +54,11 @@ function coverageDrift() {
   // nothing. The file becomes required the moment it is switched on, or the moment one exists.
   if (!existsSync(file)) {
     return paths.coverage?.enabled
-      ? { stale: true, reason: `${COVERAGE_MODULE} is missing — run \`motu archipelago sync\`` }
+      ? { stale: true, reason: `${COVERAGE_MODULE} is missing — run \`motu sync\`` }
       : { stale: false, reason: null };
   }
   if (readFileSync(file, 'utf8') !== want)
-    return { stale: true, reason: `${COVERAGE_MODULE} does not match motu.config.json — run \`motu archipelago sync\`` };
+    return { stale: true, reason: `${COVERAGE_MODULE} does not match motu.config.json — run \`motu sync\`` };
   return { stale: false, reason: null };
 }
 
@@ -207,7 +207,7 @@ export async function checkCommand(argv) {
   }
   console.log(
     drift.stale
-      ? `  ${color.red('✗')} ${color.dim('generated'.padEnd(20))} ${color.red(drift.reason)} — run \`motu island sync\``
+      ? `  ${color.red('✗')} ${color.dim('generated'.padEnd(20))} ${color.red(drift.reason)} — run \`motu sync\``
       : `  ${color.green('✓')} ${color.dim('generated'.padEnd(20))}${color.dim('every island contract matches its component')}`,
   );
   // THE REGION SIDE, which fails silently in a way the island side does not. `coverage.generated.ts`
@@ -323,6 +323,6 @@ export async function checkCommand(argv) {
   // AND WHERE TO LOOK AT IT. `check` is the verdict an agent reads and quotes; without this line the
   // handover is a summary of files and nobody has opened the region the work is for.
   const live = readLiveUrl();
-  console.log(live ? color.dim('  look at it: ') + live : color.dim('  no live lagoon — start one with: motu lagoon dev --detach'));
+  console.log(live ? color.dim('  look at it: ') + live : color.dim('  no live lagoon — start one with: motu lagoon serve --watch --detach'));
   process.exit(pass ? 0 : 1);
 }

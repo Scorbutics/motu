@@ -412,5 +412,5 @@ export async function initCommand(argv) {
   if (!LEGACY_FIT_HOSTS.has(host)) {
     console.log(color.dim('  legacy fit is off for this host — islands mount directly, there is no legacy skin to fit.'));
   }
-  console.log('Next: ' + color.bold('motu archipelago create <id>') + color.dim(' then ') + color.bold('motu island create <name>'));
+  console.log('Next: ' + color.bold('motu archipelago init <id> --page <file>') + color.dim(' then ') + color.bold('motu island create <name>'));
 }

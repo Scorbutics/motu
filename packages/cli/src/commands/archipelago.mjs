@@ -1,4 +1,4 @@
-// `motu archipelago create <id>` — scaffolds a new (empty) archipelago as its own folder and
+// `motu archipelago init <id>` with no `--page` — scaffolds a new (empty) archipelago as its own folder and
 // registers it so the lagoon / CLI can resolve it by id. It:
 //   1. Writes <archipelagos>/<id>/<id>.archipelago.ts with
 //      `export const <id>Archipelago: ArchipelagoConfig = { id, islands: [] }`.
@@ -57,10 +57,10 @@ export const ${constName}: ArchipelagoConfig = {
 `;
 }
 
-export async function archipelagoCreateCommand(argv) {
+export async function scaffoldArchipelago(argv) {
   const raw = argv._[0];
   if (!raw) {
-    console.error('usage: motu archipelago create <id>');
+    console.error('usage: motu archipelago init <id> [--page <path/to/page.tsx>]');
     process.exit(2);
   }
   const { id, constName } = archNames(raw);

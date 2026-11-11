@@ -374,7 +374,8 @@ shows ONE region of the view at a time (pills switch between them when a screen 
   force ("At anchor · 2 of 3") — ‹ past the first weighs anchor back to the seed, and › stops at the
   last rather than setting sail into a flow.
 - **the atoll** — the region drawn as a place, its islands as sand dots around the lagoon, each sized by
-  how many what-ifs it declares. Tapping one brings its list into view.
+  how many what-ifs it declares. Tapping one is going there: it drops anchor at that island's first
+  what-if, so the voyage shows its anchorages (an island with none opens its details instead).
 - **flows** (*the region gets there itself*) and **what-ifs** (*an island is told what to show*). The
   two marks carry the difference: a flow is SAILED — the boat — because the region reached it through
   its own declared outputs; a what-if is ANCHORED — the anchor — because one island was handed the
@@ -822,8 +823,8 @@ So the lens now EXPOSES data and the dock renders it. The data is `sheet`, `seam
 - **Seams** — whether it is wired right: findings, the region sheet, and a **Production** section that
   appears only when the region has a coverage corpus (none: no section, rather than an empty tab).
 
-The rest appears where it is needed. **The island card** — tap an island on the atoll, its *about* in
-the what-ifs, or point at it with ⌖ — says what that island was given, in words and with where each
+The rest appears where it is needed. **The island card** — *About <island>* on the voyage while
+anchored, *about* on an island in the what-ifs, or point at it on the page with ⌖ — says what that island was given, in words and with where each
 value came from ("Newcomers' welcome evening · chosen by event-list", "Dennis Shaw · set by the page",
 the raw value a tap away), what its outputs do, and its what-ifs. **⋯** in the masthead holds the
 view switch (only when the region offers more than one view), the page layers (coupling wires, call

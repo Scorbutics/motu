@@ -2886,10 +2886,16 @@ function motuMountDock(opts) {
    * lagoon (`dockInset=off`): a dimmed page would be a picture of the dock, not of the application.
    */
   var DIM = 'data-motu-dim';
+  // AND THE ISLAND ITSELF IS RINGED. Dimming alone did not say where to look on a page whose island was
+  // pale to begin with: My club's chapter panel is, undimmed, the colour its neighbours turn INTO at 80%
+  // (measured: the panel (86,113,98) against the dimmed level box (94,117,108)), and cream content
+  // barely moves at all. So the emphasis cannot depend on the island's own palette: a sand ring — the
+  // anchor's colour — marks it whatever it looks like.
+  var ANCHORED = 'data-motu-anchored';
   var clearDim = function () {
     try {
-      var marked = lagoonWindow().document.querySelectorAll('[' + DIM + ']');
-      for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(DIM);
+      var marked = lagoonWindow().document.querySelectorAll('[' + DIM + '],[' + ANCHORED + ']');
+      for (var i = 0; i < marked.length; i++) { marked[i].removeAttribute(DIM); marked[i].removeAttribute(ANCHORED); }
     } catch (e) { /* the lagoon reloaded under us; nothing left to clear */ }
   };
   var dimAround = function (regId, tag) {
@@ -2905,7 +2911,10 @@ function motuMountDock(opts) {
     if (!d.getElementById('motu-dim-style')) {
       var st = d.createElement('style');
       st.id = 'motu-dim-style';
-      st.textContent = '[' + DIM + ']{opacity:.8;transition:opacity .25s ease}';
+      st.textContent = '[' + DIM + ']{opacity:.8;transition:opacity .25s ease}' +
+        // Sand on the outside, deep water on the inside: sand alone vanished on a cream page, so the
+        // ring carries its own contrast and reads on a light page and a dark one alike.
+        '[' + ANCHORED + ']{outline:3px solid #e3c893;outline-offset:3px;box-shadow:0 0 0 3px rgba(11,61,92,.75);transition:outline-color .25s ease}';
       (d.head || d.documentElement).appendChild(st);
     }
     var dimIn = function (n) {
@@ -2918,6 +2927,16 @@ function motuMountDock(opts) {
       }
       n.setAttribute(DIM, '');
     };
+    // The ring goes on the island's real boxes — its wrapper has none (display: contents).
+    var ring = function (n) {
+      if (!n || n.nodeType !== 1) return;
+      if (w.getComputedStyle(n).display === 'contents') {
+        for (var c = 0; c < n.children.length; c++) ring(n.children[c]);
+        return;
+      }
+      n.setAttribute(ANCHORED, '');
+    };
+    ring(target);
     for (var node = target; node && node !== d.body && node.parentElement; node = node.parentElement) {
       var siblings = node.parentElement.children;
       for (var i = 0; i < siblings.length; i++) if (siblings[i] !== node) dimIn(siblings[i]);

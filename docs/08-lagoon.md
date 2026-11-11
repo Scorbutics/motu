@@ -373,7 +373,9 @@ shows ONE region of the view at a time (pills switch between them when a screen 
   between the island's what-ifs instead — its anchorages, shown as buoys with the anchor at the one in
   force ("At anchor · 2 of 3") — ‹ past the first weighs anchor back to the seed, and › stops at the
   last rather than setting sail into a flow. While anchored, the rest of the page drops to 80% opacity
-  so the eye goes to the island that was told the state (off while the checks drive the lagoon).
+  and the island that was told the state is ringed (sand, with a deep inner edge, so it reads on a pale
+  island too — opacity alone did not, where the island's own palette was as light as its dimmed
+  neighbours). Off while the checks drive the lagoon.
 - **the atoll** — the region drawn as a place, its islands as sand dots around the lagoon, each sized by
   how many what-ifs it declares. Tapping one is going there: it drops anchor at that island's first
   what-if, so the voyage shows its anchorages (an island with none opens its details instead).

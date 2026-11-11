@@ -372,7 +372,7 @@ shows ONE region of the view at a time (pills switch between them when a screen 
   replayed the boat is under way ("Sailing to step 2…"). AT ANCHOR (a what-if) the same ‹ / › move
   between the island's what-ifs instead — its anchorages, shown as buoys with the anchor at the one in
   force ("At anchor · 2 of 3") — ‹ past the first weighs anchor back to the seed, and › stops at the
-  last rather than setting sail into a flow. While anchored, the rest of the page drops to 80% opacity
+  last rather than setting sail into a flow. While anchored, the rest of the page drops to 70% opacity
   and the island that was told the state is ringed (sand, with a deep inner edge, so it reads on a pale
   island too — opacity alone did not, where the island's own palette was as light as its dimmed
   neighbours). Off while the checks drive the lagoon.
@@ -397,7 +397,8 @@ navigation is a search, not a column. On a phone the closed dock is a mini playe
 the region and step with the water along its top edge, the same ‹ / ›, **Share** (copies the address of exactly this state, step
 included; hosted, the shell's address rather than the frame's) and the picker, **⚓**: point at an
 island on the page and the dock drops anchor there — its first what-if, the voyage card in view with
-‹ / › on its anchorages, the rest of the page at 80% and the island ringed. It does not open the
+‹ / › on its anchorages, the rest of the page at 70% and the island ringed — press ⚓ again to weigh anchor, back to the region as
+the page seeds it. It does not open the
 island's details; that is *About <island>* on the card. On a phone the panel stays closed, so what was
 pointed at stays visible and the bar carries the anchor. An island with no what-ifs has nowhere to
 anchor: the page still steps back around it until the region's state moves. On a screen, hovering a

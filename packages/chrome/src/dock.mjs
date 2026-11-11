@@ -190,6 +190,11 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
   background: var(--motu-on-primary, #fff);
   color: var(--w-deep);
 }
+/* AT ANCHOR from the page: the picker is the way back, and wears the anchor's sand to say so. */
+#tide .rail-act[data-anchored="true"] {
+  background: var(--motu-sand, #e3c893);
+  color: var(--motu-on-sand, #0b3d5c);
+}
 #tide .rail-act[hidden] { display: none; }
 #tide .rail-dock .mark { width: 20px; height: 20px; flex: 0 0 auto; }
 /* THE ATOLL MARK — the icon's three sand islets on deep water, drawn in CSS so it wears the lagoon's
@@ -2167,6 +2172,18 @@ function motuMountDock(opts) {
   railOpen.addEventListener('click', function () { open(true); });
   pick.addEventListener('click', function () {
     var ctl = control();
+    // THE WAY BACK. Anchored at an island that was pointed at on the page, the same button lifts it:
+    // weigh anchor — the region back to its seed on the same screen, the page out of the shade — and
+    // the next press points again. A toggle, because that is how the anchor reads: down, then up.
+    if (pickedAnchor && lastAim) {
+      var back = lastAim;
+      pickedAnchor = null;
+      lookAt = null;
+      // Looking at an island with no what-ifs moved nothing, so there is nothing to undo but the shade.
+      if (back.activeScenario) underWay('Weighing anchor\u2026', playIn(back, null))();
+      else paint();
+      return;
+    }
     if (!ctl || !ctl.togglePicking) return;
     pick.setAttribute('aria-pressed', ctl.togglePicking() ? 'true' : 'false');
   });
@@ -2558,6 +2575,10 @@ function motuMountDock(opts) {
   var anchorTo = null;
   /** A pointed-at island with no what-ifs: dimmed around while the region stays where it was. */
   var lookAt = null;
+  /** The island the PICKER anchored at, `region\u0000tag` — while it holds, ⚓ is the way back. */
+  var pickedAnchor = null;
+  /** The aim of the last paint, for acts taken outside it (the picker's way back). */
+  var lastAim = null;
   var underWay = function (label, run) {
     return function () {
       pending = { label: label, sig: stateSig };
@@ -2921,7 +2942,7 @@ function motuMountDock(opts) {
     if (!d.getElementById('motu-dim-style')) {
       var st = d.createElement('style');
       st.id = 'motu-dim-style';
-      st.textContent = '[' + DIM + ']{opacity:.8;transition:opacity .25s ease}' +
+      st.textContent = '[' + DIM + ']{opacity:.7;transition:opacity .25s ease}' +
         // Sand on the outside, deep water on the inside: sand alone vanished on a cream page, so the
         // ring carries its own contrast and reads on a light page and a dark one alike.
         '[' + ANCHORED + ']{outline:3px solid #e3c893;outline-offset:3px;box-shadow:0 0 0 3px rgba(11,61,92,.75);transition:outline-color .25s ease}';
@@ -3272,6 +3293,7 @@ function motuMountDock(opts) {
         var wanted = anchorTo;
         anchorTo = null;
         var pickedIsl = (aim.reg.islands || []).filter(function (i) { return i.tag === wanted.tag; })[0];
+        pickedAnchor = pickedIsl ? aim.regId + '\u0000' + wanted.tag : null;
         if (pickedIsl && pickedIsl.scenarios.length && !(aim.activeScenario && aim.activeScenario.island === wanted.tag)) {
           underWay('Dropping anchor\u2026', drive(function (c) {
             c.playState({ region: aim.regId, kind: 'scenario', island: wanted.tag, name: pickedIsl.scenarios[0] });
@@ -3321,6 +3343,14 @@ function motuMountDock(opts) {
     if (lookAt && (lookAt.sig !== stateSig || !aim || aim.regId !== lookAt.region)) lookAt = null;
     var dimTag = aim && aim.activeScenario ? aim.activeScenario.island : lookAt ? lookAt.tag : null;
     var dimKey = dimTag ? aim.regId + '\u0000' + dimTag : '';
+    // Picked, and still there — anchored at that island (any of its what-ifs), or looking at it. Moving
+    // to another island or region, or weighing anchor by other means, ends it; so does a pending
+    // anchoring that has not landed yet keep it, since the dim key is not set until it does.
+    if (pickedAnchor && !pending && dimKey !== pickedAnchor) pickedAnchor = null;
+    lastAim = aim;
+    pick.dataset.anchored = pickedAnchor ? 'true' : 'false';
+    pick.title = pickedAnchor ? 'Weigh anchor \u2014 back to the region as the page seeds it' : 'Point at an island on the page to anchor there (Esc to stop)';
+    pick.setAttribute('aria-label', pickedAnchor ? 'Weigh anchor' : 'Anchor at an island on the page');
     if (dimKey) dimAround(aim.regId, dimTag);
     else if (lastDim) clearDim();
     if (dimKey && dimKey !== lastDim) {

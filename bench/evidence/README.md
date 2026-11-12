@@ -1,7 +1,8 @@
 # Does motu refuse fake evidence? — design
 
-**Status:** designed, not run. Pre-registered here before any result exists, so the expectations
-cannot be fitted to the outcome afterwards.
+**Status:** run — see [RESULTS.md](RESULTS.md). The design and the expectations below were committed
+before any result existed (`87c9e46`) and are left as they were; what changed afterwards, and why, is in
+RESULTS.md under "Corrections".
 
 ## The question
 

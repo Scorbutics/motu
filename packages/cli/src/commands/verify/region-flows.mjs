@@ -243,11 +243,13 @@ export function buildMutants(report, scenarios) {
         coverageOnly++;
         continue;
       }
-      mutants.push({
-        name: `${MUTANT_PREFIX}${scenario.name ?? 'flow'} § ${i + 1}`,
-        seed: scenario.seed,
-        steps: [...(scenario.steps ?? []).slice(0, i), mutated],
-      });
+      const name = `${MUTANT_PREFIX}${scenario.name ?? 'flow'} § ${i + 1}`;
+      mutants.push({ name, seed: scenario.seed, steps: [...(scenario.steps ?? []).slice(0, i), mutated] });
+      // A SECOND MUTANT OF THE SAME TYPE, consulted only when the crude one CRASHES the region. The
+      // crude value stays first — it cannot reproduce the original by accident — but on shlink every
+      // search step's `null` threw inside the list, so a crash was the only answer it ever gave.
+      const typed = mutateStimulus(step, 'typed');
+      if (typed) mutants.push({ name: `${name}${TYPED_SUFFIX}`, seed: scenario.seed, steps: [...(scenario.steps ?? []).slice(0, i), typed] });
     }
   }
   return { mutants, coverageOnly, vacuous };
@@ -260,14 +262,34 @@ export function buildMutants(report, scenarios) {
  * possible for a mutant to reproduce the original behaviour by accident, which turns a tautology into
  * a pass — the exact failure this check exists to remove.
  */
-export function mutateStimulus(step) {
+export function mutateStimulus(step, kind = 'crude') {
+  // TYPED: another value of the SAME type — a different string, number or boolean. Only for scalars:
+  // an object or array has no "other value" that is not a guess about its shape. `null` when nothing
+  // in the step can be mutated that way, so the caller sends no typed mutant at all.
+  const typedOf = (v) =>
+    typeof v === 'string'
+      ? v === '__motu_mutant__' ? '__motu_mutant_2__' : '__motu_mutant__'
+      : typeof v === 'number' && Number.isFinite(v)
+        ? v + 7919
+        : typeof v === 'boolean'
+          ? !v
+          : undefined;
   if (step.provide) {
+    if (kind === 'typed') {
+      const entries = Object.entries(step.provide).map(([k, v]) => [k, typedOf(v)]);
+      if (entries.some(([, v]) => v === undefined)) return null;
+      return { ...step, provide: Object.fromEntries(entries), __mutant: true };
+    }
     const provide = Object.fromEntries(
       Object.entries(step.provide).map(([k, v]) => [k, v === null || v === undefined ? '__motu_mutant__' : null]),
     );
     return { ...step, provide, __mutant: true };
   }
   if (step.emit) {
+    if (kind === 'typed') {
+      const detail = typedOf(step.emit.detail);
+      return detail === undefined ? null : { ...step, emit: { ...step.emit, detail }, __mutant: true };
+    }
     return {
       ...step,
       emit: { ...step.emit, detail: step.emit.detail === null ? '__motu_mutant__' : null },
@@ -276,6 +298,9 @@ export function mutateStimulus(step) {
   }
   return null;
 }
+
+/** Marks the same-type mutant that stands in when the crude one crashes. */
+export const TYPED_SUFFIX = ' · typed';
 
 /** Mutant scenarios are tagged so one run can carry both sets and tell them apart afterwards. */
 export const MUTANT_PREFIX = 'µ mutant · ';
@@ -293,14 +318,6 @@ export function reportMutants(report, flows, { mutants, coverageOnly, vacuous })
     const prev = lastOf.get(f.scenario);
     if (!prev || f.step > prev.step) lastOf.set(f.scenario, f);
   }
-  const survived = [...lastOf.values()].filter((f) => f.ok);
-  // A mutant that BROKE the region proves nothing. Crude values are deliberate — they must not
-  // reproduce the original behaviour by accident — but emitting one can crash the island receiving it,
-  // and a crash is not the assertion discriminating. Counting those as kills was hiding exactly the
-  // tautology this check exists to find: a step asserting a total the PREVIOUS step already produced
-  // was reported killed, because its mutant died on the way rather than on the claim.
-  const broke = [...lastOf.values()].filter((f) => !f.ok && f.error && !(f.mismatches ?? []).length);
-
   // COUNT WHAT CAME BACK, not what was sent. Reporting `mutants.length` killed regardless of results
   // meant that when the mutants failed to come back at all — a tag that did not survive the round
   // trip, say — the check printed a confident green for work it never saw. Which is the exact failure
@@ -313,26 +330,66 @@ export function reportMutants(report, flows, { mutants, coverageOnly, vacuous })
     );
     return;
   }
-  for (const s of survived) {
-    report.error(
-      'flow-mutation',
-      `"${String(s.scenario).replace(MUTANT_PREFIX, '')}" still holds when its input is changed — the assertion ` +
-        `does not depend on what the step does, so it is asserting a constant. Assert something the stimulus moves`,
-    );
-  }
-  for (const b of broke) {
+  // A mutant that BROKE the region proves nothing. Crude values are deliberate — they must not
+  // reproduce the original behaviour by accident — but emitting one can crash the island receiving it,
+  // and a crash is not the assertion discriminating. It used to count only an error with NO mismatch
+  // as broken; a crash that EMPTIES the slot is a mismatch too, so on shlink a step asserting a
+  // constant (the search box's own placeholder, after searching) was credited as killed. A step that
+  // raised a page error is broken, whatever its assertions then saw.
+  const broke = (f) => !f.ok && (Boolean(f.crashed) || (f.error && !(f.mismatches ?? []).length));
+  const why = (f) => f.crashed ?? f.error ?? 'the region broke';
+  const label = (name) => String(name).replace(MUTANT_PREFIX, '');
+  let killed = 0;
+  let survivedAny = false;
+  for (const [name, crude] of lastOf) {
+    if (name.endsWith(TYPED_SUFFIX)) continue; // judged with its crude mutant, below
+    const typed = lastOf.get(`${name}${TYPED_SUFFIX}`);
+    if (crude.ok) {
+      survivedAny = true;
+      report.error(
+        'flow-mutation',
+        `"${label(name)}" still holds when its input is changed — the assertion does not depend on what the ` +
+          `step does, so it is asserting a constant. Assert something the stimulus moves`,
+      );
+      continue;
+    }
+    if (!broke(crude)) {
+      killed++;
+      continue;
+    }
+    // The crude mutant crashed. The same-type one decides, when there is one and it did not crash too.
+    if (typed && !broke(typed)) {
+      if (!typed.ok) {
+        killed++;
+        continue;
+      }
+      // AN ERROR, as when the crude mutant itself survives — one rule, whether or not the app happens to
+      // crash on `null`. Two inputs that land in the same case (two terms that both match nothing) are
+      // still an assertion the stimulus does not move; the step has to assert something only its own
+      // input produces.
+      survivedAny = true;
+      report.error(
+        'flow-mutation',
+        `"${label(name)}" still holds when its input is changed to another value of the same type (the crude ` +
+          `mutant crashed the region: ${why(crude)}) — the assertion does not depend on what the step does. ` +
+          `Assert something only this input produces`,
+      );
+      continue;
+    }
     report.warn(
       'flow-mutation',
-      `"${String(b.scenario).replace(MUTANT_PREFIX, '')}" broke the region when its input was mutated ` +
-        `(${b.error}) — the assertion was never evaluated, so this step's discrimination is unproven`,
+      `"${label(name)}" broke the region when its input was mutated (${why(crude)})` +
+        (typed ? ' — on a crude and on a same-type input alike' : '') +
+        ` — the assertion was never evaluated, so this step's discrimination is unproven`,
     );
   }
-  if (!survived.length && !vacuous)
+  const steps = [...lastOf.keys()].filter((n) => !n.endsWith(TYPED_SUFFIX)).length;
+  if (!survivedAny && !vacuous)
     report.ok(
       'flow-mutation',
-      `${lastOf.size - broke.length}/${mutants.length} step(s) fail on their assertion when mutated` +
+      `${killed}/${steps} step(s) fail on their assertion when mutated` +
         (coverageOnly ? `; ${coverageOnly} coverage step(s) have no input to mutate` : ''),
-      { n: mutants.length, of: 'mutant(s) killed' },
+      { n: killed, of: 'mutant(s) killed' },
     );
 }
 

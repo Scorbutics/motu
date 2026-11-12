@@ -738,6 +738,13 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         // The first step of a scenario establishes the page's starting state; the rest build on it.
         step = index === 0 ? { ...step, __seedNow: true } : step;
         if (trace) step = { ...step, __trace: true };
+        // WHAT THIS STEP CRASHED, if anything. A mutant's crude value can throw inside an island
+        // (`null.toLowerCase()`), the region empties, and the assertion "fails" — which read as the
+        // assertion discriminating. `flow-mutation` needs to tell a crash from a kill, so every step
+        // records the page errors raised while it ran.
+        const crashes = [];
+        const onCrash = (err) => crashes.push(String(err?.message || err).split('\n')[0].slice(0, 200));
+        page.on('pageerror', onCrash);
         const result = await page.evaluate(
           async ({ seed, step: st }) => {
             const lagoon = window.__motuLagoon;
@@ -1059,6 +1066,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         );
         // A beat for the calls a step starts to land, then read them against the mark.
         await sleep(150);
+        page.off('pageerror', onCrash);
         const landed = await callsSince(mark);
         mark = landed.reduce((m, c) => Math.max(m, c.seq), mark);
         // WHAT THIS STEP LEFT BEHIND, for `motu diff`: every key the region holds, and what each slot
@@ -1089,6 +1097,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
           ok: !result.error && result.mismatches.length === 0 && result.alive !== false,
           error: result.error ?? (result.alive === false ? 'the region rendered nothing after this step' : null),
           mismatches: result.mismatches ?? [],
+          crashed: crashes[0] ?? null,
           calls: landed.length,
           // A FAILURE NOTHING DECLARED. A declared one (a fixture's `status: 500`) is the flow's own
           // state and never lands here.

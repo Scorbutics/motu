@@ -4334,7 +4334,13 @@ function motuMountDock(opts) {
       ? shown.map(function (c, i) {
           var li = el('li', { role: 'option', 'aria-selected': String(i === cursor) },
             [el('span', {}, [c.label]), el('span', { class: 'kind' }, [c.kind])]);
-          li.addEventListener('mouseenter', function () { cursor = i; renderPalette(); });
+          // HOVER MOVES THE CURSOR IN PLACE. It used to re-render the list, which replaced the entry under
+          // the pointer: a press and a release then landed on two different elements and no `click`
+          // ever fired, so a mouse could not pick anything in the palette.
+          li.addEventListener('mouseenter', function () {
+            cursor = i;
+            Array.prototype.forEach.call(pList.children, function (n, j) { n.setAttribute('aria-selected', String(j === i)); });
+          });
           li.addEventListener('click', function () { c.run(); closePalette(); });
           return li;
         })

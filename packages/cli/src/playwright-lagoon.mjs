@@ -696,6 +696,24 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         out.push({ scenario: scenario.name ?? 'flow', step: 1, ok: false, error: `world "${scenario.world}" is not declared in the lagoon`, mismatches: [], calls: 0, undeclared: [] });
         continue;
       }
+      // A NULL-ISLAND MUTANT names one slot to render from defaults or not at all; every other flow
+      // clears it. Set before the reset and remount below, so the region mounts already nulled.
+      const nullable = await page
+        .evaluate((n) => {
+          const set = window.__motuLagoon?.nullIsland;
+          if (!set) return false;
+          set(null);
+          if (n) set(n.slot, n.mode);
+          return true;
+        }, scenario.__nullIsland ?? null)
+        .catch(() => false);
+      // A MUTANT THIS MOUNT PATH CANNOT MAKE IS NOT RUN. The custom-element path (demo-app) has no
+      // null-island switch; running the flow anyway replayed the REAL flow, every one held, and every
+      // slot of demo-app was reported unconstrained — a verdict about a mutant nobody made.
+      if (scenario.__nullIsland && !nullable) {
+        out.push({ scenario: scenario.name ?? 'flow', step: 1, ok: false, unsupported: true, error: 'this mount path cannot null an island', mismatches: [], calls: 0, undeclared: [] });
+        continue;
+      }
       let mark = await lastSeq();
       // A fresh REGION per scenario: forget the store, THEN rebuild the tree. One flow CAN leave the
       // region unrenderable — seed an index past the end of a list and the component that reads it
@@ -1128,6 +1146,8 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
     // One beat before reading: a host effect answering an island lands a tick later, and the last
     // step's assertion returns before it does.
     await sleep(300);
+    // No null island outlives the run — the page is pooled and the next check re-aims it.
+    await page.evaluate(() => window.__motuLagoon?.nullIsland?.(null)).catch(() => {});
     // BACK TO THE DEFAULT WORLD before anything else reads this page: it is pooled, and the next check
     // re-aims it rather than reloading — a world left on would be inherited by a check that never asked.
     if (activeWorld !== 'default') await switchWorld('default');

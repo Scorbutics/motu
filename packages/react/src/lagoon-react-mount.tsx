@@ -37,7 +37,7 @@ import {
   type MotuFit,
 } from '@motu/core';
 import type { DeclaredChannel } from '@motu/core';
-import { ArchipelagoProvider, Island, useRegion } from './react-island';
+import { ArchipelagoProvider, Island, setNullIsland, useRegion } from './react-island';
 import { renderArchipelagoLayout } from './archipelago-layout';
 import { RegionRefSlot, type ResolvedRegionRef } from './region-ref-slot';
 import type { ElementSpec } from './bootstrap';
@@ -149,6 +149,8 @@ declare global {
        * erase the journey the flow exists to describe.
        */
       reset: (keys?: readonly string[]) => void;
+      /** Null one slot's island for a mutant flow (`defaults` / `nothing`), or clear every one (`null`). */
+      nullIsland?: (slot: string | null, mode?: 'defaults' | 'nothing' | null) => void;
       /** Fire one of an island's DECLARED outputs, as if the component had. */
       emit: (slot: string, event: string, detail: unknown) => boolean;
       /** Host modules the islands actually called, for provenance (see `traced`). */
@@ -521,6 +523,7 @@ export function mountReactLagoon(
   root.render(tree);
 
   window.__motuLagoon = {
+    nullIsland: (slot, mode) => setNullIsland(slot, mode),
     // EVERY CAPABILITY THAT IS NOT ABOUT TEARDOWN lives in `lagoonHarness`, shared with the custom-
     // element mount. It sat here for years, which quietly made region FLOWS a React-only feature — see
     // that module for what it cost.

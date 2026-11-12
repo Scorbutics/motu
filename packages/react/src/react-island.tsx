@@ -401,6 +401,23 @@ export interface IslandProps {
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
 
+/**
+ * NULL ISLANDS — the mutant `flow-mutation`'s null-island pass swaps in (constraint-loop item 2b).
+ *
+ * `defaults`: the slot renders its component from declared defaults and static props alone, deaf to
+ * the region and to whatever the page handed it. `nothing`: the slot keeps its mount (so a flow's
+ * `emit` to it still lands) and renders no component. If every flow still holds with a slot nulled,
+ * the evidence does not constrain that island — an implementation ignoring every input satisfies it.
+ *
+ * Set only by the lagoon harness, between flows; a page never has an entry here.
+ */
+const nullIslands = new Map<string, 'defaults' | 'nothing'>();
+export function setNullIsland(slot: string | null, mode?: 'defaults' | 'nothing' | null): void {
+  if (slot === null) nullIslands.clear();
+  else if (mode) nullIslands.set(slot, mode);
+  else nullIslands.delete(slot);
+}
+
 export function Island({ slot, fit, props: extra, className, children }: IslandProps) {
   const ctx = useContext(ArchipelagoContext);
   if (!ctx) throw new Error(`motu: <Island slot="${slot}"> must be used inside <ArchipelagoProvider>`);
@@ -525,6 +542,8 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   }
   // 2. Static props from the archipelago.
   Object.assign(resolved, spec.props ?? {});
+  // A NULL ISLAND stops here: defaults and static props only (see `nullIslands`).
+  const nulled = nullIslands.get(slot);
   // 3. Reactive binds.
   //
   //    Registry path (no children): an undefined store value must not clobber a declared default.
@@ -533,7 +552,7 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
   //    is bound and HAS BEEN SET, otherwise the page's own prop stands. `has()` rather than a value
   //    test, so a sibling that deliberately sets a key to `undefined` is honoured instead of silently
   //    falling back to the page.
-  for (const [prop, key] of bindEntries(spec)) {
+  for (const [prop, key] of nulled ? [] : bindEntries(spec)) {
     if (!key) continue;
     if (hosted) {
       if (ctx.store.has(key)) resolved[prop] = ctx.store.get(key);
@@ -586,7 +605,11 @@ export function Island({ slot, fit, props: extra, className, children }: IslandP
     // Debug builds only: two fibers and two effects per island per commit is a real cost, and what
     // they buy is a row in the lens.
     DEBUG ? createElement(IslandWindow, { key: 'motu-window-open', tag: spec.element }) : null,
-    hosted ? cloneElement(hosted, resolved) : createElement(Component as never, resolved),
+    nulled === 'nothing'
+      ? null
+      : hosted && !nulled
+        ? cloneElement(hosted, resolved)
+        : createElement(Component as never, resolved),
     DEBUG ? createElement(IslandWindow, { key: 'motu-window-close' }) : null,
   );
 }

@@ -307,6 +307,87 @@ export function mutateStimulus(original, kind = 'crude') {
 /** Marks the same-type mutant that stands in when the crude one crashes. */
 export const TYPED_SUFFIX = ' · typed';
 
+/** Null-island mutants: every flow replayed with one slot's island nulled. */
+export const NULL_PREFIX = 'µ null · ';
+
+/**
+ * DOES THE EVIDENCE DEPEND ON THIS ISLAND? (constraint-loop item 2b)
+ *
+ * `flow-mutation` asks whether a STEP depends on its stimulus. Nothing asked whether the region's
+ * evidence depends on an ISLAND: `render-coverage` only asks whether a flow looks at a slot. A slot
+ * whose only assertion is text its default render also shows is covered and unconstrained — an island
+ * ignoring every input passes. So each asserted slot is nulled twice — rendering from its DEFAULTS
+ * (deaf to the region) and rendering NOTHING — and every flow is replayed. At least one must fail.
+ *
+ * Only slots some flow asserts: an unasserted slot is `render-coverage`'s finding already.
+ */
+export function buildNullIslands(region, scenarios) {
+  const asserted = new Set(scenarios.flatMap((s) => (s.steps ?? []).flatMap((st) => Object.keys(st.expectRender ?? {}))));
+  const islands = (region?.islands ?? []).filter((i) => !i.planned && asserted.has(i.slot));
+  const slots = islands.map((i) => i.slot);
+  // `defaults` only where the island READS the region: a pure producer (a search box binding nothing)
+  // renders from its defaults ALWAYS, so that mutant could never differ and would accuse every
+  // producer. Its residual — the handler `emit` never drives — is `motu assurance`'s `runtime·emit`.
+  // `bind` arrives in either form — the declared array, or the `{ prop: key }` object `readRegions`
+  // normalises it to (`{}` when the island binds nothing). Count bound KEYS, not entries.
+  const boundKeys = (b) =>
+    [].concat(b ?? []).flatMap((e) => (typeof e === 'string' ? [e] : e && typeof e === 'object' ? Object.values(e) : []));
+  const reads = (i) => boundKeys(i.bind).length > 0 || (i.reads ?? []).length > 0;
+  const mutants = [];
+  for (const isl of islands) {
+    const slot = isl.slot;
+    for (const mode of reads(isl) ? ['defaults', 'nothing'] : ['nothing']) {
+      for (const s of scenarios) {
+        mutants.push({ ...s, name: `${NULL_PREFIX}${slot} · ${mode} :: ${s.name ?? 'flow'}`, __nullIsland: { slot, mode } });
+      }
+    }
+  }
+  return { slots, mutants };
+}
+
+/** The verdict: a nulled slot under which every flow still holds is not constrained by the evidence. */
+export function reportNullIslands(report, flows, { slots, mutants }) {
+  if (!slots.length) return;
+  const mine = flows.filter((f) => String(f.scenario).startsWith(NULL_PREFIX));
+  if (mine.length && mine.every((f) => f.unsupported)) {
+    report.skip(
+      'null-island',
+      `this region's lagoon mounts islands as custom elements, which cannot be nulled yet — whether the ` +
+        `evidence depends on each island is not answered here (the React mount path answers it)`,
+    );
+    return;
+  }
+  const held = (slot, mode) => {
+    const names = mutants.filter((m) => m.__nullIsland.slot === slot && m.__nullIsland.mode === mode).map((m) => m.name);
+    const steps = flows.filter((f) => names.includes(f.scenario));
+    return steps.length > 0 && steps.every((f) => f.ok);
+  };
+  const ran = (slot) => flows.some((f) => String(f.scenario).startsWith(`${NULL_PREFIX}${slot} · `));
+  let constrained = 0;
+  for (const slot of slots) {
+    if (!ran(slot)) continue;
+    const nothing = held(slot, 'nothing');
+    const defaults = held(slot, 'defaults');
+    if (nothing) {
+      report.error(
+        'null-island',
+        `${slot}: every flow still holds with this slot's island rendering NOTHING — the evidence does not ` +
+          `constrain it at all. Assert something only this island renders, after something moves it`,
+      );
+    } else if (defaults) {
+      report.error(
+        'null-island',
+        `${slot}: every flow still holds with this island rendering from its DEFAULTS, deaf to the region — ` +
+          `the evidence only checks what it shows with no data. Assert what it renders from a key that moves`,
+      );
+    } else constrained++;
+  }
+  const examined = slots.filter(ran).length;
+  if (examined && constrained === examined)
+    report.ok('null-island', `every asserted slot's island is constrained: nulling it fails a flow`, { n: examined, of: 'slot(s) nulled' });
+  else if (!examined) report.inconclusive('null-island', 'no null-island mutant came back from the run, so nothing is proved');
+}
+
 /** Mutant scenarios are tagged so one run can carry both sets and tell them apart afterwards. */
 export const MUTANT_PREFIX = 'µ mutant · ';
 export const WORLD_MUTANT_PREFIX = 'µ world · ';
@@ -432,6 +513,7 @@ export async function regionFlowCheck(report, id, port, region) {
   // The mutants ride along: one lagoon boot answers "do the flows hold?" and "could they have
   // failed?" together. Booting is most of what a flow check costs, and this was paying it twice.
   const mutation = buildMutants(report, scenarios);
+  const nulls = buildNullIslands(region, scenarios);
   // WORLD-DIFFERS, by mutation: each flow that names a world, replayed WITHOUT it. If it still holds,
   // its assertions do not depend on anything the world answers — the world is decoration for it.
   const worldMutants = scenarios
@@ -444,9 +526,11 @@ export async function regionFlowCheck(report, id, port, region) {
     // What the chart needs: the real flows, and every island's scenarios keyed by its tag.
     const chartWith = { flows: scenarios, scenarios: await regionWhatIfs(region) };
     const run = await step('region-flow', () =>
-      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants, ...worldMutants], chartWith }),
+      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants, ...worldMutants, ...nulls.mutants], chartWith }),
     );
-    results = (run.flows ?? []).filter((f) => !String(f.scenario).startsWith(MUTANT_PREFIX) && !String(f.scenario).startsWith(WORLD_MUTANT_PREFIX));
+    results = (run.flows ?? []).filter(
+      (f) => ![MUTANT_PREFIX, WORLD_MUTANT_PREFIX, NULL_PREFIX].some((p) => String(f.scenario).startsWith(p)),
+    );
     for (const wm of worldMutants) {
       const steps = (run.flows ?? []).filter((f) => f.scenario === wm.name);
       const flowName = wm.name.slice(WORLD_MUTANT_PREFIX.length);
@@ -462,6 +546,7 @@ export async function regionFlowCheck(report, id, port, region) {
       }
     }
     reportMutants(report, run.flows ?? [], mutation);
+    reportNullIslands(report, run.flows ?? [], nulls);
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
     provenanceCheck(report, id, region, run.provenance ?? [], run.outbound ?? []);

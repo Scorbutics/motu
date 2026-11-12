@@ -17,11 +17,14 @@ import { CLUB, EVIDENCE_DAY } from 'demo-app/evidence/club';
 
 const seedPort = () => seedEventsPort({ members: SEED_MEMBERS, now: () => EVIDENCE_NOW });
 const clock = { now: () => EVIDENCE_NOW };
+const SOONEST = [...UPCOMING].sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0]!;
 
 export const eventsRegion = overridesFor(eventsArchipelago, {
   // OPENED ON THE SOONEST EVENT, as the page opens it (`EventsPage` seeds the first one once the
   // calendar arrives). With `null` the preview showed "Pick an event" — a screen nobody lands on.
-  seed: { me: SIGNED_IN, filter: ALL_EVENTS, selectedEventId: UPCOMING[0]!.id },
+  // SOONEST BY DATE: the port sorts by `startsAt`, and `UPCOMING` is in template order — `UPCOMING[0]`
+  // opened the second row, below an earlier event (caught by a fresh-eyes look at the screen).
+  seed: { me: SIGNED_IN, filter: ALL_EVENTS, selectedEventId: SOONEST.id },
   channels: [channelFrom({ to: eventsArchipelago, id: 'events', channelName: 'events: the page’s events source, over the seed', args: [seedPort, clock] })],
 });
 

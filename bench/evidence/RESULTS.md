@@ -105,6 +105,13 @@ the frame's text, the calls strip, and the state verdict.
 | B7 | a flow drops its `notText` | no | evidence weakening | review of the evidence diff — no mechanical check |
 | B6 | a story stops checking the callback's value | n/a (Storybook-only) | evidence weakening | review of the evidence diff |
 
+**Since fixed in motu:** B3 — a page's `<X.Region>` now lets go of its store when the page unmounts, so
+returning starts from the seed and the line B3 deletes is no longer needed (shlink's own `ManageServers`
+tests: 3 fail without the fix, 9/9 pass with it). B9 — a flow step can declare `expectCalls` (`[]` = "asks
+for nothing"); with it on "each slot renders its own island", B9 is refused by `region-flow`. Making
+that hold on the clean tree also needed the flow runner to seed BEFORE it mounts: every flow used to
+mount once in the region's default state first, and on shlink that mount fetched the remote servers.
+
 So the eight blind misses split four ways: **three belong to unit tests** (B1, B4, B10 — logic inside a
 component, which CLAUDE.md already says motu does not check); **three are motu's own territory and
 fixable** (B3 by fixing store lifetime, B9 by letting flows declare calls, B12 by adopting `root`);

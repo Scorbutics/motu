@@ -610,6 +610,7 @@ motu archipelago coverage <id> [--corpus <file|url>] [<more corpora>…] [--toke
 | `--ids` | Print each uncovered state's id, so `--accept` is reachable without deriving it (`:526`) | off |
 | `--fail-above <n>` | Gate: fail when an uncovered state's share is at or above `n` percent (`:466`, `:554-558`) | advisory only |
 | `--json` | Findings as data, including a typed scenario skeleton per uncovered state. Owns stdout — the prose is suppressed (`:159`, `:474-508`) | off |
+| `--runtime` | Replay the region's flows in a browser and count each step's REAL region state as previewed — what sources fed and what an `emit` caused, which the static comparison of seeds cannot see. On Peps' `actions` it took the "missing column" warnings from 17 to 6 | off (static: seeds and `provide` only) |
 
 **Reads** the archipelago's declared keys and `coverage.enums`, the region's flows, and the corpus —
 which may be a file, a URL, the host's `GET /api/coverage` envelope, or a `/coverage/status` summary,

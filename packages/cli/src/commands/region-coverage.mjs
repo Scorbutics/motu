@@ -22,6 +22,7 @@ import {
   keysHash,
 } from '@motu/coverage';
 import { color, paths, REPO_ROOT } from '../lib/util.mjs';
+import { runRegionFlows, closeLagoonPool } from '../playwright-lagoon.mjs';
 import { readRegions } from '../lib/eject.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -181,7 +182,31 @@ export async function regionCoverageCommand(argv) {
     );
     process.exit(2);
   }
-  const { states: covered, emits, sample } = coveredStates(flows, keys, enums);
+  const { states: covered, emits: staticEmits, sample } = coveredStates(flows, keys, enums);
+  let emits = staticEmits;
+
+  // `--runtime`: THE FLOWS' REAL STATES, not their seeds. A region fed by sources (Peps' `actions`:
+  // the week, the stats, the check-ins) holds keys no seed mentions, and a step that `emit`s reaches a
+  // state only the region can compute — so the static set above reported every production state as
+  // uncovered and blamed the seeds ("a missing column") for what the sources had already filled. The
+  // flow lane now records each step's region state (`motu diff` reads the same trace), and those
+  // states are what the flows actually preview.
+  let observed = null;
+  if (argv.runtime === true && flows.length) {
+    try {
+      const run = await runRegionFlows({ id, port: 6200 + Math.floor(Math.random() * 300), scenarios: flows, trace: true });
+      const fp = (state) => fingerprintRegion(keys, (k) => state[k], { enums });
+      const seen = (run.flows ?? []).filter((st) => st.trace?.keys && Object.keys(st.trace.keys).length);
+      for (const st of seen) covered.push(fp(st.trace.keys));
+      observed = seen.length;
+      // Every step that ran was observed, so a state reached by `emit` is no longer a blind spot.
+      if (seen.length) emits = 0;
+    } catch (err) {
+      say(color.yellow(`  ! --runtime: the flows could not be replayed (${String(err?.message ?? err).split('\n')[0]}) — static states only`));
+    } finally {
+      await closeLagoonPool().catch(() => {});
+    }
+  }
 
   // NO CORPUS IS NOT A PASS. Without one this can still say what the flows cover and print the known
   // set to publish, which is useful on its own — but it has examined no reality, and says so.
@@ -497,6 +522,7 @@ export async function regionCoverageCommand(argv) {
           // Said in the payload, not only in the prose: a state reached through `emit` is reported as
           // uncovered even though a flow does exercise it, because only a browser knows the result.
           caveats: { emitOnlySteps: emits, unreachableIsWeak: true },
+          observedSteps: observed,
           failAbove: threshold,
           pass: over.length === 0,
         },
@@ -533,11 +559,14 @@ export async function regionCoverageCommand(argv) {
     );
   }
 
+  if (observed !== null) {
+    say(color.dim(`\n  ${observed} flow step(s) observed at runtime — their real region states count as previewed.`));
+  }
   if (emits) {
     say(
       color.dim(
         `\n  ${emits} flow step(s) act through \`emit\`, whose result only a browser can know — a state reached` +
-          `\n  that way is reported above as uncovered even though a flow does exercise it.`,
+          `\n  that way is reported above as uncovered even though a flow does exercise it. \`--runtime\` observes them.`,
       ),
     );
   }

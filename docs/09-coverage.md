@@ -678,6 +678,19 @@ no token at all works, and only ingest stays credentialed.
 `--accept` is a third credential again — the host's **admin** token, never either of these, because
 "a reporting credential that could also accept would let the tool mark its own findings resolved".
 
+### `--runtime`: what the flows really preview
+
+Without it, the flows' states are their seeds plus each `provide`. A region fed by SOURCES holds keys no
+seed mentions, and a step that `emit`s reaches a state only the region can compute, so every production
+state looked uncovered and the report blamed the seeds ("a missing column"). `--runtime` replays the
+flows (the same per-step trace `motu diff` reads) and adds each step's real region state to the
+previewed set. On Peps' `actions` that took 17 systemic warnings to 6, and left two production states
+that are genuinely unpreviewed.
+
+It also shows a trap: a flow that SEEDS a key a source produces pins it, so the source can never move
+it. Those flows cannot reach the states the source would produce next (Peps: a past week, a loading
+week, "no week yet"), and production reaching them shows here as uncovered.
+
 ### Exit codes
 
 | Code | When |

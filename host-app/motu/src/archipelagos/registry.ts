@@ -10,6 +10,7 @@ import { indexArchipelago } from './index/index.archipelago';
 import { lagoonViewArchipelago } from './lagoon-view/lagoon-view.archipelago';
 import { reviewArchipelago } from './review/review.archipelago';
 import { signinArchipelago } from './signin/signin.archipelago';
+import { shareLinksArchipelago } from './share-links/share-links.archipelago';
 
 export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   [corpusArchipelago.id]: corpusArchipelago,
@@ -17,6 +18,7 @@ export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   [lagoonViewArchipelago.id]: lagoonViewArchipelago,
   [reviewArchipelago.id]: reviewArchipelago,
   [signinArchipelago.id]: signinArchipelago,
+  [shareLinksArchipelago.id]: shareLinksArchipelago,
 };
 
 /** Resolve an archipelago config by id (undefined if unknown). */

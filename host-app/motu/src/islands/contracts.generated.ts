@@ -20,6 +20,9 @@ import type { LagoonPalette as C_lagoon_palette } from '@/components/lagoon/lago
 import type { LagoonRepos as C_lagoon_repos } from '@/components/lagoon/lagoon-repos';
 import type { LagoonStats as C_lagoon_stats } from '@/components/lagoon/lagoon-stats';
 import type { RepoPicker as C_repo_picker } from '@/components/review/repo-picker/RepoPicker';
+import type { ShareCreateForm as C_share_create } from '@/components/share/ShareCreateForm';
+import type { ShareLinkList as C_share_list } from '@/components/share/ShareLinkList';
+import type { ShareTokenReveal as C_share_token } from '@/components/share/ShareTokenReveal';
 import type { ShotList as C_shot_list } from '@/components/review/shot-list/ShotList';
 import type { StatusSummary as C_status_summary } from '@/components/review/status-summary/StatusSummary';
 import type { ViewerBadge as C_viewer_badge } from '@/components/lagoon/viewer-badge';
@@ -83,6 +86,21 @@ export const CONTRACTS = {
   'x-repo-picker': {
     input: ['repos', 'value', 'shots'],
     output: { onRepoSelected: 'repo-selected' },
+    effects: [],
+  },
+  'x-share-create': {
+    input: ['commits', 'pages', 'busy'],
+    output: { onCreateRequested: 'create-requested' },
+    effects: [],
+  },
+  'x-share-list': {
+    input: ['links', 'now', 'busy', 'error'],
+    output: { onRevokeRequested: 'revoke-requested' },
+    effects: [],
+  },
+  'x-share-token': {
+    input: ['revealedToken'],
+    output: { onTokenDismissed: 'token-dismissed' },
     effects: [],
   },
   'x-shot-list': {
@@ -150,6 +168,12 @@ const _lagoon_stats: ContractFitsComponent<typeof C_lagoon_stats, 'x-lagoon-stat
 void _lagoon_stats;
 const _repo_picker: ContractFitsComponent<typeof C_repo_picker, 'x-repo-picker'> = true;
 void _repo_picker;
+const _share_create: ContractFitsComponent<typeof C_share_create, 'x-share-create'> = true;
+void _share_create;
+const _share_list: ContractFitsComponent<typeof C_share_list, 'x-share-list'> = true;
+void _share_list;
+const _share_token: ContractFitsComponent<typeof C_share_token, 'x-share-token'> = true;
+void _share_token;
 const _shot_list: ContractFitsComponent<typeof C_shot_list, 'x-shot-list'> = true;
 void _shot_list;
 const _status_summary: ContractFitsComponent<typeof C_status_summary, 'x-status-summary'> = true;

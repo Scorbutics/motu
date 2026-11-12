@@ -16,6 +16,9 @@ import { element as lagoonPaletteElement } from './lagoon-palette.island';
 import { element as lagoonReposElement } from './lagoon-repos.island';
 import { element as lagoonStatsElement } from './lagoon-stats.island';
 import { element as repoPickerElement } from './repo-picker.island';
+import { element as shareCreateElement } from './share-create.island';
+import { element as shareListElement } from './share-list.island';
+import { element as shareTokenElement } from './share-token.island';
 import { element as shotListElement } from './shot-list.island';
 import { element as statusSummaryElement } from './status-summary.island';
 import { element as viewerBadgeElement } from './viewer-badge.island';
@@ -32,7 +35,7 @@ import { element as viewerBadgeElement } from './viewer-badge.island';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [acceptBarElement, corpusFilterElement, corpusStatesElement, diffViewerElement, dockRegionsElement, dockStatesElement, githubSignInElement, lagoonFilterElement, lagoonPaletteElement, lagoonReposElement, lagoonStatsElement, repoPickerElement, shotListElement, statusSummaryElement, viewerBadgeElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [acceptBarElement, corpusFilterElement, corpusStatesElement, diffViewerElement, dockRegionsElement, dockStatesElement, githubSignInElement, lagoonFilterElement, lagoonPaletteElement, lagoonReposElement, lagoonStatsElement, repoPickerElement, shareCreateElement, shareListElement, shareTokenElement, shotListElement, statusSummaryElement, viewerBadgeElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -52,6 +55,9 @@ export interface ElementTypes {
   'x-lagoon-repos': typeof lagoonReposElement;
   'x-lagoon-stats': typeof lagoonStatsElement;
   'x-repo-picker': typeof repoPickerElement;
+  'x-share-create': typeof shareCreateElement;
+  'x-share-list': typeof shareListElement;
+  'x-share-token': typeof shareTokenElement;
   'x-shot-list': typeof shotListElement;
   'x-status-summary': typeof statusSummaryElement;
   'x-viewer-badge': typeof viewerBadgeElement;

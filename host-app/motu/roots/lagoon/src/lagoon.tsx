@@ -10,6 +10,7 @@ import { indexRegion } from './regions/index.js';
 import { lagoonViewRegion } from './regions/lagoon-view.js';
 import { reviewRegion } from './regions/review.js';
 import { signinRegion } from './regions/signin.js';
+import { shareLinksRegion, shareLinksWorlds } from './regions/share-links.js';
 
 /**
  * Every region this project previews — each entry BOUND to the archipelago it is about.
@@ -23,4 +24,8 @@ export const regions: LagoonOverrides['regions'] = [
   lagoonViewRegion,
   reviewRegion,
   signinRegion,
+  shareLinksRegion,
 ];
+
+/** Worlds: named answers for states no flow reaches from the default one (share-links.req.toml [[world]]). */
+export const worlds = shareLinksWorlds;

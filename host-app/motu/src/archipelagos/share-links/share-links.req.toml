@@ -1,0 +1,214 @@
+# share-links — a project's owner manages the links that open one part of it to somebody else.
+# THE REVIEW SURFACE for this region. Written from experiments/req-region/REQUEST.md; everything about
+# the region below this file (archipelago, region type, evidence, property tests) is GENERATED from it
+# or written to satisfy it.
+#
+# provenance:  stated — the request says it · inferred — the app's own code or docs say it
+#              default — the spec's author chose it; nobody decided it. READ THESE FIRST.
+#
+# A clause holds through up to three readings, each optional:
+#   rule  = "at <creation|settled> [when <expr>] => <expr>"   the SOURCE, as a fast-check property.
+#           Names: s (the source's state), now, created (a create answered), token (what it answered),
+#           dismissed (the token was dismissed since), failed (the last call failed), message (its error),
+#           before (the state before the last command), revoked (the id the last revoke named),
+#           listed (the list has answered at least once), port (what the port holds)
+#   flow  = steps a person takes, in a world:  in <world> · click <name> · shows <slot>: <text> ·
+#           (every click is followed by what it visibly changes — motu refuses a step that asserts nothing)
+#           hides <slot>: <text> · holds <key> = <json>          → a motu flow; motu checks it too
+#   looked = true                                                 only a fresh reader of the screen
+#
+# An island's `states` name its own scenarios when the worlds would not tell them apart
+# (`name: key = FIXTURE | …`); keys not named come from the default world (WORLD in the fixtures).
+
+[region]
+id   = "share-links"
+page = "/share"
+root = "ShareLinksLayout"     # the page's own arrangement: list beside create, the token above both
+
+# The region's keys, typed in the APP's vocabulary. Owner: host (the page fetches it) or source.
+[state]
+projectName   = "string                 # host"
+commits       = "string[]               # host — the project's recorded commits, newest first"
+pages         = "string[]               # host — the slugs those commits recorded"
+now           = "string                 # host — ISO time the statuses are read at"
+links         = "ShareLinkRow[]         # source"
+busy          = "boolean                # source — a create or revoke is in flight"
+error         = "string | null          # source"
+revealedToken = "string | null          # source — the raw token, between create and dismiss"
+
+[[island]]
+slot  = "share-list"
+reads = "links now busy error"                  # the list says why a create or revoke failed (C6, R4)
+asks  = "revoke-requested → share-revoke"       # detail: the link's id
+
+[[island]]
+slot  = "share-create"
+reads = "commits pages busy"
+asks  = "create-requested → share-create"       # detail: { sha, slug, expiry }
+states = "ready: busy = false | while a request is in flight: busy = true"
+
+[[island]]
+slot  = "share-token"
+reads = "revealedToken"
+asks  = "token-dismissed → share-dismiss"
+states = "a token to copy: revealedToken = EXAMPLE_TOKEN"
+
+[source]
+id       = "shareLinks"
+produces = "links busy error revealedToken"
+port     = "list() · create({ sha, slug, expiresAt }) → { link, token } · revoke(id) → link"
+expiry   = "1d 7d 30d never"
+
+# ── WHAT A LINK SAYS ABOUT ITSELF ────────────────────────────────────────────────────────────────
+
+[[clause]]
+id         = "S1"
+says       = "Each link reads live, expired or revoked — and a revoked link reads revoked even after it has expired."
+flow       = "in mixed-links · shows share-list: Revoked · shows share-list: Expired · shows share-list: Live"
+provenance = "stated"
+source     = "the request: 'whether it is live, expired or revoked' · share-links.ts isLive: 'Revocation beats expiry'"
+
+[[clause]]
+id         = "S2"
+says       = "Each link says what it opens: one commit or every commit, one page or every page."
+flow       = "in mixed-links · shows share-list: every commit · shows share-list: every page"
+provenance = "stated"
+
+[[clause]]
+id         = "S3"
+says       = "A link that opens every commit AND every page is flagged as opening the whole project."
+flow       = "in mixed-links · shows share-list: whole project"
+provenance = "inferred"
+source     = "share-links.ts: 'Null means every ref of this project. Rare, and worth a second look when it appears.'"
+
+[[clause]]
+id         = "S4"
+says       = "Newest link first."
+rule       = "at settled => s.links.every((l, i) => i === 0 || (s.links[i - 1]?.createdAt ?? '') >= l.createdAt)"
+provenance = "default"
+
+# ── CREATING ─────────────────────────────────────────────────────────────────────────────────────
+
+[[clause]]
+id         = "C1"
+says       = "Creating offers a commit or all of them, a page or all of them, and an expiry of 1, 7 or 30 days or never."
+flow       = "in mixed-links · shows share-create: All commits · shows share-create: All pages · shows share-create: 30 days · shows share-create: Never · shows share-create: 41d07e5 · shows share-create: product-card"
+# the last two are the PROJECT's commit and page, fed by the region — without them the flow holds even
+# when the form ignores the region (motu's null-island caught exactly that)
+provenance = "stated"
+
+[[clause]]
+id         = "C2"
+says       = "Never is a deliberate choice: picking it alone does not create anything until the owner confirms it."
+flow       = "in mixed-links · click Never · shows share-create: I understand this link never expires · click Create link · hides share-token: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB · click I understand this link never expires · shows share-create: Create a permanent link · click Create a permanent link · shows share-token: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+provenance = "stated"
+source     = "the request: 'never must be a deliberate choice' · mint-share-link.mjs: 'A link with no expiry is a decision.'"
+
+[[clause]]
+id         = "C3"
+says       = "Right after creating, the token is shown — the exact one the host answered — and only there."
+rule       = "at settled when created && !dismissed => s.revealedToken === token"
+flow       = "in mixed-links · click Create link · shows share-token: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+provenance = "stated"
+
+[[clause]]
+id         = "C4"
+says       = "Once dismissed, the token is gone for good: nothing on the page can show it again."
+rule       = "at settled when dismissed => s.revealedToken === null"
+flow       = "in mixed-links · click Create link · shows share-token: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB · click I have copied it · hides share-token: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+provenance = "stated"
+source     = "the request: 'see its token once' · mint-share-link.mjs: 'THE TOKEN IS PRINTED ONCE and never stored'"
+
+[[clause]]
+id         = "C5"
+says       = "The new link appears at the top of the list as soon as it exists."
+rule       = "at settled when created => s.links[0]?.id === created"
+provenance = "inferred"
+
+[[clause]]
+id         = "C6"
+says       = "A create that fails shows why, reveals no token and leaves the list as it was."
+rule       = "at settled when failed === 'create' => s.error === message && s.revealedToken === before.revealedToken && s.links.length === before.links.length"
+provenance = "default"
+
+# ── REVOKING ─────────────────────────────────────────────────────────────────────────────────────
+
+[[clause]]
+id         = "R1"
+says       = "Revoking asks first; cancelling leaves the link live."
+flow       = "in mixed-links · click Revoke link · shows share-list: Revoke this link? · click Cancel · hides share-list: Revoke this link?"
+provenance = "stated"
+source     = "the request: 'They can revoke a link, with a confirmation.'"
+
+[[clause]]
+id         = "R2"
+says       = "A confirmed revoke marks the link revoked — it stays on the list, it is not deleted."
+rule       = "at settled when revoked && !failed => s.links.some((l) => l.id === revoked && l.revokedAt !== null) && s.links.length === before.links.length"
+provenance = "inferred"
+source     = "mint-share-link.mjs: 'it does not delete the row: a revoked link that is still on record is the difference between \"this was turned off\" and \"this never existed\"'"
+
+[[clause]]
+id         = "R3"
+says       = "A revoked link offers no Revoke."
+flow       = "in revoked-only · hides share-list: Revoke link"
+provenance = "inferred"
+source     = "mint-share-link.mjs: revoking is idempotent ('already revoked')"
+
+[[clause]]
+id         = "R4"
+says       = "A revoke that fails shows why and leaves the link as it was."
+rule       = "at settled when failed === 'revoke' => s.error === message && same(s.links, before.links)"
+provenance = "default"
+
+# ── WHILE SOMETHING IS IN FLIGHT ─────────────────────────────────────────────────────────────────
+
+[[clause]]
+id         = "B1"
+says       = "Answers that arrive out of order never put an older list over a newer one."
+rule       = "at settled when listed => s.busy === false && s.links.length === port.links.length"
+provenance = "inferred"
+source     = "host-app's sources guard every load with a generation (shots-source.ts: 'the slowest reply can land last')"
+
+[[clause]]
+id         = "L1"
+says       = "The screen belongs to this application: no word, state or shape the app does not use."
+looked     = true
+provenance = "inferred"
+source     = "host-app/CLAUDE.md: the final look"
+
+# ── WORLDS — what the port answers, named by the flows above. The DATA lives in the app's typed
+# fixtures (motu/src/shared/share-links-evidence.ts); this only names which.
+[[world]]
+id    = "mixed-links"
+links = "MIXED_LINKS"       # live one-commit-one-page · expired · revoked-after-expiry · whole project, never
+
+[[world]]
+id    = "revoked-only"
+links = "REVOKED_ONLY"
+
+# ── QUESTIONS — found while checking the spec; the owner of the page decides ────────────────────
+
+[[question]]
+id  = "Q1"
+ask = "If loading the list fails, the page shows the error over an empty list — and a link created afterwards then appears ALONE, as if it were the project's only one. Retry the list after a create, offer a Retry button, or accept it?"
+why = "B1's first counterexample: the list answer failed, the project held one link, the page held none"
+
+[[question]]
+id  = "Q2"
+ask = "The request says 'see its token once'. What infra/mint-share-link.mjs prints is the LINK to send — /<repo>/<sha|latest>/<slug|all>?k=<token> — not the bare token. Show the link (what the owner actually sends), the token, or both?"
+why = "found reading the minting script while writing the fixtures; the spec currently shows the token only"
+
+[[question]]
+id  = "Q3"
+ask = "What should a NEW link default to? Today the form opens on all commits + all pages — a whole-project link, the rarest and widest scope, which infra/mint-share-link.mjs warns about ('should be rare … opens every record'). Default to the newest commit and require choosing 'all'?"
+why = "the final look (looks/share-links-first.md, finding 1): the spec never decided the defaults, so the build did"
+
+[[question]]
+id  = "Q4"
+ask = "Should a link be able to follow `latest` (the alias that moves with every publish) rather than one fixed commit? share-links.ts matches the ref as a string precisely so the two mean different things; the form offers only fixed commits and 'all'."
+why = "the final look (finding 6): the request said 'one commit or every commit', which has no word for latest"
+
+[[question]]
+id  = "Q5"
+ask = "Show who created each link (share_links.created_by)? share-links.ts says a revoked link is 'a reason to look at who has it'."
+why = "the final look (finding 7)"

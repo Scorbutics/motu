@@ -22,6 +22,7 @@ import {
   type MotuFit,
   slotNameOf,
   regionRefOf,
+  exclusiveViolations,
   type RegionOf,
   type SlotsOf,
   type ProducedKeys,
@@ -98,10 +99,33 @@ export interface RegionBinding<
   id: string;
 }
 
-/** The props `<X.Root>` takes: island slots as nodes, host slots as their component's props. */
+/**
+ * One exclusive group as a union: for each member, a shape where every OTHER member is null or absent.
+ * The member's own type comes from the rest of `RootPropsOf`, so this only ever narrows.
+ */
+type ExclusiveGroup<G extends readonly string[], M = G[number]> = M extends string
+  ? { [K in Exclude<G[number], M>]?: null }
+  : never;
+/** Every declared group, intersected — each must hold on its own. `unknown` when none is declared. */
+type ExclusiveGroups<E> = E extends readonly [infer H extends readonly string[], ...infer T]
+  ? ExclusiveGroup<H> & ExclusiveGroups<T>
+  : unknown;
+/** The `exclusive` constraint a config puts on its root's props. */
+export type ExclusivePropsOf<C> = C extends { exclusive: infer E } ? ExclusiveGroups<E> : unknown;
+
+/**
+ * The props `<X.Root>` takes: island slots as nodes, host slots as their component's props — and, for
+ * each `exclusive` group, at most one member non-null. Two independent ternaries over one group fail
+ * to compile, which is the guarantee the single ternary had before the page moved to `root`.
+ */
 export type RootPropsOf<C> = (C extends { slots?: infer S } ? { [K in keyof S]?: ReactNode } : object) &
   (C extends { hostSlots?: infer H } ? { [K in keyof H]?: H[K] extends (p: infer P) => unknown ? P : Record<string, unknown> } : object) &
+  ExclusivePropsOf<C> &
   Record<string, unknown>;
+
+// One report per region and group: a page re-renders constantly, and the same broken guarantee
+// printed on every render is how a console stops being read.
+const reportedExclusive = new Set<string>();
 
 /**
  * Bind an archipelago to the environment it runs in, and derive the host's surface from it.
@@ -154,6 +178,20 @@ export function createRegion<C extends AnyArchipelagoConfig>(
       throw new Error(
         `motu: region "${config.id}" has no \`root\` — declare the application's own component as ` +
           `\`root\` in the archipelago, or compose the page yourself with <${config.id}.Island>.`,
+      );
+    }
+    // A CAST GOT PAST THE TYPE. `RootPropsOf` makes two non-null members of an exclusive group a compile
+    // error, so reaching here means `as any`, an untyped caller, or a value that is not what its type
+    // said. Rendered as passed — refusing would blank a page in production over a guarantee — and
+    // reported, once per group, where `page-render` and a human both see it.
+    for (const { group, set } of exclusiveViolations(declared, props)) {
+      const key = `${config.id}:${group.join('|')}`;
+      if (reportedExclusive.has(key)) continue;
+      reportedExclusive.add(key);
+      console.error(
+        `motu: region "${config.id}" declares [${group.join(', ')}] exclusive, and <${config.id}.Root> was ` +
+          `given ${set.join(' AND ')} at once — a screen the archipelago says cannot exist. Pass one ` +
+          `(\`{...(cond ? { ${set[0]}: … } : { ${set[1]}: … })}\`).`,
       );
     }
     const composed: Record<string, unknown> = {};

@@ -33,6 +33,11 @@ export const reviewArchipelago = archipelago<ReviewRegion, ElementTypes, Produce
     viewer: { slot: 'diff-viewer' },
     accept: { slot: 'accept-bar' },
   },
+  // THE ACCEPT BAR, OR THE WAY TO SIGN IN — never both. Someone signed in can accept and needs no link;
+  // a visitor gets the link and no bar to press. The page used to say so with two ternaries over
+  // `viewer`, one per prop, and nothing held them to agreeing. `connect` is not an island — it is the
+  // page's own link, passed straight through — which is why this names root PROPS, not slots.
+  exclusive: [['accept', 'connect']],
   // WHICH OF THIS REGION'S KEYS ARE CLOSED SETS, for the coverage fold. `viewMode` is one of three
   // words wherever this region is mounted, so its value is safe to keep and worth keeping — the
   // difference between "the viewer showed something" and "the viewer showed the ACCEPTED image" is

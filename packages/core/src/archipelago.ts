@@ -301,7 +301,8 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    *   }
    *
    * It is the LAGOON's condition only. The page still decides for itself, by passing a node or null —
-   * declaring it here does not move that decision, it lets the preview follow it.
+   * declaring it here does not move that decision, it lets the preview follow it. To hold the PAGE to
+   * "never both", declare the pair in `exclusive` as well.
    *
    * A WHOLE REGION can fill a prop too — `{ region: '<id>' }`, the id of another archipelago:
    *
@@ -327,6 +328,28 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * means the preview shows the real one and only its PROPS are supplied as data.
    */
   hostSlots?: Record<string, unknown>;
+  /**
+   * Root props that are ALTERNATIVES: at most one of each group is non-null, in every render.
+   *
+   *   exclusive: [['accept', 'connect']]   // the accept bar, or the way to sign in — never both
+   *
+   * Moving a page to `root` turns `ready ? <A/> : <B/>` into two props, `a={ready ? <A/> : null}` and
+   * `b={ready ? null : <B/>}`, and the guarantee the ternary had moves into a comment. Declaring the
+   * group puts it back: `<X.Root>` takes one union per group, so the two-ternary shape is a COMPILE
+   * error and the page writes one condition (`{...(ready ? { a: <A/> } : { b: <B/> })}`). A cast that
+   * gets past the type is reported at runtime, the lagoon shows one alternative instead of a screen
+   * the application can never draw, and `page-render` fails a page that renders two.
+   *
+   * Members are ROOT PROP names — the app's vocabulary, the left side of `slots` — and may be an island
+   * slot, a host slot, a `{ region }` slot or a prop passed straight through: an island and the
+   * skeleton that stands in for it is the common case, and the skeleton is not an island.
+   *
+   * `when`/`unless` on a slot are the LAGOON's choice of which alternative to show for a region key;
+   * this is the PAGE's guarantee that only one is ever passed. They compose — inside a group the
+   * lagoon shows the first member `when`/`unless` allows — and a `when`/`unless` pair on one key with
+   * no group is reported, because it describes an either/or nothing enforces.
+   */
+  exclusive?: readonly (readonly string[])[];
   /**
    * The "new design" layout: HTML arranging the island slots (e.g. hero + toolbar + results). It is
    * rendered natively by <motu-archipelago name="id"> in the standalone app, and swapped in as a
@@ -755,6 +778,146 @@ export function slotShows(entry: string | { slot: string; when?: string; unless?
   if (entry.when && !state[entry.when]) return false;
   if (entry.unless && state[entry.unless]) return false;
   return true;
+}
+
+/** What `exclusiveProblems` reads: the root's declarations, plus the root's own props when known. */
+export interface ExclusiveDeclaration {
+  root?: unknown;
+  slots?: Record<string, unknown>;
+  hostSlots?: Record<string, unknown>;
+  exclusive?: readonly (readonly string[])[];
+}
+
+/** One reason an `exclusive` declaration cannot be honoured. */
+export interface ExclusiveProblem {
+  /** `no-root`: nothing passes the props. `size`: a group of fewer than two distinct members.
+   *  `unknown`: a member that is not a prop of the root. `overlap`: a prop in two groups. */
+  kind: 'no-root' | 'size' | 'unknown' | 'overlap';
+  group: readonly string[];
+  prop?: string;
+  message: string;
+}
+
+/**
+ * Every way a region's `exclusive` groups are wrong — one function for the CLI and anything else that
+ * asks, so they cannot disagree.
+ *
+ * `rootProps` is the root component's own prop names when the caller could read them. Without it a
+ * member that is neither a slot nor a host slot is TRUSTED as a pass-through prop rather than called
+ * unknown: the alternative is an error on every skeleton, which is the case this exists for.
+ */
+export function exclusiveProblems(config: ExclusiveDeclaration, rootProps?: readonly string[]): ExclusiveProblem[] {
+  const groups = config.exclusive ?? [];
+  if (!groups.length) return [];
+  const out: ExclusiveProblem[] = [];
+  if (!config.root) {
+    for (const group of groups) {
+      out.push({
+        kind: 'no-root',
+        group,
+        message:
+          `exclusive group [${group.join(', ')}] on a region with no \`root\` — nothing passes these as props, ` +
+          `so nothing can be held to "at most one"`,
+      });
+    }
+    return out;
+  }
+  const declared = new Set([...Object.keys(config.slots ?? {}), ...Object.keys(config.hostSlots ?? {})]);
+  const known = rootProps ? new Set([...declared, ...rootProps]) : undefined;
+  const seenIn = new Map<string, readonly string[]>();
+  for (const group of groups) {
+    const members = [...new Set(group)];
+    if (members.length < 2) {
+      out.push({
+        kind: 'size',
+        group,
+        message: `exclusive group [${group.join(', ')}] has ${members.length} distinct member(s) — an either/or needs two`,
+      });
+    }
+    for (const prop of members) {
+      if (known && !known.has(prop)) {
+        out.push({
+          kind: 'unknown',
+          group,
+          prop,
+          message: `exclusive group [${group.join(', ')}] names \`${prop}\`, which is not a prop of the root, a slot or a host slot`,
+        });
+      }
+      const earlier = seenIn.get(prop);
+      if (earlier) {
+        out.push({
+          kind: 'overlap',
+          group,
+          prop,
+          message:
+            `\`${prop}\` is in two exclusive groups ([${earlier.join(', ')}] and [${group.join(', ')}]) — ` +
+            `merge them into one group, or the guarantee each makes is not the one you meant`,
+        });
+      } else {
+        seenIn.set(prop, group);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The groups a set of root props breaks: every group where more than one member is non-null.
+ * What `<X.Root>` reports when a cast got past the type.
+ */
+export function exclusiveViolations(
+  config: { exclusive?: readonly (readonly string[])[] },
+  props: Record<string, unknown>,
+): { group: readonly string[]; set: string[] }[] {
+  const out: { group: readonly string[]; set: string[] }[] = [];
+  for (const group of config.exclusive ?? []) {
+    const set = [...new Set(group)].filter((p) => props[p] != null);
+    if (set.length > 1) out.push({ group, set });
+  }
+  return out;
+}
+
+/**
+ * Keep the FIRST non-null member of each exclusive group and null the rest — the lagoon's choice,
+ * since it has no page to make one. Returns the props unchanged when no group applies.
+ */
+export function keepOneAlternative<P extends Record<string, unknown>>(
+  config: { exclusive?: readonly (readonly string[])[] },
+  props: P,
+): P {
+  const groups = config.exclusive ?? [];
+  if (!groups.length) return props;
+  const out: Record<string, unknown> = { ...props };
+  for (const group of groups) {
+    let kept = false;
+    for (const prop of group) {
+      if (out[prop] == null) continue;
+      if (kept) out[prop] = null;
+      else kept = true;
+    }
+  }
+  return out as P;
+}
+
+/**
+ * Pairs of root props declared `when: k` and `unless: k` on the same key that NO exclusive group
+ * covers. The lagoon treats them as alternatives; nothing holds the page to it.
+ */
+export function undeclaredAlternatives(config: ExclusiveDeclaration): { key: string; when: string; unless: string }[] {
+  const when = new Map<string, string[]>();
+  const unless = new Map<string, string[]>();
+  for (const [prop, entry] of Object.entries(config.slots ?? {})) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as { when?: unknown; unless?: unknown };
+    if (typeof e.when === 'string') when.set(e.when, [...(when.get(e.when) ?? []), prop]);
+    if (typeof e.unless === 'string') unless.set(e.unless, [...(unless.get(e.unless) ?? []), prop]);
+  }
+  const covered = (a: string, b: string) => (config.exclusive ?? []).some((g) => g.includes(a) && g.includes(b));
+  const out: { key: string; when: string; unless: string }[] = [];
+  for (const [key, ws] of when) {
+    for (const w of ws) for (const u of unless.get(key) ?? []) if (!covered(w, u)) out.push({ key, when: w, unless: u });
+  }
+  return out;
 }
 
 /** Every slot a config declares, as a union — literal only when declared through `archipelago()`. */

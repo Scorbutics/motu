@@ -2,7 +2,7 @@
 // Split out of commands/verify.mjs; verify.mjs re-exports the public surface.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { readRegions } from '../../lib/eject.mjs';
-import { conditionalSlots } from '../../lib/lagoon-declares.mjs';
+import { conditionalSlots, exclusiveDeclared } from '../../lib/lagoon-declares.mjs';
 import { paths } from '../../lib/util.mjs';
 import { pageRenderLagoon, runArchipelagoLagoon } from '../../playwright-lagoon.mjs';
 import { cssChecks } from './island-static.mjs';
@@ -10,7 +10,7 @@ import { declaredReach, reportBrowserOverride, reportRuntimeDiagnostics } from '
 import { frameIsPageCheck } from './region-composition.mjs';
 import { archipelagoConfigChecks } from './region-config.mjs';
 import { catalogueCheck, regionFlowCheck, renderCoverageCheck, wiringProbe, writesCoveredCheck } from './region-flows.mjs';
-import { channelSourceCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
+import { channelSourceCheck, exclusiveCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
 import { environmentalCause, makeReport, printReport, printSweep, setProgressScope, setVerbose, step, summaryOf, sweepExitCode, verifyExitCode } from './report.mjs';
 
 export async function archipelagoVerifyCommand(argv) {
@@ -52,6 +52,7 @@ export async function runArchipelagoVerify(argv, id) {
   const hasLayout = archipelagoConfigChecks(report, id);
   // Static, and project-wide in what it reads: a cycle is a property of the graph, not of one file.
   if (existsSync(paths.archipelagoFile(id))) regionRefCheck(report, id);
+  if (existsSync(paths.archipelagoFile(id))) exclusiveCheck(report, id);
 
   // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
@@ -131,7 +132,10 @@ export async function runArchipelagoVerify(argv, id) {
                 ? []
                 : (declaredRegion?.islands ?? []).filter((i) => !i.planned).map((i) => i.slot);
             const placed = new Set(r.islands.map((i) => i.slot).filter(Boolean));
-            const unplaced = declared.filter((slot) => !placed.has(slot));
+            // AN ALTERNATIVE IS NOT UNPLACED. In an exclusive group the lagoon shows one member, like the
+            // page does; the others not being on screen is the declaration working, not a slot lost.
+            const alternatives = new Set(exclusiveIslandSlots(id).flatMap((g) => g.slots));
+            const unplaced = declared.filter((slot) => !placed.has(slot) && !alternatives.has(slot));
             report.ok('lagoon-render', `region + all ${r.islands.length} island(s) mounted in the lagoon`, {
               n: r.islands.length,
               of: 'mounted island(s)',
@@ -180,7 +184,22 @@ export async function runArchipelagoVerify(argv, id) {
           // `when`/`unless`; a slot the page did not take because the region says it is an alternative
           // is the page behaving, not a finding.
           const conditional = conditionalSlots(paths.archipelagoFile(id));
-          const missing = slots2.filter((slot) => !reached.has(slot) && !conditional.has(slot));
+          // So is a member of an EXCLUSIVE group — the page passes one alternative and null for the
+          // rest, by declaration. What an exclusive group CAN fail on is the opposite: two of its
+          // islands on the page at once, which the archipelago says is a screen that cannot exist.
+          const groups = exclusiveIslandSlots(id);
+          for (const g of groups) {
+            const both = g.slots.filter((slot) => reached.has(slot));
+            if (both.length > 1) {
+              report.error(
+                'page-render',
+                `the page renders ${both.join(' AND ')} at once, and the archipelago declares ` +
+                  `[${g.group.join(', ')}] exclusive — a screen it says cannot exist. Open ?region=${id}&view=page`,
+              );
+            }
+          }
+          const alternatives = new Set(groups.flatMap((g) => g.slots));
+          const missing = slots2.filter((slot) => !reached.has(slot) && !conditional.has(slot) && !alternatives.has(slot));
           if (!reached.size) {
             // NOTHING AT ALL. The page mounted and reached no declared slot, so whatever it drew, it
             // was not this region. That is a failure however the page is written.
@@ -232,4 +251,20 @@ export async function runArchipelagoVerify(argv, id) {
     errors: report.findings.filter((f) => f.level === 'error'),
     warns: report.findings.filter((f) => f.level === 'warn'),
   };
+}
+
+/**
+ * The island SLOTS in each exclusive group, keyed by group — the members `page-render` and
+ * `lagoon-render` can see, since both count mounted islands. A host slot or a pass-through prop in the
+ * group is invisible to them; the type of `<X.Root>` and its runtime report cover those.
+ */
+export function exclusiveIslandSlots(id) {
+  const declared = exclusiveDeclared(paths.archipelagoFile(id));
+  if (!declared) return [];
+  const slotOf = (prop) => {
+    const e = declared.slots[prop];
+    if (typeof e === 'string') return e;
+    return e && !e.region ? (e.slot ?? null) : null;
+  };
+  return declared.exclusive.map((group) => ({ group, slots: group.map(slotOf).filter(Boolean) }));
 }

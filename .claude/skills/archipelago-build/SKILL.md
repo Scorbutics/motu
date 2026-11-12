@@ -215,9 +215,9 @@ Moving a page to `root` is not "the JSX moved" — that part is checkable. These
 - **EXCLUSIVITY GETS DEMOTED.** A ternary whose branches are mutually exclusive by construction
   becomes two independent props, and nothing enforces that at most one is non-null. acme's actions page
   went from `weeksLoaded ? <WeekNavigator/> : <Skeleton/>` to a `weekNav` prop and a
-  `weekNavPlaceholder` prop rendered adjacently, with a comment where the guarantee used to be. When
-  `slots` cannot express an either/or, KEEP the ternary in the page and pass one node — not two props
-  and a promise.
+  `weekNavPlaceholder` prop rendered adjacently, with a comment where the guarantee used to be. DECLARE
+  the pair — `exclusive: [['weekNav', 'weekNavPlaceholder']]` — and `<X.Root>` will not compile with
+  both; the page writes one condition as a spread. Not two props and a promise.
 - **THE SERVER/CLIENT BOUNDARY MOVES.** The root is rendered from inside `<X.Region>`, which is a
   client component. A layout the page used to render as a server component crosses into the client
   bundle when it becomes the root — acme's `AuthLayout` did, and the nesting inverted from

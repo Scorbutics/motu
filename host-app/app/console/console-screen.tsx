@@ -173,23 +173,26 @@ function ReviewPage({ cfg, viewer, repo }: { cfg: HostConfig; viewer: Viewer | n
       error={error ? <p className="rv-error">{error}</p> : null}
       account={<ViewerBadge viewer={viewer} />}
       backHref={repo ? `/${repo}/` : "/"}
-      // NULL WHEN THERE IS NOBODY TO ACCEPT AS, which is how a slot is left unmounted — `Root` treats
-      // null as absent rather than mounting the island with no child, which would put the accept bar
-      // on screen at exactly the moment the page said not to.
-      accept={viewer ? <AcceptBar /> : null}
-      connect={
-        viewer ? null : (
-          // THE WAY IN, not a way round. This used to be a field asking for the host's admin token —
-          // a secret the operator pasted and the browser kept — because the console had no idea who
-          // was reading it. It does now, so the answer to "you cannot accept yet" is the same answer
-          // the rest of this host gives: sign in.
-          <p className="rv-token">
-            <a className="motu-btn" data-weight="strong" href={`/signin?returnTo=${encodeURIComponent("/console")}`}>
-              Sign in to accept baselines
-            </a>
-          </p>
-        )
-      }
+      // THE ACCEPT BAR OR THE WAY IN — ONE CONDITION, because the archipelago declares the two
+      // exclusive and `<Review.Root>` will not compile with both. It used to be two ternaries over
+      // `viewer`, one per prop, agreeing only because nobody had edited one of them yet.
+      //
+      // The way in, not a way round: this used to be a field asking for the host's admin token — a
+      // secret the operator pasted and the browser kept — because the console had no idea who was
+      // reading it. It does now, so the answer to "you cannot accept yet" is the same answer the rest
+      // of this host gives: sign in. (Null for both would leave the slot unmounted: `Root` treats null
+      // as absent rather than mounting the island with no child.)
+      {...(viewer
+        ? { accept: <AcceptBar /> }
+        : {
+            connect: (
+              <p className="rv-token">
+                <a className="motu-btn" data-weight="strong" href={`/signin?returnTo=${encodeURIComponent("/console")}`}>
+                  Sign in to accept baselines
+                </a>
+              </p>
+            ),
+          })}
     />
   )
 }

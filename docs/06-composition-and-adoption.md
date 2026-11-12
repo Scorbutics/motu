@@ -200,8 +200,26 @@ weekNavPlaceholder={weeksLoaded ? null : <Skeleton className="h-11 w-full rounde
 The layout renders `{weekNav}{weekNavPlaceholder}` one after the other. The guarantee moved from the
 type system into a comment.
 
-**When `slots` cannot express an either/or, keep the ternary in the page and pass one node** — not two
-props and a promise.
+**Declare the pair, and the type system has it back:**
+
+```ts
+// actions.archipelago.ts
+exclusive: [['weekNav', 'weekNavPlaceholder']],
+```
+
+```tsx
+// the page — one condition, as it was before the move
+<Actions.Root
+  {...(weeksLoaded
+    ? { weekNav: availableWeeks.length > 0 || hasNoCurrentWeek ? <WeekNavigator … /> : null }
+    : { weekNavPlaceholder: <Skeleton className="h-11 w-full rounded-lg" /> })}
+/>
+```
+
+With the group declared, the two-ternary "after" above is a compile error on `<Actions.Root>`. The
+lagoon shows one alternative instead of both, and `page-render` fails a page that renders two. See
+[05 — `exclusive`](05-archipelagos-and-regions.md#exclusive--alternatives-the-page-cannot-pass-together).
+Undeclared, nothing sees the demotion, so declaring the group is part of the move to `root`.
 
 ### The server/client boundary moves
 

@@ -6,7 +6,9 @@ import { readComponentContract } from '../../lib/component-props.mjs';
 import { readGeneratedContracts } from '../../lib/contracts.mjs';
 import { declaredSourcesOf } from '../../lib/declared-sources.mjs';
 import { readEffectEntries } from '../../lib/effects.mjs';
+import { exclusiveDeclared } from '../../lib/lagoon-declares.mjs';
 import { regionRefsOf } from '../../lib/region-refs.mjs';
+import { exclusiveProblems, undeclaredAlternatives } from '@motu/core';
 import { blankComments, islandComponentExport, islandComponentPath, lagoonViewports, names, paths, resolveAppImport } from '../../lib/util.mjs';
 import { auditRegionLagoon } from '../../playwright-lagoon.mjs';
 import { declaredWrites, readScenariosFor } from './region-flows.mjs';
@@ -465,5 +467,50 @@ export function regionRefCheck(report, id) {
       n: referencedBy.length,
       of: 'slot(s) this region fills',
     });
+  }
+}
+
+/**
+ * ALTERNATIVES: `exclusive: [['accept', 'connect']]` — root props of which at most one is non-null.
+ *
+ * The guarantee itself is the compiler's (`RootPropsOf` takes one union per group) and the runtime's
+ * (`<X.Root>` reports a cast that got past it). What is left for a static check is the DECLARATION:
+ * a group on a region with no root, a group of one, a prop in two groups — and the either/or the
+ * region describes with `when`/`unless` but never declares, which the lagoon follows and nothing holds
+ * the page to.
+ *
+ * Says nothing on a region that declares no group and no `when`/`unless` pair: that is nearly every
+ * region, and a row there would be a check that examined nothing reporting as one that passed.
+ */
+export function exclusiveCheck(report, id) {
+  const file = paths.archipelagoFile(id);
+  const declared = exclusiveDeclared(file);
+  if (declared === null) {
+    if (existsSync(file)) report.warn('exclusive', `${paths.rel(file)} could not be parsed, so its exclusive groups were not read`);
+    return;
+  }
+  for (const text of declared.unreadable) {
+    report.error(
+      'exclusive',
+      `exclusive group ${text} is not an array of string literals — it cannot be read, so it is not checked. ` +
+        `Write the prop names inline: \`exclusive: [['a', 'b']]\``,
+    );
+  }
+  const problems = exclusiveProblems(declared);
+  for (const p of problems) report.error('exclusive', p.message);
+  for (const alt of undeclaredAlternatives(declared)) {
+    report.warn(
+      'exclusive',
+      `\`${alt.when}\` (when: '${alt.key}') and \`${alt.unless}\` (unless: '${alt.key}') are alternatives the lagoon ` +
+        `follows and nothing holds the page to — add \`exclusive: [['${alt.when}', '${alt.unless}']]\` and the page ` +
+        `cannot pass both`,
+    );
+  }
+  if (declared.exclusive.length && !problems.length && !declared.unreadable.length) {
+    report.ok(
+      'exclusive',
+      `${declared.exclusive.map((g) => g.join(' | ')).join(', ')} — at most one of each, held by the type of the region's Root`,
+      { n: declared.exclusive.length, of: 'exclusive group(s)' },
+    );
   }
 }

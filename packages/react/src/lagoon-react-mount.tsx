@@ -28,6 +28,7 @@ import {
   ensureMountpointStyle,
   slotNameOf,
   slotShows,
+  keepOneAlternative,
   regionRefOf,
   regionRefs,
   type ArchipelagoConfig,
@@ -266,6 +267,7 @@ function renderRegionRoot(
     root?: unknown;
     slots?: Record<string, string | { slot: string; when?: string; unless?: string } | { region: string }>;
     hostSlots?: Record<string, unknown>;
+    exclusive?: readonly (readonly string[])[];
   };
   if (!declared.root) return undefined;
   const composed: Record<string, unknown> = {};
@@ -293,7 +295,11 @@ function renderRegionRoot(
     if (prop in composed) continue;
     composed[prop] = value;
   }
-  return createElement(declared.root as never, composed as never);
+  // ONE ALTERNATIVE PER EXCLUSIVE GROUP. The page passes one member and null for the rest; the lagoon
+  // has no page, so it filled every member it could and drew the accept bar beside the "sign in to
+  // accept" link — a screen the archipelago declares impossible. The first member that is still
+  // standing (after `when`/`unless`) is the one shown, in the order the group is written.
+  return createElement(declared.root as never, keepOneAlternative(declared, composed) as never);
 }
 
 /**

@@ -401,6 +401,56 @@ export function declaredSlotNames(file) {
 }
 
 /** The object literal that declares `islands: [...]`, wherever it sits. */
+/**
+ * What a region declares about ALTERNATIVES, as the plain data `exclusiveProblems` and
+ * `undeclaredAlternatives` (from @motu/core) read: whether it has a `root`, its slots (with their
+ * `when`/`unless`), its host slots, and its `exclusive` groups.
+ *
+ * `null` when the file did not parse — "unknown", which the caller must not read as "none". A group
+ * written as anything but an array of string literals is reported in `unreadable` rather than
+ * dropped: a group silently missing from the check is a guarantee nobody is checking.
+ */
+export function exclusiveDeclared(file) {
+  if (!existsSync(file)) return null;
+  let sf;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    sf = project.createSourceFile('archipelago.ts', readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+  const config = configLiteral(sf);
+  if (!config) return null;
+  const slots = {};
+  for (const prop of propInit(config, 'slots')?.asKind(SyntaxKind.ObjectLiteralExpression)?.getProperties() ?? []) {
+    const name = nameOf(prop);
+    const init = prop.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+    if (!name || !init) continue;
+    const obj = init.asKind(SyntaxKind.ObjectLiteralExpression);
+    slots[name] = obj
+      ? Object.fromEntries(['slot', 'when', 'unless', 'region'].map((k) => [k, str(propInit(obj, k))]).filter(([, v]) => v))
+      : (str(init) ?? name);
+  }
+  const hostSlots = {};
+  for (const prop of propInit(config, 'hostSlots')?.asKind(SyntaxKind.ObjectLiteralExpression)?.getProperties() ?? []) {
+    const name = nameOf(prop);
+    if (name) hostSlots[name] = true;
+  }
+  const exclusive = [];
+  const unreadable = [];
+  const groups = propInit(config, 'exclusive');
+  if (groups) {
+    const arr = groups.asKind(SyntaxKind.ArrayLiteralExpression);
+    if (!arr) unreadable.push(groups.getText());
+    for (const g of arr?.getElements() ?? []) {
+      const members = g.asKind(SyntaxKind.ArrayLiteralExpression)?.getElements().map(str);
+      if (!members || members.some((m) => m === undefined)) unreadable.push(g.getText());
+      else exclusive.push(members);
+    }
+  }
+  return { root: Boolean(config.getProperty('root')), slots, hostSlots, exclusive, unreadable };
+}
+
 function configLiteral(sf) {
   return sf
     .getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)

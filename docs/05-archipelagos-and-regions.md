@@ -244,7 +244,8 @@ form and an "expired link" banner — and the page expresses that by passing `nu
 does not apply. The lagoon has no page to do that, so it mounted both and previewed a screen the
 application can never show. `when` / `unless` name the region key that decides, and are the LAGOON's
 condition only (`packages/core/src/archipelago.ts:251-265`; the runtime predicate is `slotShows`,
-`:529`, and `slotNameOf` reads the name out of either form, `:519`).
+`:529`, and `slotNameOf` reads the name out of either form, `:519`). To hold the PAGE to the same either/or,
+declare the pair in [`exclusive`](#exclusive--alternatives-the-page-cannot-pass-together) as well.
 
 `hostSlots?: Record<string, unknown>` maps root props the HOST fills to the application component that
 fills them (`packages/core/src/archipelago.ts:267-278`):
@@ -258,6 +259,51 @@ member. Islanding it would invent an island that binds nothing. **A COMPONENT, n
 `hostSlots: ['header']` with nothing behind it blesses exactly the bug this replaces, the lagoon
 rendering nothing there and calling it correct. Naming the component means the preview shows the real
 one and only its PROPS are supplied as data.
+
+### `exclusive` — alternatives the page cannot pass together
+
+`exclusive?: readonly (readonly string[])[]` names groups of ROOT PROPS of which at most one is
+non-null, in every render (`packages/core/src/archipelago.ts`, `exclusiveProblems`):
+
+```ts
+root: ReviewLayout,
+slots: { accept: { slot: 'accept-bar' }, /* … */ },
+exclusive: [['accept', 'connect']],   // the accept bar, or the way to sign in — never both
+```
+
+Moving a page to `root` turns `ready ? <A/> : <B/>` into two props, and two independent ternaries over
+`ready` agree only until someone edits one of them
+([06](06-composition-and-adoption.md#exclusivity-gets-demoted)). A declared group puts the guarantee
+back where the ternary had it:
+
+- **The compiler.** `RootPropsOf` takes one union per group, so `accept={v ? <A/> : null}
+  connect={v ? null : <C/>}` does not compile. The page writes one condition:
+  `{...(viewer ? { accept: <AcceptBar/> } : { connect: <SignIn/> })}`. `integrate check` already reads
+  slots placed through a spread.
+- **`<X.Root>` at runtime.** A cast that gets past the type renders as passed and is reported once per
+  group with `console.error`, naming the props.
+- **The lagoon.** It has no page to choose, so it shows the FIRST member still standing after
+  `when`/`unless`, in the order the group is written, not all of them.
+- **`page-render`.** A group's island not on the page is an alternative the page did not take, not a
+  miss. Two of a group's islands on the page at once is an ERROR.
+
+Members are root PROP names, the app's vocabulary: an island slot, a host slot, a `{ region }` slot or a
+prop passed straight through. A pass-through member is what makes the common case expressible: an
+island and the skeleton that stands in for it, where the skeleton is not an island. Without the root
+component's own props to compare against, a member that is neither a slot nor a host slot is trusted
+as a pass-through rather than reported as unknown.
+
+The `exclusive` check (static, in `motu check`) errors on a group of fewer than two distinct members, a
+prop in two groups, a group on a region with no `root`, and a group that is not written as string
+literals (it could not be read, so it would not be checked). It WARNS on a `when: 'k'` / `unless: 'k'`
+pair that no group covers: the lagoon follows that either/or and nothing holds the page to it.
+`when`/`unless` stay the LAGOON's choice of which alternative to show for a region key; `exclusive` is
+the PAGE's guarantee. They compose, and neither implies the other.
+
+**What it does not do.** It allows zero members, because "at most one" is the ternary-with-`null` case.
+It cannot see inside the root: a layout that derives something from two members is out of reach. And
+the guarantee is motu's type, so it leaves with motu. `removal-check` rewrites `<X.Root>` back to the
+layout and the spread survives as plain JSX, but the layout's own props are independent again.
 
 ### A slot another REGION fills — `{ region: '<id>' }`
 

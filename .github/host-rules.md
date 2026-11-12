@@ -508,8 +508,10 @@ change in a move to `root` that no check sees:
  - EXCLUSIVITY GETS DEMOTED. A ternary whose branches cannot both render becomes two independent
    props, and nothing enforces that at most one is non-null — acme's actions page traded
    `weeksLoaded ? <WeekNavigator/> : <Skeleton/>` for a `weekNav` prop and a `weekNavPlaceholder` prop
-   rendered adjacently, with a comment standing where the guarantee used to be. When `slots` cannot
-   express an either/or, keep the ternary in the page and pass ONE node.
+   rendered adjacently, with a comment standing where the guarantee used to be. DECLARE the pair —
+   `exclusive: [['weekNav', 'weekNavPlaceholder']]` on the archipelago — and `<X.Root>` will not
+   compile with both: the page writes one condition, `{...(ready ? { weekNav } : { weekNavPlaceholder })}`.
+   Undeclared, nothing sees it.
  - THE SERVER/CLIENT BOUNDARY MOVES. The root renders inside `<X.Region>`, a client component. A
    layout the page rendered on the server crosses into the client bundle when it becomes the root, and
    the nesting inverts: acme's `/forgot-password` went from `page → AuthLayout → Screen` to

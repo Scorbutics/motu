@@ -362,8 +362,9 @@ of stage 2 and **refuses rather than guessing** when the frame nests two host co
 not:
 
 - **Exclusivity gets demoted.** A ternary whose branches are mutually exclusive by construction becomes
-  two independent props, and nothing enforces that at most one is non-null. When `slots` cannot express
-  an either/or, **keep the ternary in the page and pass one node** — not two props and a promise.
+  two independent props, and nothing enforces that at most one is non-null. **Declare the pair in
+  `exclusive`** and `<X.Root>` will not compile with both — not two props and a promise
+  ([05](05-archipelagos-and-regions.md#exclusive--alternatives-the-page-cannot-pass-together)).
 - **The server/client boundary moves.** The root renders inside `<X.Region>`, which is a client
   component, so a layout the page used to render as a server component crosses into the client bundle.
   Same pixels, different tree. Check what the extracted layout imports before you move it.

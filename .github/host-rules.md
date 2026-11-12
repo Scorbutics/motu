@@ -371,6 +371,18 @@ in the output — because a port that never opened *because the project does not
 whatever the headline says. Verified in both directions: a missing browser gives exit 2, a missing
 import in the region's frame still gives exit 1.
 
+## A state no flow can reach is a WORLD, not a seed
+
+When the state you need depends on what the app is ANSWERED — a paused member, a slow or empty backend,
+no week generated yet — do not seed the keys it shows. A key a running source produces is PINNED once
+seeded, and the source can never move it: the flow then proves the lagoon stored what you wrote. Declare
+a world (`defineWorlds` in the lagoon override module, exported as `worlds`) that re-answers the source's
+PORT (`regions.<id>.channels.<source>: [args]`) or a stand-in's FACT (`worldFact(name, fallback)`), and
+name it on the flow (`world: '<id>'`). `world-pins` refuses the seed; `world-differs` replays the flow
+without its world and warns when nothing changes; `world-used` flags a world no flow names. A world never
+touches the app's code or the arrangement. If the state still cannot be reached because the PAGE derives
+it in an effect, that is a finding about the page — say so; do not grow the world to imitate the effect.
+
 ## When several agents build one region at once
 
 These bind you whether or not someone launched you as part of a fan-out.

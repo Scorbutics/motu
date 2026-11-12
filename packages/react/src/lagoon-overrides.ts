@@ -9,6 +9,7 @@
 // which is the shape the region's own module already has. The kind-first maps still work and still
 // mean the same thing; where both name a field, the region-first one wins, because it is the more
 // specific statement about that region.
+import { applyWorld } from './lagoon-worlds';
 import { channelRegionId } from '@motu/core';
 import type { AnyArchipelagoConfig, DeclaredChannel, RegionOf, SlotsOf } from '@motu/core';
 import type { DeclaredWire } from './lagoon-wire';
@@ -149,8 +150,11 @@ export function regionOverrides(maps: RegionOverrideMaps | undefined, id: string
   // other dropped, and a wire that is installed in only one of them is the same bug with a worse
   // symptom — the checks drive the focused entry, so the lane a human looks at would be the only one
   // answering HTTP. Idempotent per fake, so being called on every resolve costs nothing.
-  merged.wire?.install();
-  return merged;
+  // THE ACTIVE WORLD, applied here for the same reason as the wire: both entries read through this,
+  // so the gallery a person opens and the entry every check drives see the same answers.
+  const worlded = applyWorld(id, merged);
+  (worlded.wire as { install?: () => void } | undefined)?.install?.();
+  return worlded;
 }
 
 /** A region override that KNOWS which archipelago it belongs to. */

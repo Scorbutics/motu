@@ -1543,7 +1543,28 @@ export function channelFrom<
   // The same fact the type now carries, readable at runtime — so `overridesFor` can refuse a channel
   // filed under the wrong region even where the ids are not literal enough for the compiler to see it.
   (channel as unknown as Record<symbol, string>)[CHANNEL_REGION_ID] = spec.to.id;
+  // THE SPEC, KEPT: a lagoon WORLD re-answers a source by rebuilding its channel with other `args`
+  // (`channelWithArgs`). Without it a channel is a closure over its arguments and nothing can vary them.
+  (channel as unknown as Record<symbol, unknown>)[CHANNEL_SPEC] = spec;
   return channel as DeclaredChannel<A['id']>;
+}
+
+const CHANNEL_SPEC = Symbol.for('motu.channel.spec');
+
+/** Which declared source a `channelFrom` channel installs, or null for a raw channel. */
+export function channelSourceId(channel: unknown): string | null {
+  const spec = (channel as Record<symbol, { id?: string }> | null)?.[CHANNEL_SPEC];
+  return spec?.id ?? null;
+}
+
+/**
+ * The same channel, built with other arguments — what a lagoon world uses to re-answer a source's
+ * PORT while the source itself still runs. Null for a channel that was not built by `channelFrom`.
+ */
+export function channelWithArgs<C>(channel: C, args: readonly unknown[]): C | null {
+  const spec = (channel as unknown as Record<symbol, Parameters<typeof channelFrom>[0]> | null)?.[CHANNEL_SPEC];
+  if (!spec) return null;
+  return channelFrom({ ...spec, args } as Parameters<typeof channelFrom>[0]) as unknown as C;
 }
 
 /** Observe outbound host intents (navigate/action) crossing the boundary (debug only). */

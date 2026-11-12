@@ -16,6 +16,15 @@ export const scenarios = [
     ],
   },
   {
+    // SOMEONE ELSE SIGNED IN, in the lagoon's `karen-signed-in` world: Karen Okonkwo, whose membership
+    // is suspended. Who is signed in is what the page hands the shell — a fact no screen flow could
+    // change before worlds — and the events page has to say what that membership cannot do.
+    name: 'a suspended member is told they cannot RSVP',
+    world: 'karen-signed-in',
+    screen: 'events',
+    steps: [{ expectScreen: 'events', expectRender: { 'app-nav': 'Karen', 'events-header': 'A suspended membership cannot RSVP' } }],
+  },
+  {
     name: 'a path opens the screen that serves it',
     screen: 'home',
     steps: [{ navigate: '/events', expectScreen: 'events' }],

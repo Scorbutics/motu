@@ -26,7 +26,7 @@ export const eventsArchipelago = archipelago<EventsRegion, ElementTypes, Produce
     id: 'events',
     layout: EVENTS_LAYOUT,
     islands: [
-      { slot: 'events-header', element: 'x-events-header', bind: ['events', 'myRsvps', 'me'] },
+      { slot: 'events-header', element: 'x-events-header', bind: ['events', 'myRsvps', 'me', 'eventsLoading'] },
       {
         slot: 'event-filters',
         element: 'x-event-filters',

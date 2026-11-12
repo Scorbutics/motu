@@ -6,6 +6,7 @@ import type { ComponentType } from 'react';
 import type { MotuTheme, MotuFit, IslandContract } from '@motu/core';
 import {
   defineArchipelago,
+  disposeArchipelago,
   defineArchipelagoElement,
   defineIslandElement,
   type ArchipelagoConfig,
@@ -259,6 +260,10 @@ export function defineLagoon(target: LagoonTarget, opts: DefineLagoonOptions): H
           layout: `<motu-island slot="lagoon"${target.fit ? ` fit="${target.fit}"` : ''}></motu-island>`,
         };
 
+  // A RE-AIM REPLACES THE REGION, channels included. Without this the previous definition's sources
+  // kept running beside the new ones: a world switch left the default world's instant port answering
+  // (and winning) while the store guard saw two sources answer the same intent.
+  disposeArchipelago(config.id);
   defineMotuApp({
     elements: opts.elements,
     css: opts.css,

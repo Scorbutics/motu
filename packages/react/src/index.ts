@@ -45,3 +45,6 @@ export { readStateRequest, pickState, stateNames, slug, replayFlow, publishState
 export type { LagoonEvidence, StateRequest, StateOutcome } from './lagoon-states';
 export { playState, clearState, activeStates, statesFor, mountedRegionIds, regionHarness, regionsInView, scenarioToRegion, subscribeStates, registerLagoonRegion, subscribeRegionRemount, formatStateParam, parseStateParam } from './lagoon-player';
 export type { StateRef, PlayOutcome } from './lagoon-player';
+
+export { defineWorlds, worldFact, perWorld, setWorld, currentWorld, onWorldChange, installWorlds, declaredWorlds, worldExists, describeWorld, DEFAULT_WORLD } from './lagoon-worlds';
+export type { Worlds, WorldSpec, WorldRegion } from './lagoon-worlds';

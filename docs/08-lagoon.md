@@ -451,6 +451,7 @@ the view to one island.
 | `/?screen=<id>[&path=<p>]` | a SCREEN — the app's layout with each slot's region in place (experimental) |
 | `&state=<region>.flow.<slug>[@n]` | on a screen or a region view: that region put into that flow (repeatable, one per region) |
 | `&state=<region>.scenario.<tag>.<slug>[@n]` | that island's scenario played INSIDE its region — a what-if (below) |
+| `&world=<id>` | any of the above in that WORLD — the lagoon's answers re-named ([Worlds](#worlds--named-answers-for-the-states-no-flow-can-reach)). A flow address opens in the flow's own world without it |
 
 Read at `packages/react/src/lagoon-states.ts:111-123` (`scenario`, `flow`, `step`, `region`) and
 `:134-139` (`target`). Printed by `motu lagoon states`
@@ -545,6 +546,85 @@ months later into a lagoon that has grown another region since
 (`packages/cli/src/commands/lagoon.mjs:775-780`).
 
 `step=` is not printed — append it yourself.
+
+## Worlds — named answers for the states no flow can reach
+
+A flow drives what the lagoon was handed, and by default the lagoon is handed ONE set of answers: one
+signed-in member, one backend behind each source's port, one wire. A paused member, a calendar that is
+slow to answer, "no week generated yet" — states production reaches every day — were unreachable by
+any flow, and seeding the keys involved was worse than nothing: a key a source produces is PINNED once
+seeded, and the source can no longer move it.
+
+A **world** is a named overlay on what the override module already declares. It adds no new kind of
+thing; today's lagoon is the `default` world, and a world says only what differs from it.
+
+```ts
+// roots/lagoon/src/worlds.ts — exported from the override module as `worlds`
+import { defineWorlds } from '@motu/react';
+
+export const worlds = defineWorlds({
+  'slow-backend': {
+    description: 'the events service answers after 4 s',
+    // Re-answers a SOURCE: its channel is rebuilt with these args. The source itself still runs.
+    regions: { events: { channels: { events: [() => seedEventsPort({ latencyMs: 4000 }), clock] } } },
+  },
+  'karen-signed-in': {
+    description: 'a suspended member is the one signed in',
+    facts: { signedIn: KAREN },                       // read by stand-ins with worldFact()
+    regions: { events: { seed: { me: KAREN } } },     // a key nothing produces may be seeded
+  },
+});
+```
+
+| Field | Overlays |
+| --- | --- |
+| `regions.<id>.seed` | the region's starting state (shallow). Never a key one of its running sources produces — `world-pins` |
+| `regions.<id>.channels.<sourceId>` | the `args` that source's channel is rebuilt with (`channelFrom` keeps its spec) |
+| `regions.<id>.wire` | the region's wire, replaced |
+| `regions.<id>.props` | per slot, what the page passes that is not region state |
+| `facts.<name>` | a value a lagoon stand-in reads with `worldFact(name, fallback)` |
+| `extends` | another world to build on, explicitly. Worlds are never combined implicitly |
+
+**Never in a world**: the arrangement (`layout`, `slots`, `providers`), the islands, and the
+application's code. A world changes what the app is ANSWERED, never what the app is.
+
+**A flow names its world** — `world: 'slow-backend'` on a region flow or a screen flow; absent is
+`default`, so every existing flow is unchanged. Its own `seed` layers on top of the world's.
+
+**Every world is an address**: `?world=<id>` composes with every other address
+(`/?region=events&flow=…&world=slow-backend`, `/?screen=events&world=karen-signed-in`). An undeclared
+world REFUSES to render, like any address that resolves to nothing. A flow address opens in the
+flow's own world, and naming a different one refuses. `motu lagoon states` prints each flow at its
+world — never every flow × every world, because a combination nobody declared is not a state anyone
+claimed. The dock lists worlds in its palette (Ctrl/Cmd-K → `World: …`) and shows the active one on
+the bar.
+
+**A stand-in that holds a fact as a constant** makes it readable once, with `perWorld` so a context
+value keeps its identity inside a world:
+
+```ts
+const memberContext = perWorld(() => ({ member: worldFact('member', LAGOON_MEMBER), loading: false }));
+export const useMember = () => memberContext();
+```
+
+**How it runs.** The overlay is applied in `regionOverrides`, the one reader both entries share, so
+the gallery and the focused entry every check drives see the same world. Switching world disposes the
+regions and re-defines them with the world's answers — a re-aim, not a reboot.
+
+**What it costs the host: nothing in the application.** Worlds live in the lagoon override module and
+in evidence; the production bundle, the deploy, the coverage beacon and `removal-check` are untouched.
+The one real cost falls on stand-ins that hold a fact as a constant (one line each, above), and on a
+fixture that must become a small factory where a world needs a variant of its answer
+(`actionsWeekFixturesWithout(34)`).
+
+**What a world cannot reach** is orchestration left in a page EFFECT: the lagoon has no page to run
+it. Peps' actions page seeds the navigator's landing from what the week source answered, in a
+`useEffect`; the `no-week-yet` world therefore seeds the landing too, and says why. That is a finding
+about the page, not a world's job — move the orchestration into the source and the world shrinks to
+its port.
+
+Checks: `world-declared`, `world-pins`, `world-used` (static, `motu check`), `world-differs`
+(runtime, with the region's flows) — see [07](07-checks-and-verification.md).
 
 ---
 

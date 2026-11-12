@@ -23,6 +23,7 @@ import {
 } from '@motu/coverage';
 import { color, paths, REPO_ROOT } from '../lib/util.mjs';
 import { runRegionFlows, closeLagoonPool } from '../playwright-lagoon.mjs';
+import { producedKeys } from '../lib/worlds.mjs';
 import { readRegions } from '../lib/eject.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
@@ -479,12 +480,22 @@ export async function regionCoverageCommand(argv) {
     process.exit(1);
   }
 
+  // WHO PRODUCES THE KEY decides the advice. A key a SOURCE produces cannot be seeded (seeding pins it
+  // and the source can never move it), so "widen the seeds" was the wrong advice for it: the state is
+  // reached by re-answering the source in a WORLD (docs/proposals/worlds.md). A key the region owns
+  // keeps the old advice.
+  const producer = new Map(Object.entries(producedKeys(paths.archipelagoFile(id))).flatMap(([src, ks]) => ks.map((k) => [k, src])));
   for (const s of report.systemic) {
+    const src = producer.get(s.key);
     say(
       `  ${color.yellow('!')} ${color.dim('systemic'.padEnd(20))} ` +
         `${color.bold(s.key)}: production is ${color.bold(`[${s.recorded}]`)} and the flows only ever show ` +
         `${color.bold(`[${s.scenarios.join(', ') || 'nothing'}]`)} — ` +
-        color.dim('not a missing scenario, a missing column. Widen the flow seeds'),
+        color.dim(
+          src
+            ? `produced by source \`${src}\`: no flow runs in a world where it answers that. Declare one (\`regions: { ${id}: { channels: { ${src}: [...] } } }\`) and a flow that names it`
+            : 'not a missing scenario, a missing column. Widen the flow seeds',
+        ),
     );
   }
 
@@ -508,7 +519,7 @@ export async function regionCoverageCommand(argv) {
           covered: report.covered,
           // A key where the two sides are DISJOINT: not a missing scenario but a missing column, and
           // the thing to fix before writing any of the scenarios below.
-          systemic: report.systemic,
+          systemic: report.systemic.map((sys) => ({ ...sys, producedBy: producer.get(sys.key) ?? null })),
           uncovered: report.uncovered.map((u) => ({
             id: u.id,
             share: u.share,

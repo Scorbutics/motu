@@ -9,6 +9,12 @@ export interface EventsHeaderProps {
   myRsvps?: string[];
   /** Who is signed in. Null or absent is a guest. */
   me?: MemberRow | null;
+  /**
+   * The calendar is still loading. Without it, a member going to four events was told « nothing booked
+   * yet » for as long as the service took to answer — found by the lagoon's `slow-backend` world, the
+   * only place a slow answer could be looked at.
+   */
+  eventsLoading?: boolean;
 }
 
 /**
@@ -16,7 +22,7 @@ export interface EventsHeaderProps {
  * how many you are going to and which is next. Drawn in the members header's blocks so the two pages
  * read as one app.
  */
-export function EventsHeader({ events = [], myRsvps = [], me = null }: EventsHeaderProps) {
+export function EventsHeader({ events = [], myRsvps = [], me = null, eventsLoading = false }: EventsHeaderProps) {
   const chapters = new Set(events.flatMap((e) => (e.chapter ? [e.chapter] : []))).size;
   const mine = events.filter((e) => myRsvps.includes(e.id));
   const next = mine[0];
@@ -36,10 +42,16 @@ export function EventsHeader({ events = [], myRsvps = [], me = null }: EventsHea
         {me ? (
           <>
             <span className="cl-lg cl-evh__count">
-              {mine.length === 0 ? `${first}, nothing booked yet` : `${first}, you're going to ${mine.length}`}
+              {eventsLoading && events.length === 0
+                ? `${first}, checking your bookings…`
+                : mine.length === 0
+                  ? `${first}, nothing booked yet`
+                  : `${first}, you're going to ${mine.length}`}
             </span>
             <small>
-              {next
+              {eventsLoading && events.length === 0
+                ? 'Loading the calendar.'
+                : next
                 ? `Next: ${next.title} · ${dateParts(next.startsAt).weekday} ${dateParts(next.startsAt).day} ${dateParts(next.startsAt).month}`
                 : me.status === 'suspended'
                   ? 'A suspended membership cannot RSVP.'

@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import { PAGE_SHELL_CSS } from '@motu/chrome/html';
 import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
@@ -30,6 +30,7 @@ import { mountReactLagoon, regionAddress, type ReactLagoonOptions, type RegionRe
 import { mountScreen, unmountScreen } from './lagoon-screen';
 import { matchScreen, type ScreenConfig } from './screens';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
+import { currentWorld, declaredWorlds, describeWorld, installWorlds, onWorldChange, setWorld, worldExists, DEFAULT_WORLD, type Worlds } from './lagoon-worlds';
 import {
   stateNames,
   islandTag,
@@ -78,6 +79,8 @@ export interface LagoonConfig {
 
 /** `lagoon.ts` — the escape hatch for what a JSON declaration cannot hold: functions and objects. */
 export interface LagoonOverrides extends RegionOverrideMaps {
+  /** Named worlds: answers that differ from the default lagoon (docs/proposals/worlds.md). */
+  worlds?: Worlds;
   /** Outward seam. Defaults to logging intents, which is what you want with no router present. */
   host?: HostBridge;
   /**
@@ -456,6 +459,49 @@ markSandbox();
       refused = true;
     } else requestedStates = parsed as StateRef[];
   }
+  // WORLDS — `?world=<id>`, and a flow's own `world`. Resolved BEFORE anything mounts, so the first
+  // render is already that world's (its channels are built with the world's args). A world that names
+  // nothing refuses the view, as every other lagoon address does. An addressed flow brings its own
+  // world: the flow was written against it, and showing it in another one is a state nobody declared.
+  installWorlds((overrides as { worlds?: Worlds }).worlds);
+  {
+    const q = new URLSearchParams(location.search);
+    const asked = q.get('world');
+    const flowWorld = currentFlowName && flowRegion
+      ? (pickState(opts.evidence?.flows?.[flowRegion], currentFlowName) as { world?: string } | null)?.world
+      : undefined;
+    const wanted = flowWorld ?? asked;
+    if (asked && flowWorld && asked !== flowWorld) {
+      reportState({ ok: false, target: 'this lagoon', kind: 'none', error: `world "${asked}" asked, but the flow "${currentFlowName}" runs in world "${flowWorld}"` });
+      refused = true;
+    } else if (wanted && !worldExists(wanted)) {
+      reportState({ ok: false, target: 'this lagoon', kind: 'none', error: `no world "${wanted}"`, available: [DEFAULT_WORLD, ...declaredWorlds()] });
+      refused = true;
+    } else if (wanted) {
+      setWorld(wanted);
+      // The element path defined every region's store above, with the DEFAULT world's channels.
+      rebuildRegionsForWorld();
+    }
+  }
+
+  /**
+   * Give every region a fresh store built with the active world's answers. A region's channels are
+   * installed when its store is CREATED, and both paths keep a registered store (the provider reuses
+   * it; the element path defines them all at boot) — so without this a world change re-rendered the
+   * same store, fed by the same default port. Measured on the demo: the slow world's port was never
+   * created at all.
+   */
+  function rebuildRegionsForWorld(): void {
+    for (const { id } of stations) {
+      const config = opts.archipelagos[id];
+      if (!config) continue;
+      disposeArchipelago(id);
+      if (!react) {
+        const ov = regionOverrides(overrides, id);
+        defineArchipelago(config, { host, seed: ov.seed, channels: ov.channels });
+      }
+    }
+  }
   /** The island scenario currently showing. Not read off `request`: that is only ever what the URL
    *  said at LOAD, and switching in place has to move it. */
   let currentScenario: string | null = null;
@@ -545,9 +591,25 @@ markSandbox();
   const screens = opts.screens ?? overrides.screens ?? [];
   const SCREEN = 'screen:';
   const screenStations = screens.map((sc) => ({ id: SCREEN + sc.id, label: `\u25A3 ${sc.label ?? sc.id}` }));
+  /** The path the screen on view was opened at, so a world change can reopen the same one. */
+  let lastScreenPath: string | null = null;
+  // A WORLD CHANGE REBUILDS WHAT IS ON SCREEN: the regions' channels are reinstalled with the new
+  // world's args (and its seed and wire applied), which only a fresh mount does. The address follows,
+  // so the state can be shared.
+  onWorldChange((w) => {
+    const url = new URL(location.href);
+    if (w === DEFAULT_WORLD) url.searchParams.delete('world');
+    else url.searchParams.set('world', w);
+    history.replaceState(null, '', url);
+    rebuildRegionsForWorld();
+    if (current.startsWith(SCREEN) && lastScreenPath) openScreen(lastScreenPath);
+    else if (current) mount(current);
+    controlChanged();
+  });
 
   /** Open the screen that serves `path`, and make the address say so. */
   function openScreen(path: string): void {
+    lastScreenPath = path;
     const opened = mountScreen(root!, path, {
       elements: opts.elements,
       css: opts.css,
@@ -990,10 +1052,15 @@ markSandbox();
       // A screen flow's `navigate` step: open the screen that serves this path, as the app's own
       // router would. Refused out loud (`__motuLagoonState.ok: false`) when no screen serves it.
       openPath: (path: string) => openScreen(path),
+      // WORLDS: which one is on, which exist, and switching (refused when the name resolves to nothing).
+      world: () => currentWorld(),
+      worlds: () => [DEFAULT_WORLD, ...declaredWorlds()].map((id) => ({ id, description: describeWorld(id) ?? null })),
+      setWorld: (id: string) => setWorld(id),
       // `scenario` alongside `flow` for the same reason the dock needs both: an island target's
       // showing-state is its scenario, and without it the list could not light the current row.
       current: () => ({
         region: current,
+        world: currentWorld(),
         view,
         island: island ?? null,
         flow: shownFlow,

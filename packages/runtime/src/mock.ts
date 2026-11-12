@@ -192,6 +192,12 @@ export interface ScenarioInteraction {
  * Lives beside the archipelago (`<id>.evidence.ts`), because the mapping it asserts is the region's.
  */
 export interface RegionScenario {
+  /**
+   * The lagoon WORLD this flow runs in (`defineWorlds` in the override file). Absent = the default
+   * lagoon. A world re-answers what the lagoon was handed — a source's port, a seed, a member fact — for
+   * the states no flow could otherwise reach.
+   */
+  world?: string;
   name?: string;
   /** Region keys to establish before the flow runs. */
   seed?: Record<string, unknown>;

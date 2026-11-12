@@ -1329,7 +1329,10 @@ export async function lagoonStatesCommand(argv) {
             // name. Flow names DO collide across regions ("each slot renders its own island" is a
             // good name in every region that has one), and a printed URL is the thing someone pastes
             // six months later into a lagoon that has grown another region since.
-            url: `${base}/?${q({ region: id, flow: address(name, i) })}`,
+            // A flow in a WORLD carries it: the flow was written against that world's answers, and the
+            // link must open them (the page would switch anyway; the address should say so).
+            ...(f.world ? { world: f.world } : {}),
+            url: `${base}/?${q({ region: id, flow: address(name, i), ...(f.world ? { world: f.world } : {}) })}`,
           };
         }),
         // WHAT-IFS, PLAYED IN THE REGION — what the dock calls dropping anchor at an island, and what

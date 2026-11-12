@@ -2,6 +2,7 @@
 // the build-injected target/fit and hands this the project's element registry + fixtures + archipelago
 // resolver. Everything else — mock transport wiring, the default host, target resolution, mount — is
 // generic and lives here so every project's lagoon entry stays 3 lines.
+import { currentWorld, declaredWorlds, installWorlds, onWorldChange, setWorld, worldExists, DEFAULT_WORLD, type Worlds } from './lagoon-worlds';
 import { configure } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
 import { FailingTransport } from '@motu/runtime/mock';
@@ -124,8 +125,21 @@ function resolveTarget(opts: LagoonBootstrapOptions): LagoonTarget {
  */
 function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
   const w = window as unknown as { __motuLagoonHarness?: unknown };
-  w.__motuLagoonHarness = {
+  /** What is mounted now, so a world change re-renders the same target. */
+  let last: { target: string; options?: { fit?: string; forceError?: number; scenario?: string } } = { target: opts.target ?? '' };
+  const harness = {
+    /**
+     * Switch the lagoon's world and re-render what is mounted, its channels rebuilt with the world's
+     * args. False when no such world is declared — nothing changes then.
+     */
+    setWorld(id: string) {
+      return setWorld(id);
+    },
+    world() {
+      return currentWorld();
+    },
     mount(target: string, options?: { fit?: string; forceError?: number; scenario?: string }) {
+      last = { target, options };
       // The transport is part of what is being asked for: 'the same island, but the backend fails'.
       configure(
         options?.forceError
@@ -144,6 +158,8 @@ function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
       return true;
     },
   };
+  w.__motuLagoonHarness = harness;
+  onWorldChange(() => harness.mount(last.target, last.options));
 }
 
 /**
@@ -372,6 +388,19 @@ markSandbox();
         : undefined),
   };
   installHarness(opts, host);
+  // WORLDS, before the first render, as on the gallery: the same address means the same thing on both
+  // entries, and a world that names nothing refuses rather than rendering the default.
+  installWorlds((opts.overrides as { worlds?: Worlds } | undefined)?.worlds);
+  {
+    const asked = urlParams?.get('world');
+    if (asked && !worldExists(asked)) {
+      reportState({ ok: false, target: 'this lagoon', kind: 'none', error: `no world "${asked}"`, available: [DEFAULT_WORLD, ...declaredWorlds()] });
+      const el = document.getElementById(opts.mountId ?? 'lagoon');
+      el?.replaceChildren();
+      return el as HTMLElement;
+    }
+    if (asked) setWorld(asked);
+  }
   // WHAT THIS PAGE CAN BE OPENED IN, published before it is opened in anything — the list is most
   // needed by whoever just got a name wrong, which is exactly when the mount may not have happened.
   publishStates(opts.evidence);

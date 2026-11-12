@@ -9,7 +9,7 @@
 //
 // Navigation follows these routes: a region's `host.navigate('/events')` opens the Events screen; a
 // path no screen declares is refused out loud, and `motu check` refuses it before anything runs.
-import { screen, notARegion, type ScreenConfig } from '@motu/react';
+import { screen, notARegion, worldFact, type ScreenConfig } from '@motu/react';
 import { AppFrame } from '../ui/app-frame/AppFrame.js';
 import { shellArchipelago } from '../archipelagos/shell/shell.archipelago.js';
 import { membersArchipelago } from '../archipelagos/members/members.archipelago.js';
@@ -28,7 +28,13 @@ const layout = AppFrame as unknown as ScreenConfig['layout'];
 const members = membersArchipelago();
 
 /** What the app feeds the shell on every screen: where you are, which build, who you are. */
-const shell = (section: AppSection) => ({ [shellArchipelago.id]: { section, dataSource: 'sandbox', me: SIGNED_IN } });
+/**
+ * Who is signed in: Dennis, unless a lagoon WORLD says otherwise (`karen-signed-in`). A fact, read when
+ * a screen opens; in the app no world is installed and this is always Dennis.
+ */
+const signedIn = () => worldFact('signedIn', SIGNED_IN);
+
+const shell = (section: AppSection) => ({ [shellArchipelago.id]: { section, dataSource: 'sandbox', me: signedIn() } });
 
 export const SCREENS: ScreenConfig[] = [
   screen({
@@ -37,7 +43,7 @@ export const SCREENS: ScreenConfig[] = [
     path: '/me',
     layout,
     slots: { sidebar: shellArchipelago, main: homeArchipelago },
-    host: () => ({ ...shell('home'), home: { me: SIGNED_IN, asOf: EVIDENCE_DAY, overview: CLUB } }),
+    host: () => ({ ...shell('home'), home: { me: signedIn(), asOf: EVIDENCE_DAY, overview: CLUB } }),
   }),
   screen({
     id: 'directory',
@@ -70,7 +76,7 @@ export const SCREENS: ScreenConfig[] = [
     path: '/events',
     layout,
     slots: { sidebar: shellArchipelago, main: eventsArchipelago },
-    host: () => ({ ...shell('events'), events: { me: SIGNED_IN } }),
+    host: () => ({ ...shell('events'), events: { me: signedIn() } }),
   }),
   screen({
     id: 'chapters',

@@ -3440,6 +3440,10 @@ function motuMountDock(opts) {
 
     // THE MINI PLAYER: what is playing, where, and whether the lens is waiting on a decision.
     railTitle.textContent = showingName;
+    // THE WORLD, when it is not the default: a paused member and the default one render the same
+    // region differently, and a reader of the bar (or of a screenshot of it) must be able to tell.
+    var worldNow = now.world && now.world !== 'default' ? now.world : null;
+    if (worldNow) where = where + ' \u00b7 ' + worldNow;
     railSub.textContent = where;
     railFlag.hidden = !decisions;
     railFlag.textContent = decisions ? '⚑ ' + decisions : '';
@@ -4296,6 +4300,15 @@ function motuMountDock(opts) {
       });
     }
     out.push({ label: 'As seeded', kind: 'state', run: drive(function (c) { c.runFlow(null); }) });
+    // WORLDS: the same answers a flow can name, switched by hand. The page rebuilds what is on screen
+    // with that world's answers, and the address carries it.
+    if (ctl.worlds && ctl.setWorld) {
+      var wNow = ctl.world ? ctl.world() : 'default';
+      ctl.worlds().forEach(function (w) {
+        if (w.id === wNow) return;
+        out.push({ label: 'World: ' + w.id + (w.description ? ' \u2014 ' + w.description : ''), kind: 'view', run: drive(function (c) { c.setWorld(w.id); }) });
+      });
+    }
     // THE WAY OUT OF THE SIGNALS, in the one place every other dock control is reachable from. Signals
     // with no off switch are a decision made for somebody about their own screen.
     [['on', 'Signals: on'], ['failures', 'Signals: failures only'], ['off', 'Signals: off']].forEach(function (m) {

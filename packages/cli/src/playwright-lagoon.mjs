@@ -675,7 +675,26 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       page.evaluate(() => Math.max(0, ...((window.__motuLagoon?.calls?.() ?? []).map((c) => c.seq)))).catch(() => 0);
     const callsSince = (seq) =>
       page.evaluate((s) => (window.__motuLagoon?.calls?.() ?? []).filter((c) => c.seq > s), seq).catch(() => []);
+    // THE WORLD each flow runs in (`world` on the flow; absent = the default lagoon). Switching makes
+    // the focused entry re-render the region with that world's answers — its channels rebuilt with
+    // the world's args — so the flow drives what that world hands the app.
+    let activeWorld = 'default';
+    const switchWorld = async (want) => {
+      if (want === activeWorld) return true;
+      const ok = await page.evaluate((w) => window.__motuLagoonHarness?.setWorld?.(w) ?? false, want).catch(() => false);
+      if (!ok) return false;
+      activeWorld = want;
+      await page
+        .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
+        .catch(() => {});
+      await sleep(600);
+      return true;
+    };
     for (const scenario of scenarios) {
+      if (!(await switchWorld(scenario.world ?? 'default'))) {
+        out.push({ scenario: scenario.name ?? 'flow', step: 1, ok: false, error: `world "${scenario.world}" is not declared in the lagoon`, mismatches: [], calls: 0, undeclared: [] });
+        continue;
+      }
       let mark = await lastSeq();
       // A fresh REGION per scenario: forget the store, THEN rebuild the tree. One flow CAN leave the
       // region unrenderable — seed an index past the end of a list and the component that reads it
@@ -1080,6 +1099,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
     // One beat before reading: a host effect answering an island lands a tick later, and the last
     // step's assertion returns before it does.
     await sleep(300);
+    // BACK TO THE DEFAULT WORLD before anything else reads this page: it is pooled, and the next check
+    // re-aims it rather than reloading — a world left on would be inherited by a check that never asked.
+    if (activeWorld !== 'default') await switchWorld('default');
     // The smell, read after the flows have run: an island emitted, and the HOST answered by writing a
     // key some island reads. Declared ownership cannot see this — the declaration is consistent, it is
     // just not honest — so it is reported as a suspicion, never as a violation.
@@ -2083,7 +2105,7 @@ export async function runScreens({ port, screens = [], flows = [] }) {
     for (const flow of flows) {
       const page = await context.newPage();
       try {
-        await open(page, addr({ screen: flow.screen }));
+        await open(page, addr({ screen: flow.screen, ...(flow.world ? { world: flow.world } : {}) }));
         let mark = 0;
         for (const [index, step] of (flow.steps ?? []).entries()) {
           const result = await page.evaluate(async (st) => {

@@ -22,6 +22,7 @@ import { archipelagoConfigs, bindEntries, getArchipelagoStore, getMountedIslands
 import type { ArchipelagoConfig } from '@motu/core';
 import type { RegionScenario, Scenario } from '@motu/runtime/mock';
 import { lagoonHarness, type LagoonHarness } from './lagoon-harness';
+import { currentWorld, setWorld, worldExists, DEFAULT_WORLD } from './lagoon-worlds';
 import { pickState, replayFlow, replayInteractionsIn, slug, stateNames, type LagoonEvidence, type StateOutcome } from './lagoon-states';
 
 /** A declared state, addressed by the region it is played on. */
@@ -173,6 +174,25 @@ export async function playState(
   opts: { fresh?: boolean } = {},
 ): Promise<PlayOutcome> {
   const target = ref.kind === 'flow' ? `archipelago:${ref.region}` : `island:${ref.island}`;
+  // A FLOW RUNS IN ITS OWN WORLD. Switching rebuilds what is on screen (the entries listen), so the
+  // region is mounted fresh with that world's answers — wait for the NEW store, then play from it.
+  if (ref.kind === 'flow') {
+    const declared = (pickState(evidence?.flows?.[ref.region], ref.name) as { world?: string } | undefined)?.world;
+    const want = declared ?? DEFAULT_WORLD;
+    if (!worldExists(want)) {
+      return { ok: false, target, kind: 'flow', name: ref.name, error: `the flow "${ref.name}" names world "${want}", which is not declared` };
+    }
+    if (want !== currentWorld()) {
+      const before = getArchipelagoStore(ref.region);
+      setWorld(want);
+      for (let waited = 0; waited < 5000; waited += 100) {
+        const now = getArchipelagoStore(ref.region);
+        if (now && now !== before) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      opts = { ...opts, fresh: true };
+    }
+  }
   // WAIT FOR THE REGION, bounded, before refusing. A region's store is created by its first island's
   // render, a beat after the view mounts it; the gallery asks for an addressed state right away, and on
   // a page as large as Peps' the store was not there yet — so a valid flow address was refused as "not

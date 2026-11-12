@@ -279,6 +279,7 @@ export function mutateStimulus(step) {
 
 /** Mutant scenarios are tagged so one run can carry both sets and tell them apart afterwards. */
 export const MUTANT_PREFIX = 'µ mutant · ';
+export const WORLD_MUTANT_PREFIX = 'µ world · ';
 
 /** Report what the mutants did — no browser here; they ran with the real flows. */
 export function reportMutants(report, flows, { mutants, coverageOnly, vacuous }) {
@@ -369,6 +370,11 @@ export async function regionFlowCheck(report, id, port, region) {
   // The mutants ride along: one lagoon boot answers "do the flows hold?" and "could they have
   // failed?" together. Booting is most of what a flow check costs, and this was paying it twice.
   const mutation = buildMutants(report, scenarios);
+  // WORLD-DIFFERS, by mutation: each flow that names a world, replayed WITHOUT it. If it still holds,
+  // its assertions do not depend on anything the world answers — the world is decoration for it.
+  const worldMutants = scenarios
+    .filter((s) => s.world)
+    .map((s) => ({ ...s, world: undefined, name: `${WORLD_MUTANT_PREFIX}${s.name ?? 'flow'}`, __world: s.world }));
 
   let results;
   let suspects = [];
@@ -376,9 +382,23 @@ export async function regionFlowCheck(report, id, port, region) {
     // What the chart needs: the real flows, and every island's scenarios keyed by its tag.
     const chartWith = { flows: scenarios, scenarios: await regionWhatIfs(region) };
     const run = await step('region-flow', () =>
-      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants], chartWith }),
+      runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants, ...worldMutants], chartWith }),
     );
-    results = (run.flows ?? []).filter((f) => !String(f.scenario).startsWith(MUTANT_PREFIX));
+    results = (run.flows ?? []).filter((f) => !String(f.scenario).startsWith(MUTANT_PREFIX) && !String(f.scenario).startsWith(WORLD_MUTANT_PREFIX));
+    for (const wm of worldMutants) {
+      const steps = (run.flows ?? []).filter((f) => f.scenario === wm.name);
+      const flowName = wm.name.slice(WORLD_MUTANT_PREFIX.length);
+      // The mutant can only say something when the flow it mutates HOLDS in its world: a failing flow
+      // fails without its world too, and that is not evidence the world changes anything.
+      const real = (run.flows ?? []).filter((f) => f.scenario === flowName);
+      if (real.length && !real.every((f) => f.ok)) {
+        report.skip('world-differs', `"${flowName}" does not hold in world "${wm.__world}", so whether the world matters is not answerable yet`);
+      } else if (steps.length && steps.every((f) => f.ok)) {
+        report.warn('world-differs', `"${flowName}" still holds WITHOUT world "${wm.__world}" — none of its assertions depends on what that world answers. Assert what the world changes, or drop the world`);
+      } else if (steps.length) {
+        report.ok('world-differs', `"${flowName}" fails without world "${wm.__world}" — the world is what it shows`);
+      }
+    }
     reportMutants(report, run.flows ?? [], mutation);
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');

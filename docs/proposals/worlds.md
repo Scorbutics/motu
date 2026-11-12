@@ -1,6 +1,6 @@
 # Proposal: worlds
 
-**Status:** sketch, not implemented. Builds on [08: the lagoon override file](../08-lagoon.md) (`seed`,
+**Status:** implemented — the reference is [08: Worlds](../08-lagoon.md#worlds--named-answers-for-the-states-no-flow-can-reach). This page keeps the reasoning. Builds on [08: the lagoon override file](../08-lagoon.md) (`seed`,
 `channels`, `wire`) and [10: flows](../10-evidence-and-testing.md).
 
 ## The gap

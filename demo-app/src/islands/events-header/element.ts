@@ -5,9 +5,9 @@ export const element = islandElement({
   tag: 'x-events-header',
   component: EventsHeader,
   options: {
-    // READS the calendar, your RSVPs and who you are; OWNS NOTHING. A projection of three keys.
+    // READS the calendar, your RSVPs, who you are and whether the calendar is still loading; OWNS NOTHING.
     contract: {
-      input: ['events', 'myRsvps', 'me'],
+      input: ['events', 'myRsvps', 'me', 'eventsLoading'],
     },
     legacy: 'fill',
   },

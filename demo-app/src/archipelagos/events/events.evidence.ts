@@ -25,6 +25,16 @@ const SEED = {
 
 export const scenarios: RegionScenario[] = [
   {
+    // A SLOW CALENDAR, in the lagoon's `slow-backend` world: the page's own events source runs over a
+    // port that answers after 4 s. What a member sees meanwhile is a state no seed can set (the source
+    // produces `eventsLoading`), and it used to be a lie — « Dennis, nothing booked yet » to a member
+    // going to four events. Asserted on the header, which the world does not drive.
+    name: 'a slow calendar does not tell you that you booked nothing',
+    world: 'slow-backend',
+    seed: { ...SEED, me: DENNIS },
+    steps: [{ expectRender: { 'events-header': 'Dennis, checking your bookings' } }],
+  },
+  {
     // COVERAGE: every slot renders its own island, in text only that island produces.
     name: 'each slot renders its own island',
     seed: { ...SEED, me: DENNIS },

@@ -12,6 +12,7 @@
 // Static by default, because this is meant to run on every change. `--runtime` adds the lagoon mounts
 // (a browser per island), which belongs in CI or before a release, not in a tight loop.
 import { screenFindings } from '../lib/screens.mjs';
+import { worldFindings } from '../lib/worlds.mjs';
 import { screenRuntimeFindings } from './verify/screens-runtime.mjs';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readLiveUrl } from '../lib/live-url.mjs';
@@ -154,6 +155,10 @@ export async function checkCommand(argv) {
   // (Peps' badge counts and feature grants), and screen flows click its links and navigate.
   if (screens && (runtime || audit)) screens.findings.push(...((await screenRuntimeFindings()) ?? []));
   const screensOk = !screens || screens.findings.every((f) => f.level !== 'error');
+  // WORLDS: every name resolves, every world has a caller, nothing pins a source's key. Null (and not
+  // printed) when the project declares none.
+  const worlds = worldFindings();
+  const worldsOk = !worlds || worlds.findings.every((f) => f.level !== 'error');
 
   // Last, and only when the rest holds up: it rewrites the host on disk (and restores it), so running
   // it after a failure that is already fatal buys nothing and costs a typecheck of the whole app.
@@ -168,7 +173,7 @@ export async function checkCommand(argv) {
     regionResults.every((r) => r.errors.length === 0);
   const removal = structureOk ? await runRemovalCheck(argv, { quiet: true }) : null;
 
-  const pass = structureOk && integrationOk && screensOk && (removal?.pass ?? false);
+  const pass = structureOk && integrationOk && screensOk && worldsOk && (removal?.pass ?? false);
 
   if (argv.json) {
     console.log(
@@ -181,6 +186,7 @@ export async function checkCommand(argv) {
           archipelagos: regionResults.map(summaryOf),
           integration,
           screens: screens?.findings ?? null,
+          worlds: worlds?.findings ?? null,
           removal: removal ?? { skipped: 'structure checks failed first' },
         },
         null,
@@ -250,6 +256,14 @@ export async function checkCommand(argv) {
   if (screens) {
     console.log(color.bold('\nmotu check — screens') + color.dim('  (experimental)') + '\n');
     for (const f of screens.findings) {
+      const mark = f.level === 'error' ? color.red('✗') : f.level === 'warn' ? color.yellow('!') : f.level === 'ok' ? color.green('✓') : color.dim('–');
+      console.log(`  ${mark} ${color.dim(f.check.padEnd(20))}${f.level === 'ok' ? color.dim(f.msg) : f.msg}`);
+    }
+  }
+
+  if (worlds) {
+    console.log(color.bold('\nmotu check — worlds') + color.dim(`  ${worlds.worlds.length} declared in ${paths.rel(worlds.file)}`) + '\n');
+    for (const f of worlds.findings) {
       const mark = f.level === 'error' ? color.red('✗') : f.level === 'warn' ? color.yellow('!') : f.level === 'ok' ? color.green('✓') : color.dim('–');
       console.log(`  ${mark} ${color.dim(f.check.padEnd(20))}${f.level === 'ok' ? color.dim(f.msg) : f.msg}`);
     }

@@ -40,6 +40,7 @@ import {
 } from '@motu/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, shellArchipelago, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
 import { eventsRegion, homeRegion, SIGNED_IN } from './regions/club.js';
+import { worlds } from './worlds.js';
 // EXPERIMENTAL: the app's screens — its own layout with a region in each part (`src/screens/screens.ts`).
 import { SCREENS } from 'demo-app/screens';
 // The profile region's own evidence rows — the member and calendar its flows already speak — rather
@@ -108,6 +109,8 @@ startLagoon({
   debug: __MOTU_DEBUG__,
   overrides: {
     host,
+    // The club's worlds (`worlds.ts`) — the same module the focused entry gets.
+    worlds,
     // Stands up a fake AngularJS host so the extracted member-search island renders offline. It was a
     // top-level call; `setup` is the declared point for it and runs in BOTH views rather than only
     // whichever happened to import this module first.

@@ -58,7 +58,7 @@ export const CONTRACTS = {
     effects: [],
   },
   'x-events-header': {
-    input: ['events', 'myRsvps', 'me'],
+    input: ['events', 'myRsvps', 'me', 'eventsLoading'],
     output: {  },
     effects: [],
   },

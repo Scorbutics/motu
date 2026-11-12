@@ -12,7 +12,7 @@ and `island-extract` are the verbs that act on it; this agent is the judgement t
 is the step people skip — which is how a page ends up with an archipelago drawn around a DOM subtree,
 a key nobody reads, or a "coupling" that was only ever prop drilling.
 
-Read `README.md` (terminology, "The loop", "The rules that make islands verifiable", "Non-goals") and
+Read `README.md`, `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits) and
 the host's `CLAUDE.md` motu rules block. Do not invent rules: the mechanical rule set is whatever
 `motu check` enforces. Nothing here creates, moves or refactors code — **locating is read-only**.
 

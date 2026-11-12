@@ -297,7 +297,7 @@ Two things `motu check` cannot see, so plan for them:
 - **Invention.** Every mechanical check compares the artifact to itself. A fixture that invents a
   vocabulary the application does not use passes all of them. That is why a run with `new` snapshots
   reports `LOOK` rather than `PASS` — open the state and read it, with a fresh reader
-  (`README.md`).
+  ([design and limits](15-design-and-limits.md)).
 
 ---
 

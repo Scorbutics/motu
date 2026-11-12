@@ -504,7 +504,7 @@ package is plain source, `main`/`types` pointing at `src/index.ts`
 **When you regenerate:** whenever the backend's callable surface changes shape — a signature, a return
 type, an added or removed `@BrowserCallable`, a changed `@Roles`. "A Java signature or `@Roles` change
 reshapes the TypeScript (and breaks `tsc`) instead of drifting" (`packages/codegen/src/cli.mjs:5-6`).
-The safety net is that failure mode, not a deploy-time gate (`README.md`, "Backend").
+The safety net is that failure mode, not a deploy-time gate ([design and limits](15-design-and-limits.md#what-it-deliberately-cannot-do)).
 
 **Generated vs hand-written:**
 

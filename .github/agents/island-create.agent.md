@@ -11,7 +11,7 @@ it passes. The `motu` CLI owns the deterministic work (scaffold, config edits, v
 judgement (what to build, the data flow, the fixtures) and the **sequence below**. Never work around a
 verify failure — fix the island.
 
-Read `README.md` first (terminology, "The loop", "The rules that make islands verifiable", "Non-goals").
+Read `README.md` first (the loop), then `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits).
 The authoritative rule set is whatever `motu island verify` enforces — do not invent rules.
 
 ## The anatomy you produce

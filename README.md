@@ -5,20 +5,16 @@
 **An architecture framework for building a page's regions incrementally — keeping the state between
 components coherent, the boundaries explicit, and the backend dependencies declared.**
 
-motu's units are architectural. A region of a page is an **island**; who owns which piece of that
-region's state is declared in an **archipelago**; what the region asks of a backend is declared at its
-edge. None of that is documentation — a second island writing a key someone else owns is a build
-error, a slot that does not exist fails the host's typecheck, and a dependency that goes out an
-undeclared door shows up named.
+A region of a page is an **island**; who owns which piece of that region's state is declared in an
+**archipelago**; what the region asks of a backend is declared at its edge. None of that is
+documentation — a second island writing a key someone else owns is a build error, a slot that does
+not exist fails the host's typecheck, and a backend call nothing declared fails the flow that made it.
 
-What this buys is the thing that is normally hard: **you can build one region at a time, out of the
-box, and integrate it without a surprise at the end.** The declarations are what make the pieces
-compose, and what make the last mile uneventful.
+What this buys: **you can build one region at a time and integrate it without a surprise at the end.**
 
-The **lagoon** follows from that architecture rather than being the point of it. Once a region has
-declared its state, its seed and its dependencies, it can be rendered with nothing around it — so
-every state the region can be in gets an address you can open in a browser, with no backend, no
-session and no login. The same declarations then run as a deterministic integration suite.
+The **lagoon** follows from that. Once a region has declared its state, its seed and its
+dependencies, it renders with nothing around it — so every state it can be in gets an address you can
+open in a browser, with no backend, no session and no login:
 
 ```
 motu lagoon states
@@ -30,9 +26,8 @@ Open either one. It is the real components, still interactive, rendered from a d
 
 ### Does it catch anything?
 
-Six **coupling** defects — the class that lives between components, where every part is individually
-correct and the composition is wrong — injected into a real app (shlink), and four instruments asked
-the same question. Full method and caveats in [`bench/coupling/RESULTS.md`](bench/coupling/RESULTS.md).
+Six **coupling** defects — every part individually correct, the composition wrong — injected into a
+real app (shlink). Method and caveats in [`bench/coupling/RESULTS.md`](bench/coupling/RESULTS.md).
 
 ```
            tsc  motu-types   lint   tests    motu  motu-rt
@@ -44,285 +39,69 @@ the same question. Full method and caveats in [`bench/coupling/RESULTS.md`](benc
   C6         ·       ·         ·       ✓       ✓       ·   the region is composed but never wrapped
 ```
 
-**motu caught 6 of 6; the app's own tooling caught 5 of 6; one defect was motu's alone.** That is
-smaller than the pitch, and it is the number rather than the pitch.
-
-The reason the app does so well is worth knowing: shlink has a test that renders the whole page, and a
-page-level integration test sees composition because composition is what it renders. So the honest
-claim is not "motu catches what your tests miss" — it is:
+**motu caught 6 of 6; the app's own tooling caught 5 of 6.** shlink has a test that renders the whole
+page, and that sees composition. So the honest claim is:
 
 > a page-level integration test catches most coupling defects; motu is that test, declared instead of
 > written, plus one class the test cannot see.
 
-The one it caught alone is **two islands claiming one key**: nothing renders differently, the store
-just has two writers and no owner. Caught statically, in about a second, because ownership is declared.
+That class is **two islands claiming one key**: nothing renders differently, the store just has two
+writers and no owner. Caught statically, in about a second.
 
 ### The loop this is built for
 
-The reason the declarations and the addressable states matter together: **an agent can build a region
-and a human can look at it, in the same loop, without either waiting on the other.**
-
     an agent builds a region        declared: who owns which key, which island fills which slot
       ↓
-    the lagoon serves it live       every state at its own URL, in the shared gallery
+    the lagoon serves it live       every state at its own URL, on a shared host
       ↓
     a human looks — and so does     the URL is the handover; a passing check is not
     a fresh agent
       ↓
-    feedback goes back in           the region is one page's worth of work, so the cycle is short
-      ↓
     integrate, with the checks      slots typed against the page, one producer per key, removable
-      ↓
-    ship
 
-Every piece of motu is shaped by that loop. States are declared rather than scripted so an agent can
-enumerate them (`motu lagoon states`) and a human can bookmark one. Ownership is declared so several
-agents can work one screen at once without a coordination mechanism — the archipelago IS the claim
-registry, and a second claim on a key fails in that agent's own branch. The lagoon is hosted rather
-than local so the preview outlives the agent session that produced it, and it is scoped per branch so
-concurrent agents do not overwrite each other's. `motu check` prints where to look, because a summary
-of files is not a handover.
-
-The perception step is deliberately not the author's. An agent that built a region is the worst reader
-of it: what it invented sits in its own context as a premise. So the look belongs to a human, or to a
-fresh agent given the URL and nothing else — which is the one check in the set that catches something
-invented whole rather than merely drifted.
+Ownership is declared so several agents can build one screen at once — the archipelago IS the claim
+registry, and a second claim on a key fails in that agent's own branch. The final look is
+deliberately not the author's: an agent that invented something holds it in context as a premise, so
+the reader is a human or a fresh agent given only the URL. A run with new snapshots says **`LOOK`**,
+not `PASS`, and a check that could not run exits `2` — retry, do not repair.
 
 ### What motu is not
 
-The comparison people reach for is a component workshop (Storybook, and component testing around it),
-and the overlap is real but shallow. There the unit is a **component** and the product is a
-**catalogue**: it shows you a component in a state you wrote, and it is good at that. Here the unit is
-a **region of a page** and the product is a **declaration of ownership that the build enforces**. A
-catalogue has no notion of who owns a piece of state, so nothing tells it when a second writer
-appears; that is the check motu exists to make possible.
+Not a component workshop. Storybook's unit is a **component** and its product is a **catalogue**: a
+component in a state you wrote. motu's unit is a **region of a page** and its product is a
+**declaration of ownership the build enforces** — then checked against the real page
+(`motu integrate check`), with flows that must be able to fail and backend calls that must be
+declared. A catalogue has no notion of who owns a piece of state, so nothing tells it when a second
+writer appears. The two are complementary; for a design system, Storybook is strictly better.
 
-So the two are complementary, and if what you want is a component gallery you want the gallery. What
-you cannot get by assembling one out of existing parts is the architecture underneath: ownership
-declared per key, slots typed against the page, dependencies pinned at the region's edge, and the
-whole of it removable in one command.
+Not a test runner either. motu checks **composition**; your components' own logic still needs unit
+tests, and cross-page behaviour through a real backend still needs an integration suite. The whole of
+motu is removable in one command (`motu removal-check`), and proves it.
 
-> **Status:** early, and narrower than it looks. Works, used daily, not published to npm — install
-> from a checkout (below). MIT licensed. **motu mounts React components into a page**, so the stack
-> it has to fit is your FRONTEND, not your server. Read the next section before adopting it.
+## Where it pays
 
-## What this has actually been run against
+Per **screen**, not per app: a screen where several components share state, touched by more than one
+person — or more than one agent — in a codebase that will outlive the current roadmap. Not a
+design-system repo, not a prop-drilled tree with no coupling pain.
 
-Stated as evidence rather than intent, because the honest answer to "does it support X" is usually
-"nobody has tried". An island is a React component mounted into a page, and the lagoon is a Vite app,
-so those two facts bound everything below.
+## What it runs on
+
+> **Status:** early. Used daily, MIT licensed, not on npm — install from a checkout.
 
 | Stack | Evidence |
 |---|---|
-| **Next.js** | `host-app` in this repo (daily), plus three cold-start adoptions of [Formbricks](https://github.com/formbricks/formbricks) (Next 16, pnpm monorepo, Tailwind v4) — `bench/agent-cold-start` |
-| **Vite + React + TypeScript** | `review-console` in this repo, plus cold-start adoptions of [Novu](https://github.com/novuhq/novu)'s dashboard (pnpm monorepo, Tailwind v3), plus a metadata-driven app (Twenty: Jotai, widgets as database rows) |
-| **AngularJS 1.x** | `demo-app`, the reference ocean — a Jakarta EE + JSP application. This is the LEGACY path: islands replace AngularJS UI, they are not written in it |
+| **Next.js** | `host-app` (motu's own UI, daily), three cold-start adoptions of [Formbricks](https://github.com/formbricks/formbricks) |
+| **Vite + React + TS** | `review-console`, [Novu](https://github.com/novuhq/novu)'s dashboard, a metadata-driven app (Twenty) |
+| **AngularJS 1.x** | islands written in AngularJS mount like any other — `demo-app` runs one beside its React islands; [migrating a legacy app](docs/14-ocean-migration.md) |
 
-**`--host none` (plain React) is accepted and thinly evidenced** — the code path exists, no consumer
-here proves it.
+- **Required:** React 18+, TypeScript, a real `node_modules` (no Yarn PnP), Next (webpack, not
+  Turbopack) or Vite as the host bundler. npm projects run `motu link` once.
+- **Not supported:** Angular 2+, Vue, Svelte, Solid, Lit, plain-JS React, pages with no JavaScript
+  layer. Islands are custom elements, so nothing in the core forbids another framework — but none
+  has an adapter, and there is no partial path. Your backend language does not matter; what renders
+  your components does.
 
-### Hard requirements, found the hard way
-
-- **React 18 or newer.** `@motu/react` peer-depends on `>=18` and mounts with `createRoot` from
-  `react-dom/client`. A React 17 application is a wall, not a rough edge — measured: an adoption of a
-  real React 17 app could not start.
-- **A `node_modules` your package manager actually writes.** motu resolves `@motu/*` through symlinks
-  it recreates in `node_modules/` on every invocation. **Yarn PnP has no `node_modules`**, so that
-  mechanism has nothing to write into; yarn with `nodeLinker: node-modules` works and is what has been
-  tested.
-- **The lagoon runs the HOST's Vite on a `vite` host**, so a host plugin the lagoon cannot run is
-  dropped by name rather than taken as fatal — but a plugin your components genuinely need at
-  transform time is a real constraint on what will render.
-
-### Not supported, and not close
-
-- **Angular 2+.** The `angularjs` adapter is AngularJS **1.x**. The names collide; the frameworks do
-  not. There is no Angular 2+ adapter.
-- **Vue, Svelte, Solid, Lit, htmx.** An island IS a React component. There is no adapter and no
-  partial path — this is not a "not yet", it is a different design.
-- **A page with no JavaScript layer at all** — server-rendered Rails/ERB, Django, Laravel/Blade with
-  no client framework. motu needs somewhere to mount a custom element. Note the inverse: the reference
-  ocean's server IS Java/JSP, and that works, because the page has a JS layer to mount into. **Your
-  backend language is not the question; what renders your components is.**
-- **React without TypeScript.** Island contracts are read from the component's source with `ts-morph`.
-  A plain-JS React app (measured: a `.jsx` app on rsbuild) is a wall today, not a rough edge.
-- **Host bundlers other than Next's or Vite's.** webpack, rsbuild, Parcel, CRA are untested for the
-  HOST build. The lagoon is always Vite regardless, so the risk is your app's own build, not the
-  preview.
-- **npm works, and needs one command.** `npm install` deletes bare symlinks as extraneous, so a
-  single-package project records them instead: `motu link` writes `@motu/*` into package.json as
-  `file:` paths, which npm creates itself and never prunes. Verified on a real npm app (shlink):
-  three consecutive installs, nine links intact, typecheck clean. `motu link --check` asserts it in
-  CI. A workspace project needs neither. **yarn is still unproven.**
-
-If your stack is not in the first table, assume it does not work yet. Adding a stack is real work
-(an adapter, its verify layer, a lagoon that can build it), and the project would rather say "no"
-than let you find out over an afternoon.
-
----
-
-## The problem
-
-A component library tells you a button works. It cannot tell you that when the region holds *this*
-state, the screen shows the right thing, and that acting on it moves the state correctly. That
-question — a *screen* question — is where most bugs live, and answering it usually means a browser
-suite that logs in, seeds a database, waits for selectors, and flakes.
-
-motu answers it without a server, because the region's couplings are written down.
-
-## What a screen looks like, written down
-
-A **region** is one page's islands, sharing declared keys instead of talking to each other:
-
-```ts
-// actions.archipelago.ts — the whole coupling model of the page
-islands: [
-  { slot: 'week-picker',  element: 'x-week-picker',
-    writes: { 'week-selected': 'currentWeek' } },        // ← this island OWNS currentWeek
-  { slot: 'week-actions',  element: 'x-week-actions',
-    bind:   ['currentWeek', { stats: 'networkStats' }] }, // ← this one only READS it
-]
-```
-
-One producer per key, checked statically. A second island claiming `currentWeek` fails in the branch
-that wrote it — which is also what makes several agents working on one screen safe, with no new
-mechanism.
-
-Then a **flow** is a value, not a script:
-
-```ts
-{
-  name: 'picking a shot is what the viewer is for',
-  seed: SEED,                                    // the precondition, written where the assertion is
-  steps: [
-    { expectRender: { 'diff-viewer': 'Pick a shot' } },
-    { emit: { slot: 'shot-list', event: 'shot-selected', detail: SELECTED },
-      expectRender: { 'diff-viewer': 'compact-rows@mobile' } },
-  ],
-}
-```
-
-`motu archipelago verify actions --runtime` runs it: a real browser, the real components, the page's
-own layout — at about the cost of a unit test.
-
-## Why it does not flake
-
-Three properties, each removing a class of flakiness rather than mitigating it:
-
-- **Data, not script.** No selectors, no page objects, no waits. A step names a *slot* and a
-  *declared event*. The vocabulary is the archipelago's, so a renamed slot fails the flow instead of
-  silently matching nothing. If you want a selector, you have left the harness.
-- **Stateless.** Every flow opens on its own `seed`. No database, no login, no fixture ordering, no
-  cleanup, no leakage. Two flows cannot interfere because neither has anywhere to leave residue.
-- **One page, re-aimed.** The runtime lane boots *one* lagoon page for a whole run and feeds each
-  scenario into it. A scenario costs a store write, not a page load plus a login plus a reset.
-
-And the shape is checked as well as run, because a cheap test that cannot fail is worse than none:
-
-| Check | Rejects |
-|---|---|
-| `flow-mutation` | a step whose assertion still holds when its stimulus changes — it was asserting a constant |
-| `render-coverage` | slots no flow ever looks at — the ones accidentally wired to a neighbour's data |
-| `data-flow` | an island whose scenarios render identically — two seeds producing one screen are one seed |
-
-## The suite is also the review surface
-
-Because every declared state is an **address**, the flows are simultaneously the test suite and a
-browsable index of the app's screens — including the states *between* the steps. A scripted suite
-tells you it is green; this one you can read, and hand to someone as a link.
-
-That inverts the usual economics: the pressure to write another flow comes from wanting to *see* a
-state. Coverage is the side effect.
-
-## Two tiers, because a passing check proves less than you think
-
-motu was built agents-first, and that turned out to be the interesting constraint. Generating a
-React component is cheap; what is scarce is a loop an agent can close alone. The failure mode that
-matters is not a weak model — it is **self-consistency**: a capable agent produces a screen, and
-evidence for it that agrees perfectly with itself and describes an application that does not exist.
-A better model makes that artifact *more* convincing.
-
-- **Assertions catch DRIFT** — an artifact contradicting what it declares. `tsc` is the first and
-  cheapest: motu's declarations are typed against the application's own types, so a rename in the
-  codebase lands on the region and fails there before any motu check runs.
-- **Perception catches INVENTION** — an artifact that contradicts nothing, passes everything, and is
-  simply not this application. Nothing mechanical reaches it, because every mechanical check
-  compares the artifact to itself. Rendering is what forces a comparison with the world.
-
-Two real bugs found only by tier two: a fixture inventing a vocabulary the application does not use,
-and an island stylesheet that was bundled and never applied. Both passed every check. Both died the
-moment an agent *opened the page and read it*.
-
-So a run with new snapshots reports **`LOOK`**, not `PASS` — tier one saying it has nothing to
-offer and routing the question to something that can perceive. And the reader should be a *fresh*
-agent, handed the state's URL and the app's vocabulary but **not** the diff, the plan or the
-transcript: the agent that built the region holds the invention in context as a premise, and is the
-one reader who cannot see it.
-
-## Cost, honestly
-
-Measured on a 16-island / 2-region project (snapshots on a 20-island / 3-region one):
-
-| Command | Answers | Cost | When |
-|---|---|---|---|
-| `motu check` | has anything drifted from what it declares? | **1.4s** | every change |
-| `motu island verify <n> --runtime` | does this island still behave? | ~15s | while you work |
-| `motu archipelago verify <id> --runtime` | do this region's flows still end as declared? | ~25s | while you work |
-| `motu check --runtime --fast` | everything a happy-dom mount can answer | 44s (5.9s scoped) | while you work |
-| `motu check --runtime` | does the whole project work? | 103.5s | before handover |
-| `motu check --audit` | is it usable — every viewport, for everyone? | + responsive/a11y | before integrating, in CI |
-| `motu island snapshot --all --remote` | did anything move? | 89s | before handover |
-
-Three exit codes, and the third is the one that matters for unattended loops:
-
-```
-0  the declarations hold
-1  something contradicted them   -> repair
-2  a check could not run          -> retry, do NOT repair
-```
-
-A port that never opened is not a failing test. A human shrugs and re-runs; an agent reads `✗` and
-confidently repairs a bug that does not exist.
-
-## What it deliberately cannot do
-
-**Script.** A flow drives a region through *declared outputs*. It cannot type, click or tab, and it
-never touches a selector. That constraint is what buys the determinism — and it puts a component's
-*internal* interaction logic (type an invalid value, watch validation fire) permanently out of
-scope. That stays a Testing Library test.
-
-**Reach a backend.** The lagoon has no server, on purpose. Cross-page behaviour mediated by the
-database, authorization, migrations — those stay a real integration suite. Simulating a backend
-inside the lagoon (a stateful fake, the schema in pglite) was investigated and declined: it
-reimplements business logic that cannot be diffed against the original, and the moment the lagoon
-has a backend it loses determinism, one-cause failures, speed, and the artifact with nothing behind
-it. What is left is a worse local environment.
-
-motu shrinks that suite to the tests that were worth a browser. It does not remove it.
-
-## It is deliberately invasive
-
-motu changes the application — a source module, a region type, props with real defaults, ownership
-written down. That is not a tax the framework charges for its features; it **is** the feature. Every
-declaration is a seam a check can attach to, which is why `tsc` catches motu drift at all and why
-the checks are mechanical rather than heuristic.
-
-`removal-check` is what keeps the deal honest: it deletes every motu file, unwraps every tag, and
-proves the application still typechecks without it. A boundary instrument you cannot remove has
-stopped describing the app and started being part of it.
-
-## Where it pays — and where it does not
-
-The threshold is per **screen**, not per app. An app of any size can have one screen that wants this
-and eleven that get nothing.
-
-**Worth it:** a screen where several components share state, touched by more than one person, in a
-codebase that will outlive the current roadmap.
-
-**Not worth it:** a design-system repo (no regions, no shared page state — Storybook is strictly
-better there), and prop-drilled trees with no coupling pain. A product still in discovery should use
-the *loop* rather than the suite — build the screen out of the app, publish the link, show it, then
-integrate — and should not pay for a page's ownership survey until the page is worth keeping.
+If your stack is not in the table, assume it does not work yet.
 
 ## Try it
 
@@ -340,130 +119,20 @@ motu island verify phone-display --runtime
 motu lagoon serve --watch
 ```
 
-`--from` takes the specifier **the app itself uses**, aliases included, and writes only a mount
-point — the component stays where it is and every existing call site keeps working. On a React host
-an island *is* the app's component; no wrapper is written and nothing is forked.
+`--from` takes the specifier the app itself uses and writes only a mount point — on a React host an
+island *is* the app's component; nothing is forked. `motu lagoon publish --remote` then puts it on a
+lagoon host as a link anyone can open, phone included.
 
-There is no install step for the framework: motu resolves vite, tsx, ts-morph and playwright from
-its own checkout, so an adopting project installs nothing. A greenfield `init` → `create` →
-`verify --runtime` passes in a real browser with an empty `node_modules`.
-
-**Show someone.** `motu lagoon publish --remote` uploads a self-contained page to a lagoon host and
-prints two URLs — a `latest` bookmark that follows every publish, and an immutable one keyed by the
-commit. A link you can open on a phone, with no dev server, no tunnel and no backend running.
-
----
+The demo, **The Motu's club** — six screens over a real Postgres, one left as plain React on purpose
+— is in [`demo-app/`](demo-app/RECORDING.md).
 
 ## Documentation
 
-The full reference set lives in [`docs/`](docs/README.md). Read in order if you are new:
-
-| | |
-|---|---|
-| [01 — Concepts](docs/01-concepts.md) | island, ocean, archipelago, lagoon, region, slot, key. Every other page assumes it. |
-| [02 — Getting started](docs/02-getting-started.md) | `motu init` to a working lagoon, the first island, the loop. |
-| [03 — CLI reference](docs/03-cli-reference.md) | every command, every flag, which tier it belongs to. |
-| [04 — Configuration](docs/04-configuration.md) | `motu.config.json` key by key. |
-| [05 — Archipelagos and regions](docs/05-archipelagos-and-regions.md) | declaring a region: slots, keys, `root`, `hostSlots`, channels. |
-| [06 — Composition and adoption](docs/06-composition-and-adoption.md) | `X.Root` vs `X.Island`, and the staged adoption path. |
-| [07 — Checks and verification](docs/07-checks-and-verification.md) | every check id, the three tiers, the three exit codes. |
-| [08 — The lagoon](docs/08-lagoon.md) | dev, states as addresses, publish, serve, hosting, visual baselines. |
-| [09 — Coverage](docs/09-coverage.md) | the production fold: fingerprints, corpus, `archipelago coverage`. |
-| [10 — Evidence and testing](docs/10-evidence-and-testing.md) | scenarios, flows, evidence files, what each check reads. |
-| [11 — Contract and backend](docs/11-contract-and-backend.md) | the contract seam, transports, wire-level mocking, fixtures, codegen. |
-| [12 — Hosts and adapters](docs/12-hosts-and-adapters.md) | Next, AngularJS, none; `removal-check`. |
-| [13 — Agents and skills](docs/13-agents-and-skills.md) | the shipped skills and the multi-agent workflow. |
-| [14 — Migrating an ocean](docs/14-ocean-migration.md) | coexistence, `legacy-toggle`, inbound channels, how the ocean recedes. |
-
-## Terminology
-
-The metaphor is load-bearing enough to be worth thirty seconds. These words stay in prose only —
-imports and type names are literal (`Store`, `Transport`, `MockTransport`).
-
-- **Island** — a component embedded in a host page, behind a declared boundary.
-- **Ocean** — the legacy application the islands sit in. Optional; a greenfield host has none.
-- **Archipelago** — the islands of one *page*, sharing a store instead of talking to each other. A
-  declared grouping, never a DOM container: scoping one to a subtree puts a boundary through the
-  middle of the coupling it exists to declare.
-- **Region** — the same thing named from the state side: the keys one archipelago owns.
-- **Lagoon** — isolated mode. Islands rendered with no ocean, against fixtures. Where the loop closes.
-- **Mainland** — what is left once the ocean recedes and the wrappers come off.
-- **Motu** — a low islet on an atoll's rim: the island that holds the ocean back and makes the lagoon
-  possible. Which is the whole trick — no calm water to verify in, no loop.
-
-## Where it came from
-
-motu began as a closed verification loop for building UI against a legacy application that has no
-loop of its own: build the component in isolation — no legacy app running, no session, against
-recorded fixtures — and integrate it only once it passes there. Applied to a Jakarta EE + AngularJS
-app, that same loop lets you migrate the UI incrementally, reusing the legacy backend's database,
-business logic and authorization without reimplementing any of them.
-
-Incremental migration was always the *consequence* of the loop rather than the point of it — and so,
-it turns out, was the legacy application. The loop is worth closing around a screen whether or not
-anything is being migrated into it.
-
-## Non-goals
-
-Declined by design, not gaps on a roadmap:
-
-- No runtime module loading, no federation, no import maps.
-- No per-island versioning — one build, one contract, one version.
-- No island registry mutable at runtime, no plugin API.
-- No island-to-island direct imports — the store and DOM events only.
-- No orchestrator. motu has no shell, because the host page *is* the shell.
-- No SSR, no cross-origin production deployment.
-
-Most of the pain associated with micro-frontends — duplicated framework payloads, version skew,
-debugging across bundle boundaries, fragmented auth — comes from assembling independently built
-artifacts at runtime. motu refuses that composition model outright, so those problems have nowhere
-to occur rather than needing mitigation.
-
-## Known limits
-
-- **CSS isolation is containable, not solved.** The lagoon cannot reproduce legacy stylesheet
-  collisions, AngularJS digest timing, or session expiry.
-- **`contract-only-io` cannot see a direct Supabase import.** The blocked-client list is
-  `axios/ky/superagent/node-fetch/got`; `@supabase/supabase-js` is not on it. Should be configurable.
-- **Turbopack does not work.** The Next host builds with `--webpack` only: Turbopack resolves an
-  absolute `resolveAlias` as project-relative and has no `extensionAlias` equivalent.
-- **Placed is not rendered.** `integrate check` reads source, so it sees `<X.Island slot="y">` and
-  cannot see whether the branch containing it ever runs. It warns; closing that gap needs the host's
-  own test runner.
-- **The adapter seam is unproven.** The lagoon swaps the *port*, so the app's own orchestration runs
-  — but nothing pins the few lines that map a real backend's shape onto that port. It is a few lines
-  by construction, which is the mitigation.
-- **React only, today.** Nothing in the design is React-specific; Vue and Angular hosts are adapter
-  work. Until that adapter exists, this reads as a React tool.
-
-## Repository layout
-
-```
-packages/          the framework (@motu/*)
-  core/            Store, custom elements, defineIsland, channels, provide() seam
-  react/           createRegion, islandElement, the lagoon runtime
-  runtime/         transport seam: configure(), call(), HttpTransport, MockTransport
-  cli/             the `motu` CLI — the deterministic surface an agent drives
-  host/            `motu-host`: content-addressed lagoon hosting + visual baselines
-  coverage/        the production fold — fingerprints and corpus
-  chrome/          motu's own design tokens. Plain ESM, so Vite and bare node both read it
-  adapters/        next/ and angularjs/
-  codegen/         manifest.json -> TypeScript contract
-java/              the Jakarta half: @BrowserCallable APT + the endpoint dispatcher
-demo-app/          the reference app, proven against a real ocean
-host-app/          motu's own UI — the lagoon host's Next app, built WITH motu, because a UI
-                   framework that hand-writes its own screens is testing a claim it never makes
-docs/              the reference set
-```
-
-## Building this repo
-
-```bash
-pnpm install
-pnpm dev:lagoon        # the lagoon, mock data, no backend
-pnpm typecheck
-cd java && mvn install # the Jakarta half
-```
+- [Design and limits](docs/15-design-and-limits.md) — why it does not flake, the two tiers, cost,
+  what it cannot do, non-goals, known limits.
+- [Concepts](docs/01-concepts.md) — island, archipelago, lagoon, region, slot, key.
+- [Getting started](docs/02-getting-started.md) — `motu init` to a working lagoon.
+- [Everything else](docs/README.md) — CLI, configuration, checks, lagoon, evidence, hosts, agents.
 
 ## License
 

@@ -18,7 +18,7 @@ nobody diffs.
 Iterate with `--fast` (happy-dom, no browser); spend the browser once at the end with `--runtime`, and
 `--audit` before integrating. See "Which level, when" in `island-create.agent.md`.
 
-Read `README.md` first (terminology, "The loop", "The rules that make islands verifiable", "Non-goals").
+Read `README.md` first (the loop), then `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits).
 Do **not** invent rules — the authoritative, mechanical rule set is whatever `motu island verify`
 enforces. Never work around a verify failure; fix the island.
 

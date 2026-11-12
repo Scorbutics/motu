@@ -15,14 +15,14 @@ other people, and how its visual baselines work. Vocabulary is in
 
 The lagoon proves **a component and its declared boundary**: one island or one page's islands, no
 backend, fixtures, deterministic, headless, exit-coded, publishable as a page that opens on a phone
-(`README.md`).
+([design and limits](15-design-and-limits.md)).
 
 It does not prove **the system**. Cross-page behaviour — island A changing what island B shows on
 another page — is mediated by the database, and the honest tools for it are the real app running
-locally with auth bypassed, plus Playwright (`README.md`). Simulating that backend inside the
+locally with auth bypassed, plus Playwright ([design and limits](15-design-and-limits.md)). Simulating that backend inside the
 lagoon (a stateful fake, the schema in pglite) was investigated and declined: it reimplements business
 logic that cannot be diffed against the original, and the moment the lagoon has a backend it loses
-determinism, one-cause failures, speed, and the artifact with nothing behind it (`README.md`).
+determinism, one-cause failures, speed, and the artifact with nothing behind it ([design and limits](15-design-and-limits.md)).
 
 **It is always mock-backed, and there is no way to make it otherwise from the browser.** The two mock
 layers are guaranteed differently, and it is worth knowing which is which. At the CONTRACT seam a

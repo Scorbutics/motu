@@ -55,17 +55,17 @@ archipelago, so neither side can arrange the region differently from the other
 ## The metaphor terms
 
 These are prose only. They never appear in an import or a type name — those stay literal (`Store`,
-`Transport`, `HttpTransport`, `MockTransport`) — see `README.md`.
+`Transport`, `HttpTransport`, `MockTransport`).
 
 | Term | Is | Is not |
 |---|---|---|
-| **Island** | A component embedded in a host page, behind a declared boundary: input props, output events, declared effects (`README.md`). | A micro-frontend. Islands are a compile-time composition mechanism: one build, one contract, one version (`README.md`). |
-| **Ocean** | The legacy application the islands sit in (`README.md`). The reference one is a Jakarta EE + AngularJS app. | Required. A greenfield or Next host has no ocean; `--host none` and `--host next` are ocean-free. |
-| **Archipelago** | The islands of ONE PAGE, referenced by slot, sharing a `Store` instead of talking to each other (`README.md`). A declared grouping. | A DOM container. Scoping one to a subtree puts a boundary through the middle of any coupling that crosses it (`.github/host-rules.md`, "the scope of a region is the PAGE, never a DOM subtree"). |
+| **Island** | A component embedded in a host page, behind a declared boundary: input props, output events, declared effects. | A micro-frontend. Islands are a compile-time composition mechanism: one build, one contract, one version. |
+| **Ocean** | The legacy application the islands sit in. motu began against a Jakarta EE + AngularJS one. | Required. A greenfield or Next host has no ocean; `--host none` and `--host next` are ocean-free. |
+| **Archipelago** | The islands of ONE PAGE, referenced by slot, sharing a `Store` instead of talking to each other. A declared grouping. | A DOM container. Scoping one to a subtree puts a boundary through the middle of any coupling that crosses it (`.github/host-rules.md`, "the scope of a region is the PAGE, never a DOM subtree"). |
 | **Region** | The same thing as an archipelago, named from the state side: the *keys* one archipelago owns, and the app-side TYPE those keys are declared against (`packages/core/src/archipelago.ts:201`, the `TRegion` parameter). | A second construct. `motu archipelago init` (with and without `--page`) scaffolds the same object at different scopes — see [Archipelagos and regions](05-archipelagos-and-regions.md). |
-| **Lagoon** | Isolated mode: islands rendered with no ocean present, against fixtures (`MockTransport`), no session, no login, no backend (`README.md`). Where the loop closes. | A local environment. The lagoon proves a component and its declared boundary; it deliberately has no backend, so cross-page behaviour is out of scope (`README.md`). See [The lagoon](08-lagoon.md). |
-| **Mainland** | The standalone destination the code migrates toward once the ocean recedes (`README.md`) — concretely, the plain components under `src/ui/`, which depend only on the contract and each other. | A build target. Nothing produces "the mainland"; it is what is left when the wrappers come off. |
-| **Motu** | A low islet on an atoll's rim — the island that holds the ocean back and makes the lagoon possible (`README.md`). | — |
+| **Lagoon** | Isolated mode: islands rendered with no ocean present, against fixtures (`MockTransport`), no session, no login, no backend. Where the loop closes. | A local environment. The lagoon proves a component and its declared boundary; it deliberately has no backend, so cross-page behaviour is out of scope. See [The lagoon](08-lagoon.md). |
+| **Mainland** | The standalone destination the code migrates toward once the ocean recedes — concretely, the plain components under `src/ui/`, which depend only on the contract and each other. | A build target. Nothing produces "the mainland"; it is what is left when the wrappers come off. |
+| **Motu** | A low islet on an atoll's rim — the island that holds the ocean back and makes the lagoon possible. | — |
 
 ---
 
@@ -273,14 +273,14 @@ fixtures cannot travel into a production bundle (see the header of
 | Term | Type | Is |
 |---|---|---|
 | **Fixture** | `Fixture` (`packages/runtime/src/mock.ts:71`) | One recorded backend answer, keyed by `service` + `method`, optionally by `match` (deep-equal on the call args, `undefined` as a wildcard) and gated by `roles`. Either a `response` (`:27`) or a `status` failure (`:56`). |
-| **Scenario** | `Scenario` (`:85`) | A named `seed` for ONE island. Two scenarios whose renders are identical fail `data-flow` — two seeds that produce one screen are one seed (`README.md`). |
+| **Scenario** | `Scenario` (`:85`) | A named `seed` for ONE island. Two scenarios whose renders are identical fail `data-flow` — two seeds that produce one screen are one seed. |
 | **Flow** | `RegionScenario` (`:102`) | A named `seed` plus `steps` for a whole region. This is the integration test, as a value. |
 | **Step** | `RegionStep` (`:109`) | `emit` (slot + declared event + detail), and/or `provide` (keys in), asserting with `expect` (store keys) and/or `expectRender` (slot → text). |
 
-A flow **cannot script**. There is no selector, no click, no wait, no page object: a step names a SLOT
-and a DECLARED event (`README.md`). That constraint is what buys determinism, and it puts a
-component's internal interaction logic permanently out of scope — that stays a Testing Library test
-(`README.md`).
+A region flow **cannot script**. There is no selector, no typing, no wait, no page object: a step
+names a SLOT and a DECLARED event (screen flows may click the app's own links, to navigate). That
+constraint is what buys determinism, and it puts a component's internal interaction logic permanently out of scope — that stays a Testing Library test
+([design and limits](15-design-and-limits.md#what-it-deliberately-cannot-do)).
 
 Every declared state is an **address**: `/?target=island:<tag>&scenario=<name>` and
 `/?region=<id>&flow=<name>&step=<n>` — the parameters `scenario`, `flow`, `step`, `region` and

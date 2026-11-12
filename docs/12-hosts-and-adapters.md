@@ -23,10 +23,10 @@ with a React frontend is the same shape; the same application rendering ERB or t
 client framework has nowhere for an island to go.
 
 The evidence table — which stacks have actually been driven, and by what — is in the
-[README](../README.md#what-this-has-actually-been-run-against) so that it is the first thing a
+[README](../README.md#what-it-runs-on) so that it is the first thing a
 stranger reads. In summary: **Next.js** and **Vite + React + TypeScript** are exercised by in-repo
 consumers and by repeated cold-start adoptions of two third-party production monorepos;
-**AngularJS 1.x** is exercised by the reference ocean; `--host none` exists and has no consumer
+**AngularJS 1.x** is exercised by the AngularJS island in `demo-app`; `--host none` exists and has no consumer
 proving it. **Angular 2+, Vue, Svelte, Solid, non-TypeScript React, and host bundlers other than
 Next's or Vite's have no adapter and no evidence.**
 
@@ -447,7 +447,7 @@ when something failed, on the restored tree, so a clean removal still pays for e
 
 ## Known limits
 
-The [README](../README.md) lists the headline ones; here they are verified against source:
+The [design and limits](15-design-and-limits.md#known-limits) page lists the headline ones; here they are verified against source:
 
 - **`contract-only-io` still cannot see a direct Supabase import.** The seam exists, but the static
   rule's blocked-client list is `axios / ky / superagent / node-fetch / got`
@@ -456,7 +456,7 @@ The [README](../README.md) lists the headline ones; here they are verified again
   configurable per project; it is not.
 - **Turbopack does not work.** Use `next dev --webpack` / `next build --webpack`. Turbopack resolves an
   absolute `resolveAlias` value as project-relative and has no `extensionAlias` equivalent for the
-  `.js` specifiers motu's sources use (`README.md`). The workaround is visible in the
+  `.js` specifiers motu's sources use ([design and limits](15-design-and-limits.md)). The workaround is visible in the
   generated code: the scaffolded barrel deliberately writes extensionless specifiers
   (`packages/cli/src/lib/scaffold.mjs:48`, `packages/cli/src/lib/islands.mjs:64`).
 - **A Next host needs bundler wiring beyond the aliases:** `experimental.externalDir: true` (the

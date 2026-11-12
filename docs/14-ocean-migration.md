@@ -187,7 +187,7 @@ changes, the page's stylesheet is what changed, and that is the file to read.
 ## 7 — The end: the ocean recedes
 
 The **mainland** is what is left when the wrappers come off: the plain components under `src/ui/`,
-depending only on the contract and each other (`README.md`). Nothing produces it — it is a
+depending only on the contract and each other ([concepts](01-concepts.md)). Nothing produces it — it is a
 destination, not a build target.
 
 You are done with a slot when:
@@ -210,7 +210,7 @@ rewriting the islands.
 | coexistence | `legacy-toggle` + inbound channels | not applicable — there is no second implementation |
 
 The `ui/<kebab>/` layer exists **for this case**. On a React host, copying an existing component there
-would fork it (`README.md`) — which is why `--from` exists and why
+would fork it ([README](../README.md#try-it)) — which is why `--from` exists and why
 [06 — Composition and adoption](06-composition-and-adoption.md) never mentions `ui/`.
 
 ## See also

@@ -23,6 +23,7 @@ detail behind it — read in order if you are new; jump straight in if you are n
 |---|---|
 | [01 — Concepts and terminology](01-concepts.md) | island, ocean, archipelago, lagoon, mainland, region, slot, key. Read this first; every other page assumes it. |
 | [02 — Getting started](02-getting-started.md) | `motu init` to a working lagoon, the first island, the iteration loop. |
+| [15 — Design and limits](15-design-and-limits.md) | why it does not flake, the two tiers, cost, what it cannot do, non-goals, known limits. |
 
 ## Reference
 

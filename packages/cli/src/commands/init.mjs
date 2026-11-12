@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { color } from '../lib/util.mjs';
 import { applyHostRules } from '../lib/host-rules.mjs';
+import { installSkills } from './skills.mjs';
 import {
   render,
   ISLANDS_REGISTRY,
@@ -397,9 +398,14 @@ export async function initCommand(argv) {
   // the project and silently skipped the rules — and `--json` is exactly the invocation a script or a
   // CI image uses, which is the one place nobody reads the output to notice they are missing.
   const rules = applyHostRules(hostRoot);
+  // AND THE SKILLS THEY POINT AT. The rules block is short on purpose — the invariants, and which skill
+  // holds the detail (motu-regions, motu-evidence, motu-checks). A project that got the block without
+  // the skills would be told to load something it does not have. Same root as the rules: the host's,
+  // where its agent reads both. Never over a skill the project changed (reported, not overwritten).
+  const { out: skillsOut } = installSkills(hostRoot);
 
   if (argv.json) {
-    console.log(JSON.stringify({ root, host, appPackage, created, skipped, rules }, null, 2));
+    console.log(JSON.stringify({ root, host, appPackage, created, skipped, rules, skills: skillsOut }, null, 2));
     return;
   }
 
@@ -407,6 +413,9 @@ export async function initCommand(argv) {
   for (const p of created) console.log('  ' + color.dim(relPosix(root, p).replace(/^\.\//, '')));
   for (const p of skipped) console.log('  ' + color.dim(relPosix(root, p).replace(/^\.\//, '')) + color.yellow(' (kept)'));
   for (const p of rules) console.log('  ' + color.dim(p) + color.dim(' (motu rules block)'));
+  const skillFiles = skillsOut.created.length + skillsOut.updated.length;
+  if (skillFiles) console.log('  ' + color.dim(`${skillFiles} skill file(s) — the detail the rules block points at (.claude/skills, .github/agents)`));
+  for (const p of skillsOut.skipped) console.log('  ' + color.dim(p) + color.yellow(' (kept — differs from motu\'s; `motu skills install --force` to update)'));
   console.log('');
   keptPackageJsonNotice(appRoot, skipped, motuDependencies);
   if (!LEGACY_FIT_HOSTS.has(host)) {

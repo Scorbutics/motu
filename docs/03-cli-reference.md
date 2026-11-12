@@ -162,10 +162,14 @@ pnpm/npm workspace, which decides whether `@motu/*` dependencies are declared at
 `.motu/cache` by `lagoon serve|publish`, or onto disk by `lagoon eject` (`:300-319`). Existing files are
 kept, never overwritten, and reported as `(kept)`.
 
-It also writes the shipped host-rules block into `CLAUDE.md`, `AGENTS.md` and
+It also installs the shipped skills (`installSkills`, the same code as `motu skills install`, never over a
+skill the project changed — that one is reported as kept) and writes the host-rules block into `CLAUDE.md`, `AGENTS.md` and
 `.github/copilot-instructions.md` — whichever already exist, else `CLAUDE.md` — rewriting in place
 between markers (`commands/init.mjs:340`, `lib/host-rules.mjs:24`, `:38-53`). It runs **before** the
-`--json` early return, and the paths written come back under `rules` in the JSON. That ordering is
+`--json` early return, and the paths written come back under `rules` (and the skill files under `skills`) in the JSON.
+The two travel together because the rules block is short and POINTS AT the skills (`motu-regions`,
+`motu-evidence`, `motu-checks`): a project with the block and without the skills would be told to load
+something it does not have. That ordering is
 deliberate: it used to sit after the return, so `motu init --json` — the invocation a script or a CI
 image uses, and the one place nobody reads the output — scaffolded the project and silently skipped
 the agent rules.

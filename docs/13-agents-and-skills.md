@@ -180,8 +180,10 @@ not, and the framework enforced a shape nobody had told the agent about
 ### How it gets into a project
 
 `applyHostRules(dir)` (`packages/cli/src/lib/host-rules.mjs:36-52`), called by both
-`motu skills install` (`skills.mjs:120`) and `motu init`
-(`packages/cli/src/commands/init.mjs:341`).
+`motu skills install` and `motu init`. Both also install the skills (`installSkills` in
+`commands/skills.mjs`): the block is short and points at `motu-regions`, `motu-evidence` and
+`motu-checks`, so the two must arrive together. `init` never overwrites a skill the project changed; it
+reports it as kept, and `motu skills install --force` updates it.
 
 - The text is read from the motu checkout's `.github/host-rules.md`; a checkout without one returns
   nothing rather than failing (`host-rules.mjs:26-28`, `:38`).

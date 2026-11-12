@@ -77,20 +77,14 @@ function put(path, contents, out) {
   out.created.push(rel);
 }
 
-export async function skillsInstallCommand(argv) {
-  const root = resolve(process.cwd(), argv._[0] ?? '.');
-  const only = argv.only ?? 'both'; // both | claude | copilot
-  if (!['both', 'claude', 'copilot'].includes(only)) {
-    console.error(color.red(`✗ --only must be one of: both, claude, copilot (got "${only}")`));
-    process.exit(2);
-  }
+/**
+ * Write the shipped skills into `root` — never over a file that differs unless `force` (it is reported
+ * as skipped). Shared by `motu skills install` and `motu init`: the short motu rules POINT AT these
+ * skills, so a project that has the rules must have them too.
+ */
+export function installSkills(root, { force = false, only = 'both' } = {}) {
   const skills = discover();
-  if (skills.length === 0) {
-    console.error(color.red(`✗ no skills found in ${SRC_AGENTS} — is this a complete motu checkout?`));
-    process.exit(1);
-  }
-
-  const out = { root, force: Boolean(argv.force), created: [], updated: [], same: [], skipped: [] };
+  const out = { root, force, created: [], updated: [], same: [], skipped: [] };
   for (const skill of skills) {
     if (only !== 'claude') {
       put(resolve(root, '.github/agents', `${skill.name}.agent.md`), skill.agent.raw, out);
@@ -100,6 +94,21 @@ export async function skillsInstallCommand(argv) {
       put(resolve(root, '.claude/skills', skill.name, 'SKILL.md'), skillMd(skill), out);
     }
   }
+  return { skills, out };
+}
+
+export async function skillsInstallCommand(argv) {
+  const root = resolve(process.cwd(), argv._[0] ?? '.');
+  const only = argv.only ?? 'both'; // both | claude | copilot
+  if (!['both', 'claude', 'copilot'].includes(only)) {
+    console.error(color.red(`✗ --only must be one of: both, claude, copilot (got "${only}")`));
+    process.exit(2);
+  }
+  if (discover().length === 0) {
+    console.error(color.red(`✗ no skills found in ${SRC_AGENTS} — is this a complete motu checkout?`));
+    process.exit(1);
+  }
+  const { skills, out } = installSkills(root, { force: Boolean(argv.force), only });
 
   if (argv.json) {
     console.log(JSON.stringify({ root, source: MOTU_ROOT, skills: skills.map((s) => s.name), ...out }, null, 2));

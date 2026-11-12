@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motu/runtime';
 import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago } from '@motu/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago, pinRegionKeys } from '@motu/core';
 import { installMotuChrome } from '@motu/chrome/css';
 import { PAGE_SHELL_CSS } from '@motu/chrome/html';
 import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
@@ -655,6 +655,9 @@ markSandbox();
   let elementRemount: (() => void) | undefined;
 
   function mount(id: string): void {
+    // Leaving island mode: a region's own errors are not the last lone island's.
+    stopWatchingIsland?.();
+    stopWatchingIsland = undefined;
     if (!id) return;
     if (id.startsWith(SCREEN)) {
       const sc = screens.find((x) => SCREEN + x.id === id);
@@ -769,6 +772,29 @@ markSandbox();
   }
 
   /**
+   * A lone island that THROWS while rendering leaves a blank frame — and the state report still said
+   * `ok: true`, because the address resolved. Being handed a blank page while told it is the state you
+   * named is the failure the refusal banner exists for, so a render error refuses the state the same
+   * way an unknown name does. React reports an uncaught render error to `window`; listen while this
+   * island is the one mounted.
+   */
+  let stopWatchingIsland: (() => void) | undefined;
+  function watchIslandRender(tag: string): void {
+    stopWatchingIsland?.();
+    const onError = (e: ErrorEvent) => {
+      const why = e.error instanceof Error ? e.error.message : String(e.message ?? e.error);
+      reportState({
+        ok: false,
+        target: `island:${tag}`,
+        kind: 'none',
+        error: `<${tag}> threw while rendering, so this frame is not the state it names — ${why}`,
+      });
+    };
+    window.addEventListener('error', onError);
+    stopWatchingIsland = () => window.removeEventListener('error', onError);
+  }
+
+  /**
    * Mount the addressed island ALONE, in this page's chrome.
    *
    * The station list stays visible and nothing in it is lit: what is mounted is not a region, and
@@ -782,11 +808,25 @@ markSandbox();
     // so switching island or scenario in place showed the new island over the LAST one's state. The
     // same fault the focused entry had (lagoon-bootstrap `render`); the same fix.
     disposeArchipelago(synthesised.id);
+    // THE REGION'S OVERRIDES, read for a lone island too. An island that needs the application's own
+    // store, router or container cannot render without the region's `providers`, and one that asks the
+    // backend needs the region's `wire` — which `regionOverrides` installs as it resolves. The focused
+    // entry (`island verify`) always read them; this mount read none, so on shlink every island opened
+    // alone rendered blank while every check that drives the focused entry stayed green. The third time
+    // the two entries disagreed about a field — see `regionOverrides`'s own comment.
+    const owners = Object.entries(opts.archipelagos ?? {}).filter(([, cfg]) => cfg.islands?.some((i) => i.element === open.tag));
+    const ov = owners.length === 1 ? regionOverrides(overrides, owners[0]![0]) : {};
+    // A NAMED SCENARIO IS THE ISLAND'S WHOLE WORLD: the region's channels still run, but may not
+    // overwrite a key the scenario seeded — the focused entry's rule (`pinRegionKeys`), set or cleared.
+    pinRegionKeys(synthesised.id, open.seed ? Object.keys(open.seed) : []);
     if (react) {
+      watchIslandRender(open.tag);
       mountReactLagoon(root, synthesised, {
         elements: opts.elements,
         host,
         seed: open.seed ?? {},
+        channels: ov.channels,
+        providers: ov.providers,
         view,
       });
     } else {

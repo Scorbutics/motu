@@ -11,7 +11,7 @@ it passes. The `motu` CLI owns the deterministic work (scaffold, config edits, v
 judgement (what to build, the data flow, the fixtures) and the **sequence below**. Never work around a
 verify failure — fix the island.
 
-Read `README.md` first (terminology, "The loop", "The rules that make islands verifiable", "Non-goals").
+Read `README.md` first (the loop), then `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits).
 The authoritative rule set is whatever `motu island verify` enforces — do not invent rules.
 
 ## The anatomy you produce
@@ -45,6 +45,13 @@ store nothing in the region read.
 Most islands on a page couple with NOTHING — fed by props, or reading the backend themselves. That is
 normal; membership is not a claim of coupling. Declare the grouping and the bindings; `motu contract
 check` derives the coupling graph.
+
+**If this island adds or changes ownership** — a `writes`, a key another island reads, a new slot —
+read the changed archipelago back with a FRESH agent before building the island (`archipelago-build`,
+"Read it back"): hand it the archipelago, where the app's vocabulary lives, and the question *what does
+this region promise, and what does it permit that a reasonable person would not expect?* — never your
+plan or transcript. An ownership you invented is invisible to you and obvious to a reader who did not
+choose it.
 Know up front which **store keys** the island will read/write and which **sibling islands** it
 coordinates with (e.g. a search island writes `criteria`; a results island reads it). This is the
 contract you design the island around.

@@ -12,7 +12,7 @@ and `island-extract` are the verbs that act on it; this agent is the judgement t
 is the step people skip — which is how a page ends up with an archipelago drawn around a DOM subtree,
 a key nobody reads, or a "coupling" that was only ever prop drilling.
 
-Read `README.md` (terminology, "The loop", "The rules that make islands verifiable", "Non-goals") and
+Read `README.md`, `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits) and
 the host's `CLAUDE.md` motu rules block. Do not invent rules: the mechanical rule set is whatever
 `motu check` enforces. Nothing here creates, moves or refactors code — **locating is read-only**.
 
@@ -148,7 +148,7 @@ Archipelago: <id> — NEW | EXISTS | none needed (+ one sentence: genuinely coup
 Host: next|vite|none (wrap the app's own components) | angularjs (author them under ui/)
 
 ### Region keys
-| key | owner (island `writes` / host-fed) | readers | seeded by the page? | evidence |
+| key | owner (island `writes` / host-fed) | readers | seeded by the page? | evidence | provenance |
 
 ### Island candidates (ranked, best first)
 1. <name> → tag `<prefix><name>`, slot `<slot>`
@@ -164,7 +164,27 @@ Host: next|vite|none (wrap the app's own components) | angularjs (author them un
 
 ### Unknowns and risks
 - what you could NOT trace, host coupling the lagoon can only stub, states with no reachable input
+
+### Decisions for the human (every `inferred` and `default` row above, as a question)
+- <key/slot/owner/flow>: I chose <X> because <reason> — or <alternative>?
 ```
+
+**Provenance, on every key, owner, slot and flow** — the survey IS the step that turns what a person
+wants into the spec everything after it is proved against, and a plausible guess here becomes a
+"requirement" nobody stated:
+
+- **stated** — quote it: the user's words, or the code line that already does exactly this
+  (`ManageServers.tsx:27 holds searchTerm in useState and filters with it`);
+- **inferred** — reasoned from the code, not written anywhere (`the list reads it, so the search must
+  own it`); say what it was inferred from;
+- **default** — nobody decided; you picked something plausible. Say so plainly.
+
+Stated rows get a skim. Inferred and default rows ARE the review, so every one of them is repeated
+under "Decisions for the human" as a question with the alternative named. A report with no inferred
+or default rows on a page nobody has described to you is not finished — it is overconfident.
+
+When two runs of this survey (or two agents) would plausibly answer a row differently, that row is
+ambiguous whatever its provenance says: mark it **default**.
 
 Close with **the first move**: one candidate, one verb, one command. A report that ranks eleven
 candidates and does not say where to start has not finished the job.
@@ -175,6 +195,8 @@ candidates and does not say where to start has not finished the job.
   become an island, that is a line in the report, not an edit you make now.
 - **No speculative region.** Do not propose a key without naming its reader, or a `writes` without
   naming the event that fires it. An undeclared coupling is a bug; an invented one is worse.
+- **Never upgrade provenance.** A guess written as `stated` is the invention this whole method exists
+  to catch, moved upstream where everything built afterwards is proved against it.
 - Do not propose islands for arrangement to inflate the count. A page whose honest answer is "one
   island and a layout" gets that answer.
 - Respect `host`: on a React host (`next`/`vite`/`none`) the recommendation is to WRAP the component

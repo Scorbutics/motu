@@ -31,6 +31,26 @@ Typecheck it and run `motu archipelago verify <id>`. It should PASS with a `plan
 green is the point: ownership is now enforced for islands nobody has written, so a second claim on a
 key fails in the claimant's own branch rather than at merge.
 
+### Read it back — FRESH — before anyone builds on it
+
+The archipelago is the spec every agent will build against, and every check after this proves the code
+AGAINST it. An ownership you invented — a producer nobody asked for, a key nobody reads, a slot whose
+owner is a guess — is invisible to you for the same reason a fixture's invented vocabulary is: it sits
+in your context as a premise. So before you commit, spawn a fresh subagent and hand it THREE things:
+
+- the archipelago file,
+- where the application's own vocabulary lives — the region type, the modules the region names,
+- the question: *paraphrase what this region promises, in one line per key and per slot. Then list
+  what it PERMITS that a reasonable person might not expect* — a key with no producer, a key nobody
+  reads, an island allowed to write something its name does not suggest, two slots that look like
+  alternatives with nothing saying so (`exclusive`), a `bind` that renames a key into a different
+  meaning.
+
+Do NOT hand it the survey, the plan, the transcript or your reasoning — they are the contamination.
+Put its paraphrase beside the survey's **inferred** and **default** rows (`island-locate` marks them)
+and give that page to the human: it is the review of the spec, and it is short on purpose. Change the
+archipelago for what they answer, re-run `motu archipelago verify <id>`, and only then commit.
+
 Commit this. Every agent branches from it.
 
 **A contract is good when a flow can end on an island no step drives.** Prefer a shape with a
@@ -71,6 +91,13 @@ Expect every shared file to conflict. Resolve by kind, not by hand:
 - a lagoon frame — if two agents extended a slot→data lookup, take BOTH. A ternary chain with a
   fallback silently renders one island's data in another's slot; convert it to an append-only map.
 
+Then check what the merge DID, not only that it compiles: `motu diff --base <the branch point> --json`
+replays the region's flows on both sides and lists every change, per flow step, to the region's keys,
+what each slot renders, the backend calls and the declarations. Every finding must be either a change
+some agent meant, recorded with one line why in an `--explain` file (`{ "<id>": "<why>" }`), or fixed.
+An unexplained finding is exit 1. This is the check that tells a correct merge from the naive one in
+which a slot renders its neighbour's data; nothing static can, because the frame is not declared.
+
 ## 4 — Write the region's flows
 
 The islands cannot do this: a flow is about the region, and no island can see across the seam.
@@ -83,7 +110,16 @@ A region's flows need a browser — `--fast` skips them and says so — so this 
 work belongs. `motu archipelago verify <id> --runtime` must pass with:
 - `region-flow` — the journey ends as declared,
 - `flow-mutation` — every step dies when its stimulus is mutated,
-- `render-coverage` — every slot is asserted by some flow.
+- `render-coverage` — every slot is asserted by some flow,
+- `flow-calls` — every backend call a step caused was answered by a declaration. A failure here is a
+  missing fixture, table or route: declare it (the finding names what), never make the island swallow
+  the error. A failure the flow WANTS (`status: 500`) is declared on the fixture and does not count.
+
+If the region sits on a SCREEN (`src/screens/screens.ts`), also add a step to
+`src/screens/screens.evidence.ts` that reaches it the way a person does (the app's own link: `click`,
+or `navigate` to its path) and asserts `expectScreen` plus one `expectRender` of this region. Then
+`motu screen verify <screen>`: it opens the screen with the app's own layout, whose calls no region's
+flow makes.
 
 ### Which level, when
 
@@ -217,11 +253,35 @@ state rendering. It runs no typecheck and no test runner. Two things are yours:
 
 - **logic inside the component** (a filter that stops matching a field, `some` for `every`, an
   off-by-one) — renders fine, composes fine, passes everything here;
-- **the path from a user's action to a declared output** — a flow EMITS the island's declared event,
-  entering the region past the component's own handler, so a handler that drops its argument passes
-  every flow you can write.
+- **the path from a user's action to a declared output** — a flow that EMITS the island's declared
+  event enters the region past the component's own handler, so a handler that drops its argument
+  passes it. Write `{ click: '<accessible name>' }` instead when the control has one: the component
+  fires its own output, by the path a person takes. Accessible name only — no selectors, no `fill`,
+  no waits. Anything beyond one click is Playwright's job, not motu's.
 
 Measured on a real screen: of eight injected regressions, the project's unit tests caught five and
 motu's flows caught one — and that one was a render assertion the tests missed. Different
 instruments. If the component you just wrote or wrapped carries logic, say in your handover that it
 needs unit tests in the host's own runner, and do not present a green `motu check` as coverage.
+
+
+## Before you hand this over
+
+A person has to be able to OPEN what you built. Start (or confirm) the detached lagoon, which
+announces itself to the shared host under a slug scoped to your branch:
+
+    motu lagoon serve --watch --detach
+    motu lagoon states          # the address of each declared state
+
+**End your report with the live URL and the one or two states you want looked at.** A passing check
+describes files; the work is a rendered region, and until someone opens it nobody has seen it. Every
+`motu check` verdict now prints the live URL, or how to start one if there is none.
+
+And say plainly what motu did not check: the host's typecheck and its test runner, both of which are
+yours to run.
+
+If the project has coverage on (`coverage.enabled` in motu.config.json) and the region is deployed,
+run `motu coverage doctor --url <production origin>` after the deploy and put its hop in your report.
+No route yet: `motu coverage init` (or `--mode log` for a server that cannot reach the host) writes it
+and prints the one production step left. A green check says nothing about whether production reports
+arrive; the first project to switch coverage on never stored a single one.

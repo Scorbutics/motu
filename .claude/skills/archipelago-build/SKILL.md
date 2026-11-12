@@ -31,6 +31,26 @@ Typecheck it and run `motu archipelago verify <id>`. It should PASS with a `plan
 green is the point: ownership is now enforced for islands nobody has written, so a second claim on a
 key fails in the claimant's own branch rather than at merge.
 
+### Read it back — FRESH — before anyone builds on it
+
+The archipelago is the spec every agent will build against, and every check after this proves the code
+AGAINST it. An ownership you invented — a producer nobody asked for, a key nobody reads, a slot whose
+owner is a guess — is invisible to you for the same reason a fixture's invented vocabulary is: it sits
+in your context as a premise. So before you commit, spawn a fresh subagent and hand it THREE things:
+
+- the archipelago file,
+- where the application's own vocabulary lives — the region type, the modules the region names,
+- the question: *paraphrase what this region promises, in one line per key and per slot. Then list
+  what it PERMITS that a reasonable person might not expect* — a key with no producer, a key nobody
+  reads, an island allowed to write something its name does not suggest, two slots that look like
+  alternatives with nothing saying so (`exclusive`), a `bind` that renames a key into a different
+  meaning.
+
+Do NOT hand it the survey, the plan, the transcript or your reasoning — they are the contamination.
+Put its paraphrase beside the survey's **inferred** and **default** rows (`island-locate` marks them)
+and give that page to the human: it is the review of the spec, and it is short on purpose. Change the
+archipelago for what they answer, re-run `motu archipelago verify <id>`, and only then commit.
+
 Commit this. Every agent branches from it.
 
 **A contract is good when a flow can end on an island no step drives.** Prefer a shape with a

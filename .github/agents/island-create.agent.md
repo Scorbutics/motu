@@ -45,6 +45,13 @@ store nothing in the region read.
 Most islands on a page couple with NOTHING — fed by props, or reading the backend themselves. That is
 normal; membership is not a claim of coupling. Declare the grouping and the bindings; `motu contract
 check` derives the coupling graph.
+
+**If this island adds or changes ownership** — a `writes`, a key another island reads, a new slot —
+read the changed archipelago back with a FRESH agent before building the island (`archipelago-build`,
+"Read it back"): hand it the archipelago, where the app's vocabulary lives, and the question *what does
+this region promise, and what does it permit that a reasonable person would not expect?* — never your
+plan or transcript. An ownership you invented is invisible to you and obvious to a reader who did not
+choose it.
 Know up front which **store keys** the island will read/write and which **sibling islands** it
 coordinates with (e.g. a search island writes `criteria`; a results island reads it). This is the
 contract you design the island around.
@@ -128,12 +135,24 @@ pnpm motu island integrate <name> --archipelago <id> [--slot <slot>]
 - The `<motu-island>` / `<motu-archipelago>` custom-element tags are a runtime contract — unaffected
   by source layout; you only add the marker where the island should mount.
 
+- A `flow-calls` error from `--runtime` is a backend call nothing declared: add the fixture, table or
+  route it names. Do not catch the error in the island to make the check pass.
+- Coverage on, and this ships to production: `motu coverage doctor --url <production origin>` after the
+  deploy (`motu coverage init` first if there is no route).
+
 ### 5 — Validate with the OCEAN's existing verification
 motu's lagoon is not a replacement for the host's own checks. Run the ocean's build + tests:
 - `pnpm typecheck` and `pnpm build:bridge` (motu side compiles),
 - the host application's compilation, unit tests, and integration/e2e suite (the ocean owns these —
   ask the human for the exact commands if unknown; e.g. the ocean app's Maven build + its test
   suites). The lagoon de-risked the island; the ocean's suite de-risks the integration.
+
+**Say what the change did to the flows.** `motu diff --base <branch point> --json` replays the
+flows of every region you touched, at the base and now, and lists what moved (keys, what each slot
+renders, backend calls, declarations). For each finding, fix it or explain it in an `--explain` file
+(`{ "<id>": "<one line: why it was intended>" }`) until it exits 0, then quote the explanations in your
+report. A reader of your diff sees code; this is the only place they learn which behaviour you meant to
+change.
 
 ### 6 — Picture it, before the human sees it
 
@@ -213,11 +232,29 @@ state rendering. It runs no typecheck and no test runner. Two things are yours:
 
 - **logic inside the component** (a filter that stops matching a field, `some` for `every`, an
   off-by-one) — renders fine, composes fine, passes everything here;
-- **the path from a user's action to a declared output** — a flow EMITS the island's declared event,
-  entering the region past the component's own handler, so a handler that drops its argument passes
-  every flow you can write.
+- **the path from a user's action to a declared output** — a flow that EMITS the island's declared
+  event enters the region past the component's own handler, so a handler that drops its argument
+  passes it. Write `{ click: '<accessible name>' }` instead when the control has one: the component
+  fires its own output, by the path a person takes. Accessible name only — no selectors, no `fill`,
+  no waits. Anything beyond one click is Playwright's job, not motu's.
 
 Measured on a real screen: of eight injected regressions, the project's unit tests caught five and
 motu's flows caught one — and that one was a render assertion the tests missed. Different
 instruments. If the component you just wrote or wrapped carries logic, say in your handover that it
 needs unit tests in the host's own runner, and do not present a green `motu check` as coverage.
+
+
+## Before you hand this over
+
+A person has to be able to OPEN what you built. Start (or confirm) the detached lagoon, which
+announces itself to the shared host under a slug scoped to your branch:
+
+    motu lagoon serve --watch --detach
+    motu lagoon states          # the address of each declared state
+
+**End your report with the live URL and the one or two states you want looked at.** A passing check
+describes files; the work is a rendered region, and until someone opens it nobody has seen it. Every
+`motu check` verdict now prints the live URL, or how to start one if there is none.
+
+And say plainly what motu did not check: the host's typecheck and its test runner, both of which are
+yours to run.

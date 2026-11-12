@@ -7,6 +7,12 @@ install` writes them in whatever format its coding agent reads, and installs the
 (`.github/host-rules.md`) into the host's own instruction file at the same time — because the framework
 was enforcing a shape nobody had told the agent about.
 
+**Short rules, big skills.** The standing rules are loaded into EVERY session of the host's agent, so
+they are kept to the invariants (~40 lines) plus which skill to load. The full rule text — every section,
+with the incident that paid for it — lives in three reference skills, loaded only when a task needs
+them: `motu-regions` (declaring a region), `motu-evidence` (evidence and looking), `motu-checks`
+(running and reading checks). The full set used to be one 670-line block in every session.
+
 ---
 
 ## The four skills
@@ -190,34 +196,46 @@ not, and the framework enforced a shape nobody had told the agent about
   subfolder, where a second `CLAUDE.md` would be read by nothing
   (`skills.mjs:117-119`, `skills.mjs:120` passing `HOST_ROOT`).
 
-### What the block contains
+### What the block contains — and where the rest went
 
-The full rule set (`.github/host-rules.md`, 535 lines) covers island-vs-host classification, evidence,
-ownership, the lagoon, the three check tiers and the three exit codes. Four sections matter most to an
-agent working under it, and each exists because of a specific failure:
+The block is the INVARIANTS, one or two lines each — what an agent must not miss even if it never
+loads a skill: island vs host and the survey; declaring only decisions and one producer per key;
+evidence from the app's own data; every state an address, and exploring with `motu lagoon try` before
+asserting; flows that can fail; the fresh-agent final look; the host's typecheck and tests plus
+`motu check` and `motu integrate check`; the three exit codes; one slot per parallel agent; and the
+lagoon as part of the handover.
 
-- **One producer per key, checked in the fast loop** (`host-rules.md:221-231`) — two islands declaring
+Every section of the full rules moved, verbatim, into a reference skill (sources in `.github/agents/`,
+generated like the workflow skills):
+
+| Skill | Holds |
+|---|---|
+| `motu-regions` | island vs host, the survey, ownership (`writes`, `bind`, `reads`, one producer per key), foreign stores, catalogue regions, an island that IS the app's component, `planned: true`, several agents on one region, staged adoption, sources/ports/adapters, removal-check, what motu does not check |
+| `motu-evidence` | scenarios and flows, where evidence lives, the lagoon override map, worlds, addresses, `motu lagoon try`, flows that can fail, undeclared calls, `motu diff`, the final look, baselines, the lens |
+| `motu-checks` | the check tiers and their cost, `--changed`, the three exit codes, a check that looked at nothing, `integrate check`, placed vs rendered, the handover |
+
+Four sections matter most to an agent working under them, and each exists because of a specific failure:
+
+- **One producer per key, checked in the fast loop** (`motu-regions`) — two islands declaring
   `writes` on one key is a *static* error, grouped by element rather than by slot so one island placed
   in two slots stays legal. This is what makes parallel agents safe with no new mechanism: the
   archipelago **is** the claim registry.
-- **Surveyed but not built: `planned: true`** (`host-rules.md:282-295`) — ownership counts a planned
-  island exactly as if it were built, while "does it exist, does it mount, is it placed" skip it. The
-  flag **removes itself**: once the island is registered, `planned: true` becomes an error, because a
-  survey that quietly turns into a list of things nobody built is worse than no survey.
-- **Three outcomes, three exit codes** (`host-rules.md:297-313`) — `0` the declarations hold, `1`
-  something contradicted them (repair), `2` a check could not run (retry, do **not** repair). This
-  exists for unattended loops: an agent reads `✗` and repairs a bug that does not exist, and several
-  agents produce several confident wrong repairs.
-- **An island ships with evidence that asserts its OWN render** (`host-rules.md:250-280`) — adding an
-  island means adding a flow step asserting what *that* island renders, not reusing the region's
-  existing steps.
+- **Surveyed but not built: `planned: true`** (`motu-regions`) — ownership counts a planned island
+  exactly as if it were built, while "does it exist, does it mount, is it placed" skip it. The flag
+  **removes itself**: once the island is registered, `planned: true` becomes an error.
+- **Three outcomes, three exit codes** (`motu-checks`) — `0` the declarations hold, `1` something
+  contradicted them (repair), `2` a check could not run (retry, do **not** repair). This exists for
+  unattended loops: an agent reads `✗` and repairs a bug that does not exist.
+- **An island ships with evidence that asserts its OWN render** (`motu-evidence`) — adding an island
+  means adding a flow step asserting what *that* island renders, not reusing the region's existing steps.
 
 ---
 
 ## Building one region with several agents
 
-The protocol lives in `archipelago-build`; the binding rules live in host-rules, and they bind an agent
-**whether or not someone launched it as part of a fan-out** (`.github/host-rules.md:315-317`).
+The protocol lives in `archipelago-build`; the binding rules live in `motu-regions` ("When several
+agents build one region at once"), and they bind an agent **whether or not someone launched it as part of
+a fan-out**.
 
 ### 1 — Survey, and write the answer down
 
@@ -242,7 +260,7 @@ island only writes its own key, the region's flows can only assert echoes.
 One agent per island, each in its own git worktree, each given the same brief verbatim with only the
 slot changed. Do not tell an agent about the others' internals — the archipelago is what they share
 (`SKILL.md:40-60`). The brief's binding clauses match host-rules
-(`.github/host-rules.md:317-331`):
+(the `motu-regions` skill):
 
 - **You own ONE slot.** Do not edit another island's files, another island's archipelago entry, or the
   region's shared type. If you believe the shared type is wrong, **say so and stop** — changing it is a
@@ -264,7 +282,7 @@ a source or a shared evidence module always does (`SKILL.md:98-102`).
 ### 3 — Merge: the hazards recorded from real runs
 
 Expect every shared file to conflict. Resolve **by kind, not by hand**
-(`SKILL.md:62-72`, `.github/host-rules.md:333-337`):
+(`SKILL.md:62-72`, the `motu-regions` skill):
 
 | File | Resolution |
 | --- | --- |
@@ -274,7 +292,7 @@ Expect every shared file to conflict. Resolve **by kind, not by hand**
 | a lagoon frame | if two agents extended a slot→data lookup, take **both** |
 
 The frame case is the one that actually shipped a bug, and it is worth stating in full
-(`.github/host-rules.md:250-263`). Two agents each extended the frame's `rowFor` **ternary**, whose
+(the `motu-evidence` skill). Two agents each extended the frame's `rowFor` **ternary**, whose
 fallback was the notes row. Taking either side of that conflict alone makes the other agent's widget
 render **as Notes** — wrong, and rendering. `archipelago verify` was byte-identical between the correct
 and the naive resolution, because the frame is *arrangement*, it is not declared, and nothing checks it.
@@ -283,7 +301,7 @@ content, which neither agent wrote because nothing required it. Hence two standi
 append-only LOOKUP over a ternary chain** in any frame two people may extend, and **every island ships a
 flow step asserting its own render**.
 
-One more, from the same run (`host-rules.md:278-280`): if you use git worktrees, **do not symlink
+One more, from the same run (the `motu-evidence` skill): if you use git worktrees, **do not symlink
 `node_modules` into them** — `git add -A` commits the symlink, the merge replaces the real directory
 with it, and the next build dies on `ELOOP`.
 

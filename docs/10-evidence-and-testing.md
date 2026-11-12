@@ -20,12 +20,12 @@ Three facts, and the rest of the page follows from them.
 **An island ships with evidence that asserts its own render.** An island's evidence is a list of store
 seeds — states it can be put into. Adding an island to a region means adding a step to the region's
 evidence that asserts what *that* island renders, not extending the region's existing steps
-(`.github/host-rules.md:250`). The rule was paid for: two agents added one island each to one region
+(the `motu-evidence` skill). The rule was paid for: two agents added one island each to one region
 in parallel, both islands correct, and the *merge* broke it — each had extended the lagoon frame's
 slot→row ternary whose fallback was another island's row, so resolving the conflict naively made one
 agent's widget render as the other's. `archipelago verify --runtime` was byte-identical between the
 correct and the broken resolution, because arrangement is not declared and therefore not checked
-(`packages/cli/src/commands/verify/report.mjs:185`, `.github/host-rules.md:252`).
+(`packages/cli/src/commands/verify/report.mjs:185`, the `motu-evidence` skill).
 
 **A region ships flows.** A flow is a seed, an act, and what the region holds afterwards
 (`packages/runtime/src/mock.ts:102`). The act is an island's *declared* output or the host feeding a
@@ -102,7 +102,7 @@ import { FAVORITE_IDS, FIRST_PAGE, MEMBERS } from '../shared/directory-evidence'
 
 The same rule, stated for regions, is why **evidence must not import the lagoon frame**: keep the rows
 in a module with no application imports and let both sides import *that*
-(`.github/host-rules.md:185`).
+(the `motu-regions` skill).
 
 ### The `import type` trick
 
@@ -256,7 +256,7 @@ expressible. There is no field for it.
 `emit`, which quietly meant only regions whose islands *write* could have flows at all — Twenty's
 record page, whose two widgets both read `editingWidgetId` owned by the app, was undeclarable
 (`packages/runtime/src/mock.ts:113`). A region whose islands only read uses `provide` and ends on
-`expectRender` (`.github/host-rules.md:157`).
+`expectRender` (the `motu-evidence` skill).
 
 A step must do at least one of `emit`, `provide`, or `expectRender`, and must assert at least one of
 `expect`, `expectRender` or `expectCalls`; both are runtime errors from the driver
@@ -313,7 +313,7 @@ selector from the project and cannot drift from where the region actually mounte
 `innerText` alone could not see a passenger's name in an input or a seat's identity in an aria-label,
 which left an island made of form controls with almost nothing assertable. Widening the haystack does
 not weaken the check — a wrong value and another island's text both still fail
-(`.github/host-rules.md:265`).
+(the `motu-evidence` skill).
 
 Matching is **case-insensitive**, deliberately: `innerText` reports what `text-transform` produced, and
 an assertion that breaks when a caption is restyled is asserting the wrong thing. Found the day the
@@ -363,12 +363,12 @@ Three things the mutation report gets deliberately right, each from a real miss:
 **Know the limit.** An assertion on a stand-in's invented vocabulary is perfectly sensitive to its
 stimulus and mutates correctly. Neither rule can see it. Only rendering the application's own component
 makes it visible — which is why an island on a host that owns the component *is* that component
-(`packages/cli/src/commands/verify/island-runtime.mjs:427`, `.github/host-rules.md:246`).
+(`packages/cli/src/commands/verify/island-runtime.mjs:427`, the `motu-evidence` skill).
 
 **A step may assert with no stimulus at all.** Some islands take no input, so `provide`ing something
 just to have a stimulus produces a constant that `flow-mutation` will correctly reject. Write the bare
 claim — "this slot renders THIS island" — which is not a data flow and is still worth making
-(`packages/cli/src/playwright-lagoon.mjs:558`, `.github/host-rules.md:272`):
+(`packages/cli/src/playwright-lagoon.mjs:558`, the `motu-evidence` skill):
 
 ```ts
 {
@@ -415,7 +415,7 @@ whether or not its author thought about emptiness.
 
 This exists because `removal-check` printed "no motu references in the host application" over a fully
 integrated app: it scanned the wrong directories, examined zero files, and reported that as success
-(`packages/cli/src/commands/verify/report.mjs:54`, `.github/host-rules.md:205`).
+(`packages/cli/src/commands/verify/report.mjs:54`, the `motu-checks` skill).
 
 For evidence specifically, the empty-assertion failure mode has four shapes, and each has its own
 guard:
@@ -484,7 +484,7 @@ point — while the checks that ask "does it exist, does it mount, is it placed"
 flag; the checks that skip a planned island are exactly the ones it now needs"
 (`packages/cli/src/commands/verify/report.mjs:277`). A survey that quietly becomes a list of things nobody
 built is worse than no survey (`packages/core/src/archipelago.ts:84`,
-`.github/host-rules.md:282`).
+the `motu-regions` skill).
 
 ---
 
@@ -638,7 +638,7 @@ screenshots included (`acme/motu/src/shared/directory-evidence.ts:74`).
 - **Two agents extending one ternary chain in a frame.** Both islands correct, the merge wrong, every
   check green. Prefer an **append-only LOOKUP** over a ternary chain in a frame two people may extend —
   two people extending one chain cannot both be right, and the fallback silently claims the loser
-  (`.github/host-rules.md:278`, `.github/host-rules.md:335`). The check that would have caught the
+  (the `motu-evidence` and `motu-regions` skills). The check that would have caught the
   outcome is `render-coverage`, and it is a *warning* on purpose: the rule is new, and turning every
   pre-existing region red teaches people to ignore the report rather than fix it
   (`packages/cli/src/commands/verify/report.mjs:197`). `writes-covered` is a warning for the same reason
@@ -653,10 +653,10 @@ screenshots included (`acme/motu/src/shared/directory-evidence.ts:74`).
   Getting this wrong is invisible in the region view and fatal in the mountpoints view — which is the
   one the flow checks drive — so it reads as "the region rendered nothing" rather than "no providers".
   Providers must also be idempotent, since the frame and each island both install them
-  (`.github/host-rules.md:174`).
+  (the `motu-regions` skill).
 - **Do not symlink `node_modules` into a git worktree.** `git add -A` commits the symlink, the merge
   replaces the real directory with it, and the next build dies on `ELOOP`
-  (`.github/host-rules.md:280`).
+  (the `motu-evidence` skill).
 
 ---
 

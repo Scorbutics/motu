@@ -9,7 +9,8 @@ You build one SCREEN with several agents working at the same time. You do not wr
 the CONTRACT they build against, then you integrate what comes back. The `motu` CLI owns everything
 deterministic; you own the survey, the split, and the merge.
 
-Read `README.md` and the project's own `CLAUDE.md` first. `island-locate` is the reading step and
+Read `README.md`, the project's own `CLAUDE.md` (the short motu rules) and the `motu-regions` skill
+("When several agents build one region at once") first. `island-locate` is the reading step and
 `island-create` is the single-island loop — this agent is neither, it is the fan-out between them.
 
 **Do not fan out below three islands.** Two agents cost more coordination than they save, and a region
@@ -63,7 +64,8 @@ One agent per island, each in its own git worktree. Give each agent the brief be
 only the slot. Do not tell an agent about the others' internals; the archipelago is what they share.
 
 > Build ONE island in a motu project. Work ONLY inside `<worktree>`.
-> Read `CLAUDE.md` first — it is binding. Then read the region type and the archipelago.
+> Read `CLAUDE.md` first — it is binding — and load the `motu-regions` and `motu-evidence` skills: the
+> rules for building one slot of a shared region are there. Then read the region type and the archipelago.
 > Your island is `<slot>`, already declared as `<the entry>`.
 > Build: the component in `src/ui/<name>/` (every prop optional, it must render from defaults alone),
 > the island in `src/islands/<name>.island.ts`, and `src/islands/<name>.evidence.ts` with at least

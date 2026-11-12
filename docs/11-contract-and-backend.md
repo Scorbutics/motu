@@ -304,19 +304,19 @@ rather than 403 because existence is already established by that point (`server.
 
 ## 3. SOURCE vs PORT vs ADAPTER
 
-`.github/host-rules.md:361-385` makes a distinction that decides how much a green region actually
+the `motu-regions` skill makes a distinction that decides how much a green region actually
 claims, and it is routinely read backwards.
 
 - **The source is REAL in the lagoon.** "When a flow runs, the source is the APPLICATION'S OWN
   OBJECT. Its timeout, its precedence rules, its generation guard, its error mapping, its intent
-  dispatch — all of that executes" (`.github/host-rules.md:363-366`). In the adopting project the
+  dispatch — all of that executes" (the `motu-regions` skill). In the adopting project the
   source is `createDirectorySource` — debounce, page-one reset, append-on-more, and a `generation`
   counter so a slow first request cannot land after a faster second one
   (`acme:app/dashboard/directory/directory-source.ts:56-64`). It owns
   no framework and no motu, "so it runs in a React effect, in a motu channel, and in a vitest test
   with three lines of setup" (`directory-source.ts:9-10`).
 - **The PORT is the stand-in.** "production hands it Supabase and the services, the lagoon hands it
-  fixtures" (`host-rules.md:366-367`). The port is a declared interface —
+  fixtures" (the `motu-regions` skill). The port is a declared interface —
   `DirectoryPort { search, counts }` (`directory-source.ts:23-26`). The page passes the real services
   (`acme:app/dashboard/directory/page.tsx:56-58`); the lagoon passes fixture functions through
   `channelFrom` (`motu/roots/lagoon/src/regions/directory.tsx:37-48`). The archipelago names the
@@ -327,10 +327,10 @@ claims, and it is routinely read backwards.
   side of the port: that the real adapter … matches what the backend actually sends. Get that shape
   wrong and every motu check stays green while production breaks. The lagoon replaces the host module
   so completely that nothing shows a fetch happened — that is the point of it, and it is the
-  boundary" (`host-rules.md:369-374`).
+  boundary" (the `motu-regions` skill).
 
 **So a source that carries logic gets unit tests, in the host's own runner, over a hand-made port**
-(`host-rules.md:376-381`) — that is the only place branches no rendered state distinguishes can be
+(the `motu-regions` skill) — that is the only place branches no rendered state distinguishes can be
 reached: a lookup that *threw* versus one that answered null, a deadline, the slower of two submits
 not overwriting the faster. **No check enforces this.** A `sources-tested` warning used to name each
 declared source no test file mentioned, and it was removed: whether the application's own code has
@@ -342,7 +342,7 @@ a region without the page, so orchestration hidden in page effects cannot be pre
 The known gap, stated rather than hidden: a client that talks to the database or the auth service
 directly is not a declared operation, so no tool pins its shape — "that adapter is the last unproven
 inch of this design. It is a few lines by construction, which is the mitigation"
-(`host-rules.md:396-400`).
+(the `motu-regions` skill).
 
 ### The related trap: a stub that stopped mirroring
 

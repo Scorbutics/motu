@@ -1224,7 +1224,7 @@ Name and description of every skill this checkout ships (`:132-142`). Always exi
 
 ## Which command when
 
-Times are from `.github/host-rules.md:443-455`, measured on a 16-island / 2-region project (snapshots on
+Times are from the `motu-checks` skill, measured on a 16-island / 2-region project (snapshots on
 a 20-island / 3-region one).
 
 | Situation | Command | Cost | What it answers |
@@ -1246,4 +1246,4 @@ a 20-island / 3-region one).
 Two scoping rules that decide whether these numbers apply to you. **Name what you touched**: while
 working on a region, run that region and its islands, not the whole project. And `--changed` is not that
 scoping — it narrows only while every changed file maps to an island or a region, and widens back to
-everything, loudly, the moment one does not (`.github/host-rules.md:456-466`, `lib/changed.mjs:1-10`).
+everything, loudly, the moment one does not (the `motu-checks` skill, `lib/changed.mjs:1-10`).

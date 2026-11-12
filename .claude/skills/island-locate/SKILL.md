@@ -13,7 +13,8 @@ is the step people skip — which is how a page ends up with an archipelago draw
 a key nobody reads, or a "coupling" that was only ever prop drilling.
 
 Read `README.md`, `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits) and
-the host's `CLAUDE.md` motu rules block. Do not invent rules: the mechanical rule set is whatever
+the host's `CLAUDE.md` motu rules block, with the `motu-regions` skill for the full rules on island vs
+host, ownership and the survey. Do not invent rules: the mechanical rule set is whatever
 `motu check` enforces. Nothing here creates, moves or refactors code — **locating is read-only**.
 
 ## Step 0 — Learn this project's shape before reading the page

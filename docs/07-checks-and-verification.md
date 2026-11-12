@@ -57,7 +57,7 @@ Two consequences worth stating flatly:
     1  something contradicted them        -> repair
     2  a check could not run              -> retry, do NOT repair
 
-Documented at `.github/host-rules.md` "Three outcomes, three exit codes"; implemented at `verify/island-runtime.mjs:255`.
+Documented at the `motu-checks` skill "Three outcomes, three exit codes"; implemented at `verify/island-runtime.mjs:255`.
 
 **Why 2 is distinct from 1.** A human shrugs at a port timeout and re-runs. An agent reads `✗` and repairs a bug that does not exist — and several agents produce several confident wrong repairs. `verify/report.mjs:73-80` records this as the reason `inconclusive` exists at all. The verdict line prints `INCONCLUSIVE  N check(s) could not run … — retry, do not repair` (`verify/reach.mjs:372-377`), not `PASS` and not `FAIL`.
 
@@ -245,7 +245,7 @@ reported it. The third half closes that at the one seam that knows a request was
 HTML. The dev server's own traffic (modules, CSS, source maps) is never HTML, which is what makes the
 signal narrow enough to be an error rather than a warning.
 
-**Boundary, stated in `.github/host-rules.md` "Placed is not the same as rendered":** `integrate check` reads the host's source. It can see `<X.Island slot="y">`; it cannot see whether the branch containing it ever runs. The lagoon renders every declared slot unconditionally, so it cannot see it either. The lagoon proves the island works, `integrate check` proves the page names it, and **nothing proves the page reaches it** — that needs the page rendered, in the host's own test runner.
+**Boundary, stated in the `motu-checks` skill "Placed is not the same as rendered":** `integrate check` reads the host's source. It can see `<X.Island slot="y">`; it cannot see whether the branch containing it ever runs. The lagoon renders every declared slot unconditionally, so it cannot see it either. The lagoon proves the island works, `integrate check` proves the page names it, and **nothing proves the page reaches it** — that needs the page rendered, in the host's own test runner.
 
 ### 4.9 `motu check`'s own rows
 
@@ -304,7 +304,7 @@ Advisory unless gated: without `--fail-above` the run exits 0 and says `(advisor
 
 ## 5. The three tiers, and their real costs
 
-From `.github/host-rules.md` "Three tiers, and which one you are in". **Measured on a 16-island, 2-region project; the snapshot rows on a 20-island, 3-region one.**
+From the `motu-checks` skill "Three tiers, and which one you are in". **Measured on a 16-island, 2-region project; the snapshot rows on a 20-island, 3-region one.**
 
 | Command | Question it answers | Cost | When |
 |---|---|---|---|
@@ -331,7 +331,7 @@ For the snapshots, `--changed` is the point: scoped to one touched island they c
 
 **It widens back to everything the moment one changed file maps to nothing**, and says so on stdout (`check.mjs:80-82`). That is the design: a check that quietly examined less than you think is the worse failure.
 
-The measured account from `.github/host-rules.md`: on this project, mid-session, **16 changed files were unattributable, so it ran everything**. After ignoring files that cannot reach a render and mapping the lagoon's per-region module to its region, that dropped to **14 — and it still ran everything**, because `acme:app/dashboard/profile/page.tsx` and four app-side files remained. What does not map is most of a real session: the page, the screen that installs a source, the app-side region type, `roots/lagoon/src/lagoon.tsx`, a shared evidence module, the generated barrels.
+The measured account from the `motu-checks` skill: on this project, mid-session, **16 changed files were unattributable, so it ran everything**. After ignoring files that cannot reach a render and mapping the lagoon's per-region module to its region, that dropped to **14 — and it still ran everything**, because `acme:app/dashboard/profile/page.tsx` and four app-side files remained. What does not map is most of a real session: the page, the screen that installs a source, the app-side region type, `roots/lagoon/src/lagoon.tsx`, a shared evidence module, the generated barrels.
 
 So: `--changed` is worth passing, and it is **not a substitute for naming the region**. And a `--changed` run that narrowed to nothing exits **2** with `NOTHING TO CHECK` rather than green (`check.mjs:107-115`).
 

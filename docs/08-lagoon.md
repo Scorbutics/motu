@@ -102,7 +102,7 @@ cannot hold — functions and objects — goes in `roots/lagoon/src/lagoon.tsx` 
 > answers HTTP BENEATH the app's real service, so the service itself runs instead of being replaced.
 > Both are installed for every view, which is the property that matters. Behaviour written inside the
 > frame runs only in the region view, where those checks are not.
-> — `.github/host-rules.md`
+> — the `motu-evidence` skill
 
 One line per region; each region's own seed, arrangement and stand-ins live beside it in `regions/`
 (`host-app/motu/roots/lagoon/src/lagoon.tsx:1-16`).
@@ -194,7 +194,7 @@ regions (`:138-148`).
 Confusing `layout` with `providers` is invisible in the region view and fatal in the mountpoints view
 (`packages/react/src/lagoon-overrides.ts:28-30`) — and mountpoints is the view the flow checks drive,
 so it reads as "the region rendered nothing" rather than "no providers"
-(`.github/host-rules.md:174-178`).
+(the `motu-regions` skill).
 
 There is a second, older **kind-first** shape — `seed`, `layout`, `channels`, `providers`, `props`
 each a `Record<regionId, …>` — still accepted and still meaning the same thing. Where both name a
@@ -211,7 +211,7 @@ intents), `setup` (run before anything mounts), and `transportFor`.
 The escape hatch for a frame that genuinely cannot be the page's own code, and it costs a sentence.
 The reason stays in the file, where the `region-root` check finds it and prints it beside a WARNING
 instead of an error (`packages/react/src/lagoon-overrides.ts:160-173`); warnings do not fail
-`motu check` (`.github/host-rules.md:438-439`). It is a HOLD, not an answer — a copy drifts, and this
+`motu check` (the `motu-regions` skill). It is a HOLD, not an answer — a copy drifts, and this
 project shipped a lagoon that said "On récupère ton accès" over a page that said "Mot de passe
 oublié ?", which no check could see (`packages/react/src/lagoon-overrides.ts:168-170`).
 
@@ -459,7 +459,7 @@ Read at `packages/react/src/lagoon-states.ts:111-123` (`scenario`, `flow`, `step
 (`packages/cli/src/run.mjs:117-124`).
 
 **Both forms are the GALLERY's** — the entry `serve` and `publish` build, and the one a person opens
-(`.github/host-rules.md:109-116`). Both are also honoured by the focused entry, because an address
+(the `motu-evidence` skill). Both are also honoured by the focused entry, because an address
 only one of them honours is one a person pastes and watches render something else
 (`packages/react/src/lagoon-states.ts:17-19`).
 
@@ -506,7 +506,7 @@ On the gallery, the refusal also **mounts nothing** — `root.replaceChildren()`
 first region on screen under it is the substitution being refused, and a screenshot of that looks like
 a working lagoon (`:293-294`).
 
-Read `window.__motuLagoonState` before believing a screenshot (`.github/host-rules.md:119`). Its shape
+Read `window.__motuLagoonState` before believing a screenshot (the `motu-evidence` skill). Its shape
 is `{ ok, target, kind: 'scenario'|'flow'|'none', name?, applied?, of?, error?, available? }`
 (`packages/react/src/lagoon-states.ts:54-67`). The whole catalogue is on the page too, as
 `window.__motuLagoonStates` (`:242-246`).
@@ -913,7 +913,7 @@ baseline is stale" and "you broke something" are the same red (`packages/host/sr
 `packages/host/src/store.mjs:309-312`).
 
 > **Never use `--update` on a project whose baselines are on the host — it starts a second, drifting
-> copy.** — `.github/host-rules.md:104-107`
+> copy.** — the `motu-evidence` skill
 
 Nothing enforces that across runs. The CLI can only catch both flags in the same invocation
 (`packages/cli/src/commands/snapshot.mjs:177-180`); a lone `--update` on a host-baselined project
@@ -1002,7 +1002,7 @@ declared write has fired" (`findings-view.ts:325-327`) — plus a flag where a d
 fired or the host answered an island.
 
 Read it before reading the archipelago; it is the same declaration, proved by the region that is
-running (`.github/host-rules.md:120-123`). `MOTU_DEBUG=0` strips the lens entirely
+running (the `motu-evidence` skill). `MOTU_DEBUG=0` strips the lens entirely
 (`packages/cli/src/lib/scaffold.mjs:458-459`).
 
 ### A call that landed says so, without being asked
@@ -1128,7 +1128,7 @@ crash needs no cleanup: the member expires on its own after 90 seconds.
 ## Known traps
 
 **Absolute asset paths.** `/images/…` resolves on a local lagoon at the root of its own origin, and
-404s the moment the page is hosted (`.github/host-rules.md:133-134`). Hosting is the
+404s the moment the page is hosted (the `motu-evidence` skill). Hosting is the
 first place that difference is visible, so the host says it: an upload is **refused (422)** when the
 fragment still references `/assets/` — that build's inlining did not happen — and anything else
 absolute is a **warning**, printed by the CLI and returned in the JSON
@@ -1136,11 +1136,11 @@ absolute is a **warning**, printed by the CLI and returned in the JSON
 finding.
 
 **Invented data in a frame is a third copy nobody diffs.** Evidence lives in evidence files, and the
-lagoon is not one (`.github/host-rules.md:86-93`). See
+lagoon is not one (the `motu-evidence` skill). See
 [10 — Evidence and testing](10-evidence-and-testing.md).
 
 **Behaviour written inside a frame runs only in the region view** — where the flow checks are not. Make
-it a `channel`, or answer it at the wire (`.github/host-rules.md`). Both are installed for every view;
+it a `channel`, or answer it at the wire (the `motu-evidence` skill). Both are installed for every view;
 a frame is not.
 
 **`mount` must match the host application.** `"mount": "react"` in `lagoon.config.json`, and the same

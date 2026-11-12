@@ -908,6 +908,16 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
                   if (v) parts.push(v);
                 }
               }
+              // A CONTROL'S STATE, the way a screen reader announces it — "Not yet accepted, pressed".
+              // A toggle group's value lives in `aria-pressed`, a tab's in `aria-selected`, a nav
+              // link's in `aria-current`; none of it is text, so a flow could not say which choice a
+              // filter showed (host-app's `corpus-filter`, found by `null-island`). Each is reported
+              // as `<name> pressed|selected|current`, beside the name, as `checked` is for a checkbox.
+              for (const n of el.querySelectorAll('[aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"])')) {
+                const name = (n.getAttribute('aria-label') || n.innerText || n.textContent || '').replace(/\s+/g, ' ').trim();
+                const state = n.getAttribute('aria-pressed') === 'true' ? 'pressed' : n.getAttribute('aria-selected') === 'true' ? 'selected' : 'current';
+                if (name) parts.push(`${name} ${state}`);
+              }
               return parts.join(' ').replace(/\s+/g, ' ').trim();
             };
             /**

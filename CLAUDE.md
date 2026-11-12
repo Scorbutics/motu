@@ -289,8 +289,9 @@ So: adding an island means adding a step to `<id>.evidence.ts` that asserts what
 Not the region's existing steps — its own. `render-coverage` names the slots no flow looks at.
 
 `expectRender` asserts what a person can PERCEIVE in that slot, not one DOM property: rendered text,
-a control's accessible name (`aria-label`/`alt`/`title`), a field's current value, and a checkbox's
-`checked`/`unchecked` state. `innerText` alone could not see a passenger's name in an input or a
+a control's accessible name (`aria-label`/`alt`/`title`), a field's current value, a checkbox's
+`checked`/`unchecked` state, and a control's announced state as `<name> pressed|selected|current`
+(`aria-pressed`, `aria-selected`, `aria-current` — a toggle group's value is not text otherwise). `innerText` alone could not see a passenger's name in an input or a
 seat's identity in an aria-label, which left an island made of form controls with almost nothing
 assertable. Widening the haystack does not weaken the check — a wrong value and another island's text
 both still fail — and the failure message prints the whole surface, so what WAS there is visible.

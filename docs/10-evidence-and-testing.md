@@ -304,6 +304,9 @@ selector from the project and cannot drift from where the region actually mounte
 - every descendant's `aria-label`, `alt` and `title`,
 - every `input`/`textarea`/`select` value and `placeholder`,
 - `checked` / `unchecked` for checkboxes and radios.
+- `<name> pressed`, `<name> selected`, `<name> current` for a control whose `aria-pressed` / `aria-selected`
+  is `true` or that carries `aria-current` — a toggle group's or a tab list's value, which is not text
+  (`corpus-filter`'s "Not yet accepted (3) pressed").
 
 — `packages/cli/src/playwright-lagoon.mjs:610`
 

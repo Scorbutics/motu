@@ -36,7 +36,9 @@ import {
 import {
   applyOutput,
   defineArchipelago,
+  disposeArchipelago,
   getArchipelagoStore,
+  isSandbox,
   producerOf,
   registerIslandDefinition,
   registerMountedIsland,
@@ -148,6 +150,14 @@ export interface ArchipelagoProviderProps {
   seed?: Record<string, unknown>;
   /** Inbound channels: host signals mirrored into the store. */
   channels?: Channel[];
+  /**
+   * Let go of the region's store when the last provider of it unmounts — what a PAGE wants: coming
+   * back starts from the seed, as the page's own `useState` always did. Set by `createRegion`'s
+   * `<X.Region>`; off for the lagoon, whose harness seeds a store and then remounts the tree and needs
+   * the store to survive that. Ignored inside the lagoon (`isSandbox()`) even when set, because the
+   * page view renders the application's own `<X.Region>` and is remounted the same way.
+   */
+  releaseOnUnmount?: boolean;
   children?: ReactNode;
 }
 
@@ -156,7 +166,29 @@ export interface ArchipelagoProviderProps {
  * it. The store, the slot registry and the host bridge are the SAME ones the custom-element path
  * registers, so the debug overlay, `provide()` and channels behave identically either way.
  */
-export function ArchipelagoProvider({ config, elements, host, seed, channels, children }: ArchipelagoProviderProps): ReactElement {
+/**
+ * A REGION LIVES AS LONG AS ITS PAGE.
+ *
+ * The provider reuses a registered store on purpose — StrictMode and Fast Refresh unmount and remount
+ * it, and a new store would swap the region out from under islands already bound to the old one — but
+ * nothing ever let go of it. So the store outlived the page: on shlink, leaving "Manage servers" and
+ * coming back showed the list still filtered by the last term under an empty search box, and the page
+ * had to re-seed `searchTerm` by hand (bench/evidence's blind mistake B3 is an agent deleting that line
+ * as redundant). The page's own `useState` had never had that problem; adopting motu introduced it.
+ *
+ * Opt-in (`releaseOnUnmount`, which `<X.Region>` sets) and never inside the lagoon. Counted per region
+ * id. When the LAST provider of a region unmounts, its store is disposed on the next
+ * task — late enough that a remount in the same commit (StrictMode, Fast Refresh) cancels it, early
+ * enough that coming back to the page starts from the seed. Only a store the PROVIDER created is ever
+ * disposed: the lagoon and a host that call `defineArchipelago` themselves own theirs, and a store
+ * pulled out from under the lagoon between its define and its render would leave the harness reading a
+ * region that no longer exists.
+ */
+const providerMounts = new Map<string, number>();
+const pendingDisposal = new Map<string, ReturnType<typeof setTimeout>>();
+const providerCreated = new WeakSet<Store>();
+
+export function ArchipelagoProvider({ config, elements, host, seed, channels, releaseOnUnmount = false, children }: ArchipelagoProviderProps): ReactElement {
   const value = useMemo<ArchipelagoValue>(() => {
     // The islands' DECLARED shape, for the seam lens. On the custom-element path `defineIsland` does
     // this; the React path defines no elements, so without this call the overlay knew every island's
@@ -176,6 +208,7 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
     // island already bound to the first one. Reuse the registered store when the id is already known.
     const existing = getArchipelagoStore(config.id);
     const store = existing ?? defineArchipelago(config, { host, seed, channels });
+    if (!existing) providerCreated.add(store);
     const ctx: ArchipelagoValue = {
       config,
       store,
@@ -233,6 +266,35 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, ch
   useEffect(() => {
     value.flush();
   });
+
+  // The region's lifetime — see `providerMounts`. A passive effect, so content Suspense merely HIDES
+  // keeps its region; only a real unmount counts.
+  useEffect(() => {
+    if (!releaseOnUnmount || isSandbox()) return undefined;
+    const id = config.id;
+    clearTimeout(pendingDisposal.get(id));
+    pendingDisposal.delete(id);
+    providerMounts.set(id, (providerMounts.get(id) ?? 0) + 1);
+    return () => {
+      const left = (providerMounts.get(id) ?? 1) - 1;
+      if (left > 0) {
+        providerMounts.set(id, left);
+        return;
+      }
+      providerMounts.delete(id);
+      const store = value.store;
+      if (!providerCreated.has(store)) return;
+      pendingDisposal.set(
+        id,
+        setTimeout(() => {
+          pendingDisposal.delete(id);
+          // Remounted meanwhile, or the registry already holds another store: not ours to drop.
+          if (providerMounts.get(id) || getArchipelagoStore(id) !== store) return;
+          disposeArchipelago(id);
+        }, 0),
+      );
+    };
+  }, [config.id, value, releaseOnUnmount]);
 
   // `createElement`, with the return type ANNOTATED — not JSX.
   //

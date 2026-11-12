@@ -148,7 +148,8 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     const host = useHost();
     return createElement(
       ArchipelagoProvider,
-      { config, elements: opts.elements, host, seed: opts.seed, channels: opts.channels },
+      // A page's region lives as long as the page — see `releaseOnUnmount`.
+      { config, elements: opts.elements, host, seed: opts.seed, channels: opts.channels, releaseOnUnmount: true },
       children,
     );
   }

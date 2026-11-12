@@ -713,6 +713,14 @@ neither is named twice and a slot typo is a build error rather than a console wa
 | `seed?: Record<string, unknown>` | initial store contents, so bound islands render meaningfully on first paint (`:43-44`) |
 | `channels?: Channel[]` | inbound channels: host signals mirrored into the store (`:45-46`) |
 
+**A page's region lives as long as the page.** `<X.Region>` lets go of its store when the last
+`<X.Region>` of that id unmounts (on the next task, so a StrictMode or Fast Refresh remount in the same
+commit keeps it), and coming back to the page starts again from `seed` — the behaviour the page's own
+`useState` always had. Before, the store outlived the page: on shlink, returning to "Manage servers"
+showed the list still filtered under an empty search box. Only a store the provider itself created is
+released, and never inside the lagoon (`isSandbox()`), whose harness seeds a store and then remounts
+the tree (`releaseOnUnmount` in `packages/react/src/react-island.tsx`).
+
 It returns seven members (`packages/react/src/create-region.tsx:168-176`, typed by
 `RegionBinding<TRegion, TSlot, TRootProps>` at `:49-83`):
 

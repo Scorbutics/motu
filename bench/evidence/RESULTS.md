@@ -112,6 +112,10 @@ for nothing"); with it on "each slot renders its own island", B9 is refused by `
 that hold on the clean tree also needed the flow runner to seed BEFORE it mounts: every flow used to
 mount once in the region's default state first, and on shlink that mount fetched the remote servers.
 
+**Since caught by `motu diff`:** B7 — the evidence is now compared as spec, and dropping a `notText`
+reads as `weakens` under SPEC CHANGES; B9 is `locked` there (calls moved in a region whose declaration
+did not). See `docs/proposals/constraint-loop.md`, item 1.
+
 So the eight blind misses split four ways: **three belong to unit tests** (B1, B4, B10 — logic inside a
 component, which CLAUDE.md already says motu does not check); **three are motu's own territory and
 fixable** (B3 by fixing store lifetime, B9 by letting flows declare calls, B12 by adopting `root`);

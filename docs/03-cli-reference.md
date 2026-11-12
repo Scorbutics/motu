@@ -642,14 +642,29 @@ motu diff --base HEAD --region members --explain .motu/diff-explained.json
 | `--base <ref>` | the commit to compare against | `HEAD` |
 | `--region <id>[,<id>]` | replay these regions instead of the ones the change touches | touched regions (every region, said, when a changed file belongs to none) |
 | `--explain <file>` | `{ "<id>": "<one line: why it was intended>" }` — explained findings stop counting | none |
-| `--json` | `{ ok, base, scope, regions, unreplayed, findings, unexplained, staleExplanations }` | off |
+| `--json` | `{ ok, base, scope, regions, unreplayed, findings, unexplained, specChanges, weakened, locked, staleExplanations }` | off |
 
 Each finding is ONE change, wherever it shows: `{ id, region, kind, subject, before, after, where:
 [{ flow, step }] }`, with `kind` one of `keys` (a region key after the step), `render` (a slot's text,
 read through portals as `expectRender` reads it, cut around the first difference), `calls` (how many
 times a call was made, by method, target and status), `outcome` (a flow step's assertion started or
 stopped holding) and `declaration` (a slot's element, writes, bind, reads; a flow or step added or
-removed). The id is a hash of the change itself, so an explanation holds for exactly that change.
+removed; and what each flow step ASSERTS, clause by clause — an `expect` key, a slot's `expectRender`
+text or notText, `expectCalls`). The id is a hash of the change itself, so an explanation holds for
+exactly that change.
+
+**The evidence is spec, and a change that weakens it is said.** A declaration finding carries
+`weakens: true` when the region now checks less: an assertion removed, a render text shortened to a
+part of itself, an `expectCalls` list that allows more, a step or flow removed. Every declaration
+finding is printed first, under SPEC CHANGES, weakenings at the top — that section is what a person
+reviews.
+
+**A change either modifies the declaration or preserves behaviour.** In a region whose archipelago and
+evidence did not change, every `keys`, `render`, `calls` or `outcome` finding is `locked`: `--explain`
+cannot waive it, because the explanation would come from the agent that made the change. Fix the
+behaviour, or change the declaration so a reviewer sees it. Where the declaration changed too,
+behavioural findings are explained as before. (`account()` in `commands/diff.mjs`; the frame is
+`docs/proposals/constraint-loop.md`, item 1.)
 
 Base results are cached per base commit, region set and motu version (including uncommitted motu
 changes); a base in which any region failed to replay is never kept. A region whose lagoon never
@@ -660,6 +675,30 @@ mounted on either side is reported as unreplayed, not compared.
 
 **Not compared**: screen flows, pixels (that is `snapshot`), and submodules at the base's pinned commit
 (they are borrowed at their current checkout).
+
+## `motu assurance [id]`
+
+One row per DECLARED THING — each slot, each write, each key one island writes and another reads, and
+each flow's backend calls — with the strongest evidence that holds it, what that evidence is, and what
+is missing. A check report has one row per check, so "green" cannot say how much was held; this can.
+
+```console
+motu assurance                 # every region
+motu assurance members --json
+```
+
+| Level | Means |
+|---|---|
+| `unchecked` | nothing exercises it (a key no other island reads) |
+| `static` | declared, typed and placed; no flow holds it |
+| `runtime·emit` | a flow drives it through the island's declared output — PAST the component's own handler, so a handler that ignores its input still passes |
+| `runtime` | a flow asserts it (a slot's render; a reader's render as a key moves; `expectCalls`) |
+| `runtime·user` | a `click` on the rendered control moves it — the path a person takes |
+
+Static and fast: derived from the archipelago and its flows. A level is what the evidence CLAIMS;
+`motu check --runtime` confirms it. Reporting, not gating — it always exits `0`. Known limit: a `click`
+step is credited to a write only when it `expect`s the written key; one asserted by its render alone
+cannot be tied to a write without running it. The frame: `docs/proposals/constraint-loop.md`, item 3.
 
 ## `motu screen verify [id]`
 

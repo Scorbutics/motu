@@ -56,6 +56,14 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    invention — an artifact that contradicts nothing, passes everything, and describes an application
    that does not exist. No mechanical check reaches the second, because every mechanical check
    compares the artifact to itself; rendering is what forces it to be compared to the world.
+ - THE SAME GOES FOR THE DECLARATION. Before islands are built on a new or changed archipelago, a fresh
+   agent reads it back: given the archipelago, where the app's vocabulary lives, and the question
+   *what does this region promise, and what does it permit that a reasonable person would not
+   expect?* — a key with no producer, a key nobody reads, an owner its name does not suggest. Never the
+   survey, the plan or the transcript. An invented ownership hides in its author's context exactly as
+   an invented vocabulary does, and everything built afterwards is proved AGAINST it. The survey marks
+   every key, owner and slot as stated, inferred or default; the inferred and default ones, with the
+   read-back, are what a person reviews.
  - CHANGED UI starts with the scenario that shows the state you are about to change. Then change it,
    look at it, and keep the scenario as the regression. A scenario set whose members render identically
    fails `data-flow` — that check exists because fake evidence is worse than none.
@@ -288,7 +296,9 @@ with no outbound network, collected later by `motu coverage pull --from <log>`).
 Before handing over, `motu diff --base <branch point> --json` replays the touched regions' flows at the
 base and now and lists every change to keys, renders, calls and declarations. Fix each finding or
 explain it (`--explain file.json`, `{ "<id>": "<why it was intended>" }`) until it exits 0, and quote
-the explanations in your report.
+the explanations in your report. A `locked` finding cannot be explained: behaviour moved in a region
+whose archipelago and evidence did not, so fix it or change the declaration. List every SPEC CHANGE
+in your report, and every `weakens` one with the reason — never weaken a flow to make it pass.
 
 ## A flow step must be able to fail
 

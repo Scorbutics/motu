@@ -35,6 +35,14 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    invention — an artifact that contradicts nothing, passes everything, and describes an application
    that does not exist. No mechanical check reaches the second, because every mechanical check
    compares the artifact to itself; rendering is what forces it to be compared to the world.
+ - THE SAME GOES FOR THE DECLARATION. Before islands are built on a new or changed archipelago, a fresh
+   agent reads it back: given the archipelago, where the app's vocabulary lives, and the question
+   *what does this region promise, and what does it permit that a reasonable person would not
+   expect?* — a key with no producer, a key nobody reads, an owner its name does not suggest. Never the
+   survey, the plan or the transcript. An invented ownership hides in its author's context exactly as
+   an invented vocabulary does, and everything built afterwards is proved AGAINST it. The survey marks
+   every key, owner and slot as stated, inferred or default; the inferred and default ones, with the
+   read-back, are what a person reviews.
  - CHANGED UI starts with the scenario that shows the state you are about to change. Then change it,
    look at it, and keep the scenario as the regression. A scenario set whose members render identically
    fails `data-flow` — that check exists because fake evidence is worse than none.
@@ -431,6 +439,13 @@ finding per change, with an id that IS the change. Each must be fixed, or explai
 file with one line saying why it was intended; unexplained is exit 1. It does not judge, it makes the
 agent say which behaviour it meant to change, which no reader of a diff is ever told. It exists because
 a merge made a slot render its neighbour's data while every static check was byte-identical.
+
+Two rules make it a verifier rather than a ledger. The EVIDENCE is spec: what each flow step asserts is
+compared clause by clause, and a change that makes it check less is reported as `weakens` and printed
+first under SPEC CHANGES — the part a person reviews. And a change either modifies the declaration or
+preserves behaviour: in a region whose archipelago and evidence did not change, a behavioural finding
+is `locked` and `--explain` cannot waive it, because the explanation would come from the agent that
+made the change. Fix the behaviour, or change the declaration where a reviewer sees it.
 
 ## Production coverage is proved, not assumed
 

@@ -71,6 +71,13 @@ Expect every shared file to conflict. Resolve by kind, not by hand:
 - a lagoon frame — if two agents extended a slot→data lookup, take BOTH. A ternary chain with a
   fallback silently renders one island's data in another's slot; convert it to an append-only map.
 
+Then check what the merge DID, not only that it compiles: `motu diff --base <the branch point> --json`
+replays the region's flows on both sides and lists every change, per flow step, to the region's keys,
+what each slot renders, the backend calls and the declarations. Every finding must be either a change
+some agent meant, recorded with one line why in an `--explain` file (`{ "<id>": "<why>" }`), or fixed.
+An unexplained finding is exit 1. This is the check that tells a correct merge from the naive one in
+which a slot renders its neighbour's data; nothing static can, because the frame is not declared.
+
 ## 4 — Write the region's flows
 
 The islands cannot do this: a flow is about the region, and no island can see across the seam.

@@ -247,6 +247,13 @@ Then:
 - If the archipelago layout is an imported constant, add the marker to that layout too (integrate prints
   the exact marker when it can't edit it automatically).
 
+**Say what the change did to the flows.** `motu diff --base <branch point> --json` replays the
+flows of every region you touched, at the base and now, and lists what moved (keys, what each slot
+renders, backend calls, declarations). For each finding, fix it or explain it in an `--explain` file
+(`{ "<id>": "<one line: why it was intended>" }`) until it exits 0, then quote the explanations in your
+report. A reader of your diff sees code; this is the only place they learn which behaviour you meant to
+change.
+
 ## Step 8 — Verify green + typecheck
 
 ```bash

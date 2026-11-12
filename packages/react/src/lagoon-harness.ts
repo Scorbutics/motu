@@ -68,6 +68,8 @@ export function lagoonHarness(
         .filter((c) => c.store === getArchipelagoStore(config.id))
         .map((c) => ({ name: c.name ?? `channel #${c.index}`, keys: [...c.keys], fired: c.fireCount })),
     read: (key) => getArchipelagoStore(config.id)?.get(key),
+    //  - snapshot: every key the region holds, at once — what `motu diff` compares per flow step.
+    snapshot: () => getArchipelagoStore(config.id)?.snapshot() ?? {},
     held: () => {
       const store = getArchipelagoStore(config.id);
       // `has`, not a truthy value: a key deliberately set to `undefined` is established, and the

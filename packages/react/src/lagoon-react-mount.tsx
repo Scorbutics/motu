@@ -162,6 +162,8 @@ declare global {
        * `declared` marks a failure a fixture asked for; a failure without it is one nothing declared,
        * which is what fails a flow step (`flow-calls`).
        */
+      /** Every key the region holds right now (`motu diff` compares it per flow step). */
+      snapshot: () => Record<string, unknown>;
       calls: () => { seq: number; via: 'contract' | 'wire'; url: string; method: string; label: string; owner: string; status: number; ok: boolean; error?: string; declared?: boolean }[];
       /** Read a region key, for a check that needs to know whether it moved. */
       read: (key: string) => unknown;

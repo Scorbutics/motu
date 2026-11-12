@@ -140,6 +140,13 @@ motu's lagoon is not a replacement for the host's own checks. Run the ocean's bu
   ask the human for the exact commands if unknown; e.g. the ocean app's Maven build + its test
   suites). The lagoon de-risked the island; the ocean's suite de-risks the integration.
 
+**Say what the change did to the flows.** `motu diff --base <branch point> --json` replays the
+flows of every region you touched, at the base and now, and lists what moved (keys, what each slot
+renders, backend calls, declarations). For each finding, fix it or explain it in an `--explain` file
+(`{ "<id>": "<one line: why it was intended>" }`) until it exits 0, then quote the explanations in your
+report. A reader of your diff sees code; this is the only place they learn which behaviour you meant to
+change.
+
 ### 6 — Picture it, before the human sees it
 
 ```bash

@@ -634,7 +634,7 @@ async function remountAndCompare(page, tag) {
  *
  * Returns [{ scenario, step, ok, mismatches: [{ key, expected, actual }] }].
  */
-export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWith = null }) {
+export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWith = null, trace = false }) {
   const { chromium } = await import('playwright');
   // See probeWiring: the flows are where writes happen, so this is where a store complaint lands.
   const diagnostics = [];
@@ -718,6 +718,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       for (let [index, step] of (scenario.steps ?? []).entries()) {
         // The first step of a scenario establishes the page's starting state; the rest build on it.
         step = index === 0 ? { ...step, __seedNow: true } : step;
+        if (trace) step = { ...step, __trace: true };
         const result = await page.evaluate(
           async ({ seed, step: st }) => {
             const lagoon = window.__motuLagoon;
@@ -1022,7 +1023,18 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
             // Did the region survive its own flow? A step that leaves nothing on screen has broken
             // something, even when every key it asserted holds the right value.
             const alive = document.querySelectorAll('[data-motu-slot]').length > 0;
-            return { mismatches: [...mismatches, ...renderMismatches], alive };
+            // FOR `motu diff`: what every slot renders, read the way `expectRender` reads it — through
+            // portals — so a dialog an island opened is part of its slot's surface on both sides.
+            let surface = null;
+            if (st.__trace) {
+              surface = {};
+              for (const el of document.querySelectorAll('[data-motu-slot]')) {
+                const slot = el.getAttribute('data-motu-slot');
+                const text = perceivableWithPortals(el);
+                surface[slot] = surface[slot] ? `${surface[slot]} | ${text}` : text;
+              }
+            }
+            return { mismatches: [...mismatches, ...renderMismatches], alive, surface };
           },
           { seed: scenario.seed ?? {}, step },
         );
@@ -1030,7 +1042,29 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         await sleep(150);
         const landed = await callsSince(mark);
         mark = landed.reduce((m, c) => Math.max(m, c.seq), mark);
+        // WHAT THIS STEP LEFT BEHIND, for `motu diff`: every key the region holds, and what each slot
+        // renders (the same perceivable surface `expectRender` reads). Values pass through JSON so
+        // a function or a cycle cannot break the comparison.
+        const traced = !trace
+          ? null
+          : await page
+              .evaluate(() => {
+                const safe = (v) => {
+                  try {
+                    return JSON.parse(JSON.stringify(v ?? null));
+                  } catch {
+                    return String(v);
+                  }
+                };
+                const keys = safe(window.__motuLagoon?.snapshot?.() ?? {});
+                const surface = null;
+                return { keys, surface };
+              })
+              .catch(() => null);
         out.push({
+          ...(traced
+            ? { trace: { keys: traced.keys, surface: result.surface ?? {}, calls: landed.map((c) => `${c.method} ${c.label || c.url} ${c.status}`) } }
+            : {}),
           scenario: scenario.name ?? 'flow',
           step: index + 1,
           ok: !result.error && result.mismatches.length === 0 && result.alive !== false,

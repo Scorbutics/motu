@@ -282,6 +282,13 @@ With coverage on, prove production reports arrive: `motu coverage doctor --url <
 after a deploy names the failing hop. `motu coverage init` writes the route (`--mode log` for a server
 with no outbound network, collected later by `motu coverage pull --from <log>`).
 
+## Say what a change did to the flows
+
+Before handing over, `motu diff --base <branch point> --json` replays the touched regions' flows at the
+base and now and lists every change to keys, renders, calls and declarations. Fix each finding or
+explain it (`--explain file.json`, `{ "<id>": "<why it was intended>" }`) until it exits 0, and quote
+the explanations in your report.
+
 ## A flow step must be able to fail
 
 `flow-mutation` runs with the region's flows and asks whether they could have failed. Two rules:

@@ -646,7 +646,18 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // none of the app's theme. `searchForWorkspaceRoot` is Vite's own answer to the same question.
       fs: {
         allow: [
-          ...new Set([root, paths.root, paths.hostRoot, paths.motuRoot, workspaceRootOf(paths.hostRoot)].filter(Boolean)),
+          ...new Set(
+            [
+              root,
+              paths.root,
+              paths.hostRoot,
+              paths.motuRoot,
+              workspaceRootOf(paths.hostRoot),
+              // A BASE CHECKOUT borrows the working tree's node_modules (`motu diff`), whose real
+              // path is outside it — so the tree they really live in has to be servable too.
+              ...String(env.MOTU_FS_ALLOW ?? '').split(':'),
+            ].filter(Boolean),
+          ),
         ],
       },
       // WHO IS ALLOWED TO ASK. Vite 5.4 rejects a request whose Host header it does not recognise —

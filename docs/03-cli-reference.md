@@ -625,6 +625,41 @@ motu archipelago coverage actions --ids --fail-above 2
 
 ---
 
+## `motu diff --base <ref>`
+
+What a change did to the FLOWS, for the agent that made it. Replays every flow of the regions the change
+touches, at the base commit (a temporary git worktree, borrowing the working tree's `node_modules` and
+submodules, run with this checkout's motu) and in the working tree, and compares them per flow step.
+
+```console
+motu diff --base main --json
+motu diff --base HEAD --region members --explain .motu/diff-explained.json
+```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `--base <ref>` | the commit to compare against | `HEAD` |
+| `--region <id>[,<id>]` | replay these regions instead of the ones the change touches | touched regions (every region, said, when a changed file belongs to none) |
+| `--explain <file>` | `{ "<id>": "<one line: why it was intended>" }` — explained findings stop counting | none |
+| `--json` | `{ ok, base, scope, regions, unreplayed, findings, unexplained, staleExplanations }` | off |
+
+Each finding is ONE change, wherever it shows: `{ id, region, kind, subject, before, after, where:
+[{ flow, step }] }`, with `kind` one of `keys` (a region key after the step), `render` (a slot's text,
+read through portals as `expectRender` reads it, cut around the first difference), `calls` (how many
+times a call was made, by method, target and status), `outcome` (a flow step's assertion started or
+stopped holding) and `declaration` (a slot's element, writes, bind, reads; a flow or step added or
+removed). The id is a hash of the change itself, so an explanation holds for exactly that change.
+
+Base results are cached per base commit, region set and motu version (including uncommitted motu
+changes); a base in which any region failed to replay is never kept. A region whose lagoon never
+mounted on either side is reported as unreplayed, not compared.
+
+**Exit**: `0` no unexplained change, `1` unexplained changes, `2` a side could not be replayed (or
+`--base` does not resolve).
+
+**Not compared**: screen flows, pixels (that is `snapshot`), and submodules at the base's pinned commit
+(they are borrowed at their current checkout).
+
 ## `motu screen verify [id]`
 
 Open every declared screen (or one) at runtime, hold its backend calls to declarations, and replay

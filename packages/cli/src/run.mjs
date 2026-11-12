@@ -15,6 +15,7 @@ import { integrateCheckCommand } from './commands/integration.mjs';
 import { archipelagoInitCommand } from './commands/archipelago-init.mjs';
 import { regionCoverageCommand } from './commands/region-coverage.mjs';
 import { coverageCommand } from './commands/coverage.mjs';
+import { diffCommand, flowsTraceCommand } from './commands/diff.mjs';
 import { screenVerifyCommand } from './commands/verify/screens-runtime.mjs';
 import { closeLagoonPool } from './playwright-lagoon.mjs';
 import { archipelagoAdoptRootCommand } from './commands/adopt-root.mjs';
@@ -69,6 +70,7 @@ ${color.bold('Usage:')}
   motu archipelago verify <id|--all>                boot the whole region in the lagoon + config checks
   motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
   motu archipelago coverage <id> [--corpus <f>]     states production reached that no flow previews
+  motu diff --base <ref> [--explain <file>] [--json] what the change did to the flows: keys, renders, calls, declarations — each to explain or fix
   motu screen verify [id] [--json]                  open each declared screen (or one), hold its calls to declarations, replay screen flows
   motu coverage init [--mode forward|log]           wire production coverage: the route, the ingest token, the one step left
   motu coverage doctor --url <origin>               prove the deployed route reaches the host; names the hop that fails
@@ -318,6 +320,16 @@ async function main() {
     console.error(color.red(`unknown: motu lagoon ${sub ?? ''}`));
     console.log(USAGE);
     process.exit(2);
+  }
+
+  if (group === 'diff') {
+    const code = await diffCommand(parse([sub, ...rest].filter(Boolean)));
+    process.exit(code ?? 0);
+  }
+  // INTERNAL: one side of `motu diff` (it runs this in a base worktree, then here).
+  if (group === 'flows' && sub === 'trace') {
+    const code = await flowsTraceCommand(argv);
+    process.exit(code ?? 0);
   }
 
   if (group === 'screen') {

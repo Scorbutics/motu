@@ -405,6 +405,16 @@ declare FLOWS (`src/screens/screens.evidence.ts`): click the app's own link or `
 then `expectScreen` and `expectRender`. That is the one place a coupling ACROSS regions is asserted.
 `motu screen verify [id]` runs them; `motu check --runtime` includes them.
 
+## Say what a change did to the flows
+
+`motu diff --base <ref> --json` replays every flow of the regions a change touches, at the base (a
+git worktree) and in the working tree, and lists per step what moved: the region's keys, what each slot
+renders (through portals, as `expectRender` reads it), the backend calls, and the declarations. One
+finding per change, with an id that IS the change. Each must be fixed, or explained in an `--explain`
+file with one line saying why it was intended; unexplained is exit 1. It does not judge, it makes the
+agent say which behaviour it meant to change, which no reader of a diff is ever told. It exists because
+a merge made a slot render its neighbour's data while every static check was byte-identical.
+
 ## Production coverage is proved, not assumed
 
 `motu coverage init` writes the route and mints the ONE secret (`--mode log`: none, for a server with

@@ -61,3 +61,78 @@ test('a long render is cut around where it differs, not from the start', () => {
   assert.ok(x.includes('123') && y.includes('130'));
   assert.ok(x.startsWith('…') && x.length < a.length);
 });
+
+// ── constraint-loop item 1: a change either modifies the declaration or preserves behaviour ──────────
+
+import { account, assertionClauses, relaxes } from '../src/commands/diff.mjs';
+
+const withEvidence = (flows, evidence) => {
+  const t = trace(flows);
+  t.declarations.members.evidence = evidence;
+  return t;
+};
+const narrowing = { emit: { slot: 's', event: 'e', detail: 'staging' }, expectRender: { list: { text: 'staging.example.com', notText: 'Main shlink' } } };
+
+test('the evidence is spec: each step reads as clauses — expect keys, render text/notText, expectCalls', () => {
+  assert.deepEqual(assertionClauses({ expect: { q: 'a' }, expectRender: { list: 'x', side: { notText: 'y' } }, expectCalls: ['GET /b', 'GET /a'] }), {
+    'expect q': '"a"',
+    'render list text': 'x',
+    'render side notText': 'y',
+    calls: '["GET /a","GET /b"]',
+  });
+});
+
+test('a step that drops its notText WEAKENS the evidence — bench/evidence B7, said in so many words', () => {
+  const base = withEvidence({ f: [step()] }, { f: [assertionClauses(narrowing)] });
+  const weakened = { ...narrowing, expectRender: { list: { text: 'staging.example.com' } } };
+  const head = withEvidence({ f: [step()] }, { f: [assertionClauses(weakened)] });
+  const f = compareTraces(base, head);
+  assert.equal(f.length, 1);
+  assert.equal(f[0].kind, 'declaration');
+  assert.equal(f[0].weakens, true);
+  assert.equal(f[0].subject, 'asserts render list notText');
+  assert.deepEqual(f[0].where, [{ flow: 'f', step: 1 }]);
+});
+
+test('weaker vs different: a shorter text inside the old one weakens, an unrelated one only changes', () => {
+  assert.equal(relaxes('render list text', 'Main shlink', 'Main'), true);
+  assert.equal(relaxes('render list text', 'Main shlink', 'Staging'), false);
+  assert.equal(relaxes('calls', '[]', '["GET /servers.json"]'), true);
+  assert.equal(relaxes('calls', '["GET /a"]', '["GET /b"]'), false);
+});
+
+test('adding an assertion changes the spec without weakening it', () => {
+  const base = withEvidence({ f: [step()] }, { f: [{ 'render list text': 'x' }] });
+  const head = withEvidence({ f: [step()] }, { f: [{ 'render list text': 'x', calls: '[]' }] });
+  const [f] = compareTraces(base, head);
+  assert.equal(f.kind, 'declaration');
+  assert.equal(f.weakens, undefined);
+});
+
+test('a flow or step removed weakens; added does not', () => {
+  const two = trace({ a: [step(), step()], b: [step()] });
+  const fewer = trace({ a: [step()] });
+  const f = compareTraces(two, fewer).filter((x) => x.kind === 'declaration');
+  assert.ok(f.length >= 2);
+  assert.ok(f.every((x) => x.weakens === true), JSON.stringify(f));
+  assert.ok(compareTraces(fewer, two).filter((x) => x.kind === 'declaration').every((x) => !x.weakens));
+});
+
+test('LOCKED: behaviour moved where the declaration did not — an explanation is not accepted', () => {
+  const findings = compareTraces(trace({ a: [step()] }), trace({ a: [step({ surface: { table: 'Notes' } })] }));
+  const { unexplained } = account(findings, { [findings[0].id]: 'the agent says it meant it' });
+  assert.equal(findings[0].locked, true);
+  assert.equal(findings[0].intended, undefined);
+  assert.equal(unexplained.length, 1);
+});
+
+test('where the declaration changed too, behaviour can be explained as before', () => {
+  const base = withEvidence({ a: [step()] }, { a: [{ 'render table text': 'Ada' }] });
+  const head = withEvidence({ a: [step({ surface: { table: 'Notes' } })] }, { a: [{ 'render table text': 'Notes' }] });
+  const findings = compareTraces(base, head);
+  const explained = Object.fromEntries(findings.map((f) => [f.id, 'renamed the column, reviewed']));
+  const { unexplained, spec } = account(findings, explained);
+  assert.equal(unexplained.length, 0);
+  assert.equal(spec.length, 1);
+  assert.ok(findings.every((f) => !f.locked));
+});

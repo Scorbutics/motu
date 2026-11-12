@@ -17,6 +17,12 @@
 // change is exit 1. That makes the agent state which behaviour changes it MEANT — the one thing a
 // reader of the diff is never told.
 //
+// AND IT MAY NOT EXPLAIN EVERYTHING. A region whose archipelago and evidence did not change must not
+// change behaviour: those findings are LOCKED, and `--explain` cannot waive them — the explanation
+// would come from the agent that made the change (docs/proposals/constraint-loop.md, item 1). The
+// evidence is compared as spec, clause by clause, and a change that makes it check less is said as
+// such (`weakens`) and printed first, for the person who reviews the spec.
+//
 // THE BASE RUNS IN A GIT WORKTREE of the base commit, with the working tree's node_modules borrowed by
 // symlink (the worktree is temporary and never committed), and with THIS checkout's motu: the
 // question is what the project's change did, not what motu's did. Base results are cached per base
@@ -54,9 +60,48 @@ function declarations(regionIds) {
         ...(i.member ? { member: i.member } : {}),
       };
     }
-    out[r.id] = { slots, flows: readScenariosFor(r.id).map((f) => f.name ?? 'flow') };
+    const flows = readScenariosFor(r.id);
+    out[r.id] = {
+      slots,
+      flows: flows.map((f) => f.name ?? 'flow'),
+      // THE EVIDENCE IS SPEC TOO. What each step asserts, as clauses — so a change that rewrites a
+      // flow is a DECLARATION change a reviewer sees, and one that weakens it is said in so many words.
+      evidence: Object.fromEntries(flows.map((f) => [f.name ?? 'flow', (f.steps ?? []).map(assertionClauses)])),
+    };
   }
   return out;
+}
+
+/**
+ * What one flow step ASSERTS, as `clause -> value`: each `expect` key, each slot's `expectRender`
+ * text and notText, and the `expectCalls` list. The stimulus is not here — changing what a step does
+ * is a different finding from changing what it checks.
+ */
+export function assertionClauses(step) {
+  const out = {};
+  for (const [k, v] of Object.entries(step?.expect ?? {})) out[`expect ${k}`] = JSON.stringify(v);
+  for (const [slot, want] of Object.entries(step?.expectRender ?? {})) {
+    const w = typeof want === 'string' ? { text: want } : (want ?? {});
+    if (w.text != null) out[`render ${slot} text`] = String(w.text);
+    if (w.notText != null) out[`render ${slot} notText`] = String(w.notText);
+  }
+  if (step?.expectCalls !== undefined) out.calls = JSON.stringify([...step.expectCalls].map(String).sort());
+  return out;
+}
+
+/**
+ * Does replacing `before` with `after` make the clause hold in MORE cases than it used to?
+ * A text it must contain that got shorter and is still part of the old one (`'Main shlink'` → `'Main'`),
+ * or a calls list that now allows calls it did not. A different text is a change, not a weakening:
+ * motu cannot know whether the new one is stronger.
+ */
+export function relaxes(clause, before, after) {
+  if (clause.endsWith(' text')) return after.length < before.length && before.toLowerCase().includes(after.toLowerCase());
+  if (clause === 'calls') {
+    const b = new Set(JSON.parse(before));
+    return JSON.parse(after).some((c) => !b.has(c)) && [...b].every((c) => JSON.parse(after).includes(c));
+  }
+  return false;
 }
 
 /**
@@ -178,10 +223,37 @@ export function compareTraces(base, head) {
         }
       }
     }
+    const evidenceFile = paths.rel(paths.archipelagoEvidence(region));
     for (const f of new Set([...bd.flows, ...hd.flows])) {
       const inB = bd.flows.includes(f);
       const inH = hd.flows.includes(f);
-      if (inB !== inH) add({ region, kind: 'declaration', subject: `flow "${f}"`, before: inB ? 'declared' : '(absent)', after: inH ? 'declared' : '(absent)', file: paths.rel(paths.archipelagoEvidence(region)) });
+      // A FLOW REMOVED is evidence lost — the region now promises less than it did.
+      if (inB !== inH) add({ region, kind: 'declaration', subject: `flow "${f}"`, before: inB ? 'declared' : '(absent)', after: inH ? 'declared' : '(absent)', file: evidenceFile, ...(inB ? { weakens: true } : {}) });
+    }
+    // WHAT EACH STEP ASSERTS, for flows on both sides. Read from the declarations, not the replay, so
+    // a step whose assertion was rewritten is found even when the replay of both sides holds.
+    const be = bd.evidence ?? {};
+    const he = hd.evidence ?? {};
+    for (const flow of Object.keys(he).filter((f) => be[f])) {
+      for (let i = 0; i < Math.min(be[flow].length, he[flow].length); i++) {
+        const b = be[flow][i] ?? {};
+        const h = he[flow][i] ?? {};
+        for (const clause of new Set([...Object.keys(b), ...Object.keys(h)])) {
+          if (b[clause] === h[clause]) continue;
+          const weakens = h[clause] === undefined || (b[clause] !== undefined && relaxes(clause, b[clause], h[clause]));
+          add({
+            region,
+            flow,
+            step: i + 1,
+            kind: 'declaration',
+            subject: `asserts ${clause}`,
+            before: b[clause] ?? '(not asserted)',
+            after: h[clause] ?? '(not asserted)',
+            file: evidenceFile,
+            ...(weakens ? { weakens: true } : {}),
+          });
+        }
+      }
     }
 
     // OUTCOMES, per flow that exists on both sides, per step.
@@ -194,7 +266,7 @@ export function compareTraces(base, head) {
         const h = hf[flow][i];
         const step = i + 1;
         if (!b || !h) {
-          add({ region, flow, step, kind: 'declaration', subject: `step ${step}`, before: b ? 'present' : '(absent)', after: h ? 'present' : '(absent)', file: paths.rel(paths.archipelagoEvidence(region)) });
+          add({ region, flow, step, kind: 'declaration', subject: `step ${step}`, before: b ? 'present' : '(absent)', after: h ? 'present' : '(absent)', file: paths.rel(paths.archipelagoEvidence(region)), ...(b ? { weakens: true } : {}) });
           continue;
         }
         if (b.ok !== h.ok) {
@@ -222,6 +294,24 @@ export function compareTraces(base, head) {
     }
   }
   return [...byChange.values()];
+}
+
+/**
+ * Mark each finding `locked` (behaviour that moved in a region whose declaration did not — no
+ * explanation accepted) or `intended` (explained), and return what is left unexplained and what the
+ * spec now says differently. Pure, so the rule is tested without a worktree or a browser.
+ */
+export function account(findings, explained = {}) {
+  const declared = new Set(findings.filter((f) => f.kind === 'declaration').map((f) => f.region));
+  for (const f of findings) {
+    if (f.kind !== 'declaration' && !declared.has(f.region)) f.locked = true;
+    const why = explained[f.id];
+    if (!f.locked && typeof why === 'string' && why.trim()) f.intended = why.trim();
+  }
+  return {
+    unexplained: findings.filter((f) => !f.intended),
+    spec: findings.filter((f) => f.kind === 'declaration'),
+  };
 }
 
 // ── the base side, in a worktree ─────────────────────────────────────────────────────────────────
@@ -421,11 +511,12 @@ export async function diffCommand(argv) {
       return 2;
     }
   }
-  for (const f of findings) {
-    const why = explained[f.id];
-    if (typeof why === 'string' && why.trim()) f.intended = why.trim();
-  }
-  const unexplained = findings.filter((f) => !f.intended);
+  // A CHANGE EITHER MODIFIES THE DECLARATION OR PRESERVES BEHAVIOUR. In a region whose archipelago and
+  // evidence did not change, a behavioural finding (keys, render, calls, outcome) cannot be explained
+  // away: the explanation would come from the agent that made the change, which is the solver grading
+  // its own exam at exactly the point a person was meant to look. The two honest options are to change
+  // the declaration — where a reviewer sees it — or to fix the behaviour.
+  const { unexplained, spec } = account(findings, explained);
   const stale = Object.keys(explained).filter((id) => !findings.some((f) => f.id === id));
 
   if (json) {
@@ -439,6 +530,11 @@ export async function diffCommand(argv) {
           unreplayed: unreplayed.map((r) => ({ region: r, error: base.regions?.[r]?.error ?? headTrace.regions?.[r]?.error })),
           findings,
           unexplained: unexplained.map((f) => f.id),
+          // For a reviewer: what the spec now says differently, the weakenings first.
+          specChanges: spec.map((f) => f.id),
+          weakened: spec.filter((f) => f.weakens).map((f) => f.id),
+          // Behaviour that moved in a region whose declaration did not: `--explain` cannot waive these.
+          locked: findings.filter((f) => f.locked).map((f) => f.id),
           staleExplanations: stale,
         },
         null,
@@ -449,6 +545,19 @@ export async function diffCommand(argv) {
     console.log(color.dim(`  base ${sha.slice(0, 12)} · ${scopeNote}`));
     for (const r of unreplayed) console.log(color.yellow(`  ! ${r} could not be replayed — ${base.regions?.[r]?.error ?? headTrace.regions?.[r]?.error}`));
     if (!findings.length) console.log(`${color.green('✓')} the flows end the same as at the base`);
+    // THE SPEC FIRST — the part of this change a person has to read. Weakenings at the top: a flow
+    // that now checks less is the one change a reviewer must not miss, and it is the change an agent
+    // makes when the evidence is in its way.
+    if (spec.length) {
+      const weak = spec.filter((f) => f.weakens);
+      console.log('');
+      console.log(color.bold(`  SPEC CHANGES — ${spec.length}${weak.length ? `, ${color.red(`${weak.length} WEAKEN what is checked`)}` : ''}`));
+      for (const f of [...weak, ...spec.filter((x) => !x.weakens)]) {
+        const at = f.where[0] ? ` · "${f.where[0].flow}" step ${f.where[0].step}` : '';
+        console.log(`    ${f.weakens ? color.red('weakens') : color.dim('changes')} ${f.region}${at} · ${f.subject}: ${f.before} → ${f.after}`);
+      }
+      console.log('');
+    }
     for (const f of findings) {
       const first = f.where[0];
       const more = f.where.length > 1 ? ` (+${f.where.length - 1} more step(s))` : '';
@@ -458,11 +567,22 @@ export async function diffCommand(argv) {
       console.log(`    ${color.dim('before')} ${f.before}`);
       console.log(`    ${color.dim('after ')} ${f.after}`);
       if (f.intended) console.log(`    ${color.dim('intended:')} ${f.intended}`);
+      if (f.locked) {
+        console.log(
+          `    ${color.red('locked:')} ${f.region}'s archipelago and evidence did not change, so its behaviour must not — ` +
+            `${explained[f.id] ? 'the --explain entry is not accepted; ' : ''}change the declaration (and have it reviewed) or fix the behaviour`,
+        );
+      }
     }
     for (const id of stale) console.log(color.yellow(`  ! --explain names ${id}, which this diff did not find`));
     if (unexplained.length) {
       console.log('');
-      console.log(`  ${unexplained.length} change(s) unexplained. For each: fix it, or add it to an --explain file as { "<id>": "<why it was intended>" }.`);
+      const locked = unexplained.filter((f) => f.locked).length;
+      console.log(
+        `  ${unexplained.length} change(s) unexplained` +
+          (locked ? ` — ${locked} of them locked (behaviour moved where the declaration did not; fix it, or change the declaration)` : '') +
+          `. Otherwise: fix it, or add it to an --explain file as { "<id>": "<why it was intended>" }.`,
+      );
     }
   }
   if (unreplayed.length) return 2;

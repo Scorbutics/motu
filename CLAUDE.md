@@ -412,6 +412,11 @@ fixture asked for (`status: 500`) is the flow's own state and never counts. This
 screens 404'd four tables while every check stayed green: the app swallowed each error and rendered a
 plausible page.
 
+The other half is `expectCalls` on a step: the calls that state may make, and ONLY those — `[]` says it
+asks for nothing. `flow-calls` catches a call nobody answered; `expectCalls` catches one nobody
+expected, answered or not (an agent made a list refetch on every load, every harness answered it, and
+nothing failed). Declare it where a state's backend traffic IS the claim.
+
 Screens are held to it too, because the app's LAYOUT makes calls no region's flow does. A screen can
 declare FLOWS (`src/screens/screens.evidence.ts`): click the app's own link or `navigate` to a path,
 then `expectScreen` and `expectRender`. That is the one place a coupling ACROSS regions is asserted.

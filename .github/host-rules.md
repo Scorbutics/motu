@@ -273,7 +273,8 @@ separate ledger would only restate it.
 
 Every backend call a flow step causes is held to a declaration (`flow-calls`): one no fixture, table or
 route answered fails the step and names what to declare. Never make an island swallow the error to pass
-it. A failure a fixture asks for (`status: 500`) does not count. Screens are held to it too, since the
+it. A failure a fixture asks for (`status: 500`) does not count. `expectCalls` on a step is the other
+half — the calls that state may make, and only those (`[]`: it asks for nothing), answered or not. Screens are held to it too, since the
 app's layout makes calls no region's flow does, and a screen can declare flows of its own
 (`src/screens/screens.evidence.ts`: `click` the app's link or `navigate`, then `expectScreen` /
 `expectRender`). `motu screen verify [id]`; `motu check --runtime` includes it.

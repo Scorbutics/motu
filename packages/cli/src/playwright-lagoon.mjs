@@ -3,6 +3,7 @@
 // layout, CSS and paint — not just an in-process DOM. Exposes runLagoon() for `motu island verify`;
 // also runnable directly for a screenshot: `node --import tsx playwright-lagoon.mjs <tag> <fit> [screenshotPath]`.
 import { judgeRenders, scenarioInputs } from './lib/data-flow.mjs';
+import { expectCallsMismatches } from './lib/expect-calls.mjs';
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -725,6 +726,22 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       // asked for and been given, then silently lost. A scenario's seed is the authoritative starting
       // state; the source's initial answer belongs before it, not on top of it.
       await sleep(400);
+      // SEED, THEN MOUNT. The flow's seed used to land in step 1, AFTER this remount — so every flow
+      // first mounted the region in its DEFAULT state and only then moved it to the one it asked for.
+      // Whatever the mount did under the wrong state stayed done: on shlink the app's own "fetch the
+      // remote servers when the store starts empty" fired on every flow, because the store WAS empty
+      // for one mount, and a flow declaring "this state asks for nothing" (`expectCalls: []`) could
+      // never hold. Step 1 still applies the seed again after the mount (a source the reset restarted
+      // may answer late); this makes the mount itself happen in the flow's own state.
+      await page
+        .evaluate((seed) => {
+          const lagoon = window.__motuLagoon;
+          for (const [k, v] of Object.entries(seed ?? {})) (lagoon?.seed ?? lagoon?.provide)?.(k, v);
+        }, scenario.seed ?? {})
+        .catch(() => {});
+      // Step 1's calls start HERE: the mount is part of what the flow's first state does (`flow-calls`
+      // counts it), the reset to the region's default above is not.
+      mark = await lastSeq();
       await page.evaluate(() => window.__motuLagoon?.remount?.()).catch(() => {});
       // WAIT FOR THE REGION, do not sleep at it. 250ms was enough for stand-in islands and is not
       // enough for an app's real component tree (Twenty's widgets mount a dozen providers, read a
@@ -1043,8 +1060,8 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
                 renderMismatches.push({ key: `render:${slot}`, expected: `text NOT containing ${JSON.stringify(wants.notText)}`, actual: text });
               }
             }
-            if (!Object.keys(st.expect ?? {}).length && !Object.keys(st.expectRender ?? {}).length) {
-              return { error: 'a step must assert something — `expect` a region key or `expectRender` an island' };
+            if (!Object.keys(st.expect ?? {}).length && !Object.keys(st.expectRender ?? {}).length && st.expectCalls === undefined) {
+              return { error: 'a step must assert something — `expect` a region key, `expectRender` an island, or `expectCalls` the backend' };
             }
             // Did the region survive its own flow? A step that leaves nothing on screen has broken
             // something, even when every key it asserted holds the right value.
@@ -1069,6 +1086,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         page.off('pageerror', onCrash);
         const landed = await callsSince(mark);
         mark = landed.reduce((m, c) => Math.max(m, c.seq), mark);
+        // WHAT THE STEP WAS ALLOWED TO ASK FOR (`expectCalls`), held against what it asked for. Read
+        // after the beat above, with the same `mark` `flow-calls` uses, so step 1 includes the mount.
+        const callMismatches = result.error ? [] : expectCallsMismatches(step.expectCalls, landed);
         // WHAT THIS STEP LEFT BEHIND, for `motu diff`: every key the region holds, and what each slot
         // renders (the same perceivable surface `expectRender` reads). Values pass through JSON so
         // a function or a cycle cannot break the comparison.
@@ -1094,9 +1114,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
             : {}),
           scenario: scenario.name ?? 'flow',
           step: index + 1,
-          ok: !result.error && result.mismatches.length === 0 && result.alive !== false,
+          ok: !result.error && result.mismatches.length === 0 && callMismatches.length === 0 && result.alive !== false,
           error: result.error ?? (result.alive === false ? 'the region rendered nothing after this step' : null),
-          mismatches: result.mismatches ?? [],
+          mismatches: [...(result.mismatches ?? []), ...callMismatches],
           crashed: crashes[0] ?? null,
           calls: landed.length,
           // A FAILURE NOTHING DECLARED. A declared one (a fixture's `status: 500`) is the flow's own

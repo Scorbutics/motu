@@ -262,7 +262,12 @@ export function buildMutants(report, scenarios) {
  * possible for a mutant to reproduce the original behaviour by accident, which turns a tautology into
  * a pass — the exact failure this check exists to remove.
  */
-export function mutateStimulus(step, kind = 'crude') {
+export function mutateStimulus(original, kind = 'crude') {
+  // A mutant is judged on what the step RENDERS and STORES, never on `expectCalls`: "asks for
+  // nothing" rarely depends on the input, so judging it would read every such step as a constant —
+  // and a mutant failing only because its calls changed would be credited as a kill.
+  const { expectCalls: _calls, ...step } = original;
+  void _calls;
   // TYPED: another value of the SAME type — a different string, number or boolean. Only for scalars:
   // an object or array has no "other value" that is not a guess about its shape. `null` when nothing
   // in the step can be mutated that way, so the caller sends no typed mutant at all.

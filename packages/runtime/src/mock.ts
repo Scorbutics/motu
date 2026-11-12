@@ -237,6 +237,20 @@ export interface RegionStep {
    */
   expectRender?: Record<string, string | { text?: string; notText?: string }>;
   /**
+   * The backend calls this step may make — and ONLY these. `[]` says it asks for nothing.
+   *
+   * `flow-calls` already fails a call nothing ANSWERED; this fails a call nobody EXPECTED, answered or
+   * not. Without it a change that made a state ask for more stayed green as long as the extra call was
+   * answered — bench/evidence's B9 refetched the remote servers on every load, and the only trace was
+   * "1 answered" in the lagoon's calls strip. An entry is `METHOD /path` (query ignored), `/path` (any
+   * method) or the declaration's label (`shots.list`). Compared as sets: how often a call repeated is
+   * not the claim. Step 1 includes the calls the mount made.
+   *
+   * Not part of `flow-mutation`: "asks for nothing" rarely depends on the step's input, and a mutant
+   * judged on it would report every such step as a constant. It is judged on `expect`/`expectRender`.
+   */
+  expectCalls?: readonly string[];
+  /**
    * A control to click, BY ACCESSIBLE NAME — the user's half of a coupling.
    *
    * `emit` proves the region carries a declared output. This proves something the region cannot say by

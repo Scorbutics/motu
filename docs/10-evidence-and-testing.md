@@ -241,9 +241,11 @@ export interface RegionStep {
   /** Region keys and the values they must hold afterwards. Compared structurally. */
   expect?: Record<string, unknown>;
   expectRender?: Record<string, string | { text?: string; notText?: string }>;
+  /** The backend calls this step may make — and only these. `[]`: it asks for nothing. */
+  expectCalls?: readonly string[];
 }
 ```
-— `packages/runtime/src/mock.ts:109`
+— `packages/runtime/src/mock.ts`
 
 `emit` fires an island's **declared** output — the same seam the wiring probe uses — so a flow can
 only ever do what the archipelago says that island can do
@@ -257,7 +259,7 @@ record page, whose two widgets both read `editingWidgetId` owned by the app, was
 `expectRender` (`.github/host-rules.md:157`).
 
 A step must do at least one of `emit`, `provide`, or `expectRender`, and must assert at least one of
-`expect` or `expectRender`; both are runtime errors from the driver
+`expect`, `expectRender` or `expectCalls`; both are runtime errors from the driver
 (`packages/cli/src/playwright-lagoon.mjs:565`, `packages/cli/src/playwright-lagoon.mjs:673`). A step
 that leaves nothing on screen fails even when every key it asserted holds the right value —
 `document.querySelectorAll('[data-motu-slot]').length > 0`
@@ -266,6 +268,30 @@ that leaves nothing on screen fails even when every key it asserted holds the ri
 Assertions are **polled**, not sampled once: 2000 ms for a real step, 300 ms for a mutant, because a
 mutant that still holds holds immediately and the long budget made `flow-mutation` 30% of a whole
 `check --runtime` run (`packages/cli/src/playwright-lagoon.mjs:577`).
+
+### `expectCalls`: what a state asks the backend for
+
+`flow-calls` fails a call nothing ANSWERED. `expectCalls` fails a call nobody EXPECTED, answered or
+not — the other half. Without it, a change that made a state ask for more stayed green as long as the
+extra call was answered: in `bench/evidence`, an agent dropped shlink's "only fetch the remote servers
+when the store starts empty", every harness default-answered `/servers.json`, and the only trace was
+"1 answered" in the lagoon's calls strip.
+
+```ts
+{ expectRender: { list: 'Main shlink' }, expectCalls: [] }                       // asks for nothing
+{ emit: { slot: 'list', event: 'refresh' }, expectCalls: ['GET /servers.json'] } // exactly this
+```
+
+An entry is `METHOD /path` (the query is ignored), `/path` (any method), or the declaration's label
+(`shots.list`, `table:shots(select)`). Compared as SETS of distinct calls — every call the step made
+must be named and every name must have been called; how often one repeated is not the claim. Step 1
+counts the calls the mount made, and the mount happens in the flow's own seeded state: the runner seeds
+BEFORE it remounts the region, so a flow never starts by mounting in the region's default state.
+(`packages/cli/src/lib/expect-calls.mjs`, `packages/cli/src/playwright-lagoon.mjs`.)
+
+`flow-mutation` does not judge it. "Asks for nothing" rarely depends on the step's input, so a mutant
+held to it would report every such step as a constant; mutants are judged on `expect` and
+`expectRender`, and drop `expectCalls`.
 
 ### `expectRender`: what a person can perceive
 

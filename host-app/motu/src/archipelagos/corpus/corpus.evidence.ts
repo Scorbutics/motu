@@ -17,6 +17,20 @@ const ACCEPTED = CORPUS_STATES.find((s) => s.accepted)!;
 
 export const scenarios: RegionScenario[] = [
   {
+    // THE FILTER SHOWS THE CHOICE THE REGION HOLDS — not only the one it last emitted. `filter` moves
+    // without anyone clicking: a deep link, a restored state, coming back to the page. A filter deaf
+    // to it renders "All states" pressed over a list narrowed to the unaccepted ones — the screen
+    // `null-island` exists to catch, and this region's evidence did not rule it out until now.
+    name: 'the filter shows the choice the region holds',
+    seed: {
+      states: CORPUS_STATES,
+      unacceptedCount: CORPUS_UNACCEPTED,
+      regionId: CORPUS_REGION_ID,
+      filter: 'unaccepted',
+    },
+    steps: [{ expectRender: { 'corpus-filter': { text: 'pressed', notText: 'All states pressed' } } }],
+  },
+  {
     // Each slot's own coverage step: this slot renders THAT island. No stimulus, because the claim is
     // not a data flow — and `flow-mutation` is right to reject an assertion on a constant that
     // pretends otherwise. Worth making anyway: it is what catches a slot rewired to a neighbour's

@@ -17,6 +17,15 @@ import { REPOS, FILTERED_REPOS, STATS, CAP, VIEWER } from '../../shared/index-ev
 
 export const scenarios: RegionScenario[] = [
   {
+    // THE FILTER SHOWS THE QUERY THE REGION HOLDS. `query` moves without typing — a deep link, a
+    // restored state, coming back to the page — and an input deaf to it shows an empty box over a
+    // narrowed list. `null-island` found that no flow ruled this out: the filter's only assertion was
+    // its own label, which a filter ignoring the region renders just the same.
+    name: 'the filter shows the query the region holds',
+    seed: { repos: REPOS, stats: STATS, cap: CAP, query: 'twentyhq', paletteOpen: false, paletteQuery: '', viewer: VIEWER },
+    steps: [{ expectRender: { filter: 'twentyhq' } }],
+  },
+  {
     // Each slot renders ITS OWN island. The readout, the filter, the account and the list all sit on
     // one page, and a crossed wire between any two of them renders perfectly and means the wrong thing.
     name: 'each card is its own card',

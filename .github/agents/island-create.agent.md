@@ -97,6 +97,7 @@ motu island verify <name> --audit       # before integrating: + responsive + a11
     motu island verify <n> --fast       NO BROWSER            while building one island
     motu island verify <n> --runtime    ONE ISLAND    ~15s    the island you are on
     motu archipelago verify <id> --runtime  ONE REGION ~25s   the region you are on
+    motu lagoon try <id> [step…]        EXPLORE       ~5s    before you know what to assert
     motu check --runtime                EVERYTHING   ~104s    once, before handing work over
     motu check --audit                  IS IT USABLE          before integrating, and in CI
 

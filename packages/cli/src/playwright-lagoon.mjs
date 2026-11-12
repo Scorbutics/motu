@@ -635,7 +635,11 @@ async function remountAndCompare(page, tag) {
  *
  * Returns [{ scenario, step, ok, mismatches: [{ key, expected, actual }] }].
  */
-export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWith = null, trace = false }) {
+/**
+ * `onStep(page, { scenario, step })`, when given, runs after each step settles — `motu lagoon try`
+ * uses it to picture what a step left on screen. It sees the page; it must not drive it.
+ */
+export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWith = null, trace = false, onStep = null }) {
   const { chromium } = await import('playwright');
   // See probeWiring: the flows are where writes happen, so this is where a store complaint lands.
   const diagnostics = [];
@@ -1136,6 +1140,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
                 return { keys, surface };
               })
               .catch(() => null);
+        if (onStep) await onStep(page, { scenario: scenario.name ?? 'flow', step: index + 1 }).catch(() => {});
         out.push({
           ...(traced
             ? { trace: { keys: traced.keys, surface: result.surface ?? {}, calls: landed.map((c) => `${c.method} ${c.label || c.url} ${c.status}`) } }

@@ -106,6 +106,14 @@ In `src/archipelagos/<id>/<id>.evidence.ts`, write the journey — several steps
 other, each ending on the island that READS rather than the one you drove. The seed establishes the
 starting state once; steps accumulate.
 
+EXPLORE FIRST, then assert. `motu lagoon try <id> 'click …' 'emit <slot>:<event> …'` replays steps in
+about five seconds and prints what each one moved — keys `old → new`, what every slot shows, the calls
+that landed — so you write the flow knowing which island READS the effect, instead of guessing and
+paying a runtime verification to find out. When you know what should hold, add YOUR assertions
+(`shows <slot>: <text>`, `holds <key>=<json>`) and `--keep "<name>"` appends the flow — only if every
+step asserts something and all of it held. Never copy an assertion from its output: one that agrees
+with what was observed cannot fail, which is what `flow-mutation` refuses.
+
 A region's flows need a browser — `--fast` skips them and says so — so this step is where the browser
 work belongs. `motu archipelago verify <id> --runtime` must pass with:
 - `region-flow` — the journey ends as declared,
@@ -125,6 +133,7 @@ flow makes.
 
     motu check                              STATIC       every change
     motu check --runtime --fast             NO BROWSER   the loop (~6s scoped, 44s whole)
+    motu lagoon try <id> [step…]            EXPLORE      what a step moves, before you assert (~5s)
     motu archipelago verify <id> --runtime  ONE REGION   the region you are building (~25s)
     motu check --runtime                    EVERYTHING   once, before handing over (~104s)
     motu check --audit                      layout + a11y — before integrating, and in CI

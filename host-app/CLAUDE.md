@@ -128,6 +128,18 @@ UI work goes through motu (islands, archipelagos, the lagoon):
    resolves to nothing REFUSES to render — banner, console error, `window.__motuLagoonState.ok:
    false` — because being handed the default state while believing it is the one you named is the
    failure worth engineering against. Read `window.__motuLagoonState` before believing a screenshot.
+ - EXPLORE BEFORE YOU ASSERT, with `motu lagoon try <region> [step…]` — not a hand-written
+   `page.evaluate` against `window.__motuLagoon`, and not a flow you run for minutes to read its failure.
+   It replays the steps you give it (the verbs a flow has: `in <world>`, `seed <key>=<json>`, `click <name>`,
+   `emit <slot>:<event> [json]`, `provide <key>=<json>`) in about five seconds and prints what EACH step
+   changed: the region's keys (`old → new`), what each slot shows, the calls that landed; `--shot <dir>`
+   pictures every step. Reach for it before writing a flow, and whenever the screen and the state may
+   disagree — a state the screen MASKS (the right page drawn over the wrong keys) is invisible to every
+   check and to a screenshot, and shows here as a key that moved. When you know what should hold, add
+   YOUR assertions (`shows <slot>: <text>`, `hides …`, `holds <key>=<json>`) — never copied from the
+   output, which agrees with itself by construction — and `--keep "<name>"` appends the flow to
+   `<id>.evidence.ts` only if every step asserts something and all of it held. No selectors and no eval:
+   if you need either, you have left the harness. Exit 2 means it could not run — retry, do not repair.
  - The lens is the DOCK's Seams tab — **Ctrl/Cmd-K**, then `Seams` — and it opens on the REGION SHEET:
    one row per key, who owns it, who reads it, what it holds, whether it has moved, and a flag where a
    declared write has never fired or the host answered an island. Read it before reading the
@@ -425,6 +437,7 @@ the fix when it stops being a few lines.
     motu check                        STATIC        1.4s    every change
     motu island verify <n> --runtime  ONE ISLAND    ~15s    while you work
     motu archipelago verify <id> --runtime  ONE REGION ~25s  while you work
+    motu lagoon try <id> [step…]      EXPLORE       ~5s    before you know what to assert
     motu check --runtime --fast       NO BROWSER   44.0s    while you work (5.9s with --changed)
     motu check --runtime              DOES IT WORK 103.5s    before handing work over
     motu check --audit                IS IT USABLE          before integrating, and in CI

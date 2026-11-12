@@ -26,6 +26,7 @@ import { islandDefaultsCommand } from './commands/defaults.mjs';
 import { syncCommand } from './commands/sync.mjs';
 import { removalCheckCommand } from './commands/removal-check.mjs';
 import { lagoonPublishCommand, lagoonServeCommand, lagoonEjectCommand, lagoonStatesCommand } from './commands/lagoon.mjs';
+import { lagoonTryCommand } from './commands/lagoon-try.mjs';
 import { loadMotuConfig, assertProject } from './lib/config.mjs';
 import { initCommand } from './commands/init.mjs';
 import { skillsInstallCommand, skillsListCommand } from './commands/skills.mjs';
@@ -81,6 +82,7 @@ ${color.bold('Usage:')}
     --forget <id> | --forget-all                    remove a state the instrument recorded wrongly
   motu fixtures record <island>                     capture backend responses into request-keyed fixtures
   motu lagoon states [island|region]                every state the lagoon can be OPENED in, as a URL
+  motu lagoon try <region> [step…]                  "what happens if…?" — each step's keys, slots and calls
   motu lagoon eject                                 write the framework's lagoon entries into the project
   motu lagoon publish [island]                      build the lagoon as one self-contained page to publish
   motu lagoon publish --remote <url>                ...or upload it to a lagoon host as chunks (see motu-host)
@@ -126,6 +128,15 @@ ${color.bold('lagoon states:')}
   --base <url>    print absolute URLs against a running lagoon instead of paths
   --json          machine-readable catalogue
   ${color.dim('a name that resolves to nothing REFUSES to render — it never falls back to the default state.')}
+
+${color.bold('lagoon try:')}
+  ${color.dim('explore a region before you know what to assert — the same verbs a flow has, nothing else:')}
+  ${color.dim("  motu lagoon try review 'click Accept' 'emit shot-list:shot-selected {\"island\":\"x\",\"shot\":\"a@desktop\"}'")}
+  in <world> · seed <key>=<json> · look · click <name> · emit <slot>:<event> [json] · provide <key>=<json>
+  shows <slot>: <text> · hides <slot>: <text> · holds <key>=<json>   ${color.dim('assertions — yours, never copied from the output')}
+  --world <id>    run in a declared world        --shot <dir>   a PNG per step
+  --keep <name>   append it to <id>.evidence.ts — only with assertions, only if they all held
+  --json          machine-readable
 
 ${color.bold('lagoon serve flags:')}
   --port <n>      port to listen on (default 8817)
@@ -316,6 +327,7 @@ async function main() {
       process.exit(1);
     }
     if (sub === 'states') return lagoonStatesCommand(argv);
+    if (sub === 'try') return lagoonTryCommand(argv);
     if (sub === 'eject') return lagoonEjectCommand(argv);
     if (sub === 'publish') return lagoonPublishCommand(argv);
     if (sub === 'serve') return lagoonServeCommand(argv);

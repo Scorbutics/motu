@@ -24,6 +24,15 @@ motu lagoon states
 
 Open either one. It is the real components, still interactive, rendered from a declared seed.
 
+And before you know what to assert, ask a region what happens — each step's keys, slots and calls,
+in about five seconds:
+
+```
+motu lagoon try review 'click nothing-wrong@desktop new'
+  key   selectedShot: undefined → {"island":"load-error","shot":"nothing-wrong@desktop"}
+  slot  accept-bar: Accept this shot Accept load-error Accept all 2 pending
+```
+
 ### Does it catch anything?
 
 Six **coupling** defects — every part individually correct, the composition wrong — injected into a

@@ -547,6 +547,26 @@ months later into a lagoon that has grown another region since
 
 `step=` is not printed — append it yourself.
 
+### Exploring a region: `motu lagoon try`
+
+Every check answers "does this hold?", which you can only ask once you know what to assert. Before
+that, `motu lagoon try <region> [step…]` asks "what happens if…?": it replays the steps you give it —
+`click`, `emit`, `provide`, `seed`, `in <world>`, the verbs a flow has — and prints what each one
+changed: the region's keys (`old → new`), what each slot shows, and the calls that landed. About five
+seconds, lagoon boot included; `--shot <dir>` pictures every step.
+
+It reads the same in-page surface the runtime checks drive (`window.__motuLagoon`: `snapshot`, `emit`,
+`provide`, `calls`), so an agent no longer has to hand-write `page.evaluate` against it — and the one
+thing that surface shows that no check and no screenshot does is a **masked** state: a slot that draws
+the right thing over keys that are wrong. That was a real bug (a placeholder week holding another week's
+cards, hidden by the island's own guard), found only by reading `snapshot()` by hand.
+
+When you know what should hold, write it (`shows`, `hides`, `holds`) and `--keep "<name>"`: the flow is
+appended to `<id>.evidence.ts` only if every step asserts something and all of it held, and from then
+on `motu archipelago verify` judges it like any other. The assertions are always yours — copied from
+the output, they would agree with themselves by construction. Reference:
+[`03-cli-reference.md`](03-cli-reference.md#motu-lagoon-try-region-step).
+
 ## Worlds — named answers for the states no flow can reach
 
 A flow drives what the lagoon was handed, and by default the lagoon is handed ONE set of answers: one

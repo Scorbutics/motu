@@ -113,7 +113,7 @@ cause is classified — are in [checks and verification](07-checks-and-verificat
 
 | Writes files | Read-only |
 | --- | --- |
-| `init`, `island create`, `motu sync`, `island integrate`, `island snapshot --update`, `archipelago init`, `archipelago adopt-root`, `fixtures record`, `lagoon eject`, `lagoon publish`, `codegen`, `skills install` | `check`, `island verify`, `island defaults`, `archipelago verify`, `integrate check`, `lagoon serve`, `lagoon states`, `archipelago coverage` (unless `--save`), `skills list` |
+| `init`, `island create`, `motu sync`, `island integrate`, `island snapshot --update`, `archipelago init`, `archipelago adopt-root`, `fixtures record`, `lagoon eject`, `lagoon publish`, `codegen`, `skills install`, `lagoon try --keep` | `check`, `island verify`, `island defaults`, `archipelago verify`, `integrate check`, `lagoon serve`, `lagoon states`, `lagoon try` (without `--keep`), `archipelago coverage` (unless `--save`), `skills list` |
 
 Two that need a footnote. `removal-check` **temporarily** deletes and rewrites host files, then always
 restores them from a backup in a `finally` block (`packages/cli/src/commands/removal-check.mjs:512-526`);
@@ -873,6 +873,69 @@ Names are slugified into the URL, so a scenario called `nothing recorded yet` is
 `nothing-recorded-yet`. A name that resolves to nothing REFUSES to render rather than falling back to
 the default state — see [the lagoon](08-lagoon.md).
 
+
+### `motu lagoon try <region> [step…]`
+
+"What happens if…?" — before you know what to assert. Replays the steps you give it as a one-off flow
+(the same engine `motu diff` uses), and prints what **each step changed**: the region's keys
+(`old → new`), what each slot perceivably shows (the surface `expectRender` reads), and the backend
+calls that landed. Writes nothing unless asked (`commands/lagoon-try.mjs`).
+
+```console
+motu lagoon try <region> [step…] [--world <id>] [--shot <dir>] [--keep "<flow name>"] [--json]
+```
+
+| Step | Meaning |
+| --- | --- |
+| `in <world>` | Run in a declared world (first, once) |
+| `seed <key>=<json>` | The starting state, before anything renders |
+| `look` | A step that does nothing — print the state again |
+| `click <accessible name>` | What a person does; resolved like a flow's `click` (exact name, then the narrowest containing one) |
+| `emit <slot>:<event> [json]` | An island's declared output, entered past its handler |
+| `provide <key>=<json>` | The application moving its own state |
+| `shows <slot>: <text>` · `hides <slot>: <text>` · `holds <key>=<json>` | **Your** assertions, on the step before them |
+
+| Flag | Meaning |
+| --- | --- |
+| `--world <id>` | Same as `in <id>` |
+| `--shot <dir>` | A full-page PNG after every step (`<region>-step-<n>.png`) |
+| `--keep "<name>"` | Append the flow to `<id>.evidence.ts` — refused unless every step asserts something and all of it held |
+| `--json` | `{ region, world, ms, held, steps: [{ did, keys, slots, calls, mismatches, shot }] }` |
+
+THE SAME VERBS A FLOW HAS, and nothing else. No selectors and no `eval`: reaching for either is leaving
+the harness for a browser test, the line motu draws everywhere else. Step 0 is "how it starts" — every
+key and every slot before anything is done.
+
+ASSERTIONS ARE YOURS. `try` never derives one from what it observed: an assertion copied from the
+output agrees with itself by construction, which is the evidence `flow-mutation` and `null-island`
+exist to refuse. Steps you did not assert run under a placeholder that is never reported and never
+kept. Exit `0` when nothing was asserted or everything held, `1` when an assertion did not hold, `2`
+when the lagoon could not run (never mounted, a port Chromium refuses) — never an empty exploration
+printed as an answer.
+
+```console
+$ motu lagoon try review 'emit diff-viewer:view-changed "diff"' 'click nothing-wrong@desktop new'
+motu lagoon try review · 4.7s
+
+0. how it starts
+   keys  6 in the region (shots, busy, error, repos, selectedRepo, viewMode)
+   slot  diff-viewer: Pick a shot to see what changed.
+   …
+1. emit diff-viewer:view-changed "diff"
+   key   viewMode: "last" → "diff"
+   slots nothing changed on screen
+2. click nothing-wrong@desktop new
+   key   selectedShot: undefined → {"island":"load-error","shot":"nothing-wrong@desktop"}
+   slot  diff-viewer: LOAD-ERROR nothing-wrong@desktop Accepted Last run Difference …
+   slot  accept-bar: Accept this shot Accept load-error Accept all 2 pending
+```
+
+When to reach for it: before writing a flow (find what a step actually moves), when the screen and the
+state may disagree (a state the screen MASKS — the right page drawn over the wrong keys — is invisible
+to every check and to a screenshot, and shows here as a key that moved), and to look at a state no flow
+declares yet. About five seconds a run, lagoon boot included. The proposal it is stage 1 of:
+[`proposals/region-access.md`](proposals/region-access.md).
+
 ### `motu lagoon eject`
 
 Write the framework's lagoon entries into the project — the C1 escape hatch.
@@ -1176,6 +1239,7 @@ a 20-island / 3-region one).
 | Before handing work over | `motu archipelago snapshot --all --remote` | 18s | Did the composed page move? |
 | Before saying an integration is done | `motu integrate check <id>` | static | Does the **host** compose, place and read the region? |
 | Looking at a state | `motu lagoon states`, then `motu lagoon serve --watch` | — | Open the exact declared state, in a browser. |
+| Exploring before you assert | `motu lagoon try <id> [step…]` | ~5s | What does each step move — keys, slots, calls? `--keep` turns it into a flow. |
 | Showing a human | `motu lagoon publish --remote` | — | A link that outlives your process. |
 | Asking what production reached | `motu archipelago coverage <id>` | — | Which real states no flow previews. |
 

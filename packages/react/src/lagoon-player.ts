@@ -173,7 +173,16 @@ export async function playState(
   opts: { fresh?: boolean } = {},
 ): Promise<PlayOutcome> {
   const target = ref.kind === 'flow' ? `archipelago:${ref.region}` : `island:${ref.island}`;
-  const h = regionHarness(ref.region);
+  // WAIT FOR THE REGION, bounded, before refusing. A region's store is created by its first island's
+  // render, a beat after the view mounts it; the gallery asks for an addressed state right away, and on
+  // a page as large as Peps' the store was not there yet — so a valid flow address was refused as "not
+  // mounted" while the region rendered beside the banner. Still refused after 5s: a name that resolves
+  // to nothing must never quietly render the default.
+  let h = regionHarness(ref.region);
+  for (let waited = 0; !h && waited < 5000; waited += 100) {
+    await new Promise((r) => setTimeout(r, 100));
+    h = regionHarness(ref.region);
+  }
   if (!h) return { ok: false, target, kind: ref.kind, name: ref.name, error: `region "${ref.region}" is not mounted in this view` };
   const store = getArchipelagoStore(ref.region)!;
 

@@ -16,6 +16,7 @@ import { archipelagoInitCommand } from './commands/archipelago-init.mjs';
 import { regionCoverageCommand } from './commands/region-coverage.mjs';
 import { coverageCommand } from './commands/coverage.mjs';
 import { diffCommand, flowsTraceCommand } from './commands/diff.mjs';
+import { assuranceCommand } from './commands/assurance.mjs';
 import { screenVerifyCommand } from './commands/verify/screens-runtime.mjs';
 import { closeLagoonPool } from './playwright-lagoon.mjs';
 import { archipelagoAdoptRootCommand } from './commands/adopt-root.mjs';
@@ -71,6 +72,7 @@ ${color.bold('Usage:')}
   motu archipelago snapshot <id|--all> --remote      picture the COMPOSED page — catches arrangement
   motu archipelago coverage <id> [--corpus <f>]     states production reached that no flow previews
   motu diff --base <ref> [--explain <file>] [--json] what the change did to the flows: keys, renders, calls, declarations — each to explain or fix
+  motu assurance [id] [--json]                    one row per declared thing (slot, write, key, calls) and the strongest evidence holding it
   motu screen verify [id] [--json]                  open each declared screen (or one), hold its calls to declarations, replay screen flows
   motu coverage init [--mode forward|log]           wire production coverage: the route, the ingest token, the one step left
   motu coverage doctor --url <origin>               prove the deployed route reaches the host; names the hop that fails
@@ -322,6 +324,9 @@ async function main() {
     process.exit(2);
   }
 
+  if (group === 'assurance') {
+    process.exit(assuranceCommand(parse([sub, ...rest].filter(Boolean))) ?? 0);
+  }
   if (group === 'diff') {
     const code = await diffCommand(parse([sub, ...rest].filter(Boolean)));
     process.exit(code ?? 0);

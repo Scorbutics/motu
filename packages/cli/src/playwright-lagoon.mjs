@@ -222,6 +222,13 @@ async function lagoonPage(server, target, view) {
     await existing.goto(lagoonUrl(server, target, view), { waitUntil: 'load' });
     return existing;
   }
+  // CLOSE THE PAGE THIS ONE REPLACES. A view change lands here with the previous view's page still
+  // open, and the pool entry below was simply overwritten — so that page was never closed and kept
+  // running its region for the rest of the command. The region checks change view three times per
+  // region: on a 23-region project (Peps) `motu check --runtime` held ~45 live pages by the end, ran
+  // the machine out of memory, and every region ran slower than the one before it — 30 minutes and
+  // a CI timeout for checks that take ~25 alone, and a "hang" for whichever region came last.
+  if (existing) await existing.close().catch(() => {});
   const browser = await getBrowser();
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await setupPageDiagnostics(page, null);

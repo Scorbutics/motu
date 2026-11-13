@@ -702,7 +702,34 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       await sleep(600);
       return true;
     };
+    // WHERE THE LANE'S TIME WENT, per scenario. `region-flow` was 73% of a `check --runtime` on Peps and
+    // printed as one number; the real flows, the flow-mutation mutants, the world mutants and the
+    // null-island mutants all ride this lane, and which of them costs what is the whole question.
+    const timings = [];
+    const laneStarted = Date.now();
+    // ANSWERED GROUPS. A scenario carrying `__killGroup` belongs to a set whose verdict is "did ANY of
+    // these fail?" (a null-island slot and mode). The first failure answers it, so the rest of the
+    // group is not run — on Peps' `actions` the null-island mutants were 260 of 284 scenarios and 89%
+    // of the region's time, nearly all of it replaying flows for groups already answered.
+    const killed = new Set();
+    const suspects = [];
+    const suspectSeen = new Set();
+    // Every mutant the lane carries is tagged by the caller; a scenario with any of these is not a flow.
+    const isMutantScenario = (sc) => Boolean(sc.__nullIsland || sc.__killGroup || sc.__world || /^µ /.test(String(sc.name ?? '')));
+    // HOW LONG EACH REAL STEP TOOK TO HOLD. The real flows run first in the lane, so by the time a
+    // null-island replay of a step runs, the region has already shown how long that step needs. The
+    // replay's assertion is meant to FAIL — a nulled island renders less — and waiting the full 2s for
+    // each failure was most of what null-island still cost after the kill groups (~46s of 70 on
+    // Peps' `actions`). A replay whose assertion still holds holds about as fast as the real step did,
+    // so it gets three times that plus a margin; a step whose real run never held keeps the full 2s.
+    const settledIn = new Map();
+    const budgetFor = (of, index) => {
+      const real = settledIn.get(`${of}#${index}`);
+      return real == null ? 2000 : Math.min(2000, Math.max(400, 3 * real + 250));
+    };
     for (const scenario of scenarios) {
+      if (scenario.__killGroup && killed.has(scenario.__killGroup)) continue;
+      const scenarioStarted = Date.now();
       if (!(await switchWorld(scenario.world ?? 'default'))) {
         out.push({ scenario: scenario.name ?? 'flow', step: 1, ok: false, error: `world "${scenario.world}" is not declared in the lagoon`, mismatches: [], calls: 0, undeclared: [] });
         continue;
@@ -784,6 +811,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         // The first step of a scenario establishes the page's starting state; the rest build on it.
         step = index === 0 ? { ...step, __seedNow: true } : step;
         if (trace) step = { ...step, __trace: true };
+        if (scenario.__nullIsland && scenario.__of) step = { ...step, __budgetMs: budgetFor(scenario.__of, index) };
         // WHAT THIS STEP CRASHED, if anything. A mutant's crude value can throw inside an island
         // (`null.toLowerCase()`), the region empties, and the assertion "fails" — which read as the
         // assertion discriminating. `flow-mutation` needs to tell a crash from a kill, so every step
@@ -871,7 +899,10 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
             // holds immediately — the prefix steps already settled the region — so a short budget
             // loses nothing. Real steps keep the long one, because that is where a slow effect is
             // genuinely being waited for.
-            const budgetMs = st.__mutant ? 300 : 2000;
+            // `__budgetMs`: a null-island replay is given what its REAL step needed (set by the lane
+            // below), not the 2s a real step is allowed for an effect nobody has timed yet.
+            const budgetMs = st.__budgetMs ?? (st.__mutant ? 300 : 2000);
+            const settleStarted = Date.now();
             const settled = async (check) => {
               const until = Date.now() + budgetMs;
               for (;;) {
@@ -1116,7 +1147,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
                 surface[slot] = surface[slot] ? `${surface[slot]} | ${text}` : text;
               }
             }
-            return { mismatches: [...mismatches, ...renderMismatches], alive, surface };
+            // How long the step's assertions took to hold — what a null-island replay of it is allowed.
+            const settleMs = mismatches.length || renderMismatches.length ? null : Date.now() - settleStarted;
+            return { mismatches: [...mismatches, ...renderMismatches], alive, surface, settleMs };
           },
           { seed: scenario.seed ?? {}, step },
         );
@@ -1124,6 +1157,19 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         await sleep(150);
         page.off('pageerror', onCrash);
         const landed = await callsSince(mark);
+        // THE SMELL, read per step — the ledger is reset at the start of every step (above), so read
+        // once at the end of the lane it only ever held the LAST step's suspicions, and which step was
+        // last was whichever mutant happened to run last. Real flows only: a mutant's crude emit
+        // provoking a host write says nothing about how the application is written.
+        if (!isMutantScenario(scenario) && !step.__mutant) {
+          for (const sus of await page.evaluate(() => window.__motuSuspects?.list?.() ?? []).catch(() => [])) {
+            const key = JSON.stringify(sus);
+            if (!suspectSeen.has(key)) {
+              suspectSeen.add(key);
+              suspects.push(sus);
+            }
+          }
+        }
         mark = landed.reduce((m, c) => Math.max(m, c.seq), mark);
         // WHAT THE STEP WAS ALLOWED TO ASK FOR (`expectCalls`), held against what it asked for. Read
         // after the beat above, with the same `mark` `flow-calls` uses, so step 1 includes the mount.
@@ -1163,8 +1209,18 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
           // state and never lands here.
           undeclared: landed.filter((c) => !c.ok && !c.declared),
         });
+        if (!scenario.__nullIsland && !scenario.__killGroup && !step.__mutant && result.settleMs != null) {
+          settledIn.set(`${scenario.name ?? 'flow'}#${index}`, result.settleMs);
+        }
+        // A failing step answers the group; the steps after it cannot turn "it failed" into "it held".
+        if (scenario.__killGroup && !out[out.length - 1].ok) {
+          killed.add(scenario.__killGroup);
+          break;
+        }
       }
+      timings.push({ scenario: scenario.name ?? 'flow', ms: Date.now() - scenarioStarted, steps: (scenario.steps ?? []).length });
     }
+    const scenariosMs = Date.now() - laneStarted;
     // One beat before reading: a host effect answering an island lands a tick later, and the last
     // step's assertion returns before it does.
     await sleep(300);
@@ -1173,10 +1229,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
     // BACK TO THE DEFAULT WORLD before anything else reads this page: it is pooled, and the next check
     // re-aims it rather than reloading — a world left on would be inherited by a check that never asked.
     if (activeWorld !== 'default') await switchWorld('default');
-    // The smell, read after the flows have run: an island emitted, and the HOST answered by writing a
-    // key some island reads. Declared ownership cannot see this — the declaration is consistent, it is
-    // just not honest — so it is reported as a suspicion, never as a violation.
-    const suspects = await page.evaluate(() => window.__motuSuspects?.list?.() ?? []).catch(() => []);
+    // `suspects` — the smell: an island emitted, and the HOST answered by writing a key some island
+    // reads. Declared ownership cannot see this — the declaration is consistent, it is just not honest —
+    // so it is reported as a suspicion, never as a violation. Collected per real step, in the loop above.
     // What the CHANNELS actually produced while the flows ran — the inbound seam's provenance. The
     // declared `sources` say who feeds each host-fed key; this says who really did.
     // WHERE THE INPUT CAME FROM, read after the flows have run.
@@ -1211,7 +1266,7 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
             { rid: id, evidence: { flows: { [id]: chartWith.flows }, scenarios: chartWith.scenarios } },
           )
           .catch((err) => ({ error: String(err?.message ?? err) }));
-    return { flows: out, suspects, diagnostics, channels, provenance, outbound, held, renderOutputs, chart };
+    return { flows: out, suspects, diagnostics, channels, provenance, outbound, held, renderOutputs, chart, timings, scenariosMs };
   });
 }
 

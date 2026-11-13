@@ -10,7 +10,7 @@ import { probeWiring, runRegionFlows } from '../../playwright-lagoon.mjs';
 import { CLI_PKG, HARNESS, islandScenarios, readScenarios } from './island-runtime.mjs';
 import { declaredReach, operationReachCheck, operationUniverse, provenanceCheck } from './reach.mjs';
 import { emittedLiveCheck, reportStoreComplaints, sourcesLiveCheck } from './region-sources.mjs';
-import { environmentalCause, step } from './report.mjs';
+import { environmentalCause, isVerbose, step } from './report.mjs';
 
 /**
  * A CATALOGUE region's declared members are the members the data actually produces.
@@ -333,12 +333,26 @@ export function buildNullIslands(region, scenarios) {
   const boundKeys = (b) =>
     [].concat(b ?? []).flatMap((e) => (typeof e === 'string' ? [e] : e && typeof e === 'object' ? Object.values(e) : []));
   const reads = (i) => boundKeys(i.bind).length > 0 || (i.reads ?? []).length > 0;
+  // THE VERDICT IS "DID ANY FLOW FAIL?", so each (slot, mode) is a kill group: the runner stops the
+  // group at its first failing step (`__killGroup`). Flows that look at the slot — assert its render,
+  // emit from it, click in it — go first, because they are the ones that fail when it is nulled; the
+  // rest only run when those all held, which is exactly the case the verdict has to see in full.
+  const touches = (s, slot) =>
+    (s.steps ?? []).some((st) => slot in (st.expectRender ?? {}) || st.emit?.slot === slot);
   const mutants = [];
   for (const isl of islands) {
     const slot = isl.slot;
+    const ordered = [...scenarios.filter((s) => touches(s, slot)), ...scenarios.filter((s) => !touches(s, slot))];
     for (const mode of reads(isl) ? ['defaults', 'nothing'] : ['nothing']) {
-      for (const s of scenarios) {
-        mutants.push({ ...s, name: `${NULL_PREFIX}${slot} · ${mode} :: ${s.name ?? 'flow'}`, __nullIsland: { slot, mode } });
+      for (const s of ordered) {
+        mutants.push({
+          ...s,
+          name: `${NULL_PREFIX}${slot} · ${mode} :: ${s.name ?? 'flow'}`,
+          __nullIsland: { slot, mode },
+          __killGroup: `null:${slot}:${mode}`,
+          // The flow this replays, so the runner can give each step what the real step needed.
+          __of: s.name ?? 'flow',
+        });
       }
     }
   }
@@ -386,6 +400,30 @@ export function reportNullIslands(report, flows, { slots, mutants }) {
   if (examined && constrained === examined)
     report.ok('null-island', `every asserted slot's island is constrained: nulling it fails a flow`, { n: examined, of: 'slot(s) nulled' });
   else if (!examined) report.inconclusive('null-island', 'no null-island mutant came back from the run, so nothing is proved');
+}
+
+/**
+ * `--verbose`: the flow lane split by what rides it. One `region-flow` number hid that the real flows
+ * are the smallest part of it — the mutants that prove they could fail are most of the time.
+ */
+function printLaneProfile(run) {
+  const kinds = [
+    ['null-island', (n) => n.startsWith(NULL_PREFIX)],
+    ['flow-mutation', (n) => n.startsWith(MUTANT_PREFIX)],
+    ['world-differs', (n) => n.startsWith(WORLD_MUTANT_PREFIX)],
+    ['flows', () => true],
+  ];
+  const sums = new Map(kinds.map(([k]) => [k, { n: 0, ms: 0, steps: 0 }]));
+  for (const t of run.timings) {
+    const [kind] = kinds.find(([, is]) => is(String(t.scenario)));
+    const s = sums.get(kind);
+    s.n++;
+    s.ms += t.ms;
+    s.steps += t.steps;
+  }
+  const parts = [...sums].filter(([, s]) => s.n).map(([k, s]) => `${k} ${s.n}×/${s.steps} steps ${(s.ms / 1000).toFixed(1)}s`);
+  const rest = Math.max(0, (run.scenariosMs ?? 0) - run.timings.reduce((n, t) => n + t.ms, 0));
+  process.stderr.write(`      ${parts.join(' · ')}${rest > 500 ? ` · between scenarios ${(rest / 1000).toFixed(1)}s` : ''}\n`);
 }
 
 /** Mutant scenarios are tagged so one run can carry both sets and tell them apart afterwards. */
@@ -528,6 +566,7 @@ export async function regionFlowCheck(report, id, port, region) {
     const run = await step('region-flow', () =>
       runRegionFlows({ id, port, scenarios: [...scenarios, ...mutation.mutants, ...worldMutants, ...nulls.mutants], chartWith }),
     );
+    if (isVerbose() && run.timings?.length) printLaneProfile(run);
     results = (run.flows ?? []).filter(
       (f) => ![MUTANT_PREFIX, WORLD_MUTANT_PREFIX, NULL_PREFIX].some((p) => String(f.scenario).startsWith(p)),
     );

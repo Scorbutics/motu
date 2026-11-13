@@ -71,3 +71,26 @@ test('a mount path that cannot null an island is a skip, never a verdict', () =>
   reportNullIslands(r, plan.mutants.map((m) => ({ scenario: m.name, step: 1, ok: false, unsupported: true })), plan);
   assert.deepEqual(r.rows.map((x) => x.level), ['skip']);
 });
+
+// THE SHORT-CIRCUIT (the runner stops a kill group at its first failing step). It is only sound because
+// the verdict is "did ANY flow fail?" — these pin the three things that make it so.
+test('each (slot, mode) is one kill group, and flows that look at the slot run first', () => {
+  const extra = [{ name: 'c', steps: [{ expectRender: { search: 'Search...' } }] }, ...flows];
+  const { mutants } = buildNullIslands(region, extra);
+  const group = (slot, mode) => mutants.filter((m) => m.__nullIsland.slot === slot && m.__nullIsland.mode === mode);
+  for (const m of mutants) assert.equal(m.__killGroup, `null:${m.__nullIsland.slot}:${m.__nullIsland.mode}`);
+  // `c` names only the search box, so for `list` it goes after the two flows that assert the list.
+  assert.deepEqual(group('list', 'defaults').map((m) => m.name.split(':: ')[1]), ['a', 'b', 'c']);
+  // For `search`: `c` and `a` assert it, `b` emits from it — all three look at it, declared order kept.
+  assert.deepEqual(group('search', 'nothing').map((m) => m.name.split(':: ')[1]), ['c', 'a', 'b']);
+});
+
+test('a group the runner stopped at its first failure is still CONSTRAINED', () => {
+  const plan = buildNullIslands(region, flows);
+  const r = recorder();
+  // What comes back when every group is killed by its first flow: one failing step per group, the
+  // rest of the group never run.
+  const firsts = [...new Map(plan.mutants.map((m) => [m.__killGroup, m])).values()];
+  reportNullIslands(r, firsts.map((m) => result(m, false)), plan);
+  assert.deepEqual(r.rows.map((x) => x.level), ['ok']);
+});

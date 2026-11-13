@@ -25,6 +25,9 @@ export function setVerbose(on) {
   verbose = !!on;
 }
 
+/** Whether `--verbose` is on, for a check that has a finer profile of its own to print. */
+export const isVerbose = () => verbose;
+
 /**
  * Total time inside instrumented steps. Read by `motu check --verbose` to print the REMAINDER.
  *

@@ -33,6 +33,11 @@ motu lagoon try review 'click nothing-wrong@desktop new'
   slot  accept-bar: Accept this shot Accept load-error Accept all 2 pending
 ```
 
+### Try it live!
+
+Remote public official motu "demo app" lagoon: https://motu.bulgarelli.dev/Scorbutics/motu-demo-app/latest/all
+This is representing the actual demo app running here: https://sandbox.bulgarelli.dev 
+
 ### Does it catch anything?
 
 Six **coupling** defects — every part individually correct, the composition wrong — injected into a

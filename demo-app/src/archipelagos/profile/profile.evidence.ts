@@ -101,4 +101,19 @@ export const scenarios: RegionScenario[] = [
       },
     ],
   },
+  {
+    // COVERAGE for `calendar-days`: the slot renders the day picker over the calendar it is handed,
+    // and its own declared output moves what it shows. The note names the picked day in full, which
+    // only this island renders — a mutated `provide` empties the calendar and a mutated `emit`
+    // names no day in it, so neither step holds by storing what it was handed.
+    name: 'the day picker shows the calendar and the day picked',
+    seed: EMPTY_SEED,
+    steps: [
+      { provide: DENNIS_SEED, expectRender: { 'calendar-days': 'No day picked yet' } },
+      {
+        emit: { slot: 'calendar-days', event: 'day-selected', detail: '2026-09-08' },
+        expectRender: { 'calendar-days': 'Tuesday 8 Sep picked' },
+      },
+    ],
+  },
 ];

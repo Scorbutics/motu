@@ -123,6 +123,7 @@ function ProfileScreen({ memberId }: { memberId: string }) {
       */}
       <div className="app__profile">
         <div className="app__profile-col">
+          <Profile.Island slot="calendar-days" props={{ loading: state === 'loading' }} />
           <ProfileCalendarPlaceholder />
         </div>
       </div>

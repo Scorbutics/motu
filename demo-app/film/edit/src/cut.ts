@@ -24,7 +24,7 @@ export const CUT: Shot[] = [
   { from: 'lagoon', to: 'lagoon-end', seconds: 12, caption: 'Pick a day. Pick a slot.', sub: 'The summary confirms it — every step is a URL.' },
   { from: 'checks', to: 'failure', seconds: 5, caption: 'Checked.' },
   { from: 'failure', to: 'failure-end', seconds: 9, caption: 'Two islands writing one key?', sub: "It doesn't build.", zoom: { scale: 1.2, x: 30, y: 30 } },
-  { from: 'same', to: 'end', seconds: 8, caption: 'Same component. Different answers.', sub: 'Recorded fixtures on the left, live Postgres on the right.' },
+  { from: 'same', to: 'end', seconds: 8, caption: 'Same component. Different answers.', sub: 'Recorded fixtures on the left, live Postgres on the right.', zoom: { scale: 1.35, x: 50, y: 20 } },
 ];
 
 export const END_CARD_SECONDS = 4.5;

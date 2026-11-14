@@ -20,8 +20,11 @@ cd demo-app/film && pnpm install --ignore-workspace     # standalone, not a work
 OBS (33+), first launch:
 1. **Tools → WebSocket Server Settings**: enable, set a password, then `export OBS_PASSWORD=…`
 2. **Sources → + → Screen Capture (PipeWire)**: pick the screen (GNOME asks once).
-3. **Settings → Output → Recording**: format **mkv**, encoder **NVIDIA NVENC H.264**, quality *Indistinguishable*.
-   **Video**: base and output 1920×1080, 30 fps.
+3. **Settings → Output → Recording**: format **mkv**, quality *Indistinguishable* (Simple mode: "HQ").
+   Encoder **x264** is fine for a screen (NVENC needs the proprietary NVIDIA driver).
+   **Video**: base AND output (scaled) 1920×1080, 30 fps.
+4. Screen Capture source → **Properties**: untick *Show cursor* (the script does not move the mouse).
+   When GNOME asks which screen to share, pick the monitor and tick *Remember*.
 
 ## Each take
 
@@ -60,6 +63,12 @@ been still for 90 s (`FILM_IDLE_MS`). The recording and `markers.json` land in `
 Afterwards: `pnpm take:keep` (commits the build on the take branch, back to `film/hero`) or
 `pnpm take:reset` (throws it away — worktrees, files, database — to retry the same take).
 `tmux kill-session -t film` before the next `pnpm up`.
+
+## Rehearse first
+
+`FILM_DRY=1 pnpm up` runs and records every scene, but types the prompt without sending it and skips
+the build — no agent, nothing built, any branch. Its recording lands in `takes/dry-<time>/`. Run it
+after changing anything in record.mjs.
 
 ## Edit
 

@@ -1,6 +1,6 @@
 // Mount point for ViewerBadge: it wraps the application's OWN component rather than a copy, so the
 // island cannot drift from what the app already ships.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { ViewerBadge } from '@/components/lagoon/viewer-badge';
 
 export const element = islandElement({

@@ -9,7 +9,7 @@
 //
 // Navigation follows these routes: a region's `host.navigate('/events')` opens the Events screen; a
 // path no screen declares is refused out loud, and `motu check` refuses it before anything runs.
-import { screen, notARegion, worldFact, type ScreenConfig } from '@motu/react';
+import { screen, notARegion, worldFact, type ScreenConfig } from '@motujs/react';
 import { AppFrame } from '../ui/app-frame/AppFrame.js';
 import { shellArchipelago } from '../archipelagos/shell/shell.archipelago.js';
 import { membersArchipelago } from '../archipelagos/members/members.archipelago.js';

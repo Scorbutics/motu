@@ -3,7 +3,7 @@
 // A SCENARIO SEEDS THE ISLAND'S OWN PROPS, not the region's keys: a lone island is mounted through a
 // synthesised config whose binds are same-named, so these are `value` and `unacceptedCount` — the
 // names in the component — while the region speaks of `filter` and `unacceptedCount`.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { CORPUS_UNACCEPTED } from '../shared/corpus-evidence.js';
 
 export const fixtures = [];

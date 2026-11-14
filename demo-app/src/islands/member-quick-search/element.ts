@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { MemberQuickSearch, type MemberQuickSearchProps } from '../../ui/member-quick-search/MemberQuickSearch.js';
 
 export const memberQuickSearchElement: ElementSpec = {

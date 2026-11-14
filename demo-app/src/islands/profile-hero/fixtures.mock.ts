@@ -10,7 +10,7 @@
 // same, because fake evidence is worse than none.
 //
 // No fixtures: this island calls nothing. Everything it draws is a function of its two region keys.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { EVIDENCE_DAY } from '../../shared/club-evidence.js';
 import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
 

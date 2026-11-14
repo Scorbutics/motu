@@ -4,8 +4,8 @@
 // the "turn the whole archipelago" control; a per-island override lives in the debug overlay. Renders
 // as a compact chip in the shared floating toolbar.
 
-import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME } from '@motu/core';
-import type { MotuFit } from '@motu/core';
+import { motuToolbar, MOTU_TOOLBAR_CHIP_CSS, MOTU_CHROME } from '@motujs/core';
+import type { MotuFit } from '@motujs/core';
 
 const FIT_KEY = 'motu:fit';
 

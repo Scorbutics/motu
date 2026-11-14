@@ -9,8 +9,8 @@
 // a lagoon — the region under test IS the dock, not the thing it docks against. Left out rather than
 // stubbed with an empty box: an invented frame would be a third description of a screen nobody
 // diffs, and the two lists are what this region actually promises.
-import { overridesFor } from '@motu/react';
-import type { LagoonOverrides } from '@motu/react';
+import { overridesFor } from '@motujs/react';
+import type { LagoonOverrides } from '@motujs/react';
 import { lagoonViewArchipelago } from '../../../../src/archipelagos/lagoon-view/lagoon-view.archipelago.js';
 import { STATIONS, REVIEW_STATES } from '../../../../src/shared/lagoon-view-evidence.js';
 

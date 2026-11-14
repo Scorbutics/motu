@@ -6,7 +6,7 @@
 // believes they are signed in while every gated request quietly 404s. These two states are what a
 // person compares to know which they are in, and neither is reachable by looking at the live page —
 // you would have to actually sign out to see the other.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 
 export const fixtures = [];
 export const roles: string[] = [];

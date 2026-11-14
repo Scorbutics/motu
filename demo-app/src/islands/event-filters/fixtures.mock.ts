@@ -1,6 +1,6 @@
 // Lagoon scenarios for x-event-filters. A guest has no "my chapter" tab; a member's tab is named after
 // their own chapter — two different members, two different tabs. No fixtures: it calls nothing.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { UPCOMING, DENNIS, GUIDO } from '../../shared/events-evidence.js';
 
 export const fixtures: Fixture[] = [];

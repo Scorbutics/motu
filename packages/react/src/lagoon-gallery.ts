@@ -9,17 +9,17 @@
 // A project therefore declares its lagoon in `lagoon.config.json`, and — when a declaration cannot
 // express it — overrides behaviour in `lagoon.ts`. The remaining shim (`main.tsx`) is glue that must
 // live in the app because Vite requires it there: the build-time defines, `import.meta.glob`, the
-// project's own registry, and the debug overlay (which @motu/react must not depend on, so the app
+// project's own registry, and the debug overlay (which @motujs/react must not depend on, so the app
 // hands it in).
-import { configure, HttpTransport, type Transport } from '@motu/runtime';
-import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago, pinRegionKeys } from '@motu/core';
-import { installMotuChrome } from '@motu/chrome/css';
-import { PAGE_SHELL_CSS } from '@motu/chrome/html';
-import { detectPrimarySettled, primaryVars } from '@motu/chrome/primary';
-import type { DeclaredChannel } from '@motu/core';
+import { configure, HttpTransport, type Transport } from '@motujs/runtime';
+import { MockTransport, type Fixture } from '@motujs/runtime/mock';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago, pinRegionKeys } from '@motujs/core';
+import { installMotuChrome } from '@motujs/chrome/css';
+import { PAGE_SHELL_CSS } from '@motujs/chrome/html';
+import { detectPrimarySettled, primaryVars } from '@motujs/chrome/primary';
+import type { DeclaredChannel } from '@motujs/core';
 import type { ReactNode } from 'react';
-import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motu/core';
+import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motujs/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { lagoonHarness } from './lagoon-harness';
 import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef, chartRegion, exposeChart, regionChart } from './lagoon-player';
@@ -104,7 +104,7 @@ export interface LagoonOverrides extends RegionOverrideMaps {
   transportFor?: (mode: TransportMode) => Transport | undefined;
 }
 
-/** The dev-only seam lens, handed in by the app so @motu/react keeps no dependency on it. */
+/** The dev-only seam lens, handed in by the app so @motujs/react keeps no dependency on it. */
 export interface LagoonLens extends TideLens {
   mount: (opts: { chip: boolean; tab?: boolean }) => void;
 }
@@ -303,7 +303,7 @@ markSandbox();
   //
   // `applyMotuChrome` sets --motu-* custom properties on documentElement; it injects no rules. So
   // anything the lagoon draws itself — the tide line, the lens — looked right, while an island built
-  // from `@motu/chrome/react` rendered as unstyled text: `Panel`, `PanelHead` and `Row` emit
+  // from `@motujs/chrome/react` rendered as unstyled text: `Panel`, `PanelHead` and `Row` emit
   // `.motu-sheet-panel`, `.motu-cap`, `.motu-row`, whose rules live in `motuChromeCss()` and were
   // nowhere in a built lagoon. Verified on a published one: zero `.motu-sheet-panel` rules in any
   // stylesheet.
@@ -1315,7 +1315,7 @@ markSandbox();
        * The transport and fit chips, for a panel drawn outside this page.
        *
        * READ, NOT REGISTERED — the same trick the command palette already uses on them. They are
-       * mounted by whichever package owns them (`@motu/core`'s toolbar, and anything that appends to
+       * mounted by whichever package owns them (`@motujs/core`'s toolbar, and anything that appends to
        * it later), into an element with a known id, so a control added by a future package appears
        * out here with nothing to keep in sync.
        */
@@ -1334,7 +1334,7 @@ markSandbox();
        *
        * Not part of the lens, and it must not be: everything else on this surface is something the
        * dock reads when a person opens a tab, and this is what the dock shows when nobody has opened
-       * anything. It comes straight out of @motu/core's feed — both doors that have an address record
+       * anything. It comes straight out of @motujs/core's feed — both doors that have an address record
        * into it — so a host mounting chrome outside the artifact can say a call landed without
        * polling a document it does not own.
        */
@@ -1572,7 +1572,7 @@ markSandbox();
    * The dock was bundled into every artifact, which meant changing it republished every lagoon that
    * existed, and it had to overlay the application because it lived in the same document. It is drawn
    * by whoever HOSTS the lagoon now — the host app around a framed artifact, or `motu lagoon serve`
-   * for the dev loop and the checks — from `@motu/chrome/dock`, reading the catalogue this page
+   * for the dev loop and the checks — from `@motujs/chrome/dock`, reading the catalogue this page
    * publishes and driving the control surface below.
    *
    * What stays here is what only this page can know: the catalogue, the handlers, and which state is

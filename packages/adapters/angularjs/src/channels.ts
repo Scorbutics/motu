@@ -1,7 +1,7 @@
 // AngularJS-native channels. They depend only on AngularJS primitives ($http, scopes) — not on any
 // form-widget library or UI toolkit — so any AngularJS host can use them.
 
-import type { Store, Channel } from '@motu/core';
+import type { Store, Channel } from '@motujs/core';
 import { motuAngularInjector } from './host';
 
 type Matcher = RegExp | ((url: string, method: string) => boolean);

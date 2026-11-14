@@ -7,7 +7,7 @@
 //
 // The coupling worth proving: the station list and the states list share nothing except the region,
 // and picking a station is what makes the states list describe somewhere else.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { STATIONS, REVIEW_STATES, CORPUS_STATES, NO_STATES } from '../../shared/lagoon-view-evidence.js';
 
 // EVERY SEED STATES THE PRODUCED KEYS. The lagoon carries a region's state across scenarios, so a

@@ -17,7 +17,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { mergeCorpora } from '@motu/coverage'
+import { mergeCorpora } from '@motujs/coverage'
 import { db } from '../src/db.ts'
 import { ingest, readCorpus, accept, known, forget } from '../src/coverage/store.ts'
 import type { CoverageCorpus } from '../src/coverage/store.ts'
@@ -49,7 +49,7 @@ const corpus = (entries: CoverageCorpus['entries']): CoverageCorpus => ({
  * incoming bounds). Between them, all four wrong choices — keep existing, take incoming, on either
  * column — change a value this test compares.
  */
-// `= <value>` is one of @motu/coverage's own KeyState forms, so these are fingerprints the real
+// `= <value>` is one of @motujs/coverage's own KeyState forms, so these are fingerprints the real
 // fingerprinter could have produced rather than shapes only this test believes in.
 const INSIDE = { busy: 'true', week: '= 1' } as const
 const OUTSIDE = { busy: 'false', week: '= 1' } as const
@@ -191,7 +191,7 @@ test('accepting is a person’s decision, and an ingest cannot make it', async (
   assert.equal(id, 0, 'nothing accepted yet')
 
   const target = read.entries[0]!
-  const { fingerprintId } = (await import('@motu/coverage')) as { fingerprintId: (f: unknown) => string }
+  const { fingerprintId } = (await import('@motujs/coverage')) as { fingerprintId: (f: unknown) => string }
   const targetId = fingerprintId(target.fingerprint)
   assert.deepEqual(await accept(projectId!, REGION, KEYS_HASH, [targetId]), { accepted: 1 })
   assert.deepEqual(await known(projectId!, REGION, KEYS_HASH), [targetId])

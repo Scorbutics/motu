@@ -9,7 +9,7 @@
 // the other's stand-in: the schema below is what THIS app's search offers, and if the two drift the
 // lagoon is previewing a search the app does not have.
 import angular from 'angular';
-import { provideAngularHost } from '@motu/adapter-angularjs';
+import { provideAngularHost } from '@motujs/adapter-angularjs';
 import { MEMBER_SEARCH_CONFIG } from 'demo-app/search-config';
 
 // ONE SCHEMA, not two. This started as its own copy of the five fields and that is precisely the

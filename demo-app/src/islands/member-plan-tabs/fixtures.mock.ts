@@ -5,7 +5,7 @@
 // which is what the page shows before the club's numbers arrive.
 //
 // No fixtures: this island calls nothing.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { CLUB, FIRST_YEAR, NEXT_WEEK } from '../../shared/club-evidence.js';
 
 void FIRST_YEAR;

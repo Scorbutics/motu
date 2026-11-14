@@ -127,7 +127,7 @@ Derived values, not settable: `root`, `appRoot`, `cacheDir` (`resolve(root, '.mo
 
 ## There is no `motuRoot` key — the framework finds itself
 
-`@motu/*` are unpublished packages whose entry point is raw TypeScript, so a project resolves them BY
+`@motujs/*` are unpublished packages whose entry point is raw TypeScript, so a project resolves them BY
 PATH rather than through `node_modules` — that is what lets a project adopt motu with no install step.
 
 **Where the checkout is, is derived, not asked for.** `packages/cli/src/lib` → up four → the checkout
@@ -171,7 +171,7 @@ Delete the line. Set `$MOTU_ROOT` in the environment only if the derivation is g
 
 > It is the right question for a host that ADOPTED motu: the promise is that islands leave no runtime
 > trace. It is not a question motu's own tools can answer. The baseline review console composes regions
-> with `createRegion` and paints from `@motu/chrome/react`; motu is meant to be load-bearing there, and
+> with `createRegion` and paints from `@motujs/chrome/react`; motu is meant to be load-bearing there, and
 > it will never compile without it.
 >
 > Reported as a SKIP rather than a pass, because a project opting out has not proved anything — and
@@ -341,13 +341,13 @@ encoded in the loader:
 **1. `enabled` defaults to FALSE.** `cfg.coverage?.enabled === true` — anything else is off
 (`config.mjs:243`). "A thing that runs in production is a thing somebody switched on." With coverage off,
 `motu sync` writes an *empty* `coverage.generated.ts`, so nothing in the project names
-`@motu/coverage` and no bundler ships it, while the registry's import line stays constant
+`@motujs/coverage` and no bundler ships it, while the registry's import line stays constant
 (`archipelagos.mjs:18-22, 36-42`).
 
 **2. NO ADDRESSES HERE.** The comment at `config.mjs:244-247`:
 
 > They would be baked into the generated island registry, which the lagoon imports and publishes as a
-> public page. The application renders them as meta tags; see `metaContent` in `@motu/coverage`.
+> public page. The application renders them as meta tags; see `metaContent` in `@motujs/coverage`.
 > `corpusUrl` is different — it is read by the CLI on a developer's machine and never reaches a browser.
 
 ```json

@@ -1,4 +1,4 @@
-import { Meter } from "@motu/chrome/react"
+import { Meter } from "@motujs/chrome/react"
 import type { Shot } from "@/src/review/host"
 
 /**

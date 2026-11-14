@@ -12,7 +12,7 @@
 // region flow can drive.
 //
 // It owns no framework and no motu: plain functions and a subscription.
-import type { Source } from "@motu/types"
+import type { Source } from "@motujs/types"
 import type { ReviewRegion } from "@/app/console/review-region"
 import type { Shot } from "./host"
 

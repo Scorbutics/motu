@@ -12,6 +12,7 @@ import { archipelagoConfigChecks } from './region-config.mjs';
 import { catalogueCheck, regionFlowCheck, renderCoverageCheck, wiringProbe, writesCoveredCheck } from './region-flows.mjs';
 import { channelSourceCheck, exclusiveCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
 import { environmentalCause, makeReport, printReport, printSweep, setProgressScope, setVerbose, step, summaryOf, sweepExitCode, verifyExitCode } from './report.mjs';
+import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
 
 export async function archipelagoVerifyCommand(argv) {
   const id = argv._[0];
@@ -235,7 +236,7 @@ export async function runArchipelagoVerify(argv, id) {
         const msg = String(err?.message || err).split('\n')[0];
         const env = environmentalCause(err);
         if (/Executable doesn't exist|playwright install/i.test(msg)) {
-          report.inconclusive('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli)`);
+          report.inconclusive('lagoon-render', `Chromium not installed — run ${CHROMIUM_INSTALL}`);
         } else if (env) {
           report.inconclusive('lagoon-render', `could not boot the lagoon: ${env} — the environment, not the region`);
         } else {

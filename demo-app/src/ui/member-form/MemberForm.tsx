@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 import { MEMBER_TIERS, type MemberDraft, type MemberTier } from '../../shared/member-draft.js';
 import { CHAPTER_COLORS } from '../club/club-bits.js';
 

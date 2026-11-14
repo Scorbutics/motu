@@ -1,6 +1,6 @@
 // Mount point for DockStates — the panel's list and the phone bar's strip, which are one island in
 // two slots rather than two islands claiming `flow`.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { DockStates } from '@/components/lagoon/dock-states';
 
 export const element = islandElement({

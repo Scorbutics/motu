@@ -23,7 +23,7 @@ import { postgresShareLinkStore } from '@/src/auth/share-link-store';
 import { createClient } from '@/src/supabase/server';
 import { normalizeRepo, normalizeSegment, access } from '@/src/host/store';
 import { hostAdminCredential, proxyToHost } from '@/src/upstream';
-import { canRead } from '@motu/host/src/access.mjs';
+import { canRead } from '@motujs/host/src/access.mjs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';

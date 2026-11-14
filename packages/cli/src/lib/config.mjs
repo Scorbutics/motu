@@ -8,8 +8,8 @@
 // in a package.json); that file's directory is the PROJECT ROOT. All paths default to the reference
 // layout, so a project matching it needs no config at all.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename } from 'node:path';
+import { CHECKOUT_ROOT, CLI_PACKAGE_ROOT, FRAMEWORK_MODE } from './framework.mjs';
 
 // THE LAYOUT KEYS. Every one is relative to the APP root (root/<app>) except `manifest`, which is
 // relative to the PROJECT root — see its comment; that asymmetry is load-bearing and is the single
@@ -50,7 +50,7 @@ const DEFAULTS = {
   // it (`lagoon-vite.mjs:213`), and `archipelago init` edits it to add re-exports
   // (`archipelago.mjs:97`). Wrong, and every `--runtime` check fails to import the registry at all.
   barrel: 'src/index.ts',
-  // Output directory of `motu codegen` — where the generated `@motu/contract` package is written, and
+  // Output directory of `motu codegen` — where the generated `@motujs/contract` package is written, and
   // whose `index.ts` is the contract entry the lagoon aliases (`util.mjs:78`). Read only by
   // `codegen.mjs:10`, as the default when no out-dir argument is given.
   contract: 'contract/src',
@@ -125,12 +125,14 @@ const DEFAULTS = {
  * config key had that the environment variable does not is that it gets COMMITTED, which is precisely
  * the bug. A key whose only distinguishing feature is the failure mode is not an escape hatch.
  *
- * Verified rather than assumed: if the derived directory holds no motu checkout, FRAMEWORK_ROOT is
- * null and we fall back to the project root instead of resolving every @motu/* to nothing.
+ * Verified rather than assumed: the derived directory has to hold a checkout. When it does not, the
+ * CLI was INSTALLED, and this used to fall back to the project root — which was wrong in a way that
+ * only showed once the CLI came from npm: every `packages/...` path then pointed INTO the adopter's
+ * app. So the installed case is its own mode, decided in lib/framework.mjs, and `motuRoot` there names
+ * the directory the installed `@motujs/*` live in — the one thing "motu's own tree" can mean once motu
+ * is a dependency (removal-check skips it; the lagoon's fs allow-list serves it).
  */
-const CLI_DIR = dirname(fileURLToPath(import.meta.url));
-const OWN_CHECKOUT = resolve(CLI_DIR, '../../../..');
-const FRAMEWORK_ROOT = existsSync(resolve(OWN_CHECKOUT, 'packages/core/src/index.ts')) ? OWN_CHECKOUT : null;
+const FRAMEWORK_ROOT = CHECKOUT_ROOT ?? dirname(CLI_PACKAGE_ROOT);
 
 /** Hosts that have a legacy skin an island must be proven to survive. */
 const LEGACY_FIT_HOSTS = new Set(['angularjs']);
@@ -315,7 +317,7 @@ export function loadMotuConfig() {
       enabled: cfg.coverage?.enabled === true,
       // NO ADDRESSES HERE. They would be baked into the generated island registry, which the lagoon
       // imports and publishes as a public page. The application renders them as meta tags; see
-      // `metaContent` in @motu/coverage. `corpusUrl` is different — it is read by the CLI on a
+      // `metaContent` in @motujs/coverage. `corpusUrl` is different — it is read by the CLI on a
       // developer's machine and never reaches a browser.
       corpusUrl: typeof cfg.coverage?.corpusUrl === 'string' ? cfg.coverage.corpusUrl : null,
       regions: Array.isArray(cfg.coverage?.regions) ? cfg.coverage.regions : null,
@@ -327,7 +329,7 @@ export function loadMotuConfig() {
      * `removal-check` asks one question — delete motu, does the application still compile? — and it
      * is the right question for a host that ADOPTED motu: the promise is that islands leave no
      * runtime trace. It is not a question motu's own tools can answer. The baseline review console
-     * composes regions with `createRegion` and paints from `@motu/chrome/react`; motu is meant to be
+     * composes regions with `createRegion` and paints from `@motujs/chrome/react`; motu is meant to be
      * load-bearing there, and it will never compile without it.
      *
      * Reported as a SKIP rather than a pass, because a project opting out has not proved anything —
@@ -369,15 +371,20 @@ export function loadMotuConfig() {
     legacyFit: cfg.legacyFit ?? LEGACY_FIT_HOSTS.has(cfg.host ?? 'angularjs'),
     hostRoot: resolve(root, cfg.hostRoot ?? cfg.app ?? '.'),
     /**
-     * Where the motu framework checkout lives. @motu/* are unpublished packages whose entry point is
-     * raw TypeScript, so a project resolves them BY PATH rather than through node_modules — which is
-     * what lets a project adopt motu with no install step. DERIVED from the running CLI (see
-     * FRAMEWORK_ROOT); `$MOTU_ROOT` overrides it for a differently-placed checkout or a CI image.
+     * Where the motu framework checkout lives. In checkout mode a project resolves @motujs/* BY PATH
+     * into it rather than through node_modules — which is what lets a project adopt motu with no
+     * install step. DERIVED from the running CLI (see FRAMEWORK_ROOT); `$MOTU_ROOT` overrides it for a
+     * differently-placed checkout or a CI image. Installed, it is the installed packages' directory.
      *
      * There is no config key. See the FRAMEWORK_ROOT comment for why the environment is the only
      * override: this value must not be committed.
      */
-    motuRoot: process.env.MOTU_ROOT ? resolve(process.env.MOTU_ROOT) : (FRAMEWORK_ROOT ?? root),
+    motuRoot: FRAMEWORK_ROOT,
+    /**
+     * 'checkout' or 'installed' — whether `@motujs/*` are reached by path into a checkout (aliases,
+     * no-install links) or resolved normally from the app's node_modules. See lib/framework.mjs.
+     */
+    frameworkMode: FRAMEWORK_MODE,
     /** Generated, never-committed build inputs (see `.gitignore`: `.motu/`). */
     cacheDir: resolve(root, '.motu/cache'),
     /**
@@ -427,7 +434,7 @@ export function loadMotuConfig() {
   //
   // Dropping `motuRoot` quietly would be the exact failure this file's own allowlist comment is about:
   // a project keeps a line that used to mean something, nothing reads it, and the CLI resolves
-  // somewhere else without saying so. `motuRoot` in particular used to point @motu/* at a checkout, so
+  // somewhere else without saying so. `motuRoot` in particular used to point @motujs/* at a checkout, so
   // a project whose line was doing real work needs to hear that the environment now carries it.
   if (cfg.motuRoot !== undefined && !process.env.MOTU_MUTE_DEPRECATED) {
     const where = cached.configPath ?? 'motu.config.json';

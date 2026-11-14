@@ -10,8 +10,8 @@
 // because a kit that grew a ref and a resize observer for every consumer would be a framework, and
 // both of motu's React surfaces already have one.
 import { useCallback, useState, type ReactNode, type SyntheticEvent } from "react"
-import { Railed, Rail, List } from "@motu/chrome/react"
-import { motuSplashFrom } from "@motu/chrome/splash"
+import { Railed, Rail, List } from "@motujs/chrome/react"
+import { motuSplashFrom } from "@motujs/chrome/splash"
 
 /** Where the rail is, or null for "nowhere" — which is how it parks rather than sitting on row one. */
 type At = { top: number; height: number } | null

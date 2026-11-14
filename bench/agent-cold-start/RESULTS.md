@@ -56,10 +56,10 @@ Both arms shipped. Neither shipped smoothly.
 
 Ordered by how likely a stranger is to hit them.
 
-1. **`motu init` silently skips the `@motu/*` dependency block on a pnpm workspace.** `inWorkspace`
+1. **`motu init` silently skips the `@motujs/*` dependency block on a pnpm workspace.** `inWorkspace`
    looks for an npm/yarn `"workspaces"` field in a `package.json`; formbricks declares
-   `pnpm-workspace.yaml`, so init decided it was not a workspace, wrote no `@motu/*` deps — including
-   `@motu/adapter-next`, the one package a Next host needs for `nextHostBridge` — and **printed
+   `pnpm-workspace.yaml`, so init decided it was not a workspace, wrote no `@motujs/*` deps — including
+   `@motujs/adapter-next`, the one package a Next host needs for `nextHostBridge` — and **printed
    success with no warning**. pnpm monorepos are a large share of the Show HN audience.
    (`packages/cli/src/commands/init.mjs`)
 
@@ -150,7 +150,7 @@ not survive reproduction — recorded here because an agent's diagnosis being wr
 
 | # | Fix | Where | Proof |
 |---|---|---|---|
-| 1 | Host adapters are linked like every other package (`packages/adapters/next` → `@motu/adapter-next`), and `init` now says when it kept an existing `package.json` and therefore wrote no `@motu/*` block | `lib/util.mjs`, `commands/init.mjs` | `ls node_modules/@motu/` in formbricks now lists `adapter-next`; it imports and exports `nextHostBridge`. Notice reproduced in a scratch pnpm workspace |
+| 1 | Host adapters are linked like every other package (`packages/adapters/next` → `@motujs/adapter-next`), and `init` now says when it kept an existing `package.json` and therefore wrote no `@motujs/*` block | `lib/util.mjs`, `commands/init.mjs` | `ls node_modules/@motujs/` in formbricks now lists `adapter-next`; it imports and exports `nextHostBridge`. Notice reproduced in a scratch pnpm workspace |
 | 2 | `region-root` reads the `regions: { id: { seed, layout } }` shape, and an inline arrow `layout` warns (naming the one-line fix) instead of erroring as a missing `root` | `commands/verify.mjs` | novu's region switched to the record shape: `PASS`, `region-root` green. Inline-arrow variant: `PASS` with the new warning |
 | 3 | `rsc-boundary` walks the island's whole reachable application graph and names the offending module | `commands/verify.mjs`, `adapters/next/verify.mjs` | the original chain restored in formbricks: 3 named errors incl. `modules/ee/sso/actions.ts` — the exact file arm A traced by hand — in ~1s instead of an opaque rollup error |
 | 4 | `ENOSPC`/`EMFILE`/`ENFILE`/`ENOMEM` classified environmental (exit 2), and the environmental line no longer disqualifies itself by starting with `Error:`; `--help` on any subcommand exits 0 | `commands/verify.mjs`, `run.mjs` | `motu island create --help` → exit 0; missing argument still exits non-zero |
@@ -415,7 +415,7 @@ fresh agent confirmed the rendered region is genuinely Shlink's own UI. 28 invoc
 **Did npm / single-package cause anything?** Directly, almost nothing — the agent's own verdict on the
 worst bug was *"a plain field-name typo, unrelated to npm vs pnpm"*. Indirectly, one thing that
 matters for adoption: `motu init` touched **zero lines of package.json**, so on a non-workspace project
-motu's only record of itself is raw symlinks in `node_modules/@motu/*`. A fresh `npm install` deletes
+motu's only record of itself is raw symlinks in `node_modules/@motujs/*`. A fresh `npm install` deletes
 them and leaves nothing saying what was needed. A pnpm workspace at least gets a durable `workspace:*`
 entry. The CLI re-creates the links on every invocation, so this is a *legibility* gap rather than a
 breakage — but it is the one real consequence of the axis this arm existed to test.
@@ -471,7 +471,7 @@ before the fix the binding was never deleted, so this could not arise.
 |---|---|---|
 | 1 | **`--from <module>:<Export>` is accepted**, and the failure now prints correct calls | TWO independent agents, on two applications, invented exactly this syntax and burned 3 invocations each before a doc dive. When two strangers guess the same form, refusing it is the defect |
 | 1b | the error detects a file extension and says "drop it — this is a module specifier, not a path" | the exact specifier arm C typed (`./src/servers/ServerSearch.tsx`) |
-| 7 | `init` on a NON-workspace project now says what resolves `@motu/*` | arm C: `motu init` changed zero lines of package.json, so the only record of motu was symlinks a fresh `npm install` deletes |
+| 7 | `init` on a NON-workspace project now says what resolves `@motujs/*` | arm C: `motu init` changed zero lines of package.json, so the only record of motu was symlinks a fresh `npm install` deletes |
 | 4 | `island-locate` no longer assumes an adopted project | arm B and arm C both ran it BEFORE `motu init`, where its "read `motu.config.json`" step 0 cannot run; both improvised silently |
 
 `--from` was verified end-to-end: the colon form now generates
@@ -550,7 +550,7 @@ the right symptom and the wrong cause — the third agent diagnosis in this benc
 that were exactly right.
 
 **The other half was real, and it is the same mistake for the third time.** `removal-check`'s
-CANDIDATE filter selected files by how their imports are SPELLED (`@motu/…`), so the page importing
+CANDIDATE filter selected files by how their imports are SPELLED (`@motujs/…`), so the page importing
 its own composition root by a relative path — `./manage-servers-binding`, the normal spelling in a
 page — was never loaded into the rewrite project. Its tags were never unwrapped, its import of the
 deleted binding was left dangling, and removal "failed" pointing at the one file the surgery had

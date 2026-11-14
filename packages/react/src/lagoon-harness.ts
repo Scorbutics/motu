@@ -26,8 +26,8 @@ import {
   pinRegionKeys,
   runWithWriteSource,
   seedArchipelago,
-} from '@motu/core';
-import type { ArchipelagoConfig, HostBridge } from '@motu/core';
+} from '@motujs/core';
+import type { ArchipelagoConfig, HostBridge } from '@motujs/core';
 
 /** Everything the harness can do to a region without knowing which mount built it. */
 export type LagoonHarness = Omit<NonNullable<Window['__motuLagoon']>, 'remount'>;

@@ -4,7 +4,7 @@
 // error rather than an entry nothing recognises. Compared as a canonical STRING, because that is what
 // the runtime records: the fake fetch tags every request at the moment it is made and has no view of
 // anyone's declaration. Normalising the declaration to the observation, rather than the other way
-// round, is what keeps `@motu/runtime` free of this vocabulary entirely.
+// round, is what keeps `@motujs/runtime` free of this vocabulary entirely.
 //
 // The canonical forms, which are exactly `reachEntry()` in `postgrest-fetch.ts`:
 //

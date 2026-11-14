@@ -1,5 +1,5 @@
 {
-  "name": "@motu/codegen",
+  "name": "@motujs/codegen",
   "version": "0.1.0",
   "description": "Generates motu contract types from a backend manifest.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "codegen", "typescript"],

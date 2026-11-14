@@ -22,7 +22,7 @@ import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { fingerprintId } from '@motu/coverage';
+import { fingerprintId } from '@motujs/coverage';
 
 const here = dirname(fileURLToPath(import.meta.url));
 

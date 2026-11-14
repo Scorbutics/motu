@@ -12,7 +12,7 @@
 // `provide` is the application moving its own state — the page resolving a member id from the URL —
 // and the assertion has to be on what RENDERED, because a step whose `expect` names the key its own
 // `provide` targets asserts that the lagoon stored what it was handed, which cannot fail.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
 import { A_FREE_SLOT, FIRST_OPEN_DAY } from '../../shared/profile-evidence.js';
 import { EVIDENCE_DAY } from '../../shared/club-evidence.js';

@@ -1437,7 +1437,7 @@ html[data-motu-dock-pin="1"] body { transform: translateZ(0); }
 /* The display rule above beats the bare hidden attribute, so say it explicitly — otherwise a region
    with nothing to decide shows an empty pill, which reads as a badge whose number failed to load.
    (No backticks in this string: it is a JS template literal, and one would end it. There is a test
-   named for that hazard in @motu/host, which is how well known it is.) */
+   named for that hazard in @motujs/host, which is how well known it is.) */
 #tide .tab-badge[hidden] { display: none; }
 
 @media (max-width: 760px) {

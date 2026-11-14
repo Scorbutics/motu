@@ -12,7 +12,7 @@
 //
 // The overlay is applied in `regionOverrides`, the one reader both entries share, so the gallery a
 // person opens and the focused entry every check drives see the same world.
-import { channelSourceId, channelWithArgs } from '@motu/core';
+import { channelSourceId, channelWithArgs } from '@motujs/core';
 
 /** What a world may re-answer for one region. Everything else about the region stays as declared. */
 export interface WorldRegion {

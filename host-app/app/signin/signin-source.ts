@@ -8,7 +8,7 @@
 //
 // It owns no framework and no motu: plain functions and a subscription, so it runs in a React effect,
 // in a motu channel, and in a node test.
-import type { Source } from "@motu/types"
+import type { Source } from "@motujs/types"
 import type { SigninRegion } from "./signin-region"
 
 /**

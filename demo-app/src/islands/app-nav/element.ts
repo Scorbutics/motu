@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { AppNav, type AppNavProps } from '../../ui/app-nav/AppNav.js';
 
 export const appNavElement: ElementSpec = {

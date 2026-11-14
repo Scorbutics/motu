@@ -25,10 +25,10 @@
 // is symmetric and the rotation table still serves all of them.
 //
 // Implementation notes:
-//   * The bay hosts the shared @motu/core toolbar (setMotuToolbarHost) rather than duplicating the
+//   * The bay hosts the shared @motujs/core toolbar (setMotuToolbarHost) rather than duplicating the
 //     transport/fit controls — so those packages stay unchanged and keep owning their state.
 //   * The debug lens is the exception, and it now draws its OWN trigger: a tab on the edge of its
-//     panel, in @motu/debug-overlay. It was a buoy moored here, which put the trigger for a page-wide
+//     panel, in @motujs/debug-overlay. It was a buoy moored here, which put the trigger for a page-wide
 //     lens a layer away from the thing it opens (and 17px of it, on moving water). The lens is still
 //     INJECTED (`opts.lens`) so this module never imports the dev-only package — what the injection
 //     buys now is the palette entry.
@@ -39,10 +39,10 @@
 //     panel grows) is driven by one `data-corner` attribute in CSS, so moving the bay is one
 //     assignment and there is no second source of truth to drift.
 
-import { setMotuToolbarHost, flood, applyFlood, clearFlood, floodFrames, type FloodFrom } from '@motu/core';
-import { motuKitCss } from '@motu/chrome/kit';
-import { motuDockCss } from '@motu/chrome/dock';
-import { MOTU_MARK_SVG } from '@motu/chrome/mark';
+import { setMotuToolbarHost, flood, applyFlood, clearFlood, floodFrames, type FloodFrom } from '@motujs/core';
+import { motuKitCss } from '@motujs/chrome/kit';
+import { motuDockCss } from '@motujs/chrome/dock';
+import { MOTU_MARK_SVG } from '@motujs/chrome/mark';
 
 /**
  * `page` is EXPERIMENTAL and only reachable by URL (`&view=page`) — it is not offered as a toggle.
@@ -70,7 +70,7 @@ export interface TideStation {
 }
 
 /**
- * The debug seam lens, handed in rather than imported. @motu/debug-overlay is a dev-only package that
+ * The debug seam lens, handed in rather than imported. @motujs/debug-overlay is a dev-only package that
  * a production root must be able to shake out entirely, so the chrome takes the three calls it needs
  * and stays ignorant of what is behind them. The lens draws its OWN trigger (a tab on its panel); what
  * this buys the bay is the palette entry — the keyboard way in. Omit it and that entry is absent.
@@ -83,7 +83,7 @@ export interface TideLens {
    * Render the lens' FINDINGS into a container the dock owns, and return the teardown.
    *
    * The direction is inverted on purpose, and it is the same inversion `setMotuToolbarHost` already
-   * uses for the toolbar chips: the dock hands over a box, the lens fills it. @motu/debug-overlay
+   * uses for the toolbar chips: the dock hands over a box, the lens fills it. @motujs/debug-overlay
    * is dev-only and a production root has to shake it out entirely, so the dock cannot import it to
    * ask what a finding looks like — and does not need to.
    *
@@ -223,7 +223,7 @@ const PATCH_SHORT = 34;
 
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// The dock's own stylesheet now lives in `@motu/chrome/dock`, because the host draws the same dock
+// The dock's own stylesheet now lives in `@motujs/chrome/dock`, because the host draws the same dock
 // from outside the artifact and two copies of it would drift. What stays here is the palette, which
 // is still the artifact's own.
 const CSS = `${motuDockCss()}
@@ -1055,7 +1055,7 @@ export function mountTideLine(opts: TideLineOptions): TideLine {
   // ── open / close ───────────────────────────────────────────────────────────────────────────
   /**
    * The panel arrives as WATER COMING IN FROM THE BAY — the same reveal the seam lens uses for its own
-   * panel, out of @motu/core so there is one wave in the chrome rather than two that drift.
+   * panel, out of @motujs/core so there is one wave in the chrome rather than two that drift.
    *
    * The direction is the dock's: a bay lying along the bottom edge fills its panel from below, like a
    * tide coming in; one standing against the left edge fills it from the left. That is the whole point

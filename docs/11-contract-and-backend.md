@@ -4,7 +4,7 @@ An island never fetches. It calls a contract, and a **transport** — chosen onc
 root, by code the island cannot see — decides how that call leaves the process. This page is the
 whole seam: the four transports that exist, where the choice is made and what it costs in security,
 the source/port/adapter distinction that decides how much a green lagoon actually claims, the
-generated artifacts (`@motu/contract`, `contracts.generated.ts`) and which command produces which,
+generated artifacts (`@motujs/contract`, `contracts.generated.ts`) and which command produces which,
 where a fake goes when you mock at the wire rather than swapping a module, how fixtures are recorded
 and replayed, and what the `java/` subtree is for.
 
@@ -41,7 +41,7 @@ ids:
 | check id | what it rejects | source |
 |---|---|---|
 | `no-bare-fetch` | `fetch(...)` and `XMLHttpRequest` in the island's component FILE | `packages/cli/src/commands/verify/report.mjs:104` |
-| `contract-only-io` | importing `axios`/`ky`/`superagent`/`node-fetch`/`got`, or importing `configure` / `HttpTransport` / `MockTransport` from `@motu/runtime` | `packages/cli/src/commands/verify/island-static.mjs:48-64` |
+| `contract-only-io` | importing `axios`/`ky`/`superagent`/`node-fetch`/`got`, or importing `configure` / `HttpTransport` / `MockTransport` from `@motujs/runtime` | `packages/cli/src/commands/verify/island-static.mjs:48-64` |
 | `contract-only-io` (second half) | calling a `service.method` that does not exist in the generated contract | `packages/cli/src/commands/verify/island-static.mjs:80-98`, resolved against `paths.contract` by `contractPairs()` at `verify/island-static.mjs:375-381` |
 
 Note what `contract-only-io` bans: an island may not import `configure` or a transport class *at
@@ -74,7 +74,7 @@ folded as far as the addressing permits, since `createPostgrestFetch` IS a `Mock
 What did fold is the OBSERVATION. Three doors were three ledgers with two readouts between them —
 `hostCalls` (traced stub exports), `__motuDataReach` (the wire), and `CallEvent` (the contract, which
 no check ever printed). They answer one question, so each now also records to one ledger in
-`@motu/core` tagged with the door it left by (`recordOutbound`, `outboundCalls`), and `provenance`
+`@motujs/core` tagged with the door it left by (`recordOutbound`, `outboundCalls`), and `provenance`
 prints all three:
 
     ✓ provenance  islands fetched: contract: shots.list() ×2 · wire: table:shots(select)  · 3 outbound call(s)
@@ -89,7 +89,7 @@ are `DEBUG`-gated and dead-code-eliminated in production
 - **observation** — `observeCalls()` emits a `CallEvent` at start and again at completion, carrying
   the island the call was attributed to (`packages/runtime/src/index.ts:31-56`, `106-132`).
   Attribution is captured *synchronously at call entry* from the ambient island window in
-  `@motu/core`, so a call that fails later still belongs to the right island
+  `@motujs/core`, so a call that fails later still belongs to the right island
   (`packages/runtime/src/index.ts:26-28`, `47-50`).
 - **recording** — `startRecording()` / `stopRecording()` keep the **response body**, which `CallEvent`
   deliberately does not (`packages/runtime/src/index.ts:71-97`). In debug builds the pair is exposed
@@ -114,7 +114,7 @@ There are **four** implementations of `Transport` in the repo, and no others
 | `MockTransport(fixtures, roles)` | `packages/runtime/src/mock.ts:157` | the lagoon, `island verify` | Replays fixtures, request-keyed. No backend, no session, no login. |
 | `FailingTransport(status)` | `packages/runtime/src/mock.ts:198` | `island verify`, the lagoon's forced-error state | Fails **every** call with one fixed status. |
 
-`MockTransport` and `FailingTransport` live behind the `@motu/runtime/mock` subpath export
+`MockTransport` and `FailingTransport` live behind the `@motujs/runtime/mock` subpath export
 (`packages/runtime/package.json:12-15`) so a production bundle never has to reach them.
 
 ### `HttpTransport`
@@ -281,13 +281,13 @@ That is the whole point of the seam, and also its exact limit. §3 is where that
 
 ### The server-side variant
 
-When the work genuinely must run on a server (a service-role key, a secret), `@motu/adapter-next`
+When the work genuinely must run on a server (a service-role key, a secret), `@motujs/adapter-next`
 ships a route handler whose URL shape *is* `HttpTransport`'s, so no Next-specific transport is needed
 (`packages/adapters/next/src/server.ts:44-91`):
 
 ```ts
 // app/api/motu/[...call]/route.ts
-import { createMotuRoute } from '@motu/adapter-next/server'
+import { createMotuRoute } from '@motujs/adapter-next/server'
 import { services } from '@/motu/server/services'
 export const { POST } = createMotuRoute(services)
 export const dynamic = 'force-dynamic'
@@ -361,7 +361,7 @@ module at all, and fake one layer below it, where the app's own logic still runs
 
 ---
 
-## 4. Mocking at the WIRE — `@motu/runtime/postgrest-fetch`
+## 4. Mocking at the WIRE — `@motujs/runtime/postgrest-fetch`
 
 A lagoon stub replaces a whole service module by hand, which means the module's OWN logic — the
 orchestration, the derived visibility rules, the period maths, whatever the real function does beyond
@@ -373,7 +373,7 @@ for injecting where the application builds its database client
 (`packages/runtime/src/postgrest-fetch.ts:342`):
 
 ```ts
-import { createPostgrestFetch, installFakeFetch } from '@motu/runtime/postgrest-fetch';
+import { createPostgrestFetch, installFakeFetch } from '@motujs/runtime/postgrest-fetch';
 
 const fetch = createPostgrestFetch({
   baseUrl: 'https://project.supabase.co',
@@ -443,7 +443,7 @@ than what it replaces: it is what the island actually needs, at the granularity 
 
 | artifact | what it describes | produced by | committed? |
 |---|---|---|---|
-| `@motu/contract` (`<app>/contract/src/index.ts`) | the **backend's callable surface**, as typed TS functions over `call()` | `motu codegen` from `motu-manifest.json` (Jakarta hosts) — or, on a TS host, hand-written as `createContract<AppServices>()` with no generator at all | yes |
+| `@motujs/contract` (`<app>/contract/src/index.ts`) | the **backend's callable surface**, as typed TS functions over `call()` | `motu codegen` from `motu-manifest.json` (Jakarta hosts) — or, on a TS host, hand-written as `createContract<AppServices>()` with no generator at all | yes |
 | `contracts.generated.ts` (in `islands/`) | each **island's** boundary: `input`, `output`, `effects`, read from the component it mounts | `motu sync` → `syncContracts()` (`packages/cli/src/lib/contracts.mjs:177-184`) | yes |
 
 `motu check` gates *drift* of `contracts.generated.ts` against the components
@@ -463,7 +463,7 @@ override for a callback the component does not have is deliberately kept out of 
 
 ---
 
-## 6. Codegen — `motu-manifest.json` → `@motu/contract`
+## 6. Codegen — `motu-manifest.json` → `@motujs/contract`
 
 ```
 motu codegen [manifest] [outDir]
@@ -487,7 +487,7 @@ body += `    call<${m.returns}>('${service.name}', '${m.name}', [${argList}]),\n
 ```
 
 and one `__roles` map of `Service.method → string[]` (`cli.mjs:33`, `38`). Output is a single
-`index.ts` under the out dir, headed `// GENERATED by @motu/codegen from motu-manifest.json — do not
+`index.ts` under the out dir, headed `// GENERATED by @motujs/codegen from motu-manifest.json — do not
 edit.` (`cli.mjs:19-21`, `40-42`). The real thing:
 
 ```ts
@@ -736,7 +736,7 @@ An island needs server data. Six steps, in order.
 *TypeScript host* (`acme:motu/src/services/index.ts:14-25`):
 
 ```ts
-import { defineServices } from '@motu/adapter-next';
+import { defineServices } from '@motujs/adapter-next';
 import { fetchDirectorySectors, fetchDirectoryTags } from '@/lib/services/directory';
 
 export const services = defineServices({
@@ -758,7 +758,7 @@ The island side is one file
 (`acme:motu/src/contract.ts:8-11`):
 
 ```ts
-import { createContract } from '@motu/adapter-next';
+import { createContract } from '@motujs/adapter-next';
 import type { AppServices } from './services/index';   // type-only: erased at build
 
 export const contract = createContract<AppServices>();
@@ -834,5 +834,5 @@ carry, so a method that was never exposed cannot be reached from an island
 - [07 — Checks and verification](07-checks-and-verification.md) — `no-bare-fetch`, `contract-only-io`, `host-stubs`.
 - [08 — The lagoon](08-lagoon.md) — the transport toggle, forced-error states, `lagoon.config.json`'s `alias` table.
 - [10 — Evidence and testing](10-evidence-and-testing.md) — scenarios, flows, and the unit tests a source still needs.
-- [12 — Hosts and adapters](12-hosts-and-adapters.md) — `@motu/adapter-next`, `createMotuRoute`, the AngularJS bridge.
+- [12 — Hosts and adapters](12-hosts-and-adapters.md) — `@motujs/adapter-next`, `createMotuRoute`, the AngularJS bridge.
 - [13 — Agents and skills](13-agents-and-skills.md) — the host rules quoted here, and where they are enforced.

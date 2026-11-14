@@ -2,7 +2,7 @@
 // The lagoon view, as a region — the migrated dock.
 //
 // WHAT THIS REPLACES. The same screen is drawn today by ~1,700 lines of vanilla JS in
-// `@motu/chrome/dock`, injected into a document that a route HANDLER builds as a string. That is why
+// `@motujs/chrome/dock`, injected into a document that a route HANDLER builds as a string. That is why
 // it was never declared: a route handler cannot render React, so the chrome could not be islands.
 // This is a page, so it can.
 //

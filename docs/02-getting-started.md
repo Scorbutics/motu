@@ -10,7 +10,28 @@ command has more flags than are shown here ([CLI reference](03-cli-reference.md)
 
 ## 0. Get the CLI
 
-motu is not published to npm. `install.sh` from a checkout links the CLI onto your PATH:
+Two ways, and the CLI tells them apart by itself — there is no flag
+(`packages/cli/src/lib/framework.mjs`).
+
+### From npm (installed mode)
+
+```sh
+cd my-vite-or-next-app
+npm i -D @motujs/cli               # pulls the @motujs/* it needs, plus vite, the React plugin, Tailwind
+npx motu init . --host vite        # or --host next
+npm install                        # once: init recorded @motujs/* in package.json
+npx playwright install chromium    # once, for the --runtime checks
+```
+
+`@motujs/cli` carries the lagoon's build tools as its own dependencies (vite, `@vitejs/plugin-react`,
+Tailwind, autoprefixer, `@vitejs/plugin-basic-ssl`), so the app installs nothing else for them. The
+agent skills and the host rules ship inside the package too; `motu init` writes them into the app.
+On a Vite host the lagoon still runs the HOST's own Vite first (`lagoon-vite.mjs`, `resolveVite`).
+
+### From a checkout (checkout mode)
+
+For working on motu itself, or to run the framework's source under your project.
+`install.sh` from a checkout links the CLI onto your PATH:
 
 ```sh
 ./install.sh                 # link `motu` (+ `motu-host`), then install the skills into the CWD repo
@@ -24,7 +45,8 @@ into `$MOTU_BIN_DIR` (default `~/.local/bin`), adds one guarded block to your sh
 `motu skills install` (`install.sh:1-20`). POSIX sh, idempotent, safe to re-run after `git pull`.
 
 Keep the checkout. The whole framework is resolved out of it — see
-[the no-install mechanism](#the-no-install-mechanism) below.
+[the no-install mechanism](#the-no-install-mechanism) below. The rest of this page writes `motu`;
+installed from npm, that is `npx motu`.
 
 ---
 
@@ -65,6 +87,10 @@ Init refuses to overwrite an existing `motu.config.json` without `--force` (`ini
 
 Scaffolding is non-destructive per file: anything that already exists is reported as `(kept)`
 (`init.mjs:132-141`).
+The one exception is installed mode: an existing `package.json` is kept AND gains the `@motujs/*` it
+lacks — `core`, `react`, `runtime` and the host's adapter in `dependencies`, `debug-overlay` in
+`devDependencies`, each at `^<cli version>` — never replacing a range already there. Run your package
+manager once afterwards.
 
 **What it deliberately does NOT write:** `index.html`, the lagoon entries, and `src/fixtures.ts`.
 Those are rendered into `.motu/cache` by `motu lagoon serve --watch|build` instead. The reason is a name
@@ -93,29 +119,34 @@ Init ends by printing your next two commands:
 
 ## The no-install mechanism
 
+**Checkout mode only.** Installed from npm, none of this happens: `@motujs/*` are ordinary dependencies
+recorded by `motu init` with the CLI's own version (`^0.1.0`), they resolve from the app's
+`node_modules` to their compiled `dist/`, nothing is aliased or symlinked, and `motu link` says it does
+not apply. Installed mode is chosen when the CLI does not sit inside a checkout
+(`packages/cli/src/lib/framework.mjs`); `$MOTU_ROOT` still forces checkout mode.
+
 This is the part that surprises people, so it is worth reading before anything fails.
 
-The `@motu/*` packages are unpublished workspace packages whose entry point is **raw TypeScript**. A
-project cannot simply `npm install` them. Three mechanisms cover the three places a module specifier
-has to resolve:
+In a checkout, the `@motujs/*` packages are workspace packages whose source is **raw TypeScript**.
+Three mechanisms cover the three places a module specifier has to resolve:
 
-| Where | How `@motu/react` resolves | Source |
+| Where | How `@motujs/react` resolves | Source |
 |---|---|---|
 | The lagoon (Vite) | Vite `resolve.alias`, longest specifier first, pointing straight at `<checkout>/packages/react/src/index.ts` | `init.mjs:66-103` |
 | The node harness (`--fast`, evidence loaders) | The same alias list, serialised to JSON for the node loader — plus a React dedupe so the framework and the project resolve ONE React | `packages/cli/src/lib/node-aliases.mjs:31-72` |
-| The host application's own bundler | A **symlink** at `node_modules/@motu/<name>` → `<checkout>/packages/<name>` | `packages/cli/src/lib/util.mjs:431-454` |
+| The host application's own bundler | A **symlink** at `node_modules/@motujs/<name>` → `<checkout>/packages/<name>` | `packages/cli/src/lib/util.mjs:431-454` |
 
 The symlinks are re-created **on every single `motu` invocation, before argv is even parsed**
 (`packages/cli/src/run.mjs:181-193`). That is not paranoia:
 
 > `npm install` deletes them as extraneous — measured on an Angular app, where the next build failed
-> with `Cannot find module '@motu/react'`, an error pointing nowhere near the cause. (bun and pnpm
+> with `Cannot find module '@motujs/react'`, an error pointing nowhere near the cause. (bun and pnpm
 > left them alone, so this is invisible on the machines motu grew up on.)
 > — `packages/cli/src/run.mjs:183-186`
 
 The linked set is `core`, `react`, `runtime`, `types`, `debug-overlay`, `chrome`, `coverage`
 (`util.mjs:438`). `chrome` is in there even though a host never imports it by name, because
-`@motu/core`'s toolbar does.
+`@motujs/core`'s toolbar does.
 
 Consequences to plan around:
 
@@ -124,14 +155,14 @@ Consequences to plan around:
 - **Moving the checkout is fine** as long as you re-run `motu` from the new one: the framework root is
   derived from the running CLI, with `$MOTU_ROOT` the only override
   (`packages/cli/src/lib/config.mjs:308`).
-- **`@motu/*` are not in the generated `package.json`** unless a workspace above the project can
+- **`@motujs/*` are not in the generated `package.json`** unless a workspace above the project can
   actually satisfy them. `workspace:*` in a standalone project is a lie that made `bun install` — and
   therefore `bun add react` — fail outright in a freshly initialised project (`init.mjs:202-232`).
 - **The lagoon has no React of its own**, on purpose: it resolves upward to the host application's
   copy, and a second React would give the host two of them and break hooks the moment an island
   renders a component from the host's own library (`packages/cli/src/lib/scaffold.mjs:107-113`).
 
-The one motu module your application code may import is `@motu/types` — types only, so it erases at
+The one motu module your application code may import is `@motujs/types` — types only, so it erases at
 compile time and the app ships byte-identical output without motu (`packages/types/src/index.ts:1-17`).
 
 ---

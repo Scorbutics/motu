@@ -16,7 +16,7 @@
 // consumer, and this is the seam between them.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,10 +41,10 @@ const AS_IS = ['packages/chrome', 'packages/cli', 'packages/host'];
 
 // A package that ships as authored AND has one compiled corner.
 //
-// `@motu/chrome` is plain .mjs because the lagoon HOST reads it under bare node — that is the whole
+// `@motujs/chrome` is plain .mjs because the lagoon HOST reads it under bare node — that is the whole
 // reason the package exists. Its React kit cannot be: it is .tsx, and its consumers are bundled
 // applications, which do not reliably transform a raw .tsx sitting inside node_modules. So the
-// subtree is compiled and exposed at `@motu/chrome/react`, a subpath node never resolves, while the
+// subtree is compiled and exposed at `@motujs/chrome/react`, a subpath node never resolves, while the
 // rest of the package stays exactly as node-readable as before.
 const HYBRID = [{ dir: 'packages/chrome', src: 'src/react', out: 'dist/react' }];
 
@@ -116,7 +116,7 @@ function build(pkgDir, part) {
 }
 
 console.log('building publishable packages');
-// HYBRID FIRST. `@motu/chrome/react` is a DEPENDENCY of the compiled packages — the lens and the
+// HYBRID FIRST. `@motujs/chrome/react` is a DEPENDENCY of the compiled packages — the lens and the
 // review console both import the kit from it — and it resolves through `dist`, so building it last
 // meant a change to its types could never compile in one pass: the compiled packages typechecked
 // against the PREVIOUS build of it. Adding a seam to `MotuSeam` and using it in the same commit
@@ -128,3 +128,37 @@ for (const p of AS_IS) {
   const name = JSON.parse(readFileSync(resolve(ROOT, p, 'package.json'), 'utf8')).name;
   console.log(`  – ${name.padEnd(26)} ships as authored (already JavaScript)`);
 }
+
+// WHAT THE CLI READS FROM OUTSIDE ITS OWN PACKAGE, copied into it.
+//
+// In a checkout the CLI reads its agent skills from `.github/`, the host rules from
+// `.github/host-rules.md`, and each host adapter's Vite contribution from `packages/adapters/*/vite.mjs`
+// — files beside it, not in it. A published `@motujs/cli` is only `packages/cli`, so installed from npm
+// every one of those reads missed: `motu init` wrote a rules block telling the agent to load skills it
+// had installed none of, and a Next lagoon lost its `next/*` stubs with no error at all (the adapter
+// lookup returns `{}` when the file is absent). `vite` has no package of its own to ship in, so the
+// CLI carrying them is the one place all three can live.
+//
+// `bundled/` is a BUILD OUTPUT (gitignored) and the checkout never reads it — see `frameworkFile` in
+// packages/cli/src/lib/framework.mjs. `.github` is spelled `github` in it: a dot-directory in a tarball
+// is one more thing a packer is entitled to drop.
+const CLI_BUNDLED = resolve(ROOT, 'packages/cli/bundled');
+const BUNDLE = [
+  ['.github/agents', 'github/agents'],
+  ['.github/prompts', 'github/prompts'],
+  ['.github/host-rules.md', 'github/host-rules.md'],
+  ['packages/adapters/angularjs/vite.mjs', 'packages/adapters/angularjs/vite.mjs'],
+  ['packages/adapters/next/vite.mjs', 'packages/adapters/next/vite.mjs'],
+  ['packages/adapters/next/lagoon', 'packages/adapters/next/lagoon'],
+  ['packages/adapters/vite/vite.mjs', 'packages/adapters/vite/vite.mjs'],
+];
+rmSync(CLI_BUNDLED, { recursive: true, force: true });
+for (const [from, to] of BUNDLE) {
+  const src = resolve(ROOT, from);
+  // Fail rather than ship a CLI with a hole in it: a missing source here is exactly the silent
+  // absence this step exists to end.
+  if (!existsSync(src)) throw new Error(`@motujs/cli bundle: ${from} does not exist`);
+  mkdirSync(dirname(resolve(CLI_BUNDLED, to)), { recursive: true });
+  cpSync(src, resolve(CLI_BUNDLED, to), { recursive: true });
+}
+console.log(`  ✓ ${'@motujs/cli (bundled)'.padEnd(26)} ${String(BUNDLE.length).padStart(3)} skill/adapter sources copied in`);

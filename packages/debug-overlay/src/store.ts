@@ -30,8 +30,8 @@ import {
   type ChannelInfo,
   type HostIntent,
   type Store,
-} from '@motu/core';
-import { observeCalls, type CallEvent } from '@motu/runtime';
+} from '@motujs/core';
+import { observeCalls, type CallEvent } from '@motujs/runtime';
 import { CALL_BUFFER, bindKeys, computeProps, safeKey, type CallRecord } from './model';
 
 /**

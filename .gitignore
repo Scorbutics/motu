@@ -25,3 +25,6 @@ java/endpoint/src/main/resources/dev/motu/assets/bridge.js
 .playwright-mcp/
 # demo-app public sandbox build (see .github/workflows/sandbox.yml)
 dist-sandbox/
+
+# Build output of scripts/build-packages.mjs: what @motujs/cli ships from outside its own package
+packages/cli/bundled/

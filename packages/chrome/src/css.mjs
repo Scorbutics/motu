@@ -1,6 +1,6 @@
 // motu's chrome, as a stylesheet a server can inline.
 //
-// The lagoon's own chrome is built by DOM code in `@motu/react` (the tide line) and `@motu/debug-overlay`
+// The lagoon's own chrome is built by DOM code in `@motujs/react` (the tide line) and `@motujs/debug-overlay`
 // (the lens), because both are interactive and live inside a bundled app. A page rendered by the host
 // has no bundler and no React, so what it can share is not a component tree but the LANGUAGE: the same
 // tokens, the same water, the same capsule, the same warm captions, the same swim-in.

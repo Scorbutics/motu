@@ -18,7 +18,7 @@
 // because the host module was replaced. `verdictOf` says as much in its own comment ("inside a real
 // page"). So the sandbox is asked, and a finding that is only a defect outside one is demoted to a
 // note rather than reported as a fault against a page that is behaving correctly.
-import { isSandbox, type MountedIslandInfo } from '@motu/core';
+import { isSandbox, type MountedIslandInfo } from '@motujs/core';
 import { bindKeys } from './model';
 import type { Verdict } from './model';
 

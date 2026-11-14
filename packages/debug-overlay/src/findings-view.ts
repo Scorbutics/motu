@@ -1,6 +1,6 @@
 // The findings, rendered into somebody else's panel.
 //
-// The dock hosts this, and the dock must not import this package — @motu/debug-overlay is dev-only
+// The dock hosts this, and the dock must not import this package — @motujs/debug-overlay is dev-only
 // and a production root has to shake it out entirely. So the direction is inverted: the lens is
 // handed a container and mounts itself into it, exactly as the toolbar chips reach the dock through
 // `setMotuToolbarHost`. The dock stays ignorant of what is inside, and this file stays the only place
@@ -22,11 +22,11 @@ import {
   outboundCalls,
   regionIdOfStore,
   archipelagoConfigs,
-} from '@motu/core';
-import type { Store } from '@motu/core';
-import { readWireCalls, subscribeWireCalls } from '@motu/runtime/postgrest-fetch';
+} from '@motujs/core';
+import type { Store } from '@motujs/core';
+import { readWireCalls, subscribeWireCalls } from '@motujs/runtime/postgrest-fetch';
 import { corpusFor, corpusMissing, liveCoverage, ensureCorpus, subscribeCorpus } from './coverage';
-import { regionCoverage } from '@motu/coverage';
+import { regionCoverage } from '@motujs/coverage';
 import { lens } from './store';
 import { computeProps, verdictOf, bindKeys, preview, ago, isolationOf, plainValue, keyOrigins, type Verdict } from './model';
 import { findingsOf, tallyOf, type Finding } from './findings';

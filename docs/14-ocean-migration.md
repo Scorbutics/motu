@@ -218,5 +218,5 @@ would fork it ([README](../README.md#try-it)) — which is why `--from` exists a
 - [01 — Concepts](01-concepts.md) — ocean, island, lagoon, mainland
 - [06 — Composition and adoption](06-composition-and-adoption.md) — the React host's staged path
 - [11 — Contract and backend](11-contract-and-backend.md) — the transport seam and the `java/` modules
-- [12 — Hosts and adapters](12-hosts-and-adapters.md) — `host`, `legacyFit`, `@motu/adapter-angularjs`
+- [12 — Hosts and adapters](12-hosts-and-adapters.md) — `host`, `legacyFit`, `@motujs/adapter-angularjs`
 - `demo-app/roots/bridge/src/main.ts` — the worked example, end to end

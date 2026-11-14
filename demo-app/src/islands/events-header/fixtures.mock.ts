@@ -1,6 +1,6 @@
 // Lagoon scenarios for x-events-header. The calendar and the members are the seed's on the evidence
 // day (`shared/events-evidence.ts`); nothing here is typed by hand. No fixtures: it calls nothing.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { UPCOMING, DENNIS, RICH, rsvpsOf } from '../../shared/events-evidence.js';
 
 export const fixtures: Fixture[] = [];

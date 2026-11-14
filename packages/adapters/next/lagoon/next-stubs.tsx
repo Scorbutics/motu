@@ -1,18 +1,18 @@
 // Vite aliases point next/* here: the lagoon is a plain SPA with no Next runtime, but an island — or
 // the app's own layout, on a SCREEN — is still allowed to render a link or read the router.
 //
-// INERT BY DEFAULT. Navigation intents belong to the host bridge (@motu/adapter-next), so outside a
+// INERT BY DEFAULT. Navigation intents belong to the host bridge (@motujs/adapter-next), so outside a
 // screen these render and no-op: a link click is swallowed and logged, never followed (following it
 // left the lagoon for a 404). If an island needs more of Next than this, it is coupling to the host
 // too tightly.
 //
-// ON A SCREEN they follow the screen's declared routes (`@motu/react` screens, experimental). A
+// ON A SCREEN they follow the screen's declared routes (`@motujs/react` screens, experimental). A
 // screen renders the application's own layout, and a Next layout navigates with <Link> and
 // `useRouter()` rather than with motu intents — the sidebar of an app adopting motu is usually not a
 // region. So a click or `router.push(path)` is handed to the mounted screen, which opens whichever
 // screen serves `path` (or refuses out loud), and `usePathname()` / `useParams()` report the screen's
 // path so the layout lights the right item. They talk through two window events, which keeps this
-// adapter free of any dependency on @motu/react.
+// adapter free of any dependency on @motujs/react.
 import { createElement, forwardRef, useSyncExternalStore, type ComponentProps, type MouseEvent } from 'react';
 
 /** Mirrors `window.__motuScreen` (lagoon-screen.tsx): set while a screen is showing. */

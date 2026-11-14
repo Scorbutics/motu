@@ -3,7 +3,7 @@
 // native placement markers. Keeps composition roots to transport + mode overrides + this one call.
 
 import type { ComponentType } from 'react';
-import type { MotuTheme, MotuFit, IslandContract } from '@motu/core';
+import type { MotuTheme, MotuFit, IslandContract } from '@motujs/core';
 import {
   defineArchipelago,
   disposeArchipelago,
@@ -13,7 +13,7 @@ import {
   type ArchipelagoOptions,
   type Channel,
   type HostBridge,
-} from '@motu/core';
+} from '@motujs/core';
 import { defineReactElement, type DefineOptions } from './defineReactElement';
 import { lagoonHarness } from './lagoon-harness';
 import { registerLagoonRegion } from './lagoon-player';
@@ -36,7 +36,7 @@ export interface ReactElementSpec<P extends object = any> {
 /**
  * A self-registering row for non-React renderers (e.g. an AngularJS island): given the shared
  * css/defaultTheme, it registers its own custom element (via defineAngularElement, etc.). This keeps
- * registerElements — and @motu/react — free of any renderer-specific import.
+ * registerElements — and @motujs/react — free of any renderer-specific import.
  */
 /**
  * Declare a React-backed island, with its contract checked against the component's own props.

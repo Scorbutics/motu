@@ -245,7 +245,7 @@ at a region and seeing no HTTP at all is accurate and tells you nothing.
 ONE LEDGER, THREE DOORS. An ask leaves by the CONTRACT (a `call()` the transport answers), by a
 
 TRACED HOST MODULE (a stub wrapping its exports in `traced(module, fn, impl)`), or by the WIRE (a fake
-`fetch` beneath the app's own client). All three record to `recordOutbound` in `@motu/core`, and both
+`fetch` beneath the app's own client). All three record to `recordOutbound` in `@motujs/core`, and both
 readers — `provenance` and the lens's ASKED FOR block — group by door and name who asked:
 
     ✓ provenance  asked for: contract: shots.list() ×2 · wire: table:shots(select) — by island:shot-list, source:shots

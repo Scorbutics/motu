@@ -3,7 +3,7 @@
 // MIGRATED FROM A HAND-ROLLED GALLERY. This file used to be the gallery itself: it configured the
 // transport, mounted the fit toggle, built its own archipelago switcher with its own
 // localStorage keys, injected the frame stylesheets, and mounted the tide line. All of that now lives
-// in @motu/react (`startLagoon`), which is what `motu init` scaffolds and what every other project
+// in @motujs/react (`startLagoon`), which is what `motu init` scaffolds and what every other project
 // uses — so improvements to the gallery arrive with the framework instead of needing this file
 // rewritten.
 //
@@ -13,11 +13,11 @@
 // the seams, the island scope or coverage.
 //
 // What stays here is only what Vite requires in the app: the build-time defines, the project's own
-// registry and stylesheet, the frame glob, and the debug overlay — which @motu/react must not depend
+// registry and stylesheet, the frame glob, and the debug overlay — which @motujs/react must not depend
 // on, so the app hands it in.
-import { HttpTransport } from '@motu/runtime';
-import { setDefaultIsolation, type HostBridge } from '@motu/core';
-import { startLagoon, overridesFor, type TransportMode } from '@motu/react';
+import { HttpTransport } from '@motujs/runtime';
+import { setDefaultIsolation, type HostBridge } from '@motujs/core';
+import { startLagoon, overridesFor, type TransportMode } from '@motujs/react';
 import {
   mountDebugOverlay,
   toggleDebugOverlay,
@@ -37,7 +37,7 @@ import {
   onIslandPicked,
   setCoupling,
   couplingOn,
-} from '@motu/debug-overlay';
+} from '@motujs/debug-overlay';
 import { ELEMENT_REGISTRY, ARCHIPELAGOS, membersArchipelago, usersArchipelago, profileArchipelago, shellArchipelago, ALL_FIXTURES, ALL_ROLES, ALL_SCENARIOS, ALL_FLOWS } from 'demo-app';
 import { eventsRegion, homeRegion, SIGNED_IN } from './regions/club.js';
 import { worlds } from './worlds.js';
@@ -168,7 +168,7 @@ startLagoon({
       }),
     ],
   },
-  // The seam lens, handed in rather than imported: @motu/react must not depend on the dev-only
+  // The seam lens, handed in rather than imported: @motujs/react must not depend on the dev-only
   // package, and __MOTU_DEBUG__ strips both the overlay and this wiring together.
   lens: __MOTU_DEBUG__
     ? {

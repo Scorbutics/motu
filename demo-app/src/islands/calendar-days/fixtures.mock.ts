@@ -5,7 +5,7 @@
 // construction: no days, every day booked, days with free times, and one of them picked.
 //
 // No fixtures: this island calls nothing. Everything it draws is a function of its two region keys.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR, FIRST_OPEN_DAY } from '../../shared/profile-evidence.js';
 
 export const fixtures: Fixture[] = [];

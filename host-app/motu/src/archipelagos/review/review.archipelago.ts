@@ -7,7 +7,7 @@
 // The coupling this region exists to hold: picking a repo changes what the list shows, picking a shot
 // changes what the viewer shows, and accepting changes the statuses the list renders. None of those
 // travel by prop between islands — they go through the region or they are not declared.
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry';
 import type { ReviewRegion, ProducedReviewKeys } from '@/app/console/review-region';
 import { shotsSource } from '@/src/review/shots-source';

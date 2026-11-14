@@ -28,7 +28,7 @@ export function syncCommand() {
   const wanted = paths.coverage?.regions;
   const state = regions.enabled
     ? `coverage on for ${!wanted ? 'every region (no `regions` declared)' : wanted.includes('*') ? 'every region (*)' : wanted.join(', ')}`
-    : 'coverage off — an empty module, so nothing names @motu/coverage';
+    : 'coverage off — an empty module, so nothing names @motujs/coverage';
   console.log(`${paths.rel(regions.path)} — ${state}`);
   if (regions.registry === 'import added') {
     console.log(color.dim(`  added the import to ${paths.rel(paths.archipelagosDir)}/registry.ts`));

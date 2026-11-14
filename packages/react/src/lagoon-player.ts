@@ -18,9 +18,9 @@
 // reach. An island scenario played INSIDE a region sets that island's inputs directly — and where one
 // of those keys is PRODUCED by another island, it forges a value the app may never pair with the rest
 // of the screen. Both are playable; the outcome says which it is, and names the forged keys.
-import { archipelagoConfigs, bindEntries, getArchipelagoStore, getMountedIslands, writtenKeys, type HostBridge, type Store } from '@motu/core';
-import type { ArchipelagoConfig } from '@motu/core';
-import type { RegionScenario, Scenario } from '@motu/runtime/mock';
+import { archipelagoConfigs, bindEntries, getArchipelagoStore, getMountedIslands, writtenKeys, type HostBridge, type Store } from '@motujs/core';
+import type { ArchipelagoConfig } from '@motujs/core';
+import type { RegionScenario, Scenario } from '@motujs/runtime/mock';
 import { lagoonHarness, type LagoonHarness } from './lagoon-harness';
 import { currentWorld, setWorld, worldExists, DEFAULT_WORLD } from './lagoon-worlds';
 import { pickState, replayFlow, replayInteractionsIn, slug, stateNames, type LagoonEvidence, type StateOutcome } from './lagoon-states';

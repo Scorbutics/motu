@@ -3,7 +3,7 @@
 // A CONTROLLED CONTROL. The region holds `query` and `show`, not the component, so every state here
 // is reachable by seeding — which is also what lets a flow, a link or the lens put the page into any
 // of them without typing.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 
 export const fixtures = [];
 export const roles: string[] = [];

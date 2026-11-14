@@ -7,7 +7,7 @@
 // The one part that is a decision — an event whose region name differs from the callback's — is
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
 import type { BookingSummary as C_booking_summary } from '../ui/booking-summary/BookingSummary.js';
 import type { CalendarDays as C_calendar_days } from '../ui/calendar-days/CalendarDays.js';

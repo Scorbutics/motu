@@ -141,8 +141,8 @@ export type ${pascal}Region = Record<string, never>
       archFile,
       archText
         .replace(
-          "import type { ArchipelagoConfig } from '@motu/core';",
-          `import { archipelago } from '@motu/core';\n// TYPE-ONLY, from the app: the page's vocabulary is the application's to name.\nimport type { ${pascal}Region } from '${hostSpecifier(archFile, typeFile)}';`,
+          "import type { ArchipelagoConfig } from '@motujs/core';",
+          `import { archipelago } from '@motujs/core';\n// TYPE-ONLY, from the app: the page's vocabulary is the application's to name.\nimport type { ${pascal}Region } from '${hostSpecifier(archFile, typeFile)}';`,
         )
         .replace(`export const ${camel}Archipelago: ArchipelagoConfig = {`, `export const ${camel}Archipelago = archipelago<${pascal}Region>()({`)
         .replace(
@@ -158,7 +158,7 @@ export type ${pascal}Region = Record<string, never>
     regionModule,
     `// The ${id} region, for the lagoon: what the page establishes, and where the islands sit.
 import type { ReactNode } from 'react';
-import type { LagoonOverrides } from '@motu/react';
+import type { LagoonOverrides } from '@motujs/react';
 
 /** What the PAGE establishes on first paint. Add a key when an island binds one. */
 export const ${camel}Seed: NonNullable<LagoonOverrides['seed']>[string] = {};
@@ -211,7 +211,7 @@ export const ${pascal}RegionFrame = (island: (slot: string) => ReactNode): React
   // motu had just made necessary.
   const createRegionImport = /^import .*\bcreateRegion\b/m.test(modelImports)
     ? ''
-    : "\nimport { createRegion } from '@motu/react';";
+    : "\nimport { createRegion } from '@motujs/react';";
 
   // THE BARREL, AS A SPECIFIER THAT RESOLVES. `appPackage` defaults to the app directory's name, which
   // is a real package name only when the directory and the package agree — on a monorepo app called

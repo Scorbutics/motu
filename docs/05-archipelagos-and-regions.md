@@ -406,7 +406,7 @@ Declared on the region rather than in `motu.config.json` because it is a fact ab
 rather than with a deployment. **OPT-IN PER KEY, never inferred**: a fingerprint reduces every other
 value to a category precisely so that nothing identifying survives it, and motu cannot tell an enum
 from an email address by looking at one string. `defineArchipelago` offers the list to the coverage
-installer, which only exists if the generated registry imported `@motu/coverage`
+installer, which only exists if the generated registry imported `@motujs/coverage`
 (`packages/core/src/archipelago.ts:1149-1155`; `packages/core/src/sandbox.ts`). The fold itself is
 [09 — Coverage](09-coverage.md).
 
@@ -448,7 +448,7 @@ A channel is about OWNERSHIP: which module feeds a host-fed key, so the page and
 answer the same coupling differently. It is a declaration.
 
 Where the fake DATA enters is a separate axis, one layer below, and motu now mocks at the WIRE:
-`@motu/runtime/postgrest-fetch` is a fake `fetch` injected into the app's database client, so the
+`@motujs/runtime/postgrest-fetch` is a fake `fetch` injected into the app's database client, so the
 app's own services and repositories execute for real against synthetic rows
 ([11 — Contract and backend](11-contract-and-backend.md)). The two compose — a region can declare a
 source AND have that source's reads answered at the wire — and neither replaces the other. What wire
@@ -512,7 +512,7 @@ Islands change too: an output that asked the host to refetch is declared `intent
 `on` form falls through to the `HostBridge`, which in a lagoon only logs — so the island emits, the
 intent leaves and nothing answers it. That is the same region reading as wired and not reacting.
 
-**When a port earns its place.** Wire mocking (`@motu/runtime/postgrest-fetch`) substitutes data
+**When a port earns its place.** Wire mocking (`@motujs/runtime/postgrest-fetch`) substitutes data
 beneath the real service, so a port whose only job was "let the lagoon return different rows" is
 now redundant — see the paragraph above. What a port still buys is a seam for ORCHESTRATION: a
 generation guard so a slow refetch cannot land after a fast one, a debounce, reset-on-new-search,
@@ -652,7 +652,7 @@ whether a declaration is HONEST. Both are runtime facts.
 
 `packages/core/src/archipelago.ts:488-501`. Cross-checks the archipelago's `writes` against the
 APP-SIDE host/produced split, which is the thing that actually makes a page's assignment illegal. The
-page compiles against its own `Omit` — `HostRegion<TRegion, TProduced>` in `@motu/types`
+page compiles against its own `Omit` — `HostRegion<TRegion, TProduced>` in `@motujs/types`
 (`packages/types/src/index.ts:59`), whose motu-side twin is `HostRegionOf<R, A>`
 (`packages/core/src/archipelago.ts:486`) — and nothing would otherwise keep that `Omit` in step with
 the declarations. This line does, and it lives on motu's side of the boundary, so it goes when motu

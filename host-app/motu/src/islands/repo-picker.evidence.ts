@@ -2,7 +2,7 @@
 //
 // RELATIVE import — an aliased one is loaded by the checks with a plain node import() and fails
 // silently, taking every scenario with it.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { REPOS, SHOTS, SHOTS_ALL_GREEN } from '../shared/review-evidence.js';
 
 export const scenarios: Scenario[] = [

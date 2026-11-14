@@ -8,8 +8,8 @@ import { postgresProjectStore, postgresMembershipStore } from '../auth/stores.ts
 import { postgresAccessStore } from '../auth/access-store.ts'
 import { postgresShareLinkStore } from '../auth/share-link-store.ts'
 import { access } from './store.ts'
-// @motu/host is plain ESM node; tsc reads it through allowJs.
-import { canRead } from '@motu/host/src/access.mjs'
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
+import { canRead } from '@motujs/host/src/access.mjs'
 
 /**
  * The same decision the record route makes, asked for a listing.

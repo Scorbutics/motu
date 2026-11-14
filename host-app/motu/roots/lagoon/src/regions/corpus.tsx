@@ -24,8 +24,8 @@
 // region when somebody is next editing `corpus-screen.tsx` — see docs/06-composition-and-adoption.md.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 import type { ReactNode } from 'react';
-import { overridesFor } from '@motu/react';
-import type { LagoonOverrides } from '@motu/react';
+import { overridesFor } from '@motujs/react';
+import type { LagoonOverrides } from '@motujs/react';
 import { corpusArchipelago } from '../../../../src/archipelagos/corpus/corpus.archipelago.js';
 import {
   CORPUS_REGION_ID,

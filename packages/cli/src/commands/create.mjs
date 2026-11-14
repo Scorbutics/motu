@@ -30,7 +30,7 @@ function componentSource(pascal, kebab) {
  *
  * Rules enforced by \`motu island verify\` (see README "The rules that make islands verifiable"):
  *  - Mode-agnostic: no bare fetch, no history/pushState, no document reach-out into the host.
- *  - All server I/O goes through the generated @motu/contract, never a raw transport.
+ *  - All server I/O goes through the generated @motujs/contract, never a raw transport.
  *  - Renders correctly from default props alone (the lagoon mounts it with none).
  */
 export function ${pascal}({ title = '${pascal}' }: ${pascal}Props = {}) {
@@ -87,7 +87,7 @@ function elementSource(pascal, camel, tag, kebab, from, exportName, contract) {
   }
 
   const imported = exportName && exportName !== pascal ? `${exportName} as ${pascal}` : pascal;
-  return `${header}import { islandElement } from '@motu/react';
+  return `${header}import { islandElement } from '@motujs/react';
 import { ${imported} } from '${spec}';
 
 export const element = islandElement({
@@ -109,11 +109,11 @@ function indexSource(camel) {
 
 function fixturesSource(kebab, contractHint) {
   return `// Lagoon fixtures for x-${kebab}: replayed by MockTransport so the island renders offline (no backend,
-// no login). Fill these in with the shapes the island's @motu/contract calls return.
+// no login). Fill these in with the shapes the island's @motujs/contract calls return.
 //
-// Contract methods available to mock (from @motu/contract):
+// Contract methods available to mock (from @motujs/contract):
 ${contractHint}
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 
 export const fixtures: Fixture[] = [
   // TODO(motu:fixtures): e.g.
@@ -146,9 +146,9 @@ function readContractHint() {
         lines.push(`//   - ${name}.${method}`);
       }
     }
-    return lines.length ? lines.join('\n') : '//   (none found — regenerate @motu/contract)';
+    return lines.length ? lines.join('\n') : '//   (none found — regenerate @motujs/contract)';
   } catch {
-    return '//   (@motu/contract not found)';
+    return '//   (@motujs/contract not found)';
   }
 }
 

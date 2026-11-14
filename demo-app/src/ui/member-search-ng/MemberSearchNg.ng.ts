@@ -7,7 +7,7 @@
 //   - output: `criteria-changed` (auto, debounced) + `reset` — written to the store
 // It never touches the legacy `search` model or reaches into the host scope: config arrives as a prop
 // (the coupling lives in the composition-root channel), so the island stays host-agnostic.
-import type { AngularElementSpec } from '@motu/adapter-angularjs';
+import type { AngularElementSpec } from '@motujs/adapter-angularjs';
 import template from './member-search-ng.html?raw';
 import { MEMBER_SEARCH_CONFIG } from './search.config.js';
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
-import { Bay, Mark } from "@motu/chrome/react"
+import { Bay, Mark } from "@motujs/chrome/react"
 
 /**
  * WHERE THE CONSOLE'S PARTS SIT — once, for the page and for the lagoon.

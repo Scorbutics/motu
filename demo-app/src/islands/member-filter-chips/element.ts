@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { MemberFilterChips, type MemberFilterChipsProps } from '../../ui/member-filter-chips/MemberFilterChips.js';
 
 export const memberFilterChipsElement: ElementSpec = {

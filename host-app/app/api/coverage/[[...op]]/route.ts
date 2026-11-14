@@ -15,7 +15,7 @@
 // one repo and can do exactly one thing, and accepting a state takes the ADMIN token — because
 // nothing promotes a state to "known" except a flow or a person, and a reporting path that could mark
 // its own findings resolved reports nothing.
-import { loadAccess, canIngest, secretMatches } from '@motu/host/src/access.mjs';
+import { loadAccess, canIngest, secretMatches } from '@motujs/host/src/access.mjs';
 import { proxyToHost } from '@/src/upstream';
 import { postgresProjectStore } from '@/src/auth/stores';
 import { ingest, readCorpus, accept, known, forget, normalizeKeysHash } from '@/src/coverage/store';

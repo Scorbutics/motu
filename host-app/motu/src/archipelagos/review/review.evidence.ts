@@ -3,7 +3,7 @@
 // Each step ends on what ANOTHER island RENDERS, never on the key it just set: a step whose `expect`
 // names its own `provide`'s target asserts that the lagoon stored what it was handed, which cannot
 // fail unless the lagoon is broken.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { REPOS, SHOTS, SELECTED } from '../../shared/review-evidence.js';
 
 // EVERY KEY THE PAGE ESTABLISHES, not just the interesting ones.

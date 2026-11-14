@@ -1,5 +1,5 @@
 // Scenarios for dock-states — the panel's list and the phone's strip, which are one island.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { REVIEW_STATES, CORPUS_STATES, NO_STATES } from '../shared/lagoon-view-evidence.js';
 
 // `compact` is CROSSED rather than varied: every list scenario states it false and every strip one

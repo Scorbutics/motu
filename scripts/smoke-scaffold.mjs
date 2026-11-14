@@ -119,7 +119,7 @@ function makeApp({ host, aliasTarget, page, componentDir }) {
     ),
   );
   // `react` and its types resolve from the checkout: the app installs nothing, which is motu's own
-  // no-install posture. `@motu/*` is linked by the CLI itself on every invocation.
+  // no-install posture. `@motujs/*` is linked by the CLI itself on every invocation.
   mkdirSync(resolve(app, 'node_modules'), { recursive: true });
   for (const pkg of ['react', 'react-dom', '@types', 'typescript']) {
     const from = resolve(CHECKOUT, 'node_modules', pkg);
@@ -169,7 +169,7 @@ for (const c of CASES) {
   if (existsSync(overrides)) {
     writeFileSync(
       overrides,
-      `import type { LagoonOverrides } from '@motu/react';\n` +
+      `import type { LagoonOverrides } from '@motujs/react';\n` +
         `import { thingsSeed, ThingsRegionFrame } from './regions/things';\n\n` +
         `export const regions: LagoonOverrides['regions'] = {\n` +
         `  things: { seed: thingsSeed, layout: ThingsRegionFrame },\n};\n`,
@@ -212,7 +212,7 @@ for (const c of CASES) {
   // generated files — not that removal necessarily succeeds.
   // THE ASSERTION IS THE SYMPTOM, not a proxy for it. The first version of this check asked whether
   // removal recognised ANY motu file — and it passed with the shipped bug reintroduced, because the
-  // files reachable by a literal `@motu/` specifier were still classified while the ones reached by a
+  // files reachable by a literal `@motujs/` specifier were still classified while the ones reached by a
   // relative path were not. What the bug actually produced is this line, on a project where it cannot
   // be true: a freshly scaffolded composition root imports nothing but motu, by construction, so
   // "composes a region but is NOT deletable" is always a defect in the classifier here.
@@ -220,7 +220,7 @@ for (const c of CASES) {
   // file" passed with the shipped bug (two lagoon files still classified). "Did it say NOT deletable"
   // passed too — that line depends on how the binding happens to be reached. What the bug actually
   // did was collapse recognition from ELEVEN files to two, and the ones it lost are the ones reached
-  // by a relative path rather than a literal `@motu/` specifier. So assert those by name: they are
+  // by a relative path rather than a literal `@motujs/` specifier. So assert those by name: they are
   // motu's own generated files, and a classifier that cannot see them is broken however green it looks.
   const removal = run('node', [CLI, 'removal-check', '--force'], app);
   const mustClassify = ['things.archipelago.ts', 'thing-card.island.ts', 'islands/registry.ts', 'index.ts'];

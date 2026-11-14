@@ -427,7 +427,7 @@ export class Store {
   }
 }
 
-// In debug builds, expose the seed recorder to the page (paired with @motu/runtime's __motuRecorder)
+// In debug builds, expose the seed recorder to the page (paired with @motujs/runtime's __motuRecorder)
 // so `motu fixtures record` can drive both from the browser. Stripped in production.
 if (DEBUG && typeof globalThis !== 'undefined') {
   (globalThis as unknown as { __motuSeedRecorder?: unknown }).__motuSeedRecorder = {

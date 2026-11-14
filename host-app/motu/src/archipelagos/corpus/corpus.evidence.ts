@@ -6,7 +6,7 @@
 // that travels between them, so the flow below drives a real coupling rather than asserting on one
 // island's own render. `corpus-filter` emits, the region stores `filter`, and `corpus-states` — which
 // is not the island being driven — shows something different afterwards.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 // RELATIVE, like every other evidence import: these files are read by plain node, where the app's
 // `@/…` alias does not resolve, and the failure is a silent "flows could not be read".
 import { CORPUS_REGION_ID, CORPUS_STATES, CORPUS_UNACCEPTED } from '../../shared/corpus-evidence.js';

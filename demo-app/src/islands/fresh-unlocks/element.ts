@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { FreshUnlocks, type FreshUnlocksProps } from '../../ui/fresh-unlocks/FreshUnlocks.js';
 
 export const freshUnlocksElement: ElementSpec = {

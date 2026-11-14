@@ -1,4 +1,4 @@
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { MyStanding } from '../../ui/my-standing/MyStanding.js';
 
 export const element = islandElement({

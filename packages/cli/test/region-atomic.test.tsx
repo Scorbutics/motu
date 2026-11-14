@@ -17,7 +17,7 @@ GlobalRegistrator.register();
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArchipelagoProvider, Island } from '../../react/src/react-island';
-import { getArchipelagoStore } from '@motu/core';
+import { getArchipelagoStore } from '@motujs/core';
 
 let pass = 0, fail = 0;
 const t = (n: string, ok: boolean, d = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${n}${d ? ` -> ${d}` : ''}`); };

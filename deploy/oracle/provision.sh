@@ -26,7 +26,9 @@
 #   /var/lib/motu-host     the store — publish records, baselines, access policy
 #   /etc/motu-host.env     the upload token (0600)
 #   motu-host.service      the host, on 127.0.0.1:8818
-#   caddy.service          TLS termination, ACME, no buffering
+#   caddy.service          TLS termination, ACME, no buffering, the access log
+#   motu-stats.timer       every 10 min, the access log -> https://<domain>/_stats
+#   /etc/motu-stats.env    the /_stats login (0600)
 set -euo pipefail
 
 DOMAINS_RAW="${1:-}"
@@ -57,7 +59,7 @@ say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 say "packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates gnupg git debian-keyring debian-archive-keyring apt-transport-https iptables-persistent
+apt-get install -y -qq curl ca-certificates gnupg git debian-keyring debian-archive-keyring apt-transport-https iptables-persistent goaccess
 
 # ---------------------------------------------------------------- node 22
 # Ubuntu 24.04 ships node 18.19; motu needs >= 20.11.
@@ -109,10 +111,10 @@ else
 fi
 
 say "install + build"
-# @motu/host reads @motu/coverage from its dist, so the workspace has to be built once.
+# @motujs/host reads @motujs/coverage from its dist, so the workspace has to be built once.
 # The build script compiles every package, so the install cannot be filtered down to the
 # host's own dependency closure. It CAN skip the browsers: playwright is a dependency of
-# @motu/cli, which never runs here — the CLI drives a browser on your machine and uploads
+# @motujs/cli, which never runs here — the CLI drives a browser on your machine and uploads
 # only the result. Downloading Chromium onto this box buys nothing and costs ~400 MB.
 sudo -u motu env HOME=/home/motu PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
   bash -lc "cd $APP && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile && node scripts/build-packages.mjs"
@@ -124,6 +126,102 @@ if [ ! -f "$ENVFILE" ]; then
   printf 'MOTU_HOST_TOKEN=%s\nMOTU_HOST_DIR=%s\n' "$(openssl rand -hex 24)" "$STORE" > "$ENVFILE"
   chmod 600 "$ENVFILE"
 fi
+
+# ---------------------------------------------------------------- stats
+# WHO OPENS THE LAGOON, read from the access log rather than measured in the page.
+#
+# A script in the page would have to be injected into every lagoon @motujs/host serves, which
+# makes analytics a feature of the product instead of a choice of this one box. The log is
+# already here, needs no cookie and no consent banner, and still answers the questions a
+# launch asks: how many people, from where (referrer), and which states they opened — every
+# state is loaded as `…/__motu_frame?region=…&state=…`, so the frame requests ARE the list.
+#
+# What goes INTO the log is decided in the Caddyfile below: read secrets (`?k=`) deleted,
+# IPs masked to /24 and /48 before they touch disk, and the noise skipped — the CLI's 30 s
+# live heartbeat alone would otherwise be most of the traffic.
+STATS_ENV=/etc/motu-stats.env
+STATS_DIR=/var/lib/motu-stats
+if [ ! -f "$STATS_ENV" ]; then
+  say "stats login"
+  umask 077
+  printf 'STATS_USER=stats\nSTATS_PASSWORD=%s\n' "$(openssl rand -base64 24 | tr -d '/+=')" > "$STATS_ENV"
+  chmod 600 "$STATS_ENV"
+fi
+# shellcheck source=/dev/null
+. "$STATS_ENV"
+# Re-hashed on every run: bcrypt salts, so the Caddyfile changes each time, which is harmless —
+# and it means the plaintext in $STATS_ENV is the only thing to edit to change the password.
+STATS_HASH="$(caddy hash-password --plaintext "$STATS_PASSWORD")"
+install -d -m 0755 "$STATS_DIR" "$STATS_DIR/report"
+install -d -m 0700 "$STATS_DIR/db"
+install -d -o caddy -g caddy -m 0750 /var/log/caddy
+
+cat > /usr/local/sbin/motu-stats <<'STATS'
+#!/usr/bin/env bash
+# Fold the new lines of the access log into the report. Run by motu-stats.timer.
+set -euo pipefail
+DIR=/var/lib/motu-stats
+LOG=/var/log/caddy/motu-access.log
+GEO=$DIR/country.mmdb
+
+# Countries from DB-IP's free country database (CC BY 4.0, no account — MaxMind's needs one).
+# Refreshed monthly; a failed download keeps the old file, and no file at all only costs the
+# country panel, never the report.
+if [ ! -s "$GEO" ] || [ -n "$(find "$GEO" -mtime +35)" ]; then
+  for m in "$(date +%Y-%m)" "$(date -d '-1 month' +%Y-%m)"; do
+    if curl -fsS --retry 2 "https://download.db-ip.com/free/dbip-country-lite-$m.mmdb.gz" | gunzip > "$GEO.tmp" 2>/dev/null && [ -s "$GEO.tmp" ]; then
+      mv "$GEO.tmp" "$GEO"; break
+    fi
+  done
+  rm -f "$GEO.tmp"
+fi
+
+[ -s "$LOG" ] || exit 0
+geo=(); [ -s "$GEO" ] && geo=(--geoip-database="$GEO")
+
+# --persist/--restore: goaccess remembers the last line it read, so each run parses only what
+# is new and the totals outlive log rotation. (A roll between two runs loses at most the tail
+# of the old file; at 50 MiB a file that is days, not minutes.)
+# Written to a temp name then moved: a reader never gets half a report.
+goaccess "$LOG" --log-format=CADDY \
+  --persist --restore --db-path="$DIR/db" --keep-last=365 \
+  --ignore-crawlers --ignore-statics=req \
+  "${geo[@]}" \
+  --html-report-title="motu lagoon — visits" \
+  -o "$DIR/report/next.html"
+chmod 0644 "$DIR/report/next.html"
+mv "$DIR/report/next.html" "$DIR/report/index.html"
+STATS
+chmod 0755 /usr/local/sbin/motu-stats
+
+cat > /etc/systemd/system/motu-stats.service <<'UNIT'
+[Unit]
+Description=Build the motu-host visits report from the access log
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Root, to read caddy's log without loosening its permissions; everything else is locked down.
+ExecStart=/usr/local/sbin/motu-stats
+Nice=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/motu-stats
+UNIT
+
+cat > /etc/systemd/system/motu-stats.timer <<'UNIT'
+[Unit]
+Description=Refresh the motu-host visits report every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target
+UNIT
 
 # ---------------------------------------------------------------- service
 say "systemd"
@@ -168,7 +266,42 @@ cat > /etc/caddy/Caddyfile <<CADDY
 # and getting either wrong gives you a live lagoon that stops reloading silently.)
 $(printf '%s, ' "${DOMAINS[@]}" | sed 's/, $//') {
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:8818
+
+	# The access log motu-stats reads. Filtered BEFORE it reaches disk: \`k\` is a read secret
+	# (server.mjs trades it for a cookie), and an IP masked to /24 still gives a country.
+	# Authorization and Cookie headers are already redacted by caddy itself.
+	log {
+		output file /var/log/caddy/motu-access.log {
+			roll_size 50MiB
+			roll_keep 20
+			roll_keep_for 4320h
+		}
+		format filter {
+			wrap json
+			request>uri query {
+				delete k
+			}
+			request>remote_ip ip_mask 24 48
+			request>client_ip ip_mask 24 48
+		}
+	}
+	# Not visits: the API (the CLI's live heartbeat posts every 30 s), the reload stream, HMR,
+	# lagoon assets, and the report itself. \`__motu_frame\` is NOT here — it is the state view.
+	@noise path /api/* /favicon.ico /_stats /_stats/* *__motu_reload* *__motu_hmr* *__motu_assets*
+	log_skip @noise
+
+	# \`_stats\` cannot be a lagoon owner: GitHub logins have no underscore.
+	redir /_stats /_stats/
+	handle_path /_stats/* {
+		basic_auth {
+			$STATS_USER $STATS_HASH
+		}
+		root * $STATS_DIR/report
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8818
+	}
 }
 CADDY
 
@@ -177,6 +310,7 @@ systemctl enable --now motu-host
 systemctl restart motu-host
 systemctl enable --now caddy
 systemctl reload caddy || systemctl restart caddy
+systemctl enable --now motu-stats.timer
 
 # ---------------------------------------------------------------- duckdns
 # AN OCI EPHEMERAL IP LASTS AS LONG AS THE INSTANCE — it survives reboot and
@@ -257,6 +391,7 @@ if [ "${#DOMAINS[@]}" -gt 1 ]; then
   echo "          (certificates are issued per name; drop the old one from a later run)"
 fi
 echo "  token:  $(grep MOTU_HOST_TOKEN "$ENVFILE" | cut -d= -f2)"
+echo "  stats:  https://$DOMAIN/_stats/   user $STATS_USER, password in $STATS_ENV (first report within 10 min)"
 echo
 echo "  On your laptop, write ~/.config/motu/host.json:"
 echo "    { \"url\": \"https://$DOMAIN\", \"token\": \"<the token above>\" }"

@@ -4,7 +4,7 @@
 // ever recorded" and "everything recorded has been accepted" render different sentences and mean
 // opposite things to whoever is reading. A component that collapsed them into one empty state would
 // pass every check and tell somebody their instrument was broken when it was working.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { CORPUS_REGION_ID, CORPUS_STATES } from '../shared/corpus-evidence.js';
 
 export const fixtures = [];

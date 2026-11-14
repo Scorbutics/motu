@@ -20,8 +20,8 @@
 // So the wire becomes what the channel already is: `wireFrom({ to, … })`, a field, installed by the
 // lagoon. The bare `installFakeFetch` stays exported and still works — see `armFakeFetch` for the one
 // case where a top-level call is still required.
-import type { AnyArchipelagoConfig } from '@motu/core';
-import { createPostgrestFetch, installFakeFetch, type PostgrestFetchOptions, type WireClaims } from '@motu/runtime/postgrest-fetch';
+import type { AnyArchipelagoConfig } from '@motujs/core';
+import { createPostgrestFetch, installFakeFetch, type PostgrestFetchOptions, type WireClaims } from '@motujs/runtime/postgrest-fetch';
 
 /** A wire motu can vouch for: it knows which region it answers for, and what it claims. */
 export interface DeclaredWire<Id extends string = string> {

@@ -16,7 +16,7 @@
 import { createElement, Fragment, type ComponentType, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
-import { disposeArchipelago, provideToArchipelago, type HostBridge } from '@motu/core';
+import { disposeArchipelago, provideToArchipelago, type HostBridge } from '@motujs/core';
 import type { ElementSpec } from './bootstrap';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
 import { regionTree, unmountReactLagoon, type RegionRefOptions } from './lagoon-react-mount';

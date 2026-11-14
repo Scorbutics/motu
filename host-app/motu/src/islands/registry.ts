@@ -2,8 +2,8 @@
 //
 // Static imports, not a glob: this file is re-exported by the project barrel, which the host
 // application imports through its own bundler, and `import.meta.glob` is Vite-only.
-import type { ElementSpec } from '@motu/react';
-import { setDefaultIsolation } from '@motu/core';
+import type { ElementSpec } from '@motujs/react';
+import { setDefaultIsolation } from '@motujs/core';
 import { element as acceptBarElement } from './accept-bar.island';
 import { element as corpusFilterElement } from './corpus-filter.island';
 import { element as corpusStatesElement } from './corpus-states.island';

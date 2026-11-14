@@ -9,7 +9,7 @@
 // client in, the file stopped qualifying, and removal left `createRegion` behind with its imports
 // gone). The port belongs where the application is — the screen creates the source and renders the
 // real component inside the island wrapper.
-import { createRegion, nextHostBridge } from '@motu/adapter-next';
+import { createRegion, nextHostBridge } from '@motujs/adapter-next';
 import { useRouter } from 'next/navigation';
 import { ELEMENT_REGISTRY } from 'motu-host-islands';
 // The ARCHIPELAGO comes from its own module, not from the barrel beside the registry.

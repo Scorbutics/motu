@@ -12,7 +12,7 @@ that is the first thing a Show HN reader will hit.
 
 Expected failure modes if it fails: host alias inheritance (`@/*`), Tailwind detection, two copies of
 React, and — because both target apps are pnpm monorepos and motu's reference adopters are not — the
-`node_modules/@motu/*` symlinks landing in the wrong `node_modules`.
+`node_modules/@motujs/*` symlinks landing in the wrong `node_modules`.
 
 ## H2 — the friction concentrates where the CLI stops speaking
 

@@ -18,7 +18,7 @@ work; you own the judgement and the sequence. This is the workflow the
    reads/writes and which sibling islands it coordinates with.
 2. **Build in the lagoon:** `pnpm motu island create <name>` (scaffolds `ui/<kebab>/` component +
    `islands/<kebab>/` mount point). Write the mode-agnostic component (no fetch/history/document, all
-   I/O via `@motu/contract`, renders from default props), fill the `contract` (input/output), and the
+   I/O via `@motujs/contract`, renders from default props), fill the `contract` (input/output), and the
    mock fixtures — use a **function `response`** for reactive filtering and declare `scenarios`.
 3. **Test behaviour + sibling connections** offline: `MOTU_NO_SSL=1 pnpm dev:lagoon`; drive a store
    key and watch the reader island react.

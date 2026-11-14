@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { MemberHeader, type MemberHeaderProps } from '../../ui/member-header/MemberHeader.js';
 
 export const memberHeaderElement: ElementSpec = {

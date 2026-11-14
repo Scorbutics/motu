@@ -2,7 +2,7 @@
 //
 //     // app/api/motu/coverage/route.ts
 //     export const dynamic = 'force-dynamic';
-//     export { POST } from '@motu/coverage/server/next';
+//     export { POST } from '@motujs/coverage/server/next';
 //
 // Nothing else — no table, no RPCs, no RLS, no migration. What used to be four hundred lines of
 // application-specific storage is those two lines plus three environment variables.

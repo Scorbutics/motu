@@ -35,8 +35,8 @@ import {
   type Channel,
   type HostBridge,
   type MotuFit,
-} from '@motu/core';
-import type { DeclaredChannel } from '@motu/core';
+} from '@motujs/core';
+import type { DeclaredChannel } from '@motujs/core';
 import { ArchipelagoProvider, Island, setNullIsland, useRegion } from './react-island';
 import { renderArchipelagoLayout } from './archipelago-layout';
 import { RegionRefSlot, type ResolvedRegionRef } from './region-ref-slot';
@@ -333,7 +333,7 @@ export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions):
     return opts.providers ? opts.providers(el, slot) : el;
   };
 
-  // The cell chrome for this view lives in @motu/core, and nothing else on this path would install
+  // The cell chrome for this view lives in @motujs/core, and nothing else on this path would install
   // it: the element route folds it into the region's own sheet, which a React mount never builds. Get
   // it wrong and the markup below still renders — a slot name as body text, no frame, no padding —
   // which is what a host mounting through React used to see.

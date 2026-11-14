@@ -9,8 +9,8 @@
 // The SAME helper the host already hashes ingest tokens with — imported, not re-derived. A second
 // sha256 wrapper would be identical the day it was written; the point of sharing it is that a change
 // to how the host hashes credentials cannot leave share links hashing the old way.
-// `@motu/host` is plain ESM node; tsc reads it through allowJs.
-import { digest } from '@motu/host/src/access.mjs'
+// `@motujs/host` is plain ESM node; tsc reads it through allowJs.
+import { digest } from '@motujs/host/src/access.mjs'
 
 export type ShareLink = {
   projectId: string

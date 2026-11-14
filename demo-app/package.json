@@ -24,12 +24,12 @@
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource/league-gothic": "^5.3.0",
-    "@motu/adapter-angularjs": "workspace:*",
-    "@motu/contract": "workspace:*",
-    "@motu/core": "workspace:*",
-    "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*",
-    "@motu/types": "workspace:*"
+    "@motujs/adapter-angularjs": "workspace:*",
+    "@motujs/contract": "workspace:*",
+    "@motujs/core": "workspace:*",
+    "@motujs/react": "workspace:*",
+    "@motujs/runtime": "workspace:*",
+    "@motujs/types": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.3.1",

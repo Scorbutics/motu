@@ -38,7 +38,7 @@ export { availabilitySource, calendarFrom, utcDate, HORIZON_DAYS } from './share
 export type { AvailabilityPort, AvailabilitySource, TimeslotRow } from './shared/availability-source.js';
 export { SLOT_KIND_LABELS, emptyCalendar } from './shared/availability-types.js';
 export type { Calendar, DayAvailability, SlotKind, Timeslot } from './shared/availability-types.js';
-export type { MotuTheme, MotuFit, LegacyStrategy } from '@motu/core';
+export type { MotuTheme, MotuFit, LegacyStrategy } from '@motujs/core';
 
 // The club's chapters and events — the second half of the app, beside the directory.
 export { CHAPTERS, chapterBySlug, chapterByName, memberIdOf } from './shared/chapter-types.js';

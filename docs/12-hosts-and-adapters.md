@@ -43,8 +43,8 @@ the ones the framework's own comments describe (`packages/cli/src/lib/config.mjs
 
 | `host` | what it means | what it selects |
 | --- | --- | --- |
-| `angularjs` | the reference *ocean* — a foreign framework an island has to cross into | `@motu/adapter-angularjs` as a dependency (`init.mjs:232`) and as a lagoon alias (`init.mjs:64`); legacy fit ON (`config.mjs:136`); default isolation `shadow` (`init.mjs:169`); a `roots/bridge` root (`init.mjs:185`) |
-| `next` | a Next.js app — already React | `@motu/adapter-next` (`init.mjs:232`, `init.mjs:65`); the lagoon inherits the host's `@/…` alias, `globals.css` and Tailwind (`init.mjs:281`, `init.mjs:269`, `packages/adapters/next/vite.mjs:47`); `"mount": "react"` in the scaffolded lagoon config (`init.mjs:279`); legacy fit OFF |
+| `angularjs` | the reference *ocean* — a foreign framework an island has to cross into | `@motujs/adapter-angularjs` as a dependency (`init.mjs:232`) and as a lagoon alias (`init.mjs:64`); legacy fit ON (`config.mjs:136`); default isolation `shadow` (`init.mjs:169`); a `roots/bridge` root (`init.mjs:185`) |
+| `next` | a Next.js app — already React | `@motujs/adapter-next` (`init.mjs:232`, `init.mjs:65`); the lagoon inherits the host's `@/…` alias, `globals.css` and Tailwind (`init.mjs:281`, `init.mjs:269`, `packages/adapters/next/vite.mjs:47`); `"mount": "react"` in the scaffolded lagoon config (`init.mjs:279`); legacy fit OFF |
 | `none` | plain React — nothing host-specific | no adapter dependency (`init.mjs:232`); no Vite contribution (`packages/cli/src/lib/lagoon-vite.mjs:219`); legacy fit OFF |
 | `vite` | a Vite application, whose build *is* its `vite.config.ts` | no runtime adapter package — it contributes at BUILD time only (`init.mjs:231`), through `packages/adapters/vite/vite.mjs` |
 
@@ -64,7 +64,7 @@ JSX runtime, which surfaces as hooks failing in ways nothing explains.
 
 The framework's own aliases are **not** the host adapter's to supply. They used to be, which meant the
 no-install promise held for exactly the two hosts that ship an adapter, and `host: "none"` booted the
-lagoon with an empty alias list and died on "`@motu/react` could not be resolved"
+lagoon with an empty alias list and died on "`@motujs/react` could not be resolved"
 (`packages/cli/src/lib/lagoon-vite.mjs:290-303`). They are now unconditional
 (`lagoon-vite.mjs:302`).
 
@@ -99,7 +99,7 @@ declaration itself is documented on the option type at
 
 ---
 
-## `@motu/adapter-next`
+## `@motujs/adapter-next`
 
 Deliberately small, and the smallness is the claim: a Next host is already React, so an island mounts
 directly and there is no framework boundary to cross
@@ -111,9 +111,9 @@ directly and there is no framework boundary to cross
 | `nextHostBridge` / `collectingHostBridge` | the outward intent seam (`src/host-bridge.ts:43`, `:64`) |
 | `Archipelago` | the React component that mounts a region in a page (`src/archipelago.tsx`) |
 | `defineServices` / `createContract` | the contract seam (`src/services.ts`, `src/contract.ts`) |
-| `createRegion`, `Island`, `useMotuStore` | re-exported from `@motu/react` so a page has one import site (`index.ts:15`, `:19`) |
-| `@motu/adapter-next/server` | the server dispatcher, behind its own entry so a client bundle can never pull it in (`index.ts:10`, `package.json:12`) |
-| `@motu/adapter-next/verify` | the adapter-owned verify layer (`package.json:16`) |
+| `createRegion`, `Island`, `useMotuStore` | re-exported from `@motujs/react` so a page has one import site (`index.ts:15`, `:19`) |
+| `@motujs/adapter-next/server` | the server dispatcher, behind its own entry so a client bundle can never pull it in (`index.ts:10`, `package.json:12`) |
+| `@motujs/adapter-next/verify` | the adapter-owned verify layer (`package.json:16`) |
 
 ### What it is NOT
 
@@ -151,7 +151,7 @@ an island's outward contract does not change when the ocean recedes (`host-bridg
 Where there is no router — server rendering, a test, a page not yet wired — `collectingHostBridge()`
 collects intents instead of performing them, so nothing silently no-ops (`host-bridge.ts:59-70`).
 
-### `@motu/adapter-next/verify`
+### `@motujs/adapter-next/verify`
 
 The RSC boundary is Next's analogue of AngularJS's host-scope coupling: both police the one way an
 island can silently bind itself to its host (`packages/adapters/next/verify.mjs:1-15`). The core
@@ -272,9 +272,9 @@ and all three reference projects are `light` — including the AngularJS one
 
 ## No install of the framework itself
 
-`@motu/*` ship compiled (`node scripts/build-packages.mjs`, which `./install.sh` runs), so an app can
+`@motujs/*` ship compiled (`node scripts/build-packages.mjs`, which `./install.sh` runs), so an app can
 depend on them normally — and an installed package sits inside the host's own `node_modules`, so
-`import 'react'` from inside `@motu/react` resolves to the **host's** React and the peer dependency
+`import 'react'` from inside `@motujs/react` resolves to the **host's** React and the peer dependency
 means what it says. Consumed as raw TypeScript through a symlink it could not: Node resolution walks up
 from a module's *real* path, leaving the host's tree entirely (`scripts/build-packages.mjs:6`).
 
@@ -288,16 +288,16 @@ Three mechanisms carry the framework into a project with no install:
 
 1. **Vite aliases** for the lagoon, anchored regexes rather than the object form — Vite's alias matcher
    is exact-or-prefix-with-a-slash, which never matches `pkg/styles.css?inline` and lets
-   `@motu/runtime` swallow `@motu/runtime/mock` (`packages/cli/src/lib/lagoon-vite.mjs:200-214`,
+   `@motujs/runtime` swallow `@motujs/runtime/mock` (`packages/cli/src/lib/lagoon-vite.mjs:200-214`,
    `packages/cli/src/commands/init.mjs:83-86`).
 2. **`tsconfig` paths**, mirrored from the same entry map (`init.mjs:52-62`).
-3. **Real symlinks in the project's own gitignored `node_modules/@motu/`**, for plain node — the
+3. **Real symlinks in the project's own gitignored `node_modules/@motujs/`**, for plain node — the
    runtime harness and the evidence loaders `import()` the project's files, which import
-   `@motu/react`, and node knows nothing about either alias
+   `@motujs/react`, and node knows nothing about either alias
    (`packages/cli/src/lib/util.mjs:418-453`). Seven packages are linked: `core`, `react`, `runtime`,
    `types`, `debug-overlay`, `chrome`, `coverage` (`util.mjs:438`). `chrome` belongs there even though
-   a host never imports it by name, because `@motu/core`'s toolbar does — and a host that aliases
-   `@motu/*` to source resolves from its own tree and would get an unresolved import from inside a
+   a host never imports it by name, because `@motujs/core`'s toolbar does — and a host that aliases
+   `@motujs/*` to source resolves from its own tree and would get an unresolved import from inside a
    package it never named (`util.mjs:433-437`).
 
 Node's aliases are then serialised for the loader, with the **project's React first** so nothing else
@@ -314,9 +314,9 @@ than on anything about the island (`node-aliases.mjs:8-14`).
 `ensureNoInstallLinks` runs **first, on every CLI invocation**
 (`packages/cli/src/run.mjs:181-193`), not once at `init`. The reason is recorded there:
 
-> `motu init` symlinks `node_modules/@motu/*` into the checkout, which is what lets a project depend on
+> `motu init` symlinks `node_modules/@motujs/*` into the checkout, which is what lets a project depend on
 > nothing. `npm install` then deletes them as extraneous — measured on an Angular app, where the next
-> build failed with `Cannot find module '@motu/react'`, an error pointing nowhere near the cause.
+> build failed with `Cannot find module '@motujs/react'`, an error pointing nowhere near the cause.
 > (bun and pnpm left them alone, so this is invisible on the machines motu grew up on.)
 
 Re-linking is a handful of `existsSync` calls and makes the mechanism survive the host's package
@@ -346,14 +346,14 @@ block, so the check can never leave a repo half-stripped, including when the typ
 
 Two motu specifiers survive the surgery on purpose:
 
-- **`@motu/types`** — a type-only package with not a single value export
+- **`@motujs/types`** — a type-only package with not a single value export
   (`packages/types/src/index.ts:1-12`), so an app file importing it emits nothing. The guarantee is
   about the *runtime* and is unchanged; stripping it would prove something weaker while looking
   stricter (`removal-check.mjs:117-128`).
-- **`@motu/chrome`** — motu's design kit. Its tags are not unwrapped, because unwrapping means "keep
+- **`@motujs/chrome`** — motu's design kit. Its tags are not unwrapped, because unwrapping means "keep
   the children, drop the wrapper", which is right for `<X.Island>` and wrong for a `<Panel>` that *is*
   the content. The import is still removed, which is what makes the honest diagnostic appear. It also
-  states something real: an app that builds its UI out of `@motu/chrome/react` is load-bearing on motu
+  states something real: an app that builds its UI out of `@motujs/chrome/react` is load-bearing on motu
   for its *appearance* (`removal-check.mjs:196-217`).
 
 ### How it finds what to touch
@@ -416,7 +416,7 @@ and a cache that cannot be written just means the next run re-proves it (`:592`)
 
 A project may declare `"removable": false` (`packages/cli/src/lib/config.mjs:252-265`). motu's own
 surfaces do: the review console composes regions with `createRegion` and paints from
-`@motu/chrome/react`, and motu is load-bearing there by choice — "does it compile without motu" is not
+`@motujs/chrome/react`, and motu is load-bearing there by choice — "does it compile without motu" is not
 a question about its integration. It is reported as a **SKIP, never a pass**, because opting out proves
 nothing and the verdict must not read like proof (`removal-check.mjs:285-297`). It is not a hatch for
 an adopting app that finds removal inconvenient; for those the answer stays FAIL. Default is `true`: a
@@ -461,7 +461,7 @@ The [design and limits](15-design-and-limits.md#known-limits) page lists the hea
   (`packages/cli/src/lib/scaffold.mjs:48`, `packages/cli/src/lib/islands.mjs:64`).
 - **A Next host needs bundler wiring beyond the aliases:** `experimental.externalDir: true` (the
   checkout is outside the project root), `resolve.extensionAlias { '.js': ['.ts', '.tsx', '.js'] }`,
-  and exact-match alias keys, or `@motu/runtime` swallows `@motu/runtime/mock`.
+  and exact-match alias keys, or `@motujs/runtime` swallows `@motujs/runtime/mock`.
 - **A Next host is not necessarily a Tailwind host.** The adapter used to assume it was and served a
   500 naming a generated file the project never wrote; it now looks for a config first
   (`packages/adapters/next/vite.mjs:30-44`).

@@ -32,14 +32,14 @@ import { createHash } from 'node:crypto';
 import { groupView } from '@/src/host/group-routes';
 import { parseMemberAssetPath } from '@/src/host/records';
 import { railMembers, focusIndex } from '@/src/host/lagoon-rail';
-// @motu/host is plain ESM node; tsc reads it through allowJs.
-import { lagoonPage } from '@motu/host/src/views.mjs';
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
+import { lagoonPage } from '@motujs/host/src/views.mjs';
 import { store, access, normalizeRepo } from '@/src/host/store';
-// @motu/host is plain ESM node; tsc reads it through allowJs.
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
 import { visibilityFor } from '@/src/host/visibility';
-import { canRead } from '@motu/host/src/access.mjs';
+import { canRead } from '@motujs/host/src/access.mjs';
 // The SAME ramp every other motu surface wears — see bootSplashFor.
-import { primaryVars } from '@motu/chrome/primary';
+import { primaryVars } from '@motujs/chrome/primary';
 import {
   apiHealth, apiRepos, apiGroups, apiBaselines, shot, repoListing, record as serveRecord,
 } from '@/src/host/read-routes';
@@ -68,8 +68,8 @@ export const runtime = 'nodejs';
  * message, so this is byte-identical to what the host would have said had the record simply not
  * existed.
  */
-// `@motu/host` is plain ESM node; tsc reads it through allowJs, so no directive is needed here.
-import { errorPage } from '@motu/host/src/views.mjs';
+// `@motujs/host` is plain ESM node; tsc reads it through allowJs, so no directive is needed here.
+import { errorPage } from '@motujs/host/src/views.mjs';
 
 function notFound(record: { repo: string; ref: string; slug: string }) {
   return new Response(errorPage(404, refusalMessage(record)), {

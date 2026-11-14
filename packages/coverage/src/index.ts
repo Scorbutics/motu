@@ -349,7 +349,7 @@ export function diffFromNearest(
 
 // --- THE BEACON ----------------------------------------------------------------------------------
 
-import { archipelagoConfigs, getArchipelagoStore, bindEntries, writtenKeys, isSandbox, setRegionCoverageInstaller } from '@motu/core';
+import { archipelagoConfigs, getArchipelagoStore, bindEntries, writtenKeys, isSandbox, setRegionCoverageInstaller } from '@motujs/core';
 
 /**
  * Every region key the archipelago declares: what islands READ (bind), what they PRODUCE (writes),
@@ -700,7 +700,7 @@ const installed = new Map<string, RegionCoverageHandle>();
  * Turn coverage on for this application — the ONE call the generated island registry makes, and the
  * only reason this package is ever imported.
  *
- * That is the whole point of it living outside `@motu/core`. Core called `installRegionCoverage`
+ * That is the whole point of it living outside `@motujs/core`. Core called `installRegionCoverage`
  * unconditionally from `defineArchipelago`, which put this module in every project's graph whether or
  * not the project had enabled anything: no bundler can drop a module something calls. Here, a project
  * with coverage off never generates the import, and pays nothing.

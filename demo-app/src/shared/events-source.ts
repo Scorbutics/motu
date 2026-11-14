@@ -11,7 +11,7 @@
 // — the event may have filled a second ago, or your membership may be suspended — so the button asks
 // and this source answers: it calls the port, then REFETCHES. An island that wrote `myRsvps` itself
 // would be claiming a result only the database can give, and would show you a seat you do not have.
-import type { Source } from '@motu/types';
+import type { Source } from '@motujs/types';
 import { firstString, type MemberRow } from './member-types.js';
 import { IDLE_RSVP, type Attendee, type ClubEvent, type RsvpRefusal, type RsvpState } from './event-types.js';
 

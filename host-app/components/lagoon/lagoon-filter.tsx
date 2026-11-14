@@ -8,7 +8,7 @@
 // two listing islands narrow themselves. That is the coupling the region exists to declare: one
 // island changes what another shows, and neither knows the other exists.
 import { useCallback } from "react"
-import { Search } from "@motu/chrome/react"
+import { Search } from "@motujs/chrome/react"
 
 export interface LagoonFilterProps {
   query?: string

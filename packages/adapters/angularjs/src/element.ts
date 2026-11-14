@@ -6,7 +6,7 @@
 // events exactly the same way. Defaults to LIGHT DOM — shadow DOM fights $compile/$digest and the
 // legacy global CSS the component expects.
 
-import { defineIsland, type IslandElementOptions, type IslandInstance } from '@motu/core';
+import { defineIsland, type IslandElementOptions, type IslandInstance } from '@motujs/core';
 import { motuAngularInjector } from './host';
 
 function angular(): any {

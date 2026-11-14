@@ -4,7 +4,7 @@
 // writing is not "the store kept what we handed it" — that cannot fail — but what the OTHER island
 // SHOWS once the form has spoken. Every assertion below is on the card's rendered text while the
 // stimulus goes into the form.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { EMPTY, PARTIAL, PREMIUM, STANDARD } from '../../shared/member-draft-evidence.js';
 
 const SEED = { draft: EMPTY };

@@ -13,7 +13,7 @@
 //
 // THE CORPUS IS DATA, NEVER AN ADDRESS. It arrives as a build constant read from a file the CLI
 // sanitised; nothing here fetches, and there is no URL or token to leak into a published page.
-import { fingerprintRegion, fingerprintId, type CoverageCorpus, type CoverageEntry, type RegionFingerprint, type KeyState } from '@motu/coverage';
+import { fingerprintRegion, fingerprintId, type CoverageCorpus, type CoverageEntry, type RegionFingerprint, type KeyState } from '@motujs/coverage';
 
 declare const __MOTU_CORPUS__: Record<string, CoverageCorpus> | undefined;
 

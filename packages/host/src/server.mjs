@@ -1000,7 +1000,7 @@ export function createLagoonHost({ dir, maxRecords = DEFAULT_MAX_RECORDS, maxByt
    *
    * FOLDED HERE, NOT APPENDED. A corpus is a set of distinct states with counts, and two corpora for
    * the same declaration are added by merging their entries — which is arithmetic on motu's own
-   * format, and the reason `mergeCorpora` lives in @motu/coverage rather than in each backend that
+   * format, and the reason `mergeCorpora` lives in @motujs/coverage rather than in each backend that
    * ever stores one. Appending would give a file that grows with traffic and a report that counts the
    * same state many times.
    *

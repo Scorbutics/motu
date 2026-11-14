@@ -8,7 +8,7 @@
 // That is why there is not a single value in this file. Not a helper, not a constant, not a `const
 // enum`. The moment one appears the sentence above becomes false, the app has a runtime dependency on
 // the framework, and `removal-check` is proving something weaker than it claims. If a helper is
-// wanted, it belongs in `@motu/core`, which the app does not import.
+// wanted, it belongs in `@motujs/core`, which the app does not import.
 //
 // What earns a place here is the vocabulary an application needs to describe ITS OWN data. The test:
 // "does the app need this word to say what it holds?" — `Source` passes, `Channel` does not. A channel

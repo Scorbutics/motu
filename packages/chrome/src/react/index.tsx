@@ -2,12 +2,12 @@
 //
 // The shapes are declared once in `../kit.mjs` — a stylesheet a server can inline and a shadow root
 // can adopt. These are the components that USE them, for the two surfaces of motu that are React
-// applications: the seam lens (`@motu/debug-overlay`) and the review console.
+// applications: the seam lens (`@motujs/debug-overlay`) and the review console.
 //
-// WHY A SUBPATH AND NOT THE PACKAGE ROOT. `@motu/chrome` is plain `.mjs` on purpose: the lagoon host
+// WHY A SUBPATH AND NOT THE PACKAGE ROOT. `@motujs/chrome` is plain `.mjs` on purpose: the lagoon host
 // serves pages from bare node with no bundler, and `packages/host` imports the root directly. A
 // `.tsx` at the root would close that door, which is the door this package was created to keep open.
-// So React lives behind `@motu/chrome/react`, which only a bundler ever resolves, and the root stays
+// So React lives behind `@motujs/chrome/react`, which only a bundler ever resolves, and the root stays
 // exactly as node-readable as it was.
 //
 // EVERY COMPONENT IS THIN. It maps props to the kit's classes and data attributes and spreads the

@@ -1,5 +1,5 @@
 {
-  "name": "@motu/host-app",
+  "name": "@motujs/host-app",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,13 +12,13 @@
     "motu": "node ../packages/cli/src/run.mjs"
   },
   "dependencies": {
-    "@motu/adapter-next": "workspace:*",
-    "@motu/chrome": "workspace:*",
-    "@motu/core": "workspace:*",
-    "@motu/host": "workspace:*",
-    "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*",
-    "@motu/types": "workspace:*",
+    "@motujs/adapter-next": "workspace:*",
+    "@motujs/chrome": "workspace:*",
+    "@motujs/core": "workspace:*",
+    "@motujs/host": "workspace:*",
+    "@motujs/react": "workspace:*",
+    "@motujs/runtime": "workspace:*",
+    "@motujs/types": "workspace:*",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "motu-host-islands": "workspace:*",

@@ -4,7 +4,7 @@
 // 100% motu, by design: it imports nothing from the application, which is what keeps it deletable
 // whole. Copied in shape from `index-region.tsx` rather than decided again — the transport and host
 // bridge are environment decisions this project already made.
-import { createRegion, nextHostBridge } from '@motu/adapter-next';
+import { createRegion, nextHostBridge } from '@motujs/adapter-next';
 import { useRouter } from 'next/navigation';
 import { ELEMENT_REGISTRY } from 'motu-host-islands';
 // The ARCHIPELAGO from its own module, never the barrel beside the registry — a barrel pulls in every

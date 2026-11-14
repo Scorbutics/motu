@@ -8,7 +8,7 @@ import { declaredSourcesOf } from '../../lib/declared-sources.mjs';
 import { readEffectEntries } from '../../lib/effects.mjs';
 import { exclusiveDeclared } from '../../lib/lagoon-declares.mjs';
 import { regionRefsOf } from '../../lib/region-refs.mjs';
-import { exclusiveProblems, undeclaredAlternatives } from '@motu/core';
+import { exclusiveProblems, undeclaredAlternatives } from '@motujs/core';
 import { blankComments, islandComponentExport, islandComponentPath, lagoonViewports, names, paths, resolveAppImport } from '../../lib/util.mjs';
 import { auditRegionLagoon } from '../../playwright-lagoon.mjs';
 import { declaredWrites, readScenariosFor } from './region-flows.mjs';

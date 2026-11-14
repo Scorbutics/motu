@@ -4,7 +4,7 @@
 // first name three members share, and one member's address.
 //
 // No fixtures: the box calls nothing; the table it filters does.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 
 export const fixtures: Fixture[] = [];
 

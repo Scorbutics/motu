@@ -116,7 +116,7 @@ function proofFingerprint(candidates, extra) {
 }
 
 /** Specifiers that only exist because motu does. */
-const MOTU_SPECIFIER = /^@motu\/|^motu-islands(\/|$)/;
+const MOTU_SPECIFIER = /^@motujs\/|^motu-islands(\/|$)/;
 
 /**
  * The one motu module that STAYS, and the sentence it makes true.
@@ -124,12 +124,12 @@ const MOTU_SPECIFIER = /^@motu\/|^motu-islands(\/|$)/;
  *   Deleting motu leaves no runtime trace — the application ships byte-identical output. One
  *   TYPE-ONLY package remains, which erases at compile time.
  *
- * `@motu/types` has no value exports, so an app file importing it emits nothing: the guarantee this
+ * `@motujs/types` has no value exports, so an app file importing it emits nothing: the guarantee this
  * check exists to prove is about the RUNTIME, and it is unchanged. Stripping the import would only
  * make the app fail to typecheck against types that were never going to be there — proving something
- * weaker while looking stricter. Anything else under `@motu/` is still removed.
+ * weaker while looking stricter. Anything else under `@motujs/` is still removed.
  */
-const MOTU_TYPES_ONLY = /^@motu\/types(\/|$)/;
+const MOTU_TYPES_ONLY = /^@motujs\/types(\/|$)/;
 
 /**
  * Which JSX tags in THIS file disappear with motu.
@@ -279,7 +279,7 @@ function unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec) {
     // this name no longer exists). The import is still removed below, which is what makes the honest
     // diagnostic appear.
     //
-    // It also states something real: an application that builds its UI out of `@motu/chrome/react` is
+    // It also states something real: an application that builds its UI out of `@motujs/chrome/react` is
     // load-bearing on motu for its APPEARANCE, not just its wiring. That is a legitimate thing to
     // adopt and it should show up here as exactly what it is.
     if (CHROME_KIT.test(spec)) continue;
@@ -291,7 +291,7 @@ function unwrappableTags(sf, isMotuSpec, motuOnly, resolveSpec) {
 }
 
 /** motu's design kit: motu's own code, but presentation rather than a boundary. */
-const CHROME_KIT = /^@motu\/chrome(\/|$)/;
+const CHROME_KIT = /^@motujs\/chrome(\/|$)/;
 
 /** `Actions.Island` -> `Actions`: what a qualified JSX tag was imported as. */
 function rootTagName(tag) {
@@ -334,7 +334,7 @@ function motuOnlySet(graph, hostRoot, motuDirs) {
 
   // A FILE INSIDE A MOTU-OWNED DIRECTORY IS MOTU'S, whatever it imports.
   //
-  // The specifier test above can only recognise motu by how a module is SPELLED (`@motu/…`, or a path
+  // The specifier test above can only recognise motu by how a module is SPELLED (`@motujs/…`, or a path
   // through the motu directory), which works while the app reaches motu across a directory boundary
   // and fails completely for a project whose motu lives in its own `src/`: there the composition root
   // says `../islands/registry`, a relative specifier that contains no motu marker at all, and the
@@ -520,7 +520,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
   // Only the files the surgery can touch get parsed: what motu owns outright, and what mentions it.
   // A FILE THAT IMPORTS A MOTU-ONLY FILE IS A CANDIDATE, even when the specifier says nothing.
   //
-  // This selected files by how their imports are SPELLED (`@motu/…`), which misses the page that
+  // This selected files by how their imports are SPELLED (`@motujs/…`), which misses the page that
   // imports its own composition root by a relative path — `./manage-servers-binding`. That page was
   // never loaded into the rewrite project, so its `<X.Island>` tags were never unwrapped and its
   // import of the now-deleted binding was left dangling: removal then "failed" with

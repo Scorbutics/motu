@@ -14,11 +14,11 @@
     "seed:club": "node --import tsx scripts/seed-club.mjs"
   },
   "dependencies": {
-    "@motu/adapter-angularjs": "workspace:*",
-    "@motu/contract": "workspace:*",
-    "@motu/core": "workspace:*",
-    "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*",
+    "@motujs/adapter-angularjs": "workspace:*",
+    "@motujs/contract": "workspace:*",
+    "@motujs/core": "workspace:*",
+    "@motujs/react": "workspace:*",
+    "@motujs/runtime": "workspace:*",
     "@supabase/supabase-js": "^2.45.4",
     "demo-app": "workspace:*",
     "angular": "^1.8.3",

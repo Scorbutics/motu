@@ -22,10 +22,10 @@
 // you are reading this because you are about to change the arithmetic on either side: the test is the
 // thing that was supposed to stop you doing it in only one place.
 import { db, one } from '../db.ts'
-// @motu/coverage compiles to plain ESM; bare node reads it exactly as the browser does.
-import { fingerprintId, type RegionFingerprint } from '@motu/coverage'
+// @motujs/coverage compiles to plain ESM; bare node reads it exactly as the browser does.
+import { fingerprintId, type RegionFingerprint } from '@motujs/coverage'
 
-/** One state, as @motu/coverage's own format has it. */
+/** One state, as @motujs/coverage's own format has it. */
 export type CoverageEntry = {
   // THE PACKAGE'S OWN TYPE, not `Record<string, string>`. `KeyState` is a closed set — 'absent',
   // 'null', 'set', '= <value>' and so on — and widening it here would let a corpus that motu's own

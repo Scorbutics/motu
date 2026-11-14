@@ -12,7 +12,7 @@
 // the archipelago still declares the wiring, the root still chooses the transport and the host bridge.
 // That split is what lets the lagoon mount the same region against mocks — so it stays.
 import { createElement, type ReactElement, type ReactNode } from 'react';
-import { configure, type Transport } from '@motu/runtime';
+import { configure, type Transport } from '@motujs/runtime';
 import {
   provideToArchipelago,
   seedArchipelago,
@@ -26,7 +26,7 @@ import {
   type RegionOf,
   type SlotsOf,
   type ProducedKeys,
-} from '@motu/core';
+} from '@motujs/core';
 import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot } from './react-island';
 import type { ElementSpec } from './bootstrap';
 

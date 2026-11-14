@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { MemberForm, type MemberFormProps } from '../../ui/member-form/MemberForm.js';
 
 export const memberFormElement: ElementSpec = {

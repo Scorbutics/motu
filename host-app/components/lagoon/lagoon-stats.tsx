@@ -6,7 +6,7 @@
 // LABEL over a VALUE and tabular figures, so they line up and can be compared at a glance. The kit's
 // `Meter` is exactly that — dt/dd pairs, uppercase labels, `font-variant-numeric: tabular-nums` — and
 // the first version reimplemented none of it as one template string.
-import { Meter } from "@motu/chrome/react"
+import { Meter } from "@motujs/chrome/react"
 import { size } from "@/src/host/format"
 
 export interface LagoonStatsProps {

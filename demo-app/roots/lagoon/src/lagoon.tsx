@@ -1,9 +1,9 @@
 // Thin lagoon entry: reads the vite-injected target/fit and hands the generic lagoon harness
-// (@motu/react → bootstrapLagoon) the project's element registry, fixtures, and archipelago resolver.
+// (@motujs/react → bootstrapLagoon) the project's element registry, fixtures, and archipelago resolver.
 // All harness logic is framework-side; this file only supplies app-specific inputs.
-import { bootstrapLagoon } from '@motu/react';
-import { setDefaultIsolation } from '@motu/core';
-import { angularHostScopeChannel } from '@motu/adapter-angularjs';
+import { bootstrapLagoon } from '@motujs/react';
+import { setDefaultIsolation } from '@motujs/core';
+import { angularHostScopeChannel } from '@motujs/adapter-angularjs';
 import { ELEMENT_REGISTRY, getArchipelago, ALL_FIXTURES, ALL_ROLES } from 'demo-app';
 import 'demo-app/fonts';
 import css from 'demo-app/styles.css?inline';

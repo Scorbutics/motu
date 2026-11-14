@@ -3,7 +3,7 @@
 //
 // Deliberately NOT a component framework. These are functions returning strings, because the consumer
 // is a node http server with no bundler — and because the shapes worth sharing are few. Anything
-// interactive belongs in `@motu/react`'s tide line, where it already is.
+// interactive belongs in `@motujs/react`'s tide line, where it already is.
 import { motuChromeCss } from './css.mjs';
 
 export function escapeHtml(s) {

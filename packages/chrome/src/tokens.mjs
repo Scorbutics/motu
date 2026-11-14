@@ -1,16 +1,16 @@
 // motu's design language, in one place, as data.
 //
-// WHY THIS PACKAGE EXISTS. The palette used to live in `@motu/core/toolbar.ts`, whose own comment
+// WHY THIS PACKAGE EXISTS. The palette used to live in `@motujs/core/toolbar.ts`, whose own comment
 // claims it is "one place, so the tooling cannot drift into a second brand colour" — true for
 // everything Vite compiles, and false for everything else. The lagoon host renders pages from bare
 // node with no bundler, so it could not import a single token and grew its own dark-slate palette:
 // a second brand, exactly what that comment forbids.
 //
 // So the tokens moved DOWN, into a package with no dependencies and no TypeScript, importable by
-// Vite (which compiles `@motu/core`) and by plain `node` (which serves the host) alike. Anything that
+// Vite (which compiles `@motujs/core`) and by plain `node` (which serves the host) alike. Anything that
 // paints motu's own chrome — as opposed to an application's UI — reads from here.
 //
-// PLAIN .mjs ON PURPOSE. `@motu/*` ship as raw TypeScript and are transpiled by whatever bundler the
+// PLAIN .mjs ON PURPOSE. `@motujs/*` ship as raw TypeScript and are transpiled by whatever bundler the
 // consumer already runs; the host runs none. ESM that node executes as-is is the only form both can
 // consume, and it is the same choice the CLI and codegen already made.
 

@@ -1,0 +1,71 @@
+# Publish the @motujs/* packages to npm when a version tag is pushed.
+#
+#   node scripts/release.mjs --version 0.2.0 --bump-only
+#   git commit -am "release: v0.2.0" && git tag v0.2.0 && git push --follow-tags
+#
+# NO TOKEN, NO OTP. npm TRUSTED PUBLISHING: each @motujs package on npmjs.com names this repository
+# and this file (`release.yml`) as allowed to publish it, and npm trades this job's OIDC identity for
+# a one-shot credential. Nothing secret lives in the repository settings, so nothing can leak from
+# them — and every tarball carries a provenance statement linking it to the commit that built it.
+#
+# The trust is per package and must be configured once on npmjs.com (Settings → Trusted publisher →
+# GitHub Actions: Scorbutics / motu / release.yml). A package that has not been is refused with
+# E404/ENEEDAUTH on its publish, and release.mjs reports what went out before it.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+# The tag is the only trigger. Two runs for one tag would race on the same versions.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish @motujs/*
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm exchanges — the whole of the authentication
+    steps:
+      - uses: actions/checkout@v4
+
+      # BEFORE setup-node: see verify.yml — `cache: pnpm` needs the binary corepack provides.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; node 22 ships 10.x.
+      - name: Upgrade npm
+        run: npm install -g npm@latest && npm --version
+
+      - name: Install
+        env:
+          # The packages are published, not exercised: no browser is needed to build them.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: pnpm install --frozen-lockfile
+
+      # The same gates as verify.yml, in the same order: `dist/` is gitignored and every @motujs
+      # package resolves through it, so nothing typechecks until the build has run.
+      # (release.mjs builds again before packing; the second build is seconds and makes the
+      # script safe to run on its own.)
+      - name: Build packages
+        run: node scripts/build-packages.mjs
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Package unit tests
+        run: node --test packages/cli/test/*.test.mjs packages/core/test/*.test.mjs packages/chrome/test/*.test.mjs packages/host/test/*.test.mjs packages/react/test/*.test.mjs
+
+      # release.mjs checks the tag against the manifests, builds, skips versions already on the
+      # registry, then packs with pnpm and publishes with npm (--provenance).
+      - name: Publish
+        run: node scripts/release.mjs

@@ -12,7 +12,7 @@
 // is a presentation decision made here; the region never holds a state by that name, which is why
 // nothing can fail to find it.
 import { useCallback } from "react"
-import { List, ListItem, Row } from "@motu/chrome/react"
+import { List, ListItem, Row } from "@motujs/chrome/react"
 import type { LagoonState } from "@/app/lagoon-view-region"
 
 export interface DockStatesProps {

@@ -13,6 +13,7 @@ import { dirname, resolve } from 'node:path';
 import { paths, names, color } from '../lib/util.mjs';
 import { recordLagoon } from '../playwright-lagoon.mjs';
 import { scenarioInputs } from '../lib/data-flow.mjs';
+import { CHROMIUM_INSTALL } from '../lib/framework.mjs';
 
 const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../runtime-harness.mjs');
 const CLI_PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,7 +62,7 @@ export async function fixturesRecordCommand(argv) {
   } catch (err) {
     const msg = String(err?.message || err).split('\n')[0];
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
-      console.error(color.red('✗ Chromium not installed — run `npx playwright install chromium` (in packages/cli)'));
+      console.error(color.red(`✗ Chromium not installed — run ${CHROMIUM_INSTALL}`));
     } else {
       console.error(color.red(`✗ recording failed: ${msg}`));
     }
@@ -136,7 +137,7 @@ function renderFixtures(kebab, calls, seed, transport) {
       : '';
   return `// RECORDED fixtures for x-${kebab} — captured from the ${transport ?? 'mock'} transport by \`motu fixtures record\`.
 // Request-keyed (\`match\` = the exact call args). Merge the ones you want into fixtures.mock.ts.
-import type { Fixture } from '@motu/runtime/mock';
+import type { Fixture } from '@motujs/runtime/mock';
 
 export const fixtures: Fixture[] = [
 ${rows.join('\n')}

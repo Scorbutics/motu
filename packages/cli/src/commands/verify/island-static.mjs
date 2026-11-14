@@ -65,19 +65,19 @@ export function staticChecks(report, componentPath, pascal) {
   for (const imp of sf.getImportDeclarations()) {
     const spec = imp.getModuleSpecifierValue();
     if (httpLibs.has(spec)) {
-      report.error('contract-only-io', `imports HTTP client '${spec}' — use @motu/contract`, line(imp));
+      report.error('contract-only-io', `imports HTTP client '${spec}' — use @motujs/contract`, line(imp));
       badImport = true;
     }
-    if (spec === '@motu/runtime' || spec === '@motu/runtime/mock') {
+    if (spec === '@motujs/runtime' || spec === '@motujs/runtime/mock') {
       for (const n of imp.getNamedImports()) {
         if (rawTransport.has(n.getName())) {
-          report.error('contract-only-io', `imports raw transport '${n.getName()}' — use @motu/contract`, line(imp));
+          report.error('contract-only-io', `imports raw transport '${n.getName()}' — use @motujs/contract`, line(imp));
           badImport = true;
         }
       }
     }
   }
-  if (!badImport) report.ok('contract-only-io', 'server I/O only via @motu/contract');
+  if (!badImport) report.ok('contract-only-io', 'server I/O only via @motujs/contract');
 
   // Layer discipline: a ui/ component is the reusable "mainland" — it must not reach back into the
   // mount points (islands/) or compositions (archipelagos/), so it stays liftable and islands can't
@@ -93,11 +93,11 @@ export function staticChecks(report, componentPath, pascal) {
   }
   if (!sawLayerViolation) report.ok('ui-layering', 'ui component does not reach into islands/ or archipelagos/');
 
-  // Contract calls: every @motu/contract service.method the component invokes must exist in the
+  // Contract calls: every @motujs/contract service.method the component invokes must exist in the
   // generated contract — catches invented endpoints / method names stale after a backend change.
   const contractServices = new Set();
   for (const imp of sf.getImportDeclarations()) {
-    if (imp.getModuleSpecifierValue() === '@motu/contract' && !imp.isTypeOnly()) {
+    if (imp.getModuleSpecifierValue() === '@motujs/contract' && !imp.isTypeOnly()) {
       for (const n of imp.getNamedImports()) contractServices.add(n.getName());
     }
   }
@@ -114,11 +114,11 @@ export function staticChecks(report, componentPath, pascal) {
       if (seen.has(key)) continue;
       seen.add(key);
       if (pairs.size && !pairs.has(key)) {
-        report.error('contract-calls', `calls ${key}() which isn't in @motu/contract`, line(call));
+        report.error('contract-calls', `calls ${key}() which isn't in @motujs/contract`, line(call));
         badCall = true;
       }
     }
-    if (!badCall) report.ok('contract-calls', 'contract calls exist in @motu/contract');
+    if (!badCall) report.ok('contract-calls', 'contract calls exist in @motujs/contract');
   }
 
   // Renders from default props alone. The lagoon mount below is the authoritative check (it mounts

@@ -3,7 +3,7 @@
 // The picture is the reason this console exists, and it had no scenarios — so a restyle of the frame
 // around it could not be looked at before or after. These are the states the frame can be in; the
 // image itself needs `shotUrl`, which the lagoon supplies as a stand-in (see roots/lagoon/src/lagoon.tsx).
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { SELECTED, SHOTS } from '../shared/review-evidence.js';
 
 export const scenarios: Scenario[] = [

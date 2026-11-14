@@ -7,7 +7,7 @@
 //
 // It lived in `lagoon.mjs` and was therefore reachable only from `lagoon serve` — which is why
 // `motu lagoon dev` had no dock at all while the documentation said it did.
-import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
+import { motuDockCss, motuDockJs } from '@motujs/chrome/dock';
 
 /** Append the dock to a page's HTML. It takes over only a lagoon it can drive; see the script below. */
 export function injectDock(page) {

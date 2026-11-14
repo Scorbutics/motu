@@ -8,7 +8,7 @@
 // This is deliberately the whole adapter surface for navigation. There is no `defineNextElement`:
 // a Next host is already React, so an island mounts as a plain component and needs no custom-element
 // wrapper to cross a framework boundary.
-import type { HostBridge } from '@motu/core';
+import type { HostBridge } from '@motujs/core';
 
 /** The slice of Next's App Router this bridge needs — structural, so it accepts the real
  *  `useRouter()` return value without importing next/navigation into the framework. */

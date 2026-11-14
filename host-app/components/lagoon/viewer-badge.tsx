@@ -9,7 +9,7 @@
 // IT OWNS NOTHING. Signing out is a form POST to `/auth/signout`, not a callback: the region has no
 // key for "signed out" because the consequence is a NAVIGATION, and a no-JavaScript form is the
 // smallest thing that can do it. The sign-in region records the same shape for the same reason.
-import { Avatar } from "@motu/chrome/react"
+import { Avatar } from "@motujs/chrome/react"
 import type { Viewer } from "@/src/auth/viewer"
 
 export interface ViewerBadgeProps {

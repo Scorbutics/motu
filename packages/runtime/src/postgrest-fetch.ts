@@ -1,5 +1,5 @@
 import { MotuError } from './index';
-import { beginCall, reachOwner, recordOutbound } from '@motu/core';
+import { beginCall, reachOwner, recordOutbound } from '@motujs/core';
 import { MockTransport, type Fixture } from './mock';
 
 /**
@@ -165,7 +165,7 @@ const reachKey = '__motuDataReach';
 /**
  * Who is reaching, right now.
  *
- * `reachOwner()` lives in @motu/core beside the island window `traced` already uses, so a host-module
+ * `reachOwner()` lives in @motujs/core beside the island window `traced` already uses, so a host-module
  * call and a backend reach agree about who asked. Imported lazily-safe: this module is also loaded in
  * plain node by the fixture tests, where no window is ever open and the answer is `unattributed`.
  */

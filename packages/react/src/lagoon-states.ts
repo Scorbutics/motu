@@ -25,7 +25,7 @@
 // A WRONG NAME MUST NOT RENDER. The failure this is built to refuse is the quiet one: ask for a
 // scenario that does not exist, get the default state, and believe you are looking at the state you
 // named. So an unresolvable state is a banner and a refusal to mount, never a fallback.
-import type { RegionScenario, RegionStep, Scenario } from '@motu/runtime/mock';
+import type { RegionScenario, RegionStep, Scenario } from '@motujs/runtime/mock';
 
 /** One archipelago this build can be opened on, as the catalogue lists it. */
 export interface LagoonRegionEntry {

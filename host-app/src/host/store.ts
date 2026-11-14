@@ -11,9 +11,9 @@
 // `store.mjs` stops being sufficient and this decision has to be revisited BEFORE scaling out, not
 // after.
 import { resolve } from 'node:path'
-// @motu/host is plain ESM node; tsc reads it through allowJs.
-import { openStore } from '@motu/host/src/store.mjs'
-import { loadAccess } from '@motu/host/src/access.mjs'
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
+import { openStore } from '@motujs/host/src/store.mjs'
+import { loadAccess } from '@motujs/host/src/access.mjs'
 
 /**
  * Where the host keeps its store — configured, no default.

@@ -23,7 +23,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openStore } from '@motu/host/src/store.mjs'
+import { openStore } from '@motujs/host/src/store.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 

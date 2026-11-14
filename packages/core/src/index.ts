@@ -97,6 +97,6 @@ export type {
 } from './island';
 
 // WHICH STATES A REGION HAS ACTUALLY BEEN IN — the SEAM only. The fold, the fingerprint, the beacon
-// and the comparison are `@motu/coverage`, which core never imports: see ./sandbox.ts for why.
+// and the comparison are `@motujs/coverage`, which core never imports: see ./sandbox.ts for why.
 export { markSandbox, isSandbox, setRegionCoverageInstaller, offerRegionToCoverage } from './sandbox';
 export type { RegionCoverageInstaller } from './sandbox';

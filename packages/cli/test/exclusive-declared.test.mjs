@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { exclusiveProblems, undeclaredAlternatives } from '@motu/core';
+import { exclusiveProblems, undeclaredAlternatives } from '@motujs/core';
 import { exclusiveDeclared } from '../src/lib/lagoon-declares.mjs';
 
 function withFile(text, fn) {
@@ -25,7 +25,7 @@ function withFile(text, fn) {
 }
 
 const REVIEW = `
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import { ReviewLayout } from './layout';
 import { Skeleton } from './skeleton';
 export const review = archipelago<R>()({

@@ -3,7 +3,7 @@
 // every check drives (`lagoon.tsx`) — so a link and a check see the same world.
 //
 // Nothing here is invented: the latency is the port's own option, and the members are seed rows.
-import { defineWorlds } from '@motu/react';
+import { defineWorlds } from '@motujs/react';
 import { SEED_MEMBERS, seedEventsPort } from 'demo-app';
 import { EVIDENCE_NOW, KAREN } from 'demo-app/evidence/events';
 

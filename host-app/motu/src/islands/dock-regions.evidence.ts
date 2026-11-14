@@ -2,7 +2,7 @@
 //
 // A CONTROLLED CONTROL: the region holds both keys, so each state here is reachable by seeding, which
 // is also what lets a link or a flow put the list into any of them.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { STATIONS } from '../shared/lagoon-view-evidence.js';
 
 export const fixtures = [];

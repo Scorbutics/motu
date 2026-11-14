@@ -16,7 +16,7 @@
 // The layout is the APPLICATION'S component — the same rule as a region's `root` and the lagoon's
 // `layout`: a second, hand-drawn copy of the arrangement is the drift this framework exists to avoid.
 import type { ComponentType, ReactNode } from 'react';
-import type { AnyArchipelagoConfig } from '@motu/core';
+import type { AnyArchipelagoConfig } from '@motujs/core';
 
 /**
  * A part of the layout that is NOT a motu region yet — a page still written as plain components.

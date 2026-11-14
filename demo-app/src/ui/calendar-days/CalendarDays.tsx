@@ -1,4 +1,4 @@
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 import type { Calendar, DayAvailability } from '../../shared/availability-types.js';
 
 export interface CalendarDaysProps {

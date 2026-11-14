@@ -1,5 +1,5 @@
 // Lagoon EVIDENCE for shot-list.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { SHOTS, SHOTS_ALL_GREEN } from '../shared/review-evidence.js';
 
 export const scenarios: Scenario[] = [

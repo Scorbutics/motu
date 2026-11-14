@@ -4,7 +4,7 @@
 // Two callers: `motu lagoon dev` (a human iterating) and `motu island|archipelago verify`, which boots
 // a FOCUSED server (MOTU_TARGET) in its own process group so it can be killed cleanly and cannot
 // outlive the run holding a strict port. Both used to spawn the vite CLI against a vite.config.ts
-// scaffolded into the project; the config now comes from @motu/cli instead.
+// scaffolded into the project; the config now comes from @motujs/cli instead.
 //
 // Invoked with the project as cwd. Flags mirror the vite CLI's, because verify's process handling
 // depends on them: --port, --strictPort.

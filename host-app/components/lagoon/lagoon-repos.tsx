@@ -5,7 +5,7 @@
 // row is read beside the thing it describes, and this one is read on its own, on the surface a person
 // landed on. `scale="page"` is that end: two lines, a card, a 21px name. The first version used the
 // chrome row and the page read as a settings list.
-import { ListItem, Row, Gauge, Grow, TitleLine, Name, Kind, Pill, Sub, Trail, Enter, Dot, Empty } from "@motu/chrome/react"
+import { ListItem, Row, Gauge, Grow, TitleLine, Name, Kind, Pill, Sub, Trail, Enter, Dot, Empty } from "@motujs/chrome/react"
 import { RailedList } from "@/components/lagoon/railed-list"
 import type { LagoonRepo } from "@/app/index-region"
 

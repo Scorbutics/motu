@@ -3,7 +3,7 @@
 // a fact keeps its identity inside one world. Driven against the built output (`node scripts/build-packages.mjs`).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { channelFrom, channelSourceId } from '@motu/core';
+import { channelFrom, channelSourceId } from '@motujs/core';
 import {
   applyWorld,
   currentWorld,

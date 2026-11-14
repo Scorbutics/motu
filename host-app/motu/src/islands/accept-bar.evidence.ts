@@ -7,7 +7,7 @@
 // Every scenario names a repo. Without one the bar renders nothing at all — correct, and the reason
 // `lagoon-render` warns — and a scenario that renders nothing cannot take part in `data-flow`, which
 // compares outputs and has none to compare.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { SELECTED, SHOTS, SHOTS_ALL_GREEN } from '../shared/review-evidence.js';
 
 const REPO = 'acme/example-app';

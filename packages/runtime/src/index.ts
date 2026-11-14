@@ -1,7 +1,7 @@
 // Stripped in production: the debug overlay's instrumentation is gated on this build-time constant,
 // so the whole block below dead-code-eliminates when it is false (and is safely `undefined` under
 // bare Node/tsc, where the typeof guard evaluates to false rather than throwing).
-import { runWithIsland as coreRunWithIsland, ambientIsland, recordOutbound, beginCall } from '@motu/core';
+import { runWithIsland as coreRunWithIsland, ambientIsland, recordOutbound, beginCall } from '@motujs/core';
 
 declare const __MOTU_DEBUG__: boolean;
 const DEBUG = typeof __MOTU_DEBUG__ !== 'undefined' && __MOTU_DEBUG__;
@@ -55,7 +55,7 @@ export interface CallEvent {
 type CallObserver = (e: CallEvent) => void;
 const callObservers = new Set<CallObserver>();
 let callSeq = 0;
-// The window itself lives in @motu/core, so a traced host-module call and a contract call are
+// The window itself lives in @motujs/core, so a traced host-module call and a contract call are
 // attributed by the SAME open window. Two copies meant `runWithIsland` from here left `traced` blind:
 // the react adapter opens one window, and only the transport's calls carried a tag.
 const currentIsland = (): string | null => ambientIsland();

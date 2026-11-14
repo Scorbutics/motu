@@ -45,7 +45,7 @@ async function main() {
   }
 
   // 'catalogue' mode: resolve a catalogue region's declared members against the app's own capture.
-  // Runs here rather than in the CLI for one reason: `@motu/core` is TS source, so `checkCatalogue`
+  // Runs here rather than in the CLI for one reason: `@motujs/core` is TS source, so `checkCatalogue`
   // is importable under tsx and nowhere else — and a second copy of that set arithmetic in the CLI
   // would drift from the one the framework actually ships.
   if (mode === 'catalogue') {
@@ -56,7 +56,7 @@ async function main() {
         process.stdout.write(JSON.stringify({ error: 'no `capture` export' }) + '\n');
         process.exit(0);
       }
-      const { checkCatalogue } = await import('@motu/core');
+      const { checkCatalogue } = await import('@motujs/core');
       const present = (typeof capture.present === 'function' ? capture.present() : capture.present) ?? [];
       const universe = typeof capture.universe === 'function' ? capture.universe() : capture.universe;
       process.stdout.write(JSON.stringify({ report: checkCatalogue({ declared, universe, present }), present: present.length }) + '\n');
@@ -83,9 +83,9 @@ async function main() {
 
   // Imported AFTER the DOM globals exist so custom elements / shadow roots / constructable stylesheets
   // resolve against happy-dom.
-  const { configure } = await import('@motu/runtime');
-  const { MockTransport } = await import('@motu/runtime/mock');
-  const { defineLagoon } = await import('@motu/react');
+  const { configure } = await import('@motujs/runtime');
+  const { MockTransport } = await import('@motujs/runtime/mock');
+  const { defineLagoon } = await import('@motujs/react');
   // Import the app barrel by resolved path (from motu.config.json), not by a hardcoded package name,
   // so the harness works for any project layout.
   const { pathToFileURL } = await import('node:url');

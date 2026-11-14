@@ -8,13 +8,15 @@
 // Written between markers and rewritten in place, so a `motu init` on an existing repo updates the
 // block instead of appending a second copy, and anything the project added around it survives.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { frameworkFile } from './framework.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
-/** The motu checkout that owns this CLI (packages/cli/src/lib → repo root). */
-const MOTU_ROOT = resolve(here, '../../../..');
-const SOURCE = resolve(MOTU_ROOT, '.github/host-rules.md');
+/**
+ * The checkout's `.github/host-rules.md`, or the copy shipped inside @motujs/cli when installed —
+ * `<cli>/../../.github` from node_modules is nowhere, and `hostRulesText()` returning null makes
+ * `motu init` skip the rules SILENTLY (see lib/framework.mjs).
+ */
+const SOURCE = frameworkFile('.github/host-rules.md');
 
 const BEGIN = '<!-- motu:rules -->';
 const END = '<!-- /motu:rules -->';

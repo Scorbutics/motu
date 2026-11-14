@@ -16,7 +16,7 @@
 // mechanism, islands never see any of it, and the region's outward seam stays what motu says it is:
 // a `HostBridge` with a `navigate`, supplied by the composition root.
 import { useCallback, useEffect, useState } from 'react';
-import type { HostBridge } from '@motu/core';
+import type { HostBridge } from '@motujs/core';
 import { signInAs } from './session.js';
 
 /** Where the app can be. `profile` and `chapter` carry a parameter. */

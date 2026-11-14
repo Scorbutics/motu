@@ -1,9 +1,15 @@
 {
-  "name": "@motu/coverage",
+  "name": "@motujs/coverage",
   "version": "0.1.0",
   "description": "Coverage for motu regions: which declared states rendered and which backend operations a run actually reached.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "coverage", "ui-testing", "instrumentation"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/coverage"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,7 +33,7 @@
     }
   },
   "dependencies": {
-    "@motu/core": "workspace:*"
+    "@motujs/core": "workspace:*"
   },
   "files": [
     "dist"

@@ -150,6 +150,41 @@ judgment you would have to make again.
 rsync -az ubuntu@<ip>:/var/lib/motu-host/ ~/backups/motu-host/
 ```
 
+## 7. Who opens it: `/_stats`
+
+`provision.sh` also turns on a visits report, built from Caddy's access log by GoAccess every
+10 minutes and served at `https://<host>/_stats/` behind a login:
+
+```bash
+sudo cat /etc/motu-stats.env        # STATS_USER / STATS_PASSWORD
+```
+
+No script in the page, no cookie, no consent banner. What it shows: visitors and page views
+per day, referrers (`news.ycombinator.com` arrives as one; Discord and most apps send none),
+countries, browsers, and — because every state loads as `…/__motu_frame?region=…&state=…` —
+which states people actually opened.
+
+**Tag the links you post**, since the referrer is often empty: `…/latest/all?via=discord`,
+`?via=linkedin`, `?via=hn`. The lagoon ignores parameters it does not know, and each tag
+shows up as its own line in the report.
+
+What reaches the log is decided in the Caddyfile, before anything is written: `?k=` read
+secrets are deleted, IPs are masked to /24 (IPv6 /48), and the API, the CLI's 30 s live
+heartbeat, the reload stream and lagoon assets are not logged at all. Crawlers and link-preview
+bots are filtered out of the counts. Countries come from DB-IP's free country database
+(CC BY 4.0), refreshed monthly.
+
+**Turning it on for a box provisioned before this existed** — re-run the provisioning with the
+SAME names as before (a name left out loses its certificate):
+
+```bash
+scp deploy/oracle/provision.sh ubuntu@<ip>:/tmp/
+ssh ubuntu@<ip> sudo /tmp/provision.sh lagoon.example.com    # plus any other names it serves
+```
+
+To change the password, edit `/etc/motu-stats.env` and re-run `provision.sh`. To reset the
+counts: `sudo rm -rf /var/lib/motu-stats/db/*`.
+
 ## Living with Always Free
 
 - **Idle reclamation.** Oracle may reclaim an Always Free compute instance that stays

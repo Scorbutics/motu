@@ -32,7 +32,7 @@ import javax.tools.StandardLocation;
  * Emits {@code motu-manifest.json} describing every {@code @BrowserCallable} bean: its methods,
  * their positional parameter types, return types (mapped to TypeScript), and the roles declared by
  * the host's {@code @Roles} annotation. A downstream Node CLI turns this manifest into the typed
- * {@code @motu/contract} package, so the browser contract is generated, not hand-written, and
+ * {@code @motujs/contract} package, so the browser contract is generated, not hand-written, and
  * stays pinned to the compiled backend.
  * <p>
  * The processor is deliberately dependency-free: it resolves the motu and host annotations by

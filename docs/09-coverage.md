@@ -349,7 +349,7 @@ back to clients: everything the flows cover, plus everything somebody looked at 
 `maxReports`, `knownUrl` — is applied by `configureCoverage(config)`
 (`packages/coverage/src/index.ts:711`), which also fills core's seam via
 `setRegionCoverageInstaller`. That is the ONE call the generated module makes, and the only reason the
-package is ever imported (`:699`). It lives outside `@motu/core` because core used to call
+package is ever imported (`:699`). It lives outside `@motujs/core` because core used to call
 `installRegionCoverage` unconditionally from `defineArchipelago`, which put the module in every
 project's graph whether or not the project had enabled anything.
 
@@ -357,7 +357,7 @@ project's graph whether or not the project had enabled anything.
 (`packages/cli/src/lib/archipelagos.mjs:25`) and ensures the hand-owned archipelago registry imports
 it FIRST (`packages/cli/src/lib/archipelagos.mjs:66`, and see the ordering bug recorded at `:80`).
 **THE IMPORT IS THE SWITCH** (`packages/cli/src/lib/archipelagos.mjs:45`): with coverage off, the file
-is a deliberately empty `export {}` that names `@motu/coverage` nowhere, so no bundler ships it
+is a deliberately empty `export {}` that names `@motujs/coverage` nowhere, so no bundler ships it
 (`:36`). With it on, the file emits exactly `configureCoverage({ enabled: true, regions? })`
 (`packages/cli/src/lib/archipelagos.mjs:62`).
 
@@ -404,7 +404,7 @@ coverage: {
   enabled: cfg.coverage?.enabled === true,
   // NO ADDRESSES HERE. They would be baked into the generated island registry, which the lagoon
   // imports and publishes as a public page. The application renders them as meta tags; see
-  // `metaContent` in @motu/coverage. `corpusUrl` is different — it is read by the CLI on a
+  // `metaContent` in @motujs/coverage. `corpusUrl` is different — it is read by the CLI on a
   // developer's machine and never reaches a browser.
   corpusUrl: …,
   regions: …,
@@ -467,10 +467,10 @@ The CLI reads the same declaration statically, by regex over the archipelago fil
 
 ## 7. The server side
 
-`@motu/coverage` publishes four entry points (`packages/coverage/package.json`): `.`, `./server`,
+`@motujs/coverage` publishes four entry points (`packages/coverage/package.json`): `.`, `./server`,
 `./server/next`, `./server/next/known`.
 
-### `@motu/coverage/server`
+### `@motujs/coverage/server`
 
 Two handlers over web-standard `Request`/`Response`, "so the same function serves a Next route
 handler, a Vercel function, a Cloudflare Worker, Deno, Bun, or anything behind a small adapter"
@@ -562,7 +562,7 @@ answered with 502. Verified in an embedded Tomcat 10.1 (Servlet 6) deploying a W
 jar, so the web-fragment registration was exercised too: forwarded, refused token, unreachable host,
 log mode, and a `pull` of its log.
 
-### `@motu/coverage/server/next` and `/server/next/known`
+### `@motujs/coverage/server/next` and `/server/next/known`
 
 `packages/coverage/src/server/next.ts` exports `POST`, `createCoverageRoute(opts)` and a reference
 `dynamic`. `packages/coverage/src/server/next-known.ts` exports `GET`, `createKnownRoute(opts)` and
@@ -598,7 +598,7 @@ by policy:
   in production is a thing somebody switched on" (`packages/cli/src/lib/config.mjs:240`, and the same
   sentence at `packages/coverage/src/index.ts:643`).
 - **Coverage off means the package is not in the bundle.** The generated module names
-  `@motu/coverage` only when enabled (`packages/cli/src/lib/archipelagos.mjs:36`).
+  `@motujs/coverage` only when enabled (`packages/cli/src/lib/archipelagos.mjs:36`).
 - **The browser only ever talks to its own origin.** The forward to the motu host is server-to-server,
   and the ingest token appears in no bundle (`packages/coverage/src/server/index.ts:6`).
 - **The ingest token is write-only**; reading the accepted set uses a different secret
@@ -772,7 +772,7 @@ about coverage belongs here.
 
 **3. Regenerate the region-side derived files** with `motu sync`. That writes
 `archipelagos/coverage.generated.ts` and adds the one import line to the archipelago registry
-(`packages/cli/src/lib/archipelagos.mjs:25`, `:66`). Verify it names `@motu/coverage` — if coverage is
+(`packages/cli/src/lib/archipelagos.mjs:25`, `:66`). Verify it names `@motujs/coverage` — if coverage is
 off, the module is an empty `export {}` by design.
 
 **4. Wire the server route: `motu coverage init`.**
@@ -788,7 +788,7 @@ over the host's admin API (`POST /api/access/ingest`, admin credentials from
 `~/.config/motu/host.json`) and prints it once. Then it prints the ONE remaining production step in
 that platform's terms: `vercel env add MOTU_COVERAGE_TOKEN production`, a JBoss system property, or a
 plain environment variable. On a Java host (`host: "angularjs"`) it prints the servlet's steps instead.
-On any other runtime, call `handleCoverage`/`handleKnown` from `@motu/coverage/server` behind that
+On any other runtime, call `handleCoverage`/`handleKnown` from `@motujs/coverage/server` behind that
 host's adapter.
 
 **5. Render the two meta tags** in the application's document head — acme does this in

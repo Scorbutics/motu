@@ -10,10 +10,10 @@
 // mean the same thing; where both name a field, the region-first one wins, because it is the more
 // specific statement about that region.
 import { applyWorld } from './lagoon-worlds';
-import { channelRegionId } from '@motu/core';
-import type { AnyArchipelagoConfig, DeclaredChannel, RegionOf, SlotsOf } from '@motu/core';
+import { channelRegionId } from '@motujs/core';
+import type { AnyArchipelagoConfig, DeclaredChannel, RegionOf, SlotsOf } from '@motujs/core';
 import type { DeclaredWire } from './lagoon-wire';
-import type { PagePropsOf } from '@motu/core';
+import type { PagePropsOf } from '@motujs/core';
 import type { ReactNode } from 'react';
 
 /** Everything the lagoon can be told about ONE region. */

@@ -1,4 +1,4 @@
-# @motu/coverage
+# @motujs/coverage
 
 Which states a region has **actually been in**, against the states its flows **preview**.
 
@@ -70,7 +70,7 @@ mounts:
 
 The generated module is `<archipelagos>/coverage.generated.ts`, imported by your archipelago
 registry for its side effect. It is written even when coverage is OFF — as an empty module, so the
-registry's import line never changes and nothing names `@motu/coverage`, which is what keeps the
+registry's import line never changes and nothing names `@motujs/coverage`, which is what keeps the
 package out of a bundle. `motu check` fails when it drifts from the config, because a stale one still
 compiles, still type-checks and still imports; it just configures the wrong thing, and the symptom is
 coverage that never records — indistinguishable from a region nobody visited.
@@ -101,7 +101,7 @@ the goal, and a define would only oblige every host's bundler to declare a globa
 `ReferenceError`.
 
 The saving comes from the package boundary instead: with coverage off, **nothing in the project names
-`@motu/coverage`**, and a module nothing imports is a module nothing ships. Core holds only a
+`@motujs/coverage`**, and a module nothing imports is a module nothing ships. Core holds only a
 ten-line seam (`offerRegionToCoverage`) that stays a dead branch.
 
 ## What it costs to run

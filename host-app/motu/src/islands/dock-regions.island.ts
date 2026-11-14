@@ -1,6 +1,6 @@
 // Mount point for DockRegions: the application's OWN component, so the island cannot drift from what
 // the page ships.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { DockRegions } from '@/components/lagoon/dock-regions';
 
 export const element = islandElement({

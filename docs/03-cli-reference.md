@@ -23,7 +23,7 @@ installed onto `PATH` by `install.sh`. `cli.mjs` is a preflight, not the CLI: it
 been built (`packages/cli/src/cli.mjs:53-63`), exiting **2** with an instruction if either is missing,
 then imports `run.mjs`.
 
-Before dispatch, every run restores the no-install `node_modules/@motu/*` symlinks
+Before dispatch, every run restores the no-install `node_modules/@motujs/*` symlinks
 (`packages/cli/src/run.mjs:190-194`); failure there is swallowed, because a non-motu directory is a
 legitimate place to run `motu skills install`.
 
@@ -89,7 +89,7 @@ Read by the CLI itself:
 | `MOTU_ROOT` | `lib/config.mjs:308` | The framework checkout, overriding the derived one. Never written into a generated config — it stays in the environment. |
 | `MOTU_HOST_URL` | `commands/lagoon.mjs:184`, `:198`, `:518`; `commands/region-coverage.mjs:377`, `:413`; `lib/baselines.mjs:21` | Default lagoon host for `publish --remote`, snapshot baselines, coverage accept/forget, and live-gallery registration. |
 | `MOTU_HOST_TOKEN` | `commands/lagoon.mjs:255`, `:519`; `commands/region-coverage.mjs:378`, `:414`; `lib/baselines.mjs:22` | Bearer token for the same host. |
-| `MOTU_COVERAGE_TOKEN` | `commands/region-coverage.mjs:239` | Bearer for FETCHING a coverage corpus over HTTP — a **read** credential (`motu-host access --repo <r> --read`) when `corpusUrl` points at the host and the repo is private, and unnecessary when it is public. Not the ingest token, which the same variable name holds in an APPLICATION's server environment (`@motu/coverage`'s forwarder) and which cannot read (`packages/host/src/access.mjs:83`). Deliberately not a config key — config is baked into the generated registry the lagoon publishes. |
+| `MOTU_COVERAGE_TOKEN` | `commands/region-coverage.mjs:239` | Bearer for FETCHING a coverage corpus over HTTP — a **read** credential (`motu-host access --repo <r> --read`) when `corpusUrl` points at the host and the repo is private, and unnecessary when it is public. Not the ingest token, which the same variable name holds in an APPLICATION's server environment (`@motujs/coverage`'s forwarder) and which cannot read (`packages/host/src/access.mjs:83`). Deliberately not a config key — config is baked into the generated registry the lagoon publishes. |
 | `MOTU_HOST_READ_TOKEN` | `packages/coverage/src/server/index.ts:185` | Read by the APPLICATION's `known` route, not by this CLI: the secret it uses to serve the accepted set back from the host. Needed only for a private repo, and its absence is silent — an empty set, so states stay un-suppressed. |
 | `MOTU_CONFIG_HOME` | `lib/remote.mjs:24` | Directory holding `host.json` (default `~/.config/motu`). |
 
@@ -141,7 +141,7 @@ motu init [dir] [--host angularjs|next|vite|none] [--app <rel>] [--hostRoot <rel
 | `--hostRoot` | Where the host application lives (whose aliases and Tailwind a `next` lagoon borrows) | the `--app` value (`:160`) |
 | `--appPackage` | npm package name whose barrel exports `ELEMENT_REGISTRY` | the app dir's basename, or `motu-app` (`:165`) |
 | `--isolation` | `shadow` or `light` island mounting | `shadow` for `angularjs`, else `light` (`:169`) |
-| `--motuDep` | Version specifier written for `@motu/*` dependencies | `workspace:*` (`:202`) |
+| `--motuDep` | Version specifier written for `@motujs/*` dependencies | `workspace:*` (`:202`) |
 | `--no-lagoon` | Skip the lagoon root entirely | off (`:253`) |
 | `--force` | Overwrite an existing `motu.config.json` | off (`:152`) |
 | `--json` | Machine-readable `{ root, host, appPackage, created, skipped }` | off (`:334`) |
@@ -151,7 +151,7 @@ motu init [dir] [--host angularjs|next|vite|none] [--app <rel>] [--hostRoot <rel
 
 **Reads** — an existing `motu.config.json` (to refuse), the host's `tsconfig.json`/Tailwind config and
 `globals.css` when `--host next` (`commands/init.mjs:106-115`, `:329`), and whether any ancestor is a
-pnpm/npm workspace, which decides whether `@motu/*` dependencies are declared at all
+pnpm/npm workspace, which decides whether `@motujs/*` dependencies are declared at all
 (`commands/init.mjs:211-229`).
 
 **Writes** — `motu.config.json`; `<app>/package.json`, `src/islands/registry.ts`,
@@ -203,7 +203,7 @@ motu island create <name> [--from <specifier>] [--export <name>] [--force]
 
 **Reads** — with `--from`, the target component's own source, to derive `input`, `output` and `effects`
 rather than asking for them again (`commands/create.mjs:218`, `lib/component-props.mjs`). Also
-`@motu/contract`, for the comment listing mockable methods (`:139-153`).
+`@motujs/contract`, for the comment listing mockable methods (`:139-153`).
 
 **Writes** — `ui/<kebab>/<Pascal>.tsx` (only without `--from`), `islands/<kebab>.island.ts`, and
 regenerates `islands/registry.ts` and `islands/contracts.generated.ts` (`:215-229`). It deliberately
@@ -1082,7 +1082,7 @@ motu check — contracts
 
   ✓ strict-boundaries   noUncheckedIndexedAccess is on — an unguarded index is a compile error
   ✓ generated           every island contract matches its component
-  ✓ region-generated    coverage off, and nothing names @motu/coverage
+  ✓ region-generated    coverage off, and nothing names @motujs/coverage
 
 motu check — islands
 
@@ -1165,7 +1165,7 @@ motu removal-check --force
 
 ## `motu codegen [manifest] [outDir]`
 
-Regenerate the typed `@motu/contract` from a `motu-manifest.json`. A thin wrapper over
+Regenerate the typed `@motujs/contract` from a `motu-manifest.json`. A thin wrapper over
 `packages/codegen/src/cli.mjs`, so contract regeneration is reachable from the one entry point
 (`commands/codegen.mjs:1-19`).
 

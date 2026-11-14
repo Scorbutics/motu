@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { MemberService } from '@motu/contract';
-import { MotuError } from '@motu/runtime';
+import { MemberService } from '@motujs/contract';
+import { MotuError } from '@motujs/runtime';
 import {
   DEFAULT_ORDER,
   firstString,

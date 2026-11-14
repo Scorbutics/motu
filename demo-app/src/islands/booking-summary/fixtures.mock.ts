@@ -6,7 +6,7 @@
 // invented to fill the card.
 //
 // No fixtures: this island calls nothing. Everything it draws is a function of its three region keys.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { A_FREE_SLOT, DENNIS, FIRST_OPEN_DAY, GUIDO } from '../../shared/profile-evidence.js';
 
 export const fixtures: Fixture[] = [];

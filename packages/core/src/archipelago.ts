@@ -7,7 +7,7 @@ import { installChannels, noteChannelReads, rawStore, type Channel } from './cha
 import { offerRegionToCoverage } from './sandbox';
 import { runWithWriteSource, currentWriteSource } from './store';
 import { runWithSource } from './provenance';
-import type { EffectEntry } from '@motu/types';
+import type { EffectEntry } from '@motujs/types';
 
 // Stripped in production (see the debug overlay). The mount registry below only tracks when this
 // build-time constant is true; the typeof guard keeps it safe under bare Node/tsc.
@@ -617,7 +617,7 @@ type WiredEvents<I> =
  *
  * Named `…Of` because it derives the split FROM an archipelago, which is motu's own type — so this one
  * belongs to motu's side and page code should not name it. The app-facing spelling is
- * `HostRegion<TRegion, TProducedKeys>` in `@motu/types`: same concept, its own keys, and it survives
+ * `HostRegion<TRegion, TProducedKeys>` in `@motujs/types`: same concept, its own keys, and it survives
  * motu's removal because that package does. The two are asserted to agree by `ProducedKeysAre`.
  */
 export type HostRegionOf<R, A> = Omit<R, ProducedKeys<A> & keyof R>;
@@ -1779,7 +1779,7 @@ export function defineArchipelago(config: ArchipelagoConfig, opts: ArchipelagoOp
   // WHICH STATES THIS REGION ACTUALLY REACHES, when the project asked for it. Offered here because
   // this is where BOTH mount paths meet — the element route and the React one — so a host gets it
   // whichever way it composes, and per-region falls out of the fact that this runs once per region.
-  // OFFERED, not called: nothing is listening unless the generated registry imported `@motu/coverage`,
+  // OFFERED, not called: nothing is listening unless the generated registry imported `@motujs/coverage`,
   // which it only does when motu.config.json enables it. A project with coverage off never pulls the
   // module into its graph.
   offerRegionToCoverage(config.id, { enums: config.coverage?.enums as readonly string[] | undefined });

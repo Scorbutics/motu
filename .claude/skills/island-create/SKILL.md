@@ -17,7 +17,7 @@ The authoritative rule set is whatever `motu island verify` enforces — do not 
 ## The anatomy you produce
 
 - `demo-app/src/ui/<kebab>/<Pascal>.tsx` — the plain, mode-agnostic component (props in, callbacks
-  out). In `ui/` (the "mainland"); may import `@motu/contract`, `shared/`, other `ui/` — never
+  out). In `ui/` (the "mainland"); may import `@motujs/contract`, `shared/`, other `ui/` — never
   `islands/` or `archipelagos/`.
 - `demo-app/src/islands/<kebab>.island.ts` — the island: one file holding the
   registry row (`tag` → component + `contract` {input/output/ambient/coupling}, plus `legacy` fit ONLY
@@ -63,7 +63,7 @@ pnpm motu island create <name>          # scaffolds ui/<kebab>/ component + isla
 ```
 Then, entirely offline:
 - **Component**: write `ui/<kebab>/<Pascal>.tsx`. Mode-agnostic (no `fetch`/`$http`, no
-  `history`/`location`, no `document` reach-out); all server I/O via `@motu/contract`; renders from
+  `history`/`location`, no `document` reach-out); all server I/O via `@motujs/contract`; renders from
   default props alone; outward navigation/actions are `onXxx` intent callbacks.
 - **Contract** in the island file: declare INPUT (`input` props), OUTPUT (`output` events), and
   AMBIENT (host contexts/hooks/service modules the component reaches for). DEFAULTS BELONG IN THE

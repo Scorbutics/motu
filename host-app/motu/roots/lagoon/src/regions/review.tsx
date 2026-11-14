@@ -4,9 +4,9 @@
 // carry a `ReviewRegionFrame` — a second copy of the page's JSX — and then a component the page also
 // imported, which was better and still two calls. Declaring the root made it one, and the frame went
 // away with the project around it.
-import { overridesFor, wireFrom } from '@motu/react';
-import type { LagoonOverrides } from '@motu/react';
-import { channelFrom } from '@motu/core';
+import { overridesFor, wireFrom } from '@motujs/react';
+import type { LagoonOverrides } from '@motujs/react';
+import { channelFrom } from '@motujs/core';
 import { listShots, acceptShots } from '@/src/review/host';
 import { reviewArchipelago } from '../../../../src/archipelagos/review/review.archipelago.js';
 import { REPOS, SHOTS_BY_REPO } from '../../../../src/shared/review-evidence.js';

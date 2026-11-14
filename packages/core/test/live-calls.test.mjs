@@ -9,9 +9,9 @@
 globalThis.__MOTU_DEBUG__ = true;
 
 const { liveCalls, resetLiveCalls, subscribeCalls, runWithSource, runWithIsland } = await import('../dist/index.js');
-// RELATIVE, not `@motu/runtime`: core cannot declare runtime (runtime depends on core — a cycle), so the
+// RELATIVE, not `@motujs/runtime`: core cannot declare runtime (runtime depends on core — a cycle), so the
 // bare specifier only resolved through hand-made links at the repo root and failed on a clean pnpm
-// install (CI). Runtime's own `@motu/core` resolves to this package's files, so the ledger is shared.
+// install (CI). Runtime's own `@motujs/core` resolves to this package's files, so the ledger is shared.
 const { createPostgrestFetch } = await import('../../runtime/dist/postgrest-fetch.js');
 const { configure, call, MotuError } = await import('../../runtime/dist/index.js');
 const { MockTransport } = await import('../../runtime/dist/mock.js');

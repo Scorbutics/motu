@@ -1,4 +1,4 @@
-# @motu/debug-overlay
+# @motujs/debug-overlay
 
 A dev-only, **read-only** lens that makes island seams visible on the running page. It draws over any
 page containing islands and surfaces what is normally invisible: which islands are mounted, what is

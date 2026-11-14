@@ -12,7 +12,7 @@
 // no corner collision to dodge, and the controls live with the rest of the root's controls. Chips
 // already mounted are moved, so the call is order-independent w.r.t. the mount* functions.
 
-import { MOTU_CHROME as CHROME } from '@motu/chrome';
+import { MOTU_CHROME as CHROME } from '@motujs/chrome';
 
 const TOOLBAR_ID = 'motu-toolbar';
 const STYLE_ID = 'motu-toolbar-css';
@@ -100,18 +100,18 @@ export function motuToolbar(): HTMLElement {
 }
 
 /**
- * motu's chrome palette — now defined in `@motu/chrome`, and re-exported here so every existing
- * `import { MOTU_CHROME } from '@motu/core'` keeps working.
+ * motu's chrome palette — now defined in `@motujs/chrome`, and re-exported here so every existing
+ * `import { MOTU_CHROME } from '@motujs/core'` keeps working.
  *
  * It moved because "one place, so the tooling cannot drift into a second brand colour" was only true
  * for what a bundler compiles. The lagoon HOST renders pages from bare node, could not import this
- * file, and grew its own dark-slate palette — the second brand this comment forbids. `@motu/chrome`
+ * file, and grew its own dark-slate palette — the second brand this comment forbids. `@motujs/chrome`
  * is plain ESM with no dependencies, so Vite and node can both read it.
  *
  * The primary IS the lagoon's own water (see the tide line): motu's UI and the lagoon it frames are
  * the same surface, and a chip in a different hue reads as belonging to something else.
  */
-export { MOTU_CHROME } from '@motu/chrome';
+export { MOTU_CHROME } from '@motujs/chrome';
 
 export interface MotuChromeTheme {
   /** Any CSS colour, including a reference to the host's own token: `hsl(var(--primary))`. */

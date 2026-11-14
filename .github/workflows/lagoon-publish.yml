@@ -61,7 +61,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Every @motu/* package resolves through ./dist, which is gitignored.
+      # Every @motujs/* package resolves through ./dist, which is gitignored.
       - run: node scripts/build-packages.mjs
 
       # From the repo root, where motu.config.json names the app and `publishAs` names the repo the host

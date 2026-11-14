@@ -15,10 +15,11 @@ import { HOST, MOTU_CHECKOUT, REPO_ROOT, ensureNoInstallLinks, lagoonA11y, lagoo
 import { axeLagoon, differentiateLagoon, responsiveLagoon, runLagoon } from '../../playwright-lagoon.mjs';
 import { declaredReach, portalNote, reportRuntimeDiagnostics } from './reach.mjs';
 import { environmentalCause, lagoonFailure, step } from './report.mjs';
+import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
 
 export const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../../runtime-harness.mjs');
 
-// The CLI package root — used as cwd for the harness so `--import tsx` and the @motu/* workspace
+// The CLI package root — used as cwd for the harness so `--import tsx` and the @motujs/* workspace
 // symlinks resolve from packages/cli/node_modules (tsx is not hoisted to the repo root).
 export const CLI_PKG = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -50,7 +51,7 @@ export async function runtimeCheckFast(report, tag, fixturesPath, fit) {
   // The alias hook goes AFTER tsx so tsx compiles what it resolves.
   const ALIAS_LOADER = resolve(dirname(fileURLToPath(import.meta.url)), '../../alias-register.mjs');
   const args = ['--import', 'tsx', '--import', pathToFileURL(ALIAS_LOADER).href, HARNESS, tag, fixturesPath || '', fit];
-  // Node has to be able to resolve @motu/* from the project's own files before it can load them.
+  // Node has to be able to resolve @motujs/* from the project's own files before it can load them.
   ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
   const res = await step('mount(fast)', async () =>
     spawnSync(process.execPath, args, {
@@ -107,7 +108,7 @@ export async function runtimeCheckFast(report, tag, fixturesPath, fit) {
  */
 export function readScenarios(fixturesPath) {
   const args = ['--import', 'tsx', HARNESS, '', fixturesPath, 'native', 'scenarios'];
-  // Node has to be able to resolve @motu/* from the project's own files before it can load them.
+  // Node has to be able to resolve @motujs/* from the project's own files before it can load them.
   ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
   const res = spawnSync(process.execPath, args, {
     encoding: 'utf8',
@@ -161,7 +162,7 @@ export async function runtimeDifferentiationCheck(report, tag, fixturesPath, por
 /**
  * A scenario's scripted interactions must have DONE something — the guard that keeps
  * `Scenario.interactions` from becoming the untyped browser-test suite the region-flow model
- * deliberately refuses (see `RegionStep`'s doc comment in `@motu/runtime/mock`).
+ * deliberately refuses (see `RegionStep`'s doc comment in `@motujs/runtime/mock`).
  *
  * Sibling of `flow-mutation`'s "a step that cannot fail is not a check". The rule here is NOT "did
  * the render change?" — the properties interactions exist for often assert that it did NOT (a panel
@@ -268,7 +269,7 @@ export async function runtimeCheckBrowser(report, tag, fit, port) {
     const msg = lagoonFailure(err);
     const env = environmentalCause(err);
     if (/Executable doesn't exist|playwright install/i.test(msg)) {
-      report.inconclusive('lagoon-render', `Chromium not installed — run \`npx playwright install chromium\` (in packages/cli), or use --fast for the happy-dom mount`);
+      report.inconclusive('lagoon-render', `Chromium not installed — run ${CHROMIUM_INSTALL}, or use --fast for the happy-dom mount`);
     } else if (env) {
       report.inconclusive('lagoon-render', `could not boot the lagoon (fit=${fit}): ${env} — the environment, not the island`);
     } else {
@@ -301,12 +302,12 @@ export async function runtimeErrorCheck(report, tag, port) {
 // Known adapter packages -> their verify contribution's export specifier. Discovery is by the adapter
 // the island actually imports (read from element.ts), resolved via the package's `./verify` export.
 export const ADAPTER_VERIFY = {
-  '@motu/adapter-angularjs': '@motu/adapter-angularjs/verify',
-  '@motu/adapter-next': '@motu/adapter-next/verify',
+  '@motujs/adapter-angularjs': '@motujs/adapter-angularjs/verify',
+  '@motujs/adapter-next': '@motujs/adapter-next/verify',
 };
 
 // Fallback discovery for hosts whose islands don't import an adapter at the mount point.
-export const HOST_ADAPTER_VERIFY = { next: '@motu/adapter-next/verify' };
+export const HOST_ADAPTER_VERIFY = { next: '@motujs/adapter-next/verify' };
 
 /** Extract the structured `contract.coupling` from an island's element.ts (AST, not regex). */
 export function extractCoupling(elementPath) {
@@ -352,7 +353,7 @@ export async function adapterChecks(report, kebab, componentPath) {
   // adapter-specific. A React host's mount point imports no adapter (the adapter lives at the
   // composition root), so fall back to the configured host: the coupling is a property of where the
   // island is going, not of what element.ts happens to import.
-  const pkgs = [...text.matchAll(/from\s+['"](@motu\/adapter-[\w-]+)['"]/g)].map((m) => m[1]);
+  const pkgs = [...text.matchAll(/from\s+['"](@motujs\/adapter-[\w-]+)['"]/g)].map((m) => m[1]);
   const specifier = pkgs.map((p) => ADAPTER_VERIFY[p]).find(Boolean) ?? HOST_ADAPTER_VERIFY[HOST];
   if (!specifier) return; // no adapter ships a verify contribution for this island/host
   const coupling = extractCoupling(elementPath);

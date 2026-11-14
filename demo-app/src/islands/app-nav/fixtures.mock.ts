@@ -6,7 +6,7 @@
 // and the session block names a member or says Guest.
 //
 // No fixtures: the bar calls nothing. The members are seed rows, not names written here.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { SEED_MEMBERS } from '../../shared/seed-members.generated.js';
 
 const DENNIS = SEED_MEMBERS.find((m) => m.member_no === '702564');

@@ -5,7 +5,7 @@
 //   motu island verify <name>    run the deterministic island rules + lagoon mount (the moat)
 //                                `--all` sweeps every island; one line each, findings only where there are any
 //
-// Kept dependency-light and plain-ESM (like @motu/codegen) so it runs with a bare `node`.
+// Kept dependency-light and plain-ESM (like @motujs/codegen) so it runs with a bare `node`.
 import { createCommand } from './commands/create.mjs';
 import { verifyCommand, archipelagoVerifyCommand } from './commands/verify.mjs';
 import { checkCommand } from './commands/check.mjs';
@@ -54,7 +54,7 @@ const USAGE = `${color.bold('motu')} — island / archipelago CLI
 
 ${color.bold('Usage:')}
   motu init [dir] --host next|angularjs|none        scaffold config + registries + a WORKING lagoon root
-  motu link [--check]                               record @motu/* in package.json (npm deletes bare links)
+  motu link [--check]                               record @motujs/* in package.json (npm deletes bare links)
   motu island create <name>                         scaffold a new island (component, registry, fixtures)
   motu island create <name> --from <specifier>      ...over a component the app ALREADY owns (React hosts)
   motu check                                        every island + every region + removal, one verdict
@@ -90,7 +90,7 @@ ${color.bold('Usage:')}
   motu lagoon serve --watch [--host]                ...and keep it current: rebuild on save, reload viewers (the loop)
   motu lagoon serve --watch --detach | --stop       ...left running after the shell exits, and stopped
   motu removal-check [--force]                      prove motu is removable from the host app (C2)
-  motu codegen [manifest] [outDir]                  regenerate @motu/contract from motu-manifest.json
+  motu codegen [manifest] [outDir]                  regenerate @motujs/contract from motu-manifest.json
   motu skills install [dir]                         install the motu agent skills into a repo (Copilot + Claude Code)
   motu skills list                                  list the skills this motu checkout ships
 
@@ -200,9 +200,9 @@ ${color.bold('create flags:')}
 async function main() {
   // RESTORE THE NO-INSTALL LINKS FIRST, on every run.
   //
-  // `motu init` symlinks node_modules/@motu/* into the checkout, which is what lets a project depend
+  // `motu init` symlinks node_modules/@motujs/* into the checkout, which is what lets a project depend
   // on nothing. `npm install` then deletes them as extraneous — measured on an Angular app, where the
-  // next build failed with `Cannot find module '@motu/react'`, an error pointing nowhere near the
+  // next build failed with `Cannot find module '@motujs/react'`, an error pointing nowhere near the
   // cause. (bun and pnpm left them alone, so this is invisible on the machines motu grew up on.)
   // Re-linking is a handful of existsSync calls and makes the mechanism survive the host's package
   // manager instead of losing to it.
@@ -249,7 +249,7 @@ async function main() {
   // that examined nothing and passed. See `assertProject`.
   if (!['skills', 'link'].includes(group)) assertProject(loadMotuConfig(), { color });
 
-  // `motu link` — record @motu/* in package.json so the package manager stops deleting them.
+  // `motu link` — record @motujs/* in package.json so the package manager stops deleting them.
   // `--check` asserts instead of writing, which is the CI half of the same question.
   if (group === 'sync') return syncCommand(parse([sub, ...rest].filter((x) => x !== undefined)));
 

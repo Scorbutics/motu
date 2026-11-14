@@ -5,7 +5,7 @@
 // effect, and FIRST: it configures the seam every archipelago below offers itself to.
 import './coverage.generated';
 
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 import { membersArchipelago } from './members/members.archipelago.js';
 import { profileArchipelago } from './profile/profile.archipelago.js';
 import { shellArchipelago } from './shell/shell.archipelago.js';

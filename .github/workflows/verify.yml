@@ -62,7 +62,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # NOT OPTIONAL, and the reason is `.gitignore`: `dist/` is ignored, and every `@motu/*` package
+      # NOT OPTIONAL, and the reason is `.gitignore`: `dist/` is ignored, and every `@motujs/*` package
       # resolves through `main: ./dist/index.js`. A fresh checkout has no dist at all, so a check run
       # before this step fails on module resolution rather than on anything it was asked about.
       - name: Build packages
@@ -115,14 +115,14 @@ jobs:
       #
       # `pnpm typecheck` is `tsc -b` over the root's project references, and `host-app` is not one of
       # them — so the app that SERVES every published lagoon was the one thing this workflow never
-      # typechecked. `composedPage` was renamed `lagoonPage` in `@motu/host`, two call sites here did
+      # typechecked. `composedPage` was renamed `lagoonPage` in `@motujs/host`, two call sites here did
       # not follow, and `next build` failed from that day on while CI stayed green. The deployed
       # process kept serving happily from an older build, so nothing anywhere said the deploy was
       # broken — and a routing bug shipped in the same window could not be fixed, because no fix could
       # be built.
       #
       # Verified deliberately before writing this step: reintroducing the stale import makes this
-      # command fail with `TS2305: Module '@motu/host/src/views.mjs' has no exported member
+      # command fail with `TS2305: Module '@motujs/host/src/views.mjs' has no exported member
       # 'composedPage'`. A typecheck is enough; it does not need a full build to catch it.
       - name: host-app — does it still compile
         run: ./node_modules/.bin/tsc --noEmit -p tsconfig.json
@@ -164,7 +164,7 @@ jobs:
       - name: Build packages
         run: node scripts/build-packages.mjs
 
-      # playwright is a dependency of `@motu/cli` and pnpm does not hoist, so the browser is installed
+      # playwright is a dependency of `@motujs/cli` and pnpm does not hoist, so the browser is installed
       # from THAT package's directory or `npx` resolves nothing.
       - name: Cache Playwright browsers
         uses: actions/cache@v4

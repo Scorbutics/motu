@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Bay, Mark, Page } from "@motu/chrome/react"
+import { Bay, Mark, Page } from "@motujs/chrome/react"
 
 /**
  * The front page's ARRANGEMENT, as a component the archipelago points at.
@@ -14,7 +14,7 @@ import { Bay, Mark, Page } from "@motu/chrome/react"
  * THE MASTHEAD IS THE SAME BAY. `shape="masthead"` is the tall end of one component — the deeper
  * gradient, the looping sheen, the drifting waterline, room for a heading. A second header component
  * for the front page would have been a second thing to keep in step with the console's, which is the
- * drift `@motu/chrome` exists to stop.
+ * drift `@motujs/chrome` exists to stop.
  *
  * THE HEADLINE IS COPY, NOT DATA. "Your lagoons" and the sentence under it name no repository and
  * count nothing, which is what keeps them here rather than in an island. The counts a visitor wants

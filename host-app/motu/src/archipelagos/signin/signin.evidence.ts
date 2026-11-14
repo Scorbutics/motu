@@ -13,7 +13,7 @@
 // by acting — it is the environment refusing, decided by the port the channel installed, not by
 // anything a member can do. Pretending otherwise would mean a port that picks its outcome from a
 // switch no member can touch, which is a flow only a human standing in front of the lagoon can drive.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 // RELATIVE, like every other evidence import: these files are read by plain node, where the app's
 // `@/…` alias does not resolve, and the failure is a silent "flows could not be read".
 import {

@@ -16,7 +16,7 @@
 // the registry imports it.
 //
 // WRITTEN EVEN WHEN COVERAGE IS OFF, as an empty module. The load-bearing property is that a project
-// with coverage off never NAMES `@motu/coverage` — a module nothing imports is a module no bundler
+// with coverage off never NAMES `@motujs/coverage` — a module nothing imports is a module no bundler
 // ships. An empty generated file satisfies that while keeping the registry's import line constant, so
 // turning coverage on and off never edits a hand-owned file.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -36,13 +36,13 @@ export function renderCoverageModule(coverage) {
   if (!coverage?.enabled) {
     return `${head}//
 // Coverage is off in motu.config.json, so this module is deliberately empty — and empty is the point.
-// Nothing here names \`@motu/coverage\`, so no bundler ships it, while the registry's import line
+// Nothing here names \`@motujs/coverage\`, so no bundler ships it, while the registry's import line
 // stays constant whether coverage is on or off. Turning it on never edits a hand-owned file.
 export {};
 `;
   }
   return `${head}//
-// THE IMPORT IS THE SWITCH. \`@motu/coverage\` is its own package precisely so a project with coverage
+// THE IMPORT IS THE SWITCH. \`@motujs/coverage\` is its own package precisely so a project with coverage
 // off never names it. Core holds only a seam (\`offerRegionToCoverage\`) that stays a dead branch until
 // this line fills it.
 //
@@ -57,7 +57,7 @@ export {};
 //
 //   <meta name="motu-coverage-endpoint" content="…" />
 //   <meta name="motu-coverage-known"    content="…" />
-import { configureCoverage } from '@motu/coverage';
+import { configureCoverage } from '@motujs/coverage';
 
 configureCoverage(${JSON.stringify({ enabled: true, ...(coverage.regions ? { regions: coverage.regions } : {}) })});
 `;

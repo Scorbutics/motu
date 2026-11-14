@@ -8,7 +8,7 @@
 // synthesised config whose binds are same-named, so these are `error` and `isSubmitting` — the names
 // in the component — while the region's flows speak of `signInError` and `signingIn`. Same values,
 // two vocabularies, and the archipelago's `bind` maps one to the other.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import {
   ACCESS_DENIED,
   A_LAGOON_TO_RETURN_TO,

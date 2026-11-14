@@ -20,7 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Where a motu coverage beacon lands on a Java EE / Jakarta EE application — the same route
- * {@code @motu/coverage/server} is for a JavaScript one, and the same answers, so
+ * {@code @motujs/coverage/server} is for a JavaScript one, and the same answers, so
  * {@code motu coverage doctor} reads both alike.
  *
  * <p>REGISTERED BY {@code META-INF/web-fragment.xml} at {@code /motu/coverage} and

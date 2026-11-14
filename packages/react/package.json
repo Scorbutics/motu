@@ -1,9 +1,15 @@
 {
-  "name": "@motu/react",
+  "name": "@motujs/react",
   "version": "0.1.0",
   "description": "React bindings for motu: define an island from a React component, compose a page region from declared slots, and render every declared state in the lagoon preview.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "react-components", "ui-preview", "component-architecture"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,10 +24,10 @@
     }
   },
   "dependencies": {
-    "@motu/chrome": "workspace:*",
-    "@motu/core": "workspace:*",
-    "@motu/runtime": "workspace:*",
-    "@motu/types": "workspace:*"
+    "@motujs/chrome": "workspace:*",
+    "@motujs/core": "workspace:*",
+    "@motujs/runtime": "workspace:*",
+    "@motujs/types": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",

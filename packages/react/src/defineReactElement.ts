@@ -1,10 +1,10 @@
 import { createElement, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
-import { defineIsland } from '@motu/core';
-import { runWithIsland } from '@motu/runtime';
-import type { MotuTheme, MotuFit, LegacyStrategy, IslandElementOptions, IslandIsolation, IslandMount } from '@motu/core';
-import type { EffectEntry } from '@motu/types';
+import { defineIsland } from '@motujs/core';
+import { runWithIsland } from '@motujs/runtime';
+import type { MotuTheme, MotuFit, LegacyStrategy, IslandElementOptions, IslandIsolation, IslandMount } from '@motujs/core';
+import type { EffectEntry } from '@motujs/types';
 
 // Stripped in production (see the debug overlay). Only in debug builds does rendering run inside an
 // island attribution window, so contract calls made in effects are tied to this island.
@@ -37,7 +37,7 @@ export interface DefineOptions<P> {
      * React context, a session hook, an AngularJS scope name, a database table.
      *
      * The third leg of the boundary, and the one that used to be two. `ambient` lived here (typed only
-     * for React islands) while `coupling` lived in `@motu/core` (typed for everyone and holding
+     * for React islands) while `coupling` lived in `@motujs/core` (typed for everyone and holding
      * AngularJS mount mechanisms) — one idea under two names, in two files, neither complete. See
      * `IslandContract.effects`; the kind prefixes are documented there.
      *

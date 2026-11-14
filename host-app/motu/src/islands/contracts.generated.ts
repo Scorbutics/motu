@@ -7,7 +7,7 @@
 // The one part that is a decision — an event whose region name differs from the callback's — is
 // declared in the island file, as `island(tag, Component, { events: { onProgress: 'week-progress' } })`,
 // and baked in here so the compiler still sees literal event names.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import type { AcceptBar as C_accept_bar } from '@/components/review/accept-bar/AcceptBar';
 import type { CorpusFilter as C_corpus_filter } from '@/components/corpus/corpus-filter';
 import type { CorpusStates as C_corpus_states } from '@/components/corpus/corpus-states';

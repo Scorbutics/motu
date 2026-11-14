@@ -98,7 +98,7 @@ if (setVersion && !dryRun) {
   }
   console.log(`set ${PACKAGES.length} packages to ${bold(setVersion)}\n`);
   if (bumpOnly) {
-    console.log(dim(`  next: git commit -am "release: v${setVersion}" && git tag v${setVersion} && git push --follow-tags`));
+    console.log(dim(`  next: git commit -am "release: v${setVersion}" && git tag -a v${setVersion} -m v${setVersion} && git push --follow-tags`));
     process.exit(0);
   }
 } else if (setVersion) {

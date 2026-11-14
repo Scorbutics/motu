@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { WeeklyQuest, type WeeklyQuestProps } from '../../ui/weekly-quest/WeeklyQuest.js';
 
 export const weeklyQuestElement: ElementSpec = {

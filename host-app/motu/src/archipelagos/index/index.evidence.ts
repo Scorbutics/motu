@@ -5,7 +5,7 @@
 // neighbour's data, which no static check can see. The last two drive the page's one CONTROL and end
 // on a DIFFERENT island's render, because asserting `query` after emitting `query-changed` would only
 // prove the lagoon stored what it was handed.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { REPOS, FILTERED_REPOS, STATS, CAP, VIEWER } from '../../shared/index-evidence.js';
 
 // EVERY SEED STATES THE PRODUCED KEYS, and that is not belt-and-braces. The lagoon carries a region's

@@ -9,8 +9,8 @@
 // morning. A FACTORY rather than a port: every view and every flow gets a fresh calendar, so an RSVP
 // pressed in one does not leak into the next. Source keys are not seeded here — the source produces
 // them.
-import { channelFrom } from '@motu/core';
-import { overridesFor } from '@motu/react';
+import { channelFrom } from '@motujs/core';
+import { overridesFor } from '@motujs/react';
 import { ALL_EVENTS, CHAPTERS, SEED_MEMBERS, eventsArchipelago, homeArchipelago, seedEventsPort } from 'demo-app';
 import { DENNIS as SIGNED_IN, EVIDENCE_NOW, UPCOMING } from 'demo-app/evidence/events';
 import { CLUB, EVIDENCE_DAY } from 'demo-app/evidence/club';

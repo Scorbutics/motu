@@ -3,15 +3,15 @@
 // resolver. Everything else — mock transport wiring, the default host, target resolution, mount — is
 // generic and lives here so every project's lagoon entry stays 3 lines.
 import { currentWorld, declaredWorlds, installWorlds, onWorldChange, setWorld, worldExists, DEFAULT_WORLD, type Worlds } from './lagoon-worlds';
-import { configure } from '@motu/runtime';
-import { MockTransport, type Fixture } from '@motu/runtime/mock';
-import { FailingTransport } from '@motu/runtime/mock';
-import { applyMotuChrome, bindEntries, markSandbox } from '@motu/core';
-import { installMotuChrome } from '@motu/chrome/css';
-import type { DeclaredChannel } from '@motu/core';
-import { disposeArchipelago, pinRegionKeys } from '@motu/core';
+import { configure } from '@motujs/runtime';
+import { MockTransport, type Fixture } from '@motujs/runtime/mock';
+import { FailingTransport } from '@motujs/runtime/mock';
+import { applyMotuChrome, bindEntries, markSandbox } from '@motujs/core';
+import { installMotuChrome } from '@motujs/chrome/css';
+import type { DeclaredChannel } from '@motujs/core';
+import { disposeArchipelago, pinRegionKeys } from '@motujs/core';
 import type { ReactNode } from 'react';
-import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motu/core';
+import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motujs/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { mountReactLagoon } from './lagoon-react-mount';
 import { exposeChart } from './lagoon-player';
@@ -306,7 +306,7 @@ markSandbox();
   // THE KIT'S CLASS RULES, on this entry too — and this is the entry EVERY CHECK DRIVES.
   //
   // `applyMotuChrome` below sets --motu-* properties and injects no rules, so an island painted with
-  // `@motu/chrome/react` rendered as unstyled text here while looking correct in the host app, which
+  // `@motujs/chrome/react` rendered as unstyled text here while looking correct in the host app, which
   // installs the sheet itself. The note under this one already records the cost of a project having
   // to remember: "the review console installs motu's chrome sheet there". It should not have to, and
   // neither should anyone else — so the lagoon runs motu chrome by default.

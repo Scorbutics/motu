@@ -6,7 +6,7 @@
 // leaves `createRegion(...)` behind with its imports gone and errors on lines that look fine.
 //
 // So the port, the client and the transport live in `lib/`, and `main.tsx` puts them together.
-import { createRegion } from '@motu/react';
+import { createRegion } from '@motujs/react';
 // NOT FROM THE PROJECT BARREL. `demo-app`'s index pulls in every island, so an island that reaches
 // an application page composing this region closes a cycle back to here — and `membersArchipelago`
 // is then read before it is initialised. `integrate check` names this one; the registry is fine to

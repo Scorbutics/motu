@@ -5,8 +5,8 @@
 // when this module is imported. So this file is not 100% motu (nor is any binding here: they all take
 // the app's `useHostBridge`), and `removal-check` unwraps it rather than deleting it whole — verified,
 // the host still typechecks with motu removed.
-import { createRegion } from '@motu/react';
-import { channelFrom } from '@motu/core';
+import { createRegion } from '@motujs/react';
+import { channelFrom } from '@motujs/core';
 import { eventsArchipelago } from 'demo-app/archipelagos/events';
 import { ALL_EVENTS, ELEMENT_REGISTRY, IDLE_RSVP } from 'demo-app';
 import { useHostBridge } from '../lib/routing.js';

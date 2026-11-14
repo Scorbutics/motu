@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 import { CLUB_NAME, PeopleIcon, initials } from '../club/club-bits.js';
 import { firstString, type MemberRow } from '../../shared/member-types.js';
 import { PERSONAS } from '../../shared/personas.js';

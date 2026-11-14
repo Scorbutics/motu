@@ -8,7 +8,7 @@
 // members look the same.
 //
 // No fixtures: this island calls nothing. Everything it draws is a function of its three region keys.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { A_FREE_SLOT, FIRST_OPEN_DAY, FULL_CALENDAR, OPEN_CALENDAR } from '../../shared/profile-evidence.js';
 
 export const fixtures: Fixture[] = [];

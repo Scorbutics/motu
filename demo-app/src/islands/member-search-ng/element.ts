@@ -1,5 +1,5 @@
-import type { ElementSpec } from '@motu/react';
-import { defineAngularElement } from '@motu/adapter-angularjs';
+import type { ElementSpec } from '@motujs/react';
+import { defineAngularElement } from '@motujs/adapter-angularjs';
 import { memberSearchNgAngular } from '../../ui/member-search-ng/MemberSearchNg.ng.js';
 
 // Seam-isolated island: isolate scope + motu props/events (no adopt, no inheritScope). `criteria`

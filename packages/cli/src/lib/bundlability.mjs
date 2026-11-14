@@ -18,8 +18,8 @@ import { blankComments, names, paths, resolveAppImport, HOST, islandComponentPat
 import { listIslands } from './islands.mjs';
 
 /** Adapters that ship a verify contribution, by the specifier an island imports / by host. */
-const ADAPTER_VERIFY = { '@motu/adapter-next': '@motu/adapter-next/verify' };
-const HOST_ADAPTER_VERIFY = { next: '@motu/adapter-next/verify' };
+const ADAPTER_VERIFY = { '@motujs/adapter-next': '@motujs/adapter-next/verify' };
+const HOST_ADAPTER_VERIFY = { next: '@motujs/adapter-next/verify' };
 
 /**
  * Every APPLICATION file an island's component can reach, breadth-first from the component.
@@ -69,7 +69,7 @@ export function reachableAppSources(entry, { aliased = [], limit = 400 } = {}) {
 function adapterFor(elementPath) {
   if (!existsSync(elementPath)) return null;
   const text = readFileSync(elementPath, 'utf8');
-  const pkgs = [...text.matchAll(/from\s+['"](@motu\/adapter-[\w-]+)['"]/g)].map((m) => m[1]);
+  const pkgs = [...text.matchAll(/from\s+['"](@motujs\/adapter-[\w-]+)['"]/g)].map((m) => m[1]);
   return pkgs.map((p) => ADAPTER_VERIFY[p]).find(Boolean) ?? HOST_ADAPTER_VERIFY[HOST] ?? null;
 }
 

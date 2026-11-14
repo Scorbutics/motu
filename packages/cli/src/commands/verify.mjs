@@ -2,7 +2,7 @@
 // machine-checkable pass/fail, so an agent can close the loop without a human eyeballing the host.
 //
 //   static  (AST over the component): no bare fetch, no history/pushState, no document reach-out into
-//           the host, all server I/O via @motu/contract, renders from default props alone.
+//           the host, all server I/O via @motujs/contract, renders from default props alone.
 //   config  (AST over the registry):  registered with a REQUIRED legacy-fit strategy; archipelago
 //           membership (warn if standalone).
 //   runtime (lagoon):                 boots the focused lagoon and asserts the island renders a

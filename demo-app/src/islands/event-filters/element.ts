@@ -1,4 +1,4 @@
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { EventFilters } from '../../ui/event-filters/EventFilters.js';
 
 export const element = islandElement({

@@ -1,6 +1,6 @@
 // The AngularJS ocean's contribution to the lagoon's Vite config.
 //
-// Unlike the Next host, this one adds no aliases: a workspace-linked ocean resolves @motu/* through
+// Unlike the Next host, this one adds no aliases: a workspace-linked ocean resolves @motujs/* through
 // node_modules already. What it does add is the part a legacy backend forces — a single-origin dev
 // proxy and HTTPS.
 //

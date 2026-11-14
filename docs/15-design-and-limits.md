@@ -200,7 +200,7 @@ anything is being migrated into it.
 ## Repository layout
 
 ```
-packages/          the framework (@motu/*)
+packages/          the framework (@motujs/*)
   core/            Store, custom elements, defineIsland, channels, provide() seam
   react/           createRegion, islandElement, the lagoon runtime
   runtime/         transport seam: configure(), call(), HttpTransport, MockTransport

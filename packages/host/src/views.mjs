@@ -1,8 +1,8 @@
 // The pages the host renders itself: the composed multi-repo lagoon, and the two indexes.
 //
-// Every colour, surface and motion here comes from `@motu/chrome` — the same tokens the tide line
+// Every colour, surface and motion here comes from `@motujs/chrome` — the same tokens the tide line
 // paints the lagoon with. These pages had their own dark-slate palette first, which looked like a
-// different product sitting in front of motu's; that is what `@motu/chrome` exists to prevent, and
+// different product sitting in front of motu's; that is what `@motujs/chrome` exists to prevent, and
 // nothing in this file may reintroduce a literal colour.
 //
 // WHY THE COMPOSED LAGOON IS IFRAMES, and not one merged bundle. Merging pre-built archipelagos from
@@ -36,8 +36,8 @@ import {
   escapeHtml,
   PRIMARY_DETECT_JS,
   PRIMARY_VAR_NAMES,
-} from '@motu/chrome';
-import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
+} from '@motujs/chrome';
+import { motuDockCss, motuDockJs } from '@motujs/chrome/dock';
 
 /** kB / MB, whichever reads. Sizes here are artifact sizes, and 431 kB is more useful than 0.4 MB. */
 function size(bytes) {
@@ -520,7 +520,7 @@ ${PRIMARY_DETECT_JS}
   }
   // --- the chrome wears the lagoon's own colour ---------------------------------------------------
   // Read from the artifact's PIXELS rather than from a config parameter somebody has to remember.
-  // See @motu/chrome/primary for why the stylesheet cannot answer this and why a grey answer is a
+  // See @motujs/chrome/primary for why the stylesheet cannot answer this and why a grey answer is a
   // real answer rather than a failure.
   // BOTH ROOTS, because the dock is not in this document. The tide line lives INSIDE the artifact,
   // and the kit deliberately scopes its variables onto #tide rather than :root so that injecting the

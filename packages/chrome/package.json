@@ -1,9 +1,15 @@
 {
-  "name": "@motu/chrome",
+  "name": "@motujs/chrome",
   "version": "0.1.0",
   "description": "Shared UI shell for motu's lagoon gallery and its dock: design tokens, CSS and the seams panel.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "design-tokens", "ui-shell", "devtools"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/chrome"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "src/index.mjs",
   "exports": {

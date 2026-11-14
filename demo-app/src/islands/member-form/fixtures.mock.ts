@@ -3,7 +3,7 @@
 // The form calls nothing — it publishes a draft and draws inputs — so its scenarios are the states
 // its FIELDS can be in: empty, partly filled, and full. They render differently because the inputs
 // carry different values, which is what a person checking the form actually looks at.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { EMPTY, PARTIAL, PREMIUM } from '../../shared/member-draft-evidence.js';
 
 export const fixtures: Fixture[] = [];

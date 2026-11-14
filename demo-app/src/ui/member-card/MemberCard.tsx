@@ -1,4 +1,4 @@
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 import { initialsOf, type MemberDraft } from '../../shared/member-draft.js';
 import { rankOf, xpForLevel } from '../../shared/gamification.js';
 import { chapterColor, CLUB_NAME, GemIcon, grouped, PeopleIcon } from '../club/club-bits.js';

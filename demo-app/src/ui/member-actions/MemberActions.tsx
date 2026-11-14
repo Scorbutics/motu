@@ -1,5 +1,5 @@
 import type { MemberCriteria } from '../../shared/member-types.js';
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 
 export interface MemberActionsProps {
   /** Injected footprint. In 'legacy' fit the cluster becomes a titled "Member" panel. */

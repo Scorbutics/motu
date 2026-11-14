@@ -1,4 +1,4 @@
-// @motu/adapter-next — the Next.js host adapter.
+// @motujs/adapter-next — the Next.js host adapter.
 //
 // Deliberately small. The AngularJS adapter is large because AngularJS is a foreign framework: it needs
 // channels to mirror $http/$scope into the store, and a custom-element definer to cross the boundary.
@@ -12,12 +12,12 @@ export { nextHostBridge, collectingHostBridge } from './host-bridge';
 export type { NextRouterLike, NextHostBridgeOptions } from './host-bridge';
 export { Archipelago } from './archipelago';
 // Re-exported so a Next host has one import site for the region surface.
-export { createRegion } from '@motu/react';
-export type { CreateRegionOptions, RegionBinding } from '@motu/react';
+export { createRegion } from '@motujs/react';
+export type { CreateRegionOptions, RegionBinding } from '@motujs/react';
 export type { ArchipelagoProps } from './archipelago';
-// Re-exported so a page places islands without also importing @motu/react directly.
-export { Island, useMotuStore } from '@motu/react';
-export type { IslandProps } from '@motu/react';
+// Re-exported so a page places islands without also importing @motujs/react directly.
+export { Island, useMotuStore } from '@motujs/react';
+export type { IslandProps } from '@motujs/react';
 export { defineServices } from './services';
 export type { MotuServiceMap, MotuMethod } from './services';
 export { createContract } from './contract';

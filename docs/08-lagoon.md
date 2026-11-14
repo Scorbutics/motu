@@ -580,7 +580,7 @@ thing; today's lagoon is the `default` world, and a world says only what differs
 
 ```ts
 // roots/lagoon/src/worlds.ts — exported from the override module as `worlds`
-import { defineWorlds } from '@motu/react';
+import { defineWorlds } from '@motujs/react';
 
 export const worlds = defineWorlds({
   'slow-backend': {
@@ -957,7 +957,7 @@ sampled and hoped for (`packages/cli/src/playwright-lagoon.mjs:882-884`, `:1035-
 ## The lens
 
 **Ctrl/Cmd-K, then the `Seams` tab.** The lens is a tab of the DOCK, and the dock is drawn by whoever
-HOSTS the lagoon (`@motu/chrome/dock`, mounted by `motu lagoon serve`, and by the motu
+HOSTS the lagoon (`@motujs/chrome/dock`, mounted by `motu lagoon serve`, and by the motu
 host in the shell it wraps every lagoon in). So it is on the gallery and on any hosted lagoon URL, and
 it is NOT on the focused standalone entry `motu island verify` drives, nor on `/__motu_frame`, which is
 the artifact by itself. Its own keycap says which chord: `⌘K` / `Ctrl K`
@@ -1039,7 +1039,7 @@ declared failure as a `MotuError` with `declared: true`, and the wire records th
 the response, never in it. The application takes the same code path either way. Only the dock reads
 the difference.
 
-Both doors that have an address record into one feed (`beginCall` in `@motu/core`). The lagoon
+Both doors that have an address record into one feed (`beginCall` in `@motujs/core`). The lagoon
 publishes that feed on its control surface (`calls()`, `onCall()`) for chrome drawn outside the
 artifact. A TRACED HOST MODULE is deliberately absent: a stubbed export has no status, so it stays in
 `Asked for`, which can describe it honestly.

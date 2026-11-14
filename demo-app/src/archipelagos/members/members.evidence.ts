@@ -10,7 +10,7 @@
 // Boulos. A name further down the alphabet can only appear if a filter or a sort genuinely reached
 // the fetch — which is what makes each step below survive `flow-mutation` rather than assert a
 // constant.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { CLUB, EVIDENCE_DAY, NEXT_WEEK } from '../../shared/club-evidence.js';
 
 // EVERY KEY THE REGION CARRIES — the same list the page seeds (`members-region.ts`), which is what

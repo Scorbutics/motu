@@ -13,16 +13,20 @@ import { createRequire } from 'node:module';
 import { injectDock } from './dock-inject.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { resolveLagoonRoot } from './lagoon-materialize.mjs';
 import { writeIfChanged } from './write-if-changed.mjs';
 import { motuProvenance } from './provenance-plugin.mjs';
 import { unbundlableIslands } from './bundlability.mjs';
 import { hostAliasEntries } from './util.mjs';
+import { BUILD_DEPS_ROOT, CLI_PACKAGE_ROOT, INSTALLED, frameworkFile } from './framework.mjs';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-/** The motu checkout this CLI is running from — where build deps are resolved from first. */
-const FRAMEWORK_ROOT = resolve(HERE, '../../../..');
+/**
+ * Where build deps are resolved from first: the motu checkout this CLI runs from, or — installed —
+ * `@motujs/cli` itself, which declares vite, the plugins and Tailwind as its own dependencies for
+ * exactly this. See lib/framework.mjs.
+ */
+const FRAMEWORK_ROOT = BUILD_DEPS_ROOT;
 
 /**
  * Resolve a package's ESM entry point from a given root.
@@ -80,7 +84,7 @@ function packageDir(root, name) {
  * The lagoon deliberately installs no React and dedupes onto the host application's copy — two Reacts
  * break hooks the moment an island renders a component from the host's own library. That is right
  * whenever there IS a host copy, and fatal when there is not: a freshly `motu init`-ed project has no
- * node_modules at all, so every `@motu/react` module failed to resolve `react`, and the lagoon served
+ * node_modules at all, so every `@motujs/react` module failed to resolve `react`, and the lagoon served
  * 500s. `island verify` reported it as "island tag did not upgrade" — the true cause named nowhere.
  *
  * So: the host's copy wins wherever it exists, and the framework's own is the fallback that makes a
@@ -97,7 +101,9 @@ function reactFallbackAliases(paths) {
   // NOT the checkout root: in a pnpm workspace React is a devDependency of `packages/cli`, and the
   // root resolves nothing. Ask from a package that actually declares it — which is also where a
   // published install would find it.
-  const frameworkRoots = [resolve(FRAMEWORK_ROOT, 'packages/react'), resolve(FRAMEWORK_ROOT, 'packages/cli'), FRAMEWORK_ROOT];
+  const frameworkRoots = INSTALLED
+    ? [CLI_PACKAGE_ROOT]
+    : [resolve(FRAMEWORK_ROOT, 'packages/react'), resolve(FRAMEWORK_ROOT, 'packages/cli'), FRAMEWORK_ROOT];
   const fromFramework = (name) => {
     for (const r of frameworkRoots) {
       const dir = packageDir(r, name);
@@ -160,7 +166,9 @@ export async function resolveBuildDep(name, ...extraRoots) {
   if (!mod) {
     throw new Error(
       `motu: cannot resolve build dependency '${name}'. Looked in: ${roots.filter(Boolean).join(', ')}.\n` +
-        `Install it in the motu checkout (${FRAMEWORK_ROOT}) so every project gets it without its own install.`,
+        (INSTALLED
+          ? `It is a dependency of @motujs/cli, so the install is incomplete — reinstall it (\`npm i -D @motujs/cli\`).`
+          : `Install it in the motu checkout (${FRAMEWORK_ROOT}) so every project gets it without its own install.`),
     );
   }
   return mod?.default?.default ?? mod?.default ?? mod;
@@ -177,16 +185,16 @@ export function loadLagoonJson(paths) {
 }
 
 /**
- * Resolving @motu/* and the project's own island package BY PATH.
+ * Resolving @motujs/* and the project's own island package BY PATH.
  *
- * The @motu/* packages are unpublished and ship as raw TypeScript, so a project that has not installed
+ * The @motujs/* packages are unpublished and ship as raw TypeScript, so a project that has not installed
  * them (and should not have to) reaches them through these aliases. A workspace-linked project
  * (the reference ocean) resolves them through node_modules instead and contributes nothing here.
  *
  * Array form with anchored patterns, not the object form: Vite's alias matcher is
  * exact-or-prefix-with-a-slash, which gets two things wrong — 'pkg/styles.css?inline' never matches
- * 'pkg/styles.css' (the query is part of the id), and '@motu/runtime' happily swallows
- * '@motu/runtime/mock'. Anchored regexes make each mapping mean exactly what it says.
+ * 'pkg/styles.css' (the query is part of the id), and '@motujs/runtime' happily swallows
+ * '@motujs/runtime/mock'. Anchored regexes make each mapping mean exactly what it says.
  */
 /**
  * The host's workspace root — where a monorepo hoists the dependencies the host imports.
@@ -211,31 +219,41 @@ function workspaceRootOf(hostRoot) {
 export function noInstallAliases(paths) {
   const motu = (p) => resolve(paths.motuRoot, p);
   const pkg = paths.appPackage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // The project's OWN package, in both modes: it is never installed, it is the app's source.
+  const project = [
+    { find: new RegExp(`^${pkg}/styles\\.css`), replacement: resolve(paths.sharedDir, 'styles.css') },
+    { find: new RegExp(`^${pkg}$`), replacement: paths.barrel },
+  ];
+  // INSTALLED, `@motujs/*` are not aliased at all. They are real packages in the app's node_modules,
+  // and their `exports` point at `dist/` — every path below would name `<motuRoot>/packages/...`, a
+  // directory an install does not have, and the lagoon 500'd on the first `@motujs/react` import.
+  // Resolving them normally is also what makes the HOST's react the only react: `dist/` walks up the
+  // app's own tree.
+  if (paths.frameworkMode === 'installed') return project;
   return [
-    // Plain ESM, no TypeScript: @motu/core imports the palette from here, and so does the lagoon
+    // Plain ESM, no TypeScript: @motujs/core imports the palette from here, and so does the lagoon
     // HOST, which runs under bare node. One package both can read is the point of it.
-    { find: /^@motu\/chrome$/, replacement: motu('packages/chrome/src/index.mjs') },
-    // The React kit. It is the one COMPILED corner of an as-authored package, so `@motu/chrome/react`
+    { find: /^@motujs\/chrome$/, replacement: motu('packages/chrome/src/index.mjs') },
+    // The React kit. It is the one COMPILED corner of an as-authored package, so `@motujs/chrome/react`
     // resolves to `dist/react` through the exports map — which would make every kit edit invisible
-    // until someone re-ran the package build. Aliased to source like every other @motu package here,
+    // until someone re-ran the package build. Aliased to source like every other @motujs package here,
     // for the same reason: the lagoon is where motu's own chrome is looked at while it is being
     // changed.
-    { find: /^@motu\/chrome\/react$/, replacement: motu('packages/chrome/src/react/index.tsx') },
-    { find: /^@motu\/core$/, replacement: motu('packages/core/src/index.ts') },
-    { find: /^@motu\/coverage$/, replacement: motu('packages/coverage/src/index.ts') },
-    { find: /^@motu\/react$/, replacement: motu('packages/react/src/index.ts') },
-    { find: /^@motu\/react\/define$/, replacement: motu('packages/react/src/defineReactElement.ts') },
-    { find: /^@motu\/runtime\/mock$/, replacement: motu('packages/runtime/src/mock.ts') },
-    // MISSING FOR A WHILE, and invisibly: without it `@motu/runtime/postgrest-fetch` is a bare
+    { find: /^@motujs\/chrome\/react$/, replacement: motu('packages/chrome/src/react/index.tsx') },
+    { find: /^@motujs\/core$/, replacement: motu('packages/core/src/index.ts') },
+    { find: /^@motujs\/coverage$/, replacement: motu('packages/coverage/src/index.ts') },
+    { find: /^@motujs\/react$/, replacement: motu('packages/react/src/index.ts') },
+    { find: /^@motujs\/react\/define$/, replacement: motu('packages/react/src/defineReactElement.ts') },
+    { find: /^@motujs\/runtime\/mock$/, replacement: motu('packages/runtime/src/mock.ts') },
+    // MISSING FOR A WHILE, and invisibly: without it `@motujs/runtime/postgrest-fetch` is a bare
     // specifier, so it resolves through the exports map to `dist/` and Vite pre-bundles it — every
     // edit to the wire fake was then invisible in the lagoon until someone rebuilt AND cleared
     // `node_modules/.vite`. Found while testing a new check that kept passing against stale code.
-    { find: /^@motu\/runtime\/postgrest-fetch$/, replacement: motu('packages/runtime/src/postgrest-fetch.ts') },
-    { find: /^@motu\/runtime$/, replacement: motu('packages/runtime/src/index.ts') },
-    { find: /^@motu\/debug-overlay$/, replacement: motu('packages/debug-overlay/src/index.ts') },
-    { find: /^@motu\/adapter-next$/, replacement: motu('packages/adapters/next/src/index.ts') },
-    { find: new RegExp(`^${pkg}/styles\\.css`), replacement: resolve(paths.sharedDir, 'styles.css') },
-    { find: new RegExp(`^${pkg}$`), replacement: paths.barrel },
+    { find: /^@motujs\/runtime\/postgrest-fetch$/, replacement: motu('packages/runtime/src/postgrest-fetch.ts') },
+    { find: /^@motujs\/runtime$/, replacement: motu('packages/runtime/src/index.ts') },
+    { find: /^@motujs\/debug-overlay$/, replacement: motu('packages/debug-overlay/src/index.ts') },
+    { find: /^@motujs\/adapter-next$/, replacement: motu('packages/adapters/next/src/index.ts') },
+    ...project,
   ];
 }
 
@@ -243,8 +261,14 @@ export function noInstallAliases(paths) {
 async function hostContribution(ctx) {
   const dir = ['angularjs', 'next', 'vite'].includes(ctx.paths.host) ? ctx.paths.host : null;
   if (!dir) return {};
-  const mod = resolve(ctx.paths.motuRoot, `packages/adapters/${dir}/vite.mjs`);
-  if (!existsSync(mod)) return {};
+  // `frameworkFile`, not `motuRoot`: installed, the adapters' Vite contributions ship inside
+  // @motujs/cli (`bundled/`), and `motuRoot` has no `packages/` under it. The silent `return {}` below
+  // is what made that invisible — a Next lagoon with no `next/*` stubs and no Tailwind, not an error.
+  const mod = INSTALLED ? frameworkFile(`packages/adapters/${dir}/vite.mjs`) : resolve(ctx.paths.motuRoot, `packages/adapters/${dir}/vite.mjs`);
+  if (!existsSync(mod)) {
+    if (INSTALLED) throw new Error(`motu: @motujs/cli is missing its ${dir} adapter (${mod}) — reinstall it.`);
+    return {};
+  }
   const { contribute } = await import(pathToFileURL(mod).href);
   return (await contribute(ctx)) ?? {};
 }
@@ -286,7 +310,7 @@ function excludeUnbundlable(excluded) {
       const reason = JSON.stringify(hit.reason);
       const name = JSON.stringify(hit.kebab);
       return `// Generated by motu: this island was left OUT of the lagoon build.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { createElement as h } from 'react';
 
 const Unbundlable = () =>
@@ -345,6 +369,9 @@ export function chunkOf(paths) {
   const MIN_RUN = 4 * 1024;
   const firstGuess = (rawId) => {
     const id = norm(rawId.split('?')[0]);
+    // Installed, motu IS a dependency — but it is upgraded on its own schedule, not the lockfile's
+    // whole, so it keeps its own chunk rather than invalidating `vendor` on every motu release.
+    if (id.includes('/node_modules/@motujs/')) return 'motu';
     if (rawId.startsWith('\0') || id.includes('/node_modules/')) return 'vendor';
     if (id.startsWith(motuPkgs)) return 'motu';
     if (id.startsWith(archipelagos)) return 'region-' + safe(id.slice(archipelagos.length).split('/')[0].replace(/\.[^.]*$/, ''));
@@ -489,7 +516,7 @@ export function chunkOf(paths) {
 export async function buildLagoonViteConfig(paths, env = process.env) {
   // `paths` must be loadMotuConfig()'s result, NOT util.mjs's curated `paths` export — that one has no
   // `host`, so the host contribution would silently return nothing and the lagoon would build with no
-  // aliases at all. That failure surfaces as "@motu/react could not be resolved", which points nowhere
+  // aliases at all. That failure surfaces as "@motujs/react could not be resolved", which points nowhere
   // near the cause. Fail here instead.
   for (const key of ['host', 'motuRoot', 'lagoonDir', 'appRoot', 'hostRoot', 'cacheDir', 'isolation']) {
     if (paths?.[key] === undefined) {
@@ -592,7 +619,7 @@ export async function buildLagoonViteConfig(paths, env = process.env) {
       // These used to come only from the host adapter's contribution, and both adapters that exist
       // start by spreading `noInstallAliases`. Which meant the "no install step" promise held for
       // exactly the two hosts that ship an adapter: with `host: "none"`, the lagoon booted with an
-      // empty alias list and died on `@motu/react could not be resolved` — the very error the guard
+      // empty alias list and died on `@motujs/react could not be resolved` — the very error the guard
       // above warns about, from a different cause. A project's lagoon must not depend on motu having
       // written an adapter for its framework.
       // The host's tsconfig `paths` LAST, so anything the host's own vite config or an adapter

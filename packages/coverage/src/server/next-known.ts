@@ -2,7 +2,7 @@
 //
 //     // app/api/motu/coverage/known/route.ts
 //     export const dynamic = 'force-dynamic';
-//     export { GET } from '@motu/coverage/server/next/known';
+//     export { GET } from '@motujs/coverage/server/next/known';
 //
 // A SEPARATE MODULE from the forwarder, because Next names route handlers by export: a single module
 // exporting both `POST` and `GET` would work, and it would also mean each route file re-exports one

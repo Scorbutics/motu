@@ -5,7 +5,7 @@
 // it deletable whole. Identical in shape to `signin-region.tsx`, and deliberately so: the COMPOSITION
 // SHAPE is what differs between these two regions, not the binding. A stage-1 region and a stage-2
 // region bind their environment exactly the same way.
-import { createRegion, nextHostBridge } from '@motu/adapter-next';
+import { createRegion, nextHostBridge } from '@motujs/adapter-next';
 import { useRouter } from 'next/navigation';
 import { ELEMENT_REGISTRY } from 'motu-host-islands';
 // The ARCHIPELAGO comes from its own module, not from the barrel beside the registry.

@@ -1,6 +1,6 @@
 // The index region, for the lagoon: what the page establishes on first paint.
-import { overridesFor } from '@motu/react';
-import type { LagoonOverrides } from '@motu/react';
+import { overridesFor } from '@motujs/react';
+import type { LagoonOverrides } from '@motujs/react';
 import { indexArchipelago } from '../../../../src/archipelagos/index/index.archipelago.js';
 import { REPOS, STATS, CAP } from '../../../../src/shared/index-evidence.js';
 

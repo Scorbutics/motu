@@ -1,6 +1,6 @@
 // THE COMPARISON, on its own — because nothing in this repository can drive it end to end.
 //
-// `data-reach` only fires when a project installs the wire fake (`@motu/runtime/postgrest-fetch`), and
+// `data-reach` only fires when a project installs the wire fake (`@motujs/runtime/postgrest-fetch`), and
 // no project here does: motu's own hosts talk to their backends through other seams. So the check
 // cannot be exercised by running `motu check` on this repo, and "it passed" would mean "it never ran".
 // These drive `reportReachDrift` directly, over the shape `DataReach.by` produces.

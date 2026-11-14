@@ -1,6 +1,6 @@
-// The client half of the contract seam: a typed façade over the one `call()` seam in @motu/runtime.
+// The client half of the contract seam: a typed façade over the one `call()` seam in @motujs/runtime.
 //
-// This is what `@motu/contract` is on the Jakarta side, minus the generator. The service map's TYPE
+// This is what `@motujs/contract` is on the Jakarta side, minus the generator. The service map's TYPE
 // is the contract, so `contract.directory.getSectors()` carries the real signature of the function
 // the route handler will run, and a change to that function fails `tsc` here — no regeneration, no
 // window where the two disagree.
@@ -8,7 +8,7 @@
 // Everything goes through `call()`, which is why an island using this still works in the lagoon: the
 // lagoon configures MockTransport instead of HttpTransport and the same component replays fixtures
 // with no backend at all.
-import { call } from '@motu/runtime';
+import { call } from '@motujs/runtime';
 import type { MotuServiceMap } from './services';
 
 /** The client's shape: the server's service map, with every method reachable as-is. */

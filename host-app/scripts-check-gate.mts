@@ -1,6 +1,6 @@
 import { visibilityFor } from '@/src/host/visibility'
 import { store } from '@/src/host/store'
-import { canRead } from '@motu/host/src/access.mjs'
+import { canRead } from '@motujs/host/src/access.mjs'
 import { access } from '@/src/host/store'
 
 const userId = process.argv[2]

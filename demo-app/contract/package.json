@@ -1,5 +1,5 @@
 {
-  "name": "@motu/contract",
+  "name": "@motujs/contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,6 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@motu/runtime": "workspace:*"
+    "@motujs/runtime": "workspace:*"
   }
 }

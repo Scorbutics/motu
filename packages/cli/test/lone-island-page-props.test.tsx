@@ -22,7 +22,7 @@ import type { ElementSpec } from '../../react/src/bootstrap';
 const { mountReactLagoon } = await import('../../react/src/lagoon-react-mount');
 const { lagoonArchipelagoConfig } = await import('../../react/src/bootstrap');
 const { loneIslandSeed } = await import('../../react/src/lagoon-bootstrap');
-const { provideToArchipelago } = await import('@motu/core');
+const { provideToArchipelago } = await import('@motujs/core');
 
 let failures = 0;
 function check(name: string, cond: boolean, detail = '') {

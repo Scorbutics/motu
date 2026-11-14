@@ -1,9 +1,15 @@
 {
-  "name": "@motu/debug-overlay",
+  "name": "@motujs/debug-overlay",
   "version": "0.1.0",
   "description": "In-page overlay for a motu region: who owns each state key, who reads it, and what has moved.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "devtools", "debugging", "overlay"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/debug-overlay"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,10 +21,10 @@
     }
   },
   "dependencies": {
-    "@motu/chrome": "workspace:*",
-    "@motu/core": "workspace:*",
-    "@motu/coverage": "workspace:*",
-    "@motu/runtime": "workspace:*"
+    "@motujs/chrome": "workspace:*",
+    "@motujs/core": "workspace:*",
+    "@motujs/coverage": "workspace:*",
+    "@motujs/runtime": "workspace:*"
   },
   "files": [
     "dist"

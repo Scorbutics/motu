@@ -41,7 +41,7 @@ detail behind it — read in order if you are new; jump straight in if you are n
 | [14 — Migrating an ocean](14-ocean-migration.md) | The legacy-host path: coexistence, `legacy-toggle`, inbound channels, and how the ocean recedes. |
 | [07 — Checks and verification](07-checks-and-verification.md) | every check id, the three tiers, the three exit codes. |
 | [08 — The lagoon](08-lagoon.md) | dev, states as addresses, publish, serve, hosting, visual baselines. |
-| [09 — Coverage](09-coverage.md) | the production fold: fingerprints, corpus, `archipelago coverage`, and the `@motu/coverage` API. |
+| [09 — Coverage](09-coverage.md) | the production fold: fingerprints, corpus, `archipelago coverage`, and the `@motujs/coverage` API. |
 | [10 — Evidence and testing](10-evidence-and-testing.md) | scenarios, flows, evidence files, and what each check reads. |
 
 ## Integrating
@@ -49,5 +49,5 @@ detail behind it — read in order if you are new; jump straight in if you are n
 | | |
 |---|---|
 | [11 — Contract and backend](11-contract-and-backend.md) | the contract seam, transports, wire-level mocking, fixtures, codegen. |
-| [12 — Hosts and adapters](12-hosts-and-adapters.md) | Next, AngularJS, none; `@motu/adapter-next`; `removal-check`. |
+| [12 — Hosts and adapters](12-hosts-and-adapters.md) | Next, AngularJS, none; `@motujs/adapter-next`; `removal-check`. |
 | [13 — Agents and skills](13-agents-and-skills.md) | the shipped skills, host rules, and the multi-agent workflow. |

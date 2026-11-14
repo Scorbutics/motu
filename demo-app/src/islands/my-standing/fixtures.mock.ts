@@ -1,6 +1,6 @@
 // Lagoon scenarios for x-my-standing. The level, rank and streak are the club's rules over each
 // persona's seed row on the evidence day — the same numbers the directory shows them with.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { CLUB, EVIDENCE_DAY } from '../../shared/club-evidence.js';
 import { DENNIS, GUIDO, KAREN, rsvpsOf } from '../../shared/events-evidence.js';
 

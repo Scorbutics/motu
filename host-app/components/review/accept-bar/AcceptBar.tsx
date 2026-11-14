@@ -1,4 +1,4 @@
-import { Button } from "@motu/chrome/react"
+import { Button } from "@motujs/chrome/react"
 import type { ShotRef } from "@/app/console/review-region"
 import type { Shot } from "@/src/review/host"
 

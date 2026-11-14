@@ -1,4 +1,4 @@
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { EventsHeader } from '../../ui/events-header/EventsHeader.js';
 
 export const element = islandElement({

@@ -6,8 +6,8 @@
 // is the same swap the lagoon makes, from the other side.
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { configure } from '@motu/runtime';
-import { registerElements } from '@motu/react';
+import { configure } from '@motujs/runtime';
+import { registerElements } from '@motujs/react';
 import { ELEMENT_REGISTRY } from 'demo-app';
 import { setupAngularHost } from './lib/angular-host.js';
 import { appPorts } from './lib/app-data.js';

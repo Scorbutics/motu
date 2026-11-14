@@ -26,7 +26,7 @@
 // the honest model is the one motu's own rule names: the control that owns the state is the island,
 // even when others sit inside it — so the two become one island with nested slots.
 
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 import { PROFILE_LAYOUT } from './profile.layout.js';
 
 export const profileArchipelago: ArchipelagoConfig = {

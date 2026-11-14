@@ -1,6 +1,6 @@
 // The shell region's binding. motu and the region's own declaration, nothing else — the same rule as
 // the page bindings beside it, so `removal-check` deletes this file whole.
-import { createRegion } from '@motu/react';
+import { createRegion } from '@motujs/react';
 import { shellArchipelago } from 'demo-app/archipelagos/shell';
 import { ELEMENT_REGISTRY } from 'demo-app';
 import { useHostBridge } from '../lib/routing.js';

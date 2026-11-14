@@ -12,10 +12,10 @@
 import { store, access, normalizeRepo, normalizeSegment } from './store.ts'
 import type { RecordPath } from './records.ts'
 import { liveMap, liveFor, proxyLive } from './live.ts'
-// @motu/host is plain ESM node; tsc reads it through allowJs.
-import { repoIndexPage, errorPage } from '@motu/host/src/views.mjs'
-import { canRead } from '@motu/host/src/access.mjs'
-import { wrapFragment, withRepoMeta } from '@motu/host/src/document.mjs'
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
+import { repoIndexPage, errorPage } from '@motujs/host/src/views.mjs'
+import { canRead } from '@motujs/host/src/access.mjs'
+import { wrapFragment, withRepoMeta } from '@motujs/host/src/document.mjs'
 
 const NO_STORE = 'no-store'
 /** `store.mjs`'s own value for content addressed by hash: it cannot change, so cache it for a year. */

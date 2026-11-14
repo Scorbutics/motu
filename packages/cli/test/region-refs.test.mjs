@@ -25,7 +25,7 @@ import { rewriteMotuJsx } from '../src/commands/removal-check.mjs';
 
 const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '../src/cli.mjs');
 
-const ARCH = (id, body) => `import { archipelago } from '@motu/core';\n${body.replace(/ID/g, id)}\n`;
+const ARCH = (id, body) => `import { archipelago } from '@motujs/core';\n${body.replace(/ID/g, id)}\n`;
 
 function project(files) {
   const dir = mkdtempSync(join(tmpdir(), 'motu-region-refs-'));
@@ -65,12 +65,12 @@ const REGIONS = {
 };
 const BINDINGS = {
   'components/motu/base-region.tsx': `'use client';
-import { createRegion } from '@motu/react';
+import { createRegion } from '@motujs/react';
 import { baseArchipelago } from '../../src/archipelagos/base/base.archipelago';
 export const Base = createRegion(baseArchipelago, { elements: [] });
 `,
   'components/motu/equipage-region.tsx': `'use client';
-import { createRegion } from '@motu/react';
+import { createRegion } from '@motujs/react';
 import { equipageArchipelago } from '../../src/archipelagos/equipage/equipage.archipelago';
 export const Equipage = createRegion(equipageArchipelago, { elements: [] });
 `,

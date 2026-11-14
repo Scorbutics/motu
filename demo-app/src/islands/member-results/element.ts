@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { MemberResults, type MemberResultsProps } from '../../ui/member-results/MemberResults.js';
 
 export const memberResultsElement: ElementSpec = {

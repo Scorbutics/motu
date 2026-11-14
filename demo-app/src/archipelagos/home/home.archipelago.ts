@@ -15,7 +15,7 @@
 //                                  so the two pages cannot disagree about whether you are going.
 //   selectedEventId                the source's input; nothing on this page selects an event, so it
 //                                  stays null and no attendees are loaded.
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry.js';
 import type { HomeRegion, ProducedHomeKeys } from './home.region.js';
 import { eventsSource } from '../../shared/events-source.js';

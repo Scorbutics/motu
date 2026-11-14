@@ -21,9 +21,9 @@
 // somebody ELSE's laptop needs that laptop to publish a reachable URL — a tunnel — and the registry
 // already stores a URL rather than a port precisely so that stays possible.
 import { upstreamOrigin } from '../upstream.ts'
-// @motu/host is plain ESM node; tsc reads it through allowJs.
-import { wrapFragment, withRepoMeta } from '@motu/host/src/document.mjs'
-import { errorPage } from '@motu/host/src/views.mjs'
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
+import { wrapFragment, withRepoMeta } from '@motujs/host/src/document.mjs'
+import { errorPage } from '@motujs/host/src/views.mjs'
 
 /** `repo/slug` -> the URL serving it. Empty when nothing is live, or when the registry is unreachable. */
 export type LiveMap = Map<string, string>

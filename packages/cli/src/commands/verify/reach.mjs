@@ -119,7 +119,7 @@ export function reportRuntimeDiagnostics(report, r, label, declared = null) {
   }
   // remountIdentical == null → the island never rendered; the mount error already covers it.
 
-  // Only present when the lagoon's fake fetch (`@motu/runtime/postgrest-fetch`) is in play — a project
+  // Only present when the lagoon's fake fetch (`@motujs/runtime/postgrest-fetch`) is in play — a project
   // still on module-alias stubs never populates this, so `undefined` skips it rather than reporting a
   // false pass for a mechanism that never ran. `seen` is the TOTAL request count, not the unscoped
   // one: a run that made zero requests has zero unscoped requests too, and `report.ok`'s own "0 seen
@@ -187,7 +187,7 @@ export function reportRuntimeDiagnostics(report, r, label, declared = null) {
   }
 
   // WHAT DOES THIS ISLAND NEED FROM THE BACKEND? Observed, not declared — see `DataReach` in
-  // `@motu/runtime/postgrest-fetch` for why this exists at all: mocking at the wire made an island's
+  // `@motujs/runtime/postgrest-fetch` for why this exists at all: mocking at the wire made an island's
   // data dependency transitive, so the module half of `effects` stopped being able to see it. A
   // table-and-RPC list is a better answer than the module name it replaces, and it is already the
   // vocabulary `.assay/operations.json` uses — which is where a motu↔assay drift check would compare.

@@ -18,9 +18,9 @@
 // Isolation is a different axis and is unaffected by this: it decides whether the host's stylesheet
 // reaches the island, not which tree the island renders in.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArchipelagoProvider, Island, defineMotuApp, type ElementSpec, type MotuArchipelago } from '@motu/react';
-import { setDefaultIsolation } from '@motu/core';
-import type { AnyArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motu/core';
+import { ArchipelagoProvider, Island, defineMotuApp, type ElementSpec, type MotuArchipelago } from '@motujs/react';
+import { setDefaultIsolation } from '@motujs/core';
+import type { AnyArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuTheme } from '@motujs/core';
 
 export interface ArchipelagoProps {
   /**

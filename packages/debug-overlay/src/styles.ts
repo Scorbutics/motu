@@ -2,18 +2,18 @@
 //
 // WHAT USED TO BE HERE. Two hundred and seventy lines that re-declared motu's whole design language
 // from literals — `--ink: #22302c`, `0 14px 40px rgba(11,111,104,.18)`, its own glass gradient, its
-// own pill, its own caption, its own empty state. All of it already existed in `@motu/chrome`, whose
+// own pill, its own caption, its own empty state. All of it already existed in `@motujs/chrome`, whose
 // own header says a literal there "is the beginning of the second palette this package exists to
 // prevent". The lens was that second palette; the review console was a third.
 //
-// It is `@motu/chrome/kit` now, emitted at `:host` scope because this draws inside a CLOSED SHADOW
+// It is `@motujs/chrome/kit` now, emitted at `:host` scope because this draws inside a CLOSED SHADOW
 // ROOT. That is the entire difference between painting a page and painting an overlay, and it is one
 // argument rather than a copy of the stylesheet.
 //
 // WHAT IS STILL HERE is what only an overlay needs: a fixed layer over somebody else's page, the
 // outline boxes and their labels, the wire canvas, the panel's POSITION (its surface is the kit's),
 // the edge tab, and the region sheet's column widths.
-import { motuShadowCss } from '@motu/chrome/css';
+import { motuShadowCss } from '@motujs/chrome/css';
 
 /** The tab's resting height. Shared with the CSS below so the two cannot drift. */
 export const TAB_H = 54;

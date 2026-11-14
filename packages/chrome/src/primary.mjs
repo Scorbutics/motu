@@ -205,7 +205,7 @@ export function normalisePrimary(hex, opts = {}) {
  * The CSS custom properties a detected primary should set.
  *
  * The SAME RAMP applyMotuChrome builds, expressed as data so a page that has no access to
- * `@motu/core` -- the node host's composed page is a plain HTML string -- can apply it too. Keep the
+ * `@motujs/core` -- the node host's composed page is a plain HTML string -- can apply it too. Keep the
  * two in step: the percentages here are copied from applyMotuChrome deliberately, because a second
  * ramp with slightly different numbers is exactly the drift this package exists to prevent.
  */

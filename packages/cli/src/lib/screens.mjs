@@ -1,7 +1,7 @@
 // `motu check — screens` (EXPERIMENTAL): do the declared screens hold together, and does every
 // navigation a region asks for go somewhere?
 //
-// A screen is arrangement — a route, the app's own layout, a region per slot (`@motu/react`
+// A screen is arrangement — a route, the app's own layout, a region per slot (`@motujs/react`
 // `screens.ts`). What can be checked without a browser:
 //
 //   screens-declared  the routes are unique and every slot names a region this project has
@@ -29,7 +29,7 @@ export function screensFile() {
   return resolve(dirname(paths.archipelagosDir), 'screens', 'screens.ts');
 }
 
-/** `/member/:id` -> a whole-path matcher, as `compileScreenPath` in @motu/react builds it. */
+/** `/member/:id` -> a whole-path matcher, as `compileScreenPath` in @motujs/react builds it. */
 export function compilePath(path) {
   const source = path
     .replace(/\/+$/, '')

@@ -4,7 +4,7 @@
 // names the real page exposes — so the extracted island renders and is clickable offline. It is a
 // preview stand-in; embedded (the real legacy page) uses the actual controller scope instead.
 import angular from 'angular';
-import { provideAngularHost } from '@motu/adapter-angularjs';
+import { provideAngularHost } from '@motujs/adapter-angularjs';
 
 let installed = false;
 

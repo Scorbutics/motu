@@ -148,7 +148,7 @@ export function renderContracts(contracts, outDir) {
 // The one part that is a decision — an event whose region name differs from the callback's — is
 // declared in the island file, as \`island(tag, Component, { events: { onProgress: 'week-progress' } })\`,
 // and baked in here so the compiler still sees literal event names.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 ${imports}
 
 export const CONTRACTS = {

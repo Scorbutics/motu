@@ -68,7 +68,7 @@ export const MISTAKES = [
     edits: [
       {
         file: 'roots/lagoon/src/manage-servers-shell.tsx',
-        find: "import { MotuError } from '@motu/runtime';\n",
+        find: "import { MotuError } from '@motujs/runtime';\n",
         replace: '',
       },
       {

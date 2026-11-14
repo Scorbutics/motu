@@ -12,16 +12,21 @@
 // Deliberately config-free: this verb installs INTO a repo that may not be a motu project yet, so it
 // never reads motu.config.json and never touches the island layout.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, relative, resolve } from 'node:path';
 import { color, HOST_ROOT } from '../lib/util.mjs';
 import { applyHostRules } from '../lib/host-rules.mjs';
+import { frameworkFile } from '../lib/framework.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
-/** The motu checkout that owns this CLI (packages/cli/src/commands → repo root). */
-const MOTU_ROOT = resolve(here, '../../../..');
-const SRC_AGENTS = resolve(MOTU_ROOT, '.github/agents');
-const SRC_PROMPTS = resolve(MOTU_ROOT, '.github/prompts');
+/**
+ * Where the skills are read from: the checkout's `.github/`, or — installed from npm — the copy
+ * shipped inside @motujs/cli. They used to be read from `<cli>/../../.github` unconditionally, which
+ * from `node_modules/@motujs/cli` is `node_modules/.github`: nothing there, `discover()` returned an
+ * empty list, and `motu init` installed ZERO skills while printing a rules block that tells the
+ * agent to load them.
+ */
+const SRC_AGENTS = frameworkFile('.github/agents');
+const SRC_PROMPTS = frameworkFile('.github/prompts');
+const MOTU_ROOT = dirname(dirname(SRC_AGENTS));
 
 /** Parse a leading `---` YAML-ish frontmatter block into { data, body, raw }. */
 function frontmatter(raw) {

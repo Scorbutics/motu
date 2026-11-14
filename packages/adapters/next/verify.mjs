@@ -12,7 +12,7 @@
 //
 // Operates on the source text + the structured coupling the CLI extracts from element.ts via AST (no
 // ts-morph dependency here — the CLI owns parsing, the adapter owns semantics). Discovery is by package
-// export (`@motu/adapter-next/verify`), resolved from the adapter the island actually imports.
+// export (`@motujs/adapter-next/verify`), resolved from the adapter the island actually imports.
 
 /** Modules that only exist on the server. Importing one makes the component unmountable in the lagoon. */
 const SERVER_ONLY = [

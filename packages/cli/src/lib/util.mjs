@@ -5,6 +5,7 @@ import { existsSync, readFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
 import { loadMotuConfig } from './config.mjs';
+import { INSTALLED, frameworkFile } from './framework.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cfg = loadMotuConfig();
@@ -82,8 +83,9 @@ export const paths = {
   barrel: cfg.barrel,
   contract: resolve(cfg.contractSrcDir, 'index.ts'),
   contractSrcDir: cfg.contractSrcDir,
-  // Framework-internal path: relative to the CLI itself (packages/cli/src/lib), never the app.
-  codegenCli: resolve(here, '../../../codegen/src/cli.mjs'),
+  // Framework-internal path, never the app's. Checkout-only: @motujs/codegen is not published, so
+  // installed this names a file that does not exist and `motu codegen` says so (commands/codegen.mjs).
+  codegenCli: frameworkFile('packages/codegen/src/cli.mjs'),
   defaultManifest: cfg.manifest,
   lagoonDir: cfg.lagoonDir,
   bridgeDir: cfg.bridgeDir,
@@ -167,16 +169,39 @@ function stripJsonc(text) {
  */
 function hostTsconfigAliases() {
   const out = [];
+  const read = (file) => JSON.parse(stripJsonc(readFileSync(file, 'utf8')));
+  const collect = (file, json) => {
+    const paths = json?.compilerOptions?.paths ?? {};
+    // `paths` without `baseUrl` is relative to the config file that declares it — which is the
+    // host root for tsconfig.json, and also for a referenced tsconfig.app.json beside it.
+    const base = resolve(dirname(file), json?.compilerOptions?.baseUrl ?? '.');
+    for (const [pattern, targets] of Object.entries(paths)) {
+      if (!Array.isArray(targets) || !targets.length) continue;
+      out.push({ prefix: pattern.replace(/\*$/, ''), target: resolve(base, targets[0].replace(/\*$/, '')) });
+    }
+  };
   for (const name of ['tsconfig.json', 'jsconfig.json']) {
     const file = resolve(cfg.hostRoot, name);
     if (!existsSync(file)) continue;
     try {
-      const json = JSON.parse(stripJsonc(readFileSync(file, 'utf8')));
-      const paths = json?.compilerOptions?.paths ?? {};
-      const base = resolve(cfg.hostRoot, json?.compilerOptions?.baseUrl ?? '.');
-      for (const [pattern, targets] of Object.entries(paths)) {
-        if (!Array.isArray(targets) || !targets.length) continue;
-        out.push({ prefix: pattern.replace(/\*$/, ''), target: resolve(base, targets[0].replace(/\*$/, '')) });
+      const json = read(file);
+      collect(file, json);
+      // A SOLUTION-STYLE ROOT declares no paths of its own. `npm create vite` writes exactly that —
+      // `tsconfig.json` is `{ files: [], references: [app, node] }` and the app's `@/*` lives in
+      // `tsconfig.app.json` — so a fresh Vite app's `--from @/components/x` was rejected as "does not
+      // resolve", with the alias sitting one file over. Only when the root has none, so a project
+      // whose root does declare paths keeps exactly the answer it had.
+      if (!out.length) {
+        for (const ref of json?.references ?? []) {
+          let target = resolve(dirname(file), ref?.path ?? '');
+          if (existsSync(target) && !target.endsWith('.json')) target = resolve(target, 'tsconfig.json');
+          if (!existsSync(target)) continue;
+          try {
+            collect(target, read(target));
+          } catch {
+            /* an unreadable reference contributes nothing; the others still count */
+          }
+        }
       }
     } catch {
       /* unreadable host tsconfig — aliases just stay unresolved */
@@ -206,7 +231,7 @@ export function hostAliasEntries() {
       // same mechanism. A Next project mapping `"react": ["./node_modules/@types/react/index.d.ts"]`
       // — a common and correct thing to do — had that handed to Vite by this function, so `react`
       // resolved to a declaration file and `react/jsx-runtime` to `…/index.d.ts/jsx-runtime`. It also
-      // aliased every `@motu/*` onto a single source file. The dev server crashed on a real project
+      // aliased every `@motujs/*` onto a single source file. The dev server crashed on a real project
       // with an error naming esbuild and nothing else.
       //
       // Only the wildcard forms say WHERE SOURCE LIVES, which is what the lagoon needed. An exact name
@@ -503,11 +528,11 @@ export function blankComments(text) {
 }
 
 /**
- * Make `@motu/*` resolvable BY NODE inside the project, without an install.
+ * Make `@motujs/*` resolvable BY NODE inside the project, without an install.
  *
  * The lagoon resolves the framework with Vite aliases and tsconfig maps it with `paths` — that is the
  * no-install posture and it works. What it does not cover is plain node: the runtime harness and the
- * evidence loaders `import()` the project's own files, which import `@motu/react`, and node knows
+ * evidence loaders `import()` the project's own files, which import `@motujs/react`, and node knows
  * nothing about either alias. In a workspace this is invisible because the workspace already linked
  * them; in a standalone project `--fast` simply cannot load an island.
  *
@@ -516,16 +541,21 @@ export function blankComments(text) {
  * by hand and inherited a duplicate-React problem for its trouble.
  */
 export function ensureNoInstallLinks(root, motuRoot) {
-  const dir = resolve(root, 'node_modules', '@motu');
-  // `chrome` belongs here even though a host never imports it by name: `@motu/core`'s toolbar does
-  // (`import { MOTU_CHROME } from '@motu/chrome'`). Leaving it out worked only as long as every host
+  // CHECKOUT MODE ONLY. Installed from npm, `@motujs/*` are real packages in the app's node_modules,
+  // recorded in its package.json by `motu init` — and a symlink made here would REPLACE nothing (the
+  // `existsSync` below skips them) but would point into a `packages/` directory that does not exist
+  // the moment one is missing. There is nothing to restore that the package manager does not own.
+  if (INSTALLED) return 0;
+  const dir = resolve(root, 'node_modules', '@motujs');
+  // `chrome` belongs here even though a host never imports it by name: `@motujs/core`'s toolbar does
+  // (`import { MOTU_CHROME } from '@motujs/chrome'`). Leaving it out worked only as long as every host
   // resolved motu's files by their real path and so fell through to motu's own workspace copy. A host
-  // that aliases `@motu/*` to source instead — the arrangement Next and Angular both want — resolves
+  // that aliases `@motujs/*` to source instead — the arrangement Next and Angular both want — resolves
   // from its own tree and gets an unresolved import from inside a package it never named.
   const wanted = ['core', 'react', 'runtime', 'types', 'debug-overlay', 'chrome', 'coverage'];
-  // The HOST ADAPTERS live one directory down (`packages/adapters/next` -> `@motu/adapter-next`) and
+  // The HOST ADAPTERS live one directory down (`packages/adapters/next` -> `@motujs/adapter-next`) and
   // were left out of this list, which made them the one part of the framework the no-install posture
-  // did not cover. Measured on a cold adoption of a real Next monorepo: `@motu/adapter-next` was
+  // did not cover. Measured on a cold adoption of a real Next monorepo: `@motujs/adapter-next` was
   // neither linked here nor written into the app's package.json (see below), so `nextHostBridge` —
   // the single Next-specific export a Next host is documented to need — resolved nowhere, and the
   // agent worked around it by abandoning `useHost` entirely. Nothing reported a problem.
@@ -534,7 +564,7 @@ export function ensureNoInstallLinks(root, motuRoot) {
   for (const name of [...wanted, ...wantedAdapters.map((a) => `adapters/${a}`)]) {
     const target = resolve(motuRoot, 'packages', name);
     if (!existsSync(target)) continue;
-    // `adapters/next` is published as `@motu/adapter-next`: link it under the name it is IMPORTED by,
+    // `adapters/next` is published as `@motujs/adapter-next`: link it under the name it is IMPORTED by,
     // never its directory name, or the specifier resolves to nothing and the link looks fine on disk.
     const linkName = name.startsWith('adapters/') ? `adapter-${name.slice('adapters/'.length)}` : name;
     const link = resolve(dir, linkName);

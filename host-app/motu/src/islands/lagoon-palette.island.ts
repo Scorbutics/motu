@@ -1,6 +1,6 @@
 // Mount point for LagoonPalette: it wraps the application's OWN component rather than a copy, so the
 // island cannot drift from what the app already ships.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { LagoonPalette } from '@/components/lagoon/lagoon-palette';
 
 // RENDERS NOTHING FROM ITS DEFAULTS, ON PURPOSE — `lagoon-render` warns about this and the warning is

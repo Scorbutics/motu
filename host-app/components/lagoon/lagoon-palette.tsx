@@ -12,8 +12,8 @@
 // is. The first version moved a `selected` index and called `location.assign`, which is three
 // mechanisms for what focus already does.
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Kbd } from "@motu/chrome/react"
-import { motuSplashFrom } from "@motu/chrome/splash"
+import { Kbd } from "@motujs/chrome/react"
+import { motuSplashFrom } from "@motujs/chrome/splash"
 import type { LagoonRepo } from "@/app/index-region"
 
 /** What a palette entry is. `kind` is the app's own vocabulary, printed on the right of the row. */

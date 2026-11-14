@@ -2,7 +2,7 @@
 // so the SPA reacts. Outward actions surface as a DOM CustomEvent legacy handlers can listen for.
 // This is the reusable adapter form of the glue that used to live in the bridge composition root.
 
-import type { HostBridge } from '@motu/core';
+import type { HostBridge } from '@motujs/core';
 
 function injector(): any {
   return (window as unknown as { angular?: any }).angular?.element(document.body).injector();

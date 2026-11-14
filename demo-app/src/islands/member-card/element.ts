@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { MemberCard, type MemberCardProps } from '../../ui/member-card/MemberCard.js';
 
 export const memberCardElement: ElementSpec = {

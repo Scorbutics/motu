@@ -14,7 +14,7 @@
 // review console, THE LAGOON HOST'S PAGES — is islands and archipelagos." This page was moved into
 // the app and rendered from `views.mjs`'s string concatenation, byte-identical and not motu at all.
 // That was caught by looking at the screen and asking where it was in the lagoon.
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry';
 // THE REGION'S ROOT — the APPLICATION's own layout, imported.
 import { IndexLayout } from '@/app/index-layout';

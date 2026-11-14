@@ -56,7 +56,7 @@ import {
   closeIslandWindow,
   regionIdOfStore,
   type IslandSpec
-} from '@motu/core';
+} from '@motujs/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap';
 
 interface ArchipelagoValue {

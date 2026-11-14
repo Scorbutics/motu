@@ -1,6 +1,6 @@
 // Vite aliases point next/* here: the lagoon is a plain SPA with no Next runtime, but an island is
 // still allowed to render a link or read the router. Navigation intents belong to the host bridge
-// (@motu/adapter-next), so these stubs are inert on purpose — they render and no-op, they never
+// (@motujs/adapter-next), so these stubs are inert on purpose — they render and no-op, they never
 // navigate. If an island needs more of Next than this, it is coupling to the host too tightly.
 import { createElement, forwardRef, type ComponentProps } from 'react';
 

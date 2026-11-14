@@ -1,6 +1,6 @@
 // Lagoon scenarios for x-event-list: loading, the whole calendar, one member's chapter with their
 // RSVPs marked, and a filter that matches nothing. No fixtures: it calls nothing.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { UPCOMING, DENNIS, COASTAL_WALK, rsvpsOf } from '../../shared/events-evidence.js';
 
 export const fixtures: Fixture[] = [];

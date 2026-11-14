@@ -10,7 +10,7 @@
 // click and the browser leaving. Owned inside the component, none of those is addressable: no
 // scenario can seed one, no flow can drive one, and the only way to see one is to break GoTrue by
 // hand. That is the whole argument for motu on this screen, and it is the argument for motu.
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry';
 // THE REGION'S ROOT — the APPLICATION's own layout, imported. The page renders it with live content
 // and the lagoon renders the same component with islands; neither describes the arrangement twice.

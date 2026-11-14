@@ -1,9 +1,9 @@
 // TWO FACTS CORE HOLDS ABOUT COVERAGE, AND NOTHING ELSE.
 //
-// The fold, the fingerprint, the beacon and the comparison all live in `@motu/coverage`, which core
+// The fold, the fingerprint, the beacon and the comparison all live in `@motujs/coverage`, which core
 // never imports. What is left here is the minimum that cannot live there:
 //
-//   * WHETHER THIS IS THE SANDBOX. The lagoon says so before anything mounts, and `@motu/react` must
+//   * WHETHER THIS IS THE SANDBOX. The lagoon says so before anything mounts, and `@motujs/react` must
 //     be able to say it without depending on a package the project may not have installed. It is also
 //     not really a coverage fact — it is a fact about the environment, and anything else that must
 //     behave differently in a preview can read it.
@@ -32,7 +32,7 @@ export function isSandbox(): boolean {
   return sandbox;
 }
 
-/** What `@motu/coverage` registers: pick up a region as it is defined. */
+/** What `@motujs/coverage` registers: pick up a region as it is defined. */
 export type RegionCoverageInstaller = (regionId: string, opts: { enums?: readonly string[] }) => void;
 
 let installer: RegionCoverageInstaller | null = null;

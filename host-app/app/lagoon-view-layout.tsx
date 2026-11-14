@@ -4,7 +4,7 @@
 //
 // A MAP, NOT A SECOND COPY OF THE SCREEN. Everything here is placement: what is beside what, and
 // which of the two states placements is on screen at this width. The dock's chrome — the water
-// gradient, the rail, the sheet's grab handle — still comes from `@motu/chrome`, because it is drawn
+// gradient, the rail, the sheet's grab handle — still comes from `@motujs/chrome`, because it is drawn
 // identically when this dock is injected into somebody else's artifact.
 //
 // TWO PLACEMENTS OF ONE ISLAND. `states` is the panel's column and `statesStrip` is the phone bar's

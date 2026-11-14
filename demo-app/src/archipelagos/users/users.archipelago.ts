@@ -8,7 +8,7 @@
 // This replaces the old `x-user-search` island, which is gone: the page is no longer a search box
 // looking for members, it is the act of creating one and seeing what results.
 
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 
 export const usersArchipelago: ArchipelagoConfig = {
   id: 'users',

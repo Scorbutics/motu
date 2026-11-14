@@ -41,22 +41,22 @@ importers:
       '@fontsource/league-gothic':
         specifier: ^5.3.0
         version: 5.3.0
-      '@motu/adapter-angularjs':
+      '@motujs/adapter-angularjs':
         specifier: workspace:*
         version: link:../packages/adapters/angularjs
-      '@motu/contract':
+      '@motujs/contract':
         specifier: workspace:*
         version: link:contract
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../packages/core
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../packages/react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../packages/runtime
-      '@motu/types':
+      '@motujs/types':
         specifier: workspace:*
         version: link:../packages/types
       react:
@@ -72,25 +72,25 @@ importers:
 
   demo-app/contract:
     dependencies:
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
 
   demo-app/roots/app:
     dependencies:
-      '@motu/adapter-angularjs':
+      '@motujs/adapter-angularjs':
         specifier: workspace:*
         version: link:../../../packages/adapters/angularjs
-      '@motu/contract':
+      '@motujs/contract':
         specifier: workspace:*
         version: link:../../contract
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../../../packages/core
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../../../packages/react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../../../packages/runtime
       '@supabase/supabase-js':
@@ -121,19 +121,19 @@ importers:
 
   demo-app/roots/bridge:
     dependencies:
-      '@motu/adapter-angularjs':
+      '@motujs/adapter-angularjs':
         specifier: workspace:*
         version: link:../../../packages/adapters/angularjs
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../../../packages/core
-      '@motu/debug-overlay':
+      '@motujs/debug-overlay':
         specifier: workspace:*
         version: link:../../../packages/debug-overlay
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../../../packages/react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../../../packages/runtime
       demo-app:
@@ -152,22 +152,22 @@ importers:
 
   demo-app/roots/lagoon:
     dependencies:
-      '@motu/adapter-angularjs':
+      '@motujs/adapter-angularjs':
         specifier: workspace:*
         version: link:../../../packages/adapters/angularjs
-      '@motu/contract':
+      '@motujs/contract':
         specifier: workspace:*
         version: link:../../contract
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../../../packages/core
-      '@motu/debug-overlay':
+      '@motujs/debug-overlay':
         specifier: workspace:*
         version: link:../../../packages/debug-overlay
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../../../packages/react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../../../packages/runtime
       angular:
@@ -195,25 +195,25 @@ importers:
 
   host-app:
     dependencies:
-      '@motu/adapter-next':
+      '@motujs/adapter-next':
         specifier: workspace:*
         version: link:../packages/adapters/next
-      '@motu/chrome':
+      '@motujs/chrome':
         specifier: workspace:*
         version: link:../packages/chrome
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../packages/core
-      '@motu/host':
+      '@motujs/host':
         specifier: workspace:*
         version: link:../packages/host
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../packages/react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../packages/runtime
-      '@motu/types':
+      '@motujs/types':
         specifier: workspace:*
         version: link:../packages/types
       '@supabase/ssr':
@@ -256,16 +256,16 @@ importers:
 
   host-app/motu:
     dependencies:
-      '@motu/adapter-next':
+      '@motujs/adapter-next':
         specifier: workspace:*
         version: link:../../packages/adapters/next
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       react:
@@ -277,19 +277,19 @@ importers:
 
   packages/adapters/angularjs:
     dependencies:
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../../core
 
   packages/adapters/next:
     dependencies:
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../../core
-      '@motu/react':
+      '@motujs/react':
         specifier: workspace:*
         version: link:../../react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../../runtime
       next:
@@ -313,27 +313,42 @@ importers:
       '@happy-dom/global-registrator':
         specifier: ^20.11.2
         version: 20.11.2
-      '@motu/adapter-angularjs':
+      '@motujs/adapter-angularjs':
         specifier: workspace:*
         version: link:../adapters/angularjs
-      '@motu/adapter-next':
+      '@motujs/adapter-next':
         specifier: workspace:*
         version: link:../adapters/next
-      '@motu/chrome':
+      '@motujs/chrome':
         specifier: workspace:*
         version: link:../chrome
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../core
-      '@motu/coverage':
+      '@motujs/coverage':
         specifier: workspace:*
         version: link:../coverage
-      '@motu/react':
+      '@motujs/debug-overlay':
+        specifier: workspace:*
+        version: link:../debug-overlay
+      '@motujs/react':
         specifier: workspace:*
         version: link:../react
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@motujs/types':
+        specifier: workspace:*
+        version: link:../types
+      '@vitejs/plugin-basic-ssl':
+        specifier: ^1.1.0
+        version: 1.2.0(vite@5.4.21(@types/node@26.2.0))
+      '@vitejs/plugin-react':
+        specifier: ^4.3.3
+        version: 4.7.0(vite@5.4.21(@types/node@26.2.0))
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.4(postcss@8.5.26)
       axe-core:
         specifier: ^4.13.0
         version: 4.13.0
@@ -349,12 +364,21 @@ importers:
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
+      tailwindcss:
+        specifier: ^3.4.0
+        version: 3.4.19(tsx@4.23.12)
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
       tsx:
         specifier: ^4.23.12
         version: 4.23.12
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vite:
+        specifier: ^5.4.10
+        version: 5.4.21(@types/node@26.2.0)
     devDependencies:
       react:
         specifier: ^18.3.1
@@ -367,31 +391,31 @@ importers:
 
   packages/core:
     dependencies:
-      '@motu/chrome':
+      '@motujs/chrome':
         specifier: workspace:*
         version: link:../chrome
-      '@motu/types':
+      '@motujs/types':
         specifier: workspace:*
         version: link:../types
 
   packages/coverage:
     dependencies:
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../core
 
   packages/debug-overlay:
     dependencies:
-      '@motu/chrome':
+      '@motujs/chrome':
         specifier: workspace:*
         version: link:../chrome
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../core
-      '@motu/coverage':
+      '@motujs/coverage':
         specifier: workspace:*
         version: link:../coverage
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../runtime
       react:
@@ -403,25 +427,25 @@ importers:
 
   packages/host:
     dependencies:
-      '@motu/chrome':
+      '@motujs/chrome':
         specifier: workspace:*
         version: link:../chrome
-      '@motu/coverage':
+      '@motujs/coverage':
         specifier: workspace:*
         version: link:../coverage
 
   packages/react:
     dependencies:
-      '@motu/chrome':
+      '@motujs/chrome':
         specifier: workspace:*
         version: link:../chrome
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../core
-      '@motu/runtime':
+      '@motujs/runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@motu/types':
+      '@motujs/types':
         specifier: workspace:*
         version: link:../types
       react:
@@ -433,7 +457,7 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@motu/core':
+      '@motujs/core':
         specifier: workspace:*
         version: link:../core
 

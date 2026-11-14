@@ -34,6 +34,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { color, paths, REPO_ROOT } from '../lib/util.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
+import { CLI_VERSION, INSTALLED } from '../lib/framework.mjs';
 import { readRegions } from '../lib/eject.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { runRegionFlows, closeLagoonPool } from '../playwright-lagoon.mjs';
@@ -408,6 +409,10 @@ function traceBase({ sha, regions, gitRoot, cacheFile }) {
 }
 
 function frameworkVersion() {
+  // INSTALLED there is no git history to ask — `git rev-parse` in node_modules answers for whatever
+  // repository the APP is, so every app commit would have looked like a new motu. The package
+  // version is the framework's identity there, and it changes exactly when motu does.
+  if (INSTALLED) return `npm-${CLI_VERSION}`;
   try {
     const sha = git(['rev-parse', 'HEAD'], FRAMEWORK);
     // An uncommitted framework change is part of the version: a fix to motu itself must not reuse a

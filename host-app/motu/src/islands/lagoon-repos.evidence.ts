@@ -4,7 +4,7 @@
 // day they stand one up, it is the only place on the page that tells them what to do next, and it is
 // unreachable on any host that has ever been published to — which is every host anybody develops
 // against. Nothing but a scenario can put it on screen.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { REPOS, REPOS_WITH_LIVE, ONE_REPO, FILTERED_REPOS, CAP } from '../shared/index-evidence.js';
 
 export const fixtures = [];

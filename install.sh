@@ -79,7 +79,7 @@ if [ ! -d "$MOTU_ROOT/node_modules/ts-morph" ]; then
 fi
 
 # --- 1b. build the packages -------------------------------------------------------------------
-# The `@motu/*` packages ship COMPILED, so their entry points are in dist/ and a clone has none.
+# The `@motujs/*` packages ship COMPILED, so their entry points are in dist/ and a clone has none.
 # This is not an optimisation: shipping compiled is what lets a host install them into its own
 # node_modules, where `react` resolves to the HOST's copy and the peerDependency means what it says.
 if [ ! -f "$MOTU_ROOT/packages/core/dist/index.js" ]; then

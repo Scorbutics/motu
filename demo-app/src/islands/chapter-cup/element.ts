@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { ChapterCup, type ChapterCupProps } from '../../ui/chapter-cup/ChapterCup.js';
 
 export const chapterCupElement: ElementSpec = {

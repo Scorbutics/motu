@@ -1,9 +1,15 @@
 {
-  "name": "@motu/runtime",
+  "name": "@motujs/runtime",
   "version": "0.1.0",
   "description": "Transport for motu regions: HTTP, direct and mock backends behind one declared contract, so a region renders with no server.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "mock-server", "transport", "fetch", "postgrest", "testing"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/runtime"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,7 +28,7 @@
     }
   },
   "dependencies": {
-    "@motu/core": "workspace:*"
+    "@motujs/core": "workspace:*"
   },
   "files": [
     "dist"

@@ -9,7 +9,7 @@
 // and recording nothing looks EXACTLY like a page that is not wired. One row — the call fired, with
 // the right payload, and the read came back unchanged — separates the two in a second.
 import { createPostgrestFetch, readWireCalls, clearWireCalls, readDataReach, subscribeWireCalls, noteGesture } from '../dist/postgrest-fetch.js';
-import { runWithIsland } from '@motu/core';
+import { runWithIsland } from '@motujs/core';
 
 let pass = 0, fail = 0;
 const t = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' -> ' + detail : ''}`); };

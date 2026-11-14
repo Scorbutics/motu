@@ -1,6 +1,6 @@
 // Lagoon scenarios for x-my-events: a guest, a member with nothing booked, a member going to several,
 // and a cancellation on its way.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { UPCOMING, DENNIS, RICH, COASTAL_WALK, rsvpsOf } from '../../shared/events-evidence.js';
 
 export const fixtures: Fixture[] = [];

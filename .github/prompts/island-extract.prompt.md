@@ -29,7 +29,7 @@ are not obvious.
 2. **Scaffold.** WRAP: `motu island create <name> --from '<the app's own specifier>' [--export <Name>]`.
    REWRITE: `motu island create <name>`.
 3. **Data access.** WRAP: the component keeps the app's; a `channel` answers what reacts and the app's
-   own captured mock data answers what it reads. REWRITE: map every call to `@motu/contract` — if a
+   own captured mock data answers what it reads. REWRITE: map every call to `@motujs/contract` — if a
    method isn't `@BrowserCallable` yet, annotate it in the backend, rebuild, then `motu codegen`.
 4. **The component.** WRAP: write NONE. What it cannot render without goes in `providers` (every view,
    idempotent — gate a `<Router>` on `useInRouterContext()`), arrangement in `layout`, data in `seed`.

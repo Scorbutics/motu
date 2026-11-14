@@ -1,7 +1,7 @@
 // PHASE 0 OF THE ACCOUNTS MIGRATION: the Next app sits in front, and everything it does not yet
 // own is handed to the node host unchanged. See docs/plan-lagoon-host.md.
 //
-// The whole point of this file is that it changes NOTHING. `@motu/host` keeps serving every route
+// The whole point of this file is that it changes NOTHING. `@motujs/host` keeps serving every route
 // it serves today — the index, the pages, `/api/publish`, the composed manifests, the live proxy —
 // and the only difference is that the bytes arrive via one more hop. Each route moves into the app
 // on its own commit, and until it does it falls through to here.

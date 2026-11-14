@@ -403,7 +403,7 @@ export function declaredSlotNames(file) {
 /** The object literal that declares `islands: [...]`, wherever it sits. */
 /**
  * What a region declares about ALTERNATIVES, as the plain data `exclusiveProblems` and
- * `undeclaredAlternatives` (from @motu/core) read: whether it has a `root`, its slots (with their
+ * `undeclaredAlternatives` (from @motujs/core) read: whether it has a `root`, its slots (with their
  * `when`/`unless`), its host slots, and its `exclusive` groups.
  *
  * `null` when the file did not parse — "unknown", which the caller must not read as "none". A group

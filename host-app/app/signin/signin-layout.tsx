@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Shore } from "@motu/chrome/react"
+import { Shore } from "@motujs/chrome/react"
 
 /**
  * The sign-in page's ARRANGEMENT, as a component the archipelago points at.

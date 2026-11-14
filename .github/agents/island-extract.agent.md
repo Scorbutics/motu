@@ -53,7 +53,7 @@ An island is a **mount point** plus, only in REWRITE, a **ui component**:
    WRAP this is the ONLY code file you produce.
 2. `src/ui/<kebab>/<Pascal>.tsx` — **REWRITE only.** The plain, mode-agnostic component (props in,
    callbacks out). Lives in `ui/` (the "mainland") so mount points can never import each other — `ui/`
-   may import `@motu/contract`, `shared/`, and other `ui/`, but never `islands/` or `archipelagos/`.
+   may import `@motujs/contract`, `shared/`, and other `ui/`, but never `islands/` or `archipelagos/`.
 3. `src/islands/<kebab>.evidence.ts` — the island's scenarios, and its fixtures where it fetches.
 4. `src/archipelagos/<id>/<id>.archipelago.ts` — archipelago membership (only at integrate).
 
@@ -115,7 +115,7 @@ that renders an empty page and looks like a working one. Skip the rest of this s
 generated contract on a React host.
 
 **REWRITE (ocean host):** islands never do bare `fetch`/`$http`. All server I/O goes through
-`@motu/contract` (`contract/src/index.ts`). For each legacy call:
+`@motujs/contract` (`contract/src/index.ts`). For each legacy call:
 
 - If a matching `@BrowserCallable` method already exists in the contract, use it.
 - If not, annotate the CDI service method in the backend with `@BrowserCallable` (and `@Roles` as
@@ -166,7 +166,7 @@ Translate the legacy template + behaviour into `src/ui/<kebab>/<Pascal>.tsx`. It
 the island rules (verify enforces them):
 
 - **Mode-agnostic:** no `fetch`/`XMLHttpRequest`, no `history`/`pushState`/`location`, no
-  `document.querySelector` into the host. All server I/O via `@motu/contract`.
+  `document.querySelector` into the host. All server I/O via `@motujs/contract`.
 - **Props in, callbacks out.** Outward navigation/actions are *intents*: expose an `onXxx` callback
   (wired later to `host.navigate` / `host.action`), never touch the URL yourself.
 - **Renders from default props alone** — give the props param a default (or destructure with defaults),
@@ -192,7 +192,7 @@ resolve in the loaders that read evidence files, and that failure is silent.
 On an ocean host, additionally:
 
 - Fill `src/islands/<kebab>.evidence.ts` with responses whose **shape matches the
-  contract return types** (see the method's `call<…>()` return in `@motu/contract`). Include the
+  contract return types** (see the method's `call<…>()` return in `@motujs/contract`). Include the
   `roles` a caller needs so role-gated paths can be demoed offline.
 - For REACTIVE behaviour (e.g. type a filter → results narrow), a fixture `response` may be a
   **function of the call args** — `response: (args) => filter(dataset, args[1])` — a client-side STUB

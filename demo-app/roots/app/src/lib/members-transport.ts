@@ -3,7 +3,7 @@
 // `member-results` calls `MemberService.search(page, criteria)` and has no idea what answers it.
 // In the lagoon that is a MockTransport over recorded fixtures. Here it is Postgres. Neither the
 // island nor the region changes between the two, which is the property the whole design is for.
-import type { Transport } from '@motu/runtime';
+import type { Transport } from '@motujs/runtime';
 import { membersSource, type MembersPort, type MemberCriteria } from 'demo-app';
 
 export function membersTransport(ports: { members: MembersPort }): Transport {

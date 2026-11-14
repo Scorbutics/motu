@@ -5,7 +5,7 @@
 //
 // It operates on the STRUCTURED coupling the CLI extracts from element.ts via AST (no regex here, no
 // ts-morph dependency): { adopt?, inheritScope?, hostScopeKey?, hostScope? }. Discovery is by package
-// export (`@motu/adapter-angularjs/verify`), resolved from the adapter the island actually imports.
+// export (`@motujs/adapter-angularjs/verify`), resolved from the adapter the island actually imports.
 
 /**
  * `hostScope` is the `scope:…` half of `contract.effects`, already unprefixed by the caller; the rest

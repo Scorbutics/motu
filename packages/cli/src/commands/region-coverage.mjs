@@ -20,7 +20,7 @@ import {
   mergeCorpora,
   knownIds,
   keysHash,
-} from '@motu/coverage';
+} from '@motujs/coverage';
 import { color, paths, REPO_ROOT } from '../lib/util.mjs';
 import { runRegionFlows, closeLagoonPool } from '../playwright-lagoon.mjs';
 import { producedKeys } from '../lib/worlds.mjs';

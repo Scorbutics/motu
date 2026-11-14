@@ -1,7 +1,7 @@
 // The signin region, for the lagoon: what the page establishes, and what answers the one act.
-import { overridesFor } from '@motu/react';
-import type { LagoonOverrides } from '@motu/react';
-import { channelFrom } from '@motu/core';
+import { overridesFor } from '@motujs/react';
+import type { LagoonOverrides } from '@motujs/react';
+import { channelFrom } from '@motujs/core';
 import { signinArchipelago } from '../../../../src/archipelagos/signin/signin.archipelago.js';
 import { LAGOON_SIGNIN } from '../../../../src/shared/signin-evidence.js';
 

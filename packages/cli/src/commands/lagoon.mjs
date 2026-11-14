@@ -21,7 +21,7 @@ import { regionDeclaresPage } from '../lib/lagoon-declares.mjs';
 import { injectDock } from '../lib/dock-inject.mjs';
 import { clearLiveUrl, writeLiveUrl } from '../lib/live-url.mjs';
 import { createServer } from 'node:http';
-import { motuDockCss, motuDockJs } from '@motu/chrome/dock';
+import { motuDockCss, motuDockJs } from '@motujs/chrome/dock';
 import { networkInterfaces } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -431,7 +431,7 @@ ${page}</body>
 /**
  * The dock, drawn by the SERVER rather than bundled into the page.
  *
- * This is the second consumer of `@motu/chrome/dock`, and the reason that module exists rather than a
+ * This is the second consumer of `@motujs/chrome/dock`, and the reason that module exists rather than a
  * stylesheet in the host: the host app frames a published artifact, `motu lagoon serve` serves one
  * directly, and both must draw the same dock. A copy in each is two chromes that drift — and the dev
  * loop and every runtime check run through THIS one, so a divergence here is a divergence between
@@ -486,7 +486,7 @@ function injectReloadClient(page) {
 
 /**
  * Where a rebuild can come from. The lagoon entry, the app's own sources, and — in this monorepo,
- * where @motu/* resolve to workspace source rather than to a published tarball — the framework
+ * where @motujs/* resolve to workspace source rather than to a published tarball — the framework
  * packages, so editing the lagoon chrome in packages/react rebuilds too.
  *
  * Nested roots are dropped (the lagoon lives inside the app root), because a recursive watch on both

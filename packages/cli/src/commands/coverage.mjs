@@ -16,7 +16,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
-import { mergeCorpora, keysHash } from '@motu/coverage';
+import { mergeCorpora, keysHash } from '@motujs/coverage';
 import { color, paths, REPO_ROOT } from '../lib/util.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
 import { readRegions } from '../lib/eject.mjs';
@@ -119,7 +119,7 @@ async function doctor(argv) {
     return say(true, 'logged', 'the route is in log mode: look for one `motu-coverage-doctor {…}` line in that server’s log, then collect real lines with `motu coverage pull`', 0);
   }
   if (res.ok) {
-    return say(false, 'route too old to say', `the route answered ${res.status} without \`x-motu-coverage\` — update @motu/coverage (or the Java endpoint) so this can tell forwarded from dropped`, 1);
+    return say(false, 'route too old to say', `the route answered ${res.status} without \`x-motu-coverage\` — update @motujs/coverage (or the Java endpoint) so this can tell forwarded from dropped`, 1);
   }
   return say(false, 'unexpected answer', `the route answered ${res.status}${error ? `: ${error}` : ''}`, 1);
 }
@@ -248,10 +248,10 @@ async function pull(argv) {
 
 // ── init ────────────────────────────────────────────────────────────────────────────────────────
 
-const NEXT_ROUTE = (host, mode) => `// Where a motu coverage beacon lands. Written by \`motu coverage init\`; see @motu/coverage/server.
+const NEXT_ROUTE = (host, mode) => `// Where a motu coverage beacon lands. Written by \`motu coverage init\`; see @motujs/coverage/server.
 //
 // ${mode === 'log' ? 'LOG MODE: each report becomes one `motu-coverage {…}` line in this server\'s log, and\n// `motu coverage pull --from <log>` uploads them. No secret, no outbound network.' : 'FORWARD MODE: each report goes to the motu host with MOTU_COVERAGE_TOKEN, the one secret this\n// needs. The host URL is not a secret, so it is written here; the repo is read from the token.'}
-import { createCoverageRoute } from '@motu/coverage/server/next';
+import { createCoverageRoute } from '@motujs/coverage/server/next';
 
 export const dynamic = 'force-dynamic';
 
@@ -260,7 +260,7 @@ export const POST = createCoverageRoute({ ${mode === 'log' ? "mode: 'log'" : `ho
 
 const NEXT_KNOWN = (host) => `// The states somebody accepted, served back so the beacon stays quiet about them. Written by
 // \`motu coverage init\`. The ingest token reads this set of its own repo; nothing else is needed.
-import { createKnownRoute } from '@motu/coverage/server/next/known';
+import { createKnownRoute } from '@motujs/coverage/server/next/known';
 
 export const dynamic = 'force-dynamic';
 
@@ -290,7 +290,7 @@ async function init(argv) {
   if (full.host === 'next') {
     const appDir = ['app', 'src/app'].map((d) => resolve(full.hostRoot, d)).find((d) => existsSync(d));
     if (!appDir) {
-      steps.push(`no Next app router found under ${paths.rel(full.hostRoot)} — add a POST route at ${DEFAULT_ENDPOINT} exporting createCoverageRoute from @motu/coverage/server/next`);
+      steps.push(`no Next app router found under ${paths.rel(full.hostRoot)} — add a POST route at ${DEFAULT_ENDPOINT} exporting createCoverageRoute from @motujs/coverage/server/next`);
     } else {
       const routeFile = resolve(appDir, 'api/motu/coverage/route.ts');
       const knownFile = resolve(appDir, 'api/motu/coverage/known/route.ts');
@@ -314,7 +314,7 @@ async function init(argv) {
     steps.push(`the page renders <meta name="motu-coverage-endpoint" content="<context>${JAVA_ENDPOINT}" />`);
     steps.push(mode === 'log' ? 'set the system property -Dmotu.coverage.mode=log (or MOTU_COVERAGE_MODE=log)' : `set -Dmotu.coverage.host=${host.url || '<host url>'} (not a secret)`);
   } else {
-    steps.push(`this host (${full.host}) has no server motu writes for: deploy a POST route at ${DEFAULT_ENDPOINT} with @motu/coverage/server's handleCoverage (Web-standard Request/Response — any JS runtime), or the Java servlet`);
+    steps.push(`this host (${full.host}) has no server motu writes for: deploy a POST route at ${DEFAULT_ENDPOINT} with @motujs/coverage/server's handleCoverage (Web-standard Request/Response — any JS runtime), or the Java servlet`);
   }
 
   // 2. THE ONE SECRET, minted over the admin API.

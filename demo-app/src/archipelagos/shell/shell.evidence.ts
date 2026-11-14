@@ -3,7 +3,7 @@
 // The bar only READS, so every step either asserts with no stimulus or `provide`s a host-fed key,
 // and every assertion is on what the bar RENDERS — a step whose `expect` named the key it provided
 // would only prove the lagoon stored it.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { SEED_MEMBERS } from '../../shared/seed-members.generated.js';
 
 const member = (no: string) => SEED_MEMBERS.find((m) => m.member_no === no) ?? null;

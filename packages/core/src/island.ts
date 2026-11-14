@@ -5,7 +5,7 @@
 // lets an island be authored in any framework, including the legacy host's own, behind one stable
 // custom-element boundary.
 
-import type { EffectEntry } from '@motu/types';
+import type { EffectEntry } from '@motujs/types';
 
 import type { MotuTheme, MotuFit, LegacyStrategy } from './theme';
 

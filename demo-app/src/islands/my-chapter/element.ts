@@ -1,4 +1,4 @@
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { MyChapter } from '../../ui/my-chapter/MyChapter.js';
 
 export const element = islandElement({

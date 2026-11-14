@@ -68,7 +68,7 @@ Decisions worth keeping:
 http://localhost:3000/share?repo=…` drives the REAL page by region vocabulary with the command unchanged.
 This is where the port's adapter finally runs: the real source over the real routes.
 
-To find out first: what `@motu/adapter-next` already exposes in dev mode. Constraints:
+To find out first: what `@motujs/adapter-next` already exposes in dev mode. Constraints:
 - **Never in a production build** — gated at build time, not by a runtime flag a request can flip.
 - **Write verbs reach a real backend.** `emit revoke-requested` on a real page revokes a real link, so
   the bridge belongs on dev/staging environments with seeded data, and asks for a token.

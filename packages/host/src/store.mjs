@@ -21,9 +21,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs';
 // THE FOLD IS NOT REIMPLEMENTED HERE. Merging two corpora is arithmetic on motu's own format, and the
 // moment a second copy of it exists the two stop agreeing — which is the whole reason `mergeCorpora`
-// lives in @motu/coverage instead of in every backend that stores one. The package compiles to plain
+// lives in @motujs/coverage instead of in every backend that stores one. The package compiles to plain
 // ESM, so bare node reads it exactly as the browser does.
-import { mergeCorpora, fingerprintId } from '@motu/coverage';
+import { mergeCorpora, fingerprintId } from '@motujs/coverage';
 import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 

@@ -10,10 +10,10 @@
     "./styles.css": "./src/shared/styles.css"
   },
   "dependencies": {
-    "@motu/core": "workspace:*",
-    "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*",
-    "@motu/adapter-next": "workspace:*"
+    "@motujs/core": "workspace:*",
+    "@motujs/react": "workspace:*",
+    "@motujs/runtime": "workspace:*",
+    "@motujs/adapter-next": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",

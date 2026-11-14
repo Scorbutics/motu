@@ -2,7 +2,7 @@
 // a real event from the seed: going, not going, full, refused for a suspended membership, on its way,
 // and a guest. These are the states a person meets; the region's flows prove the source moves between
 // them. No fixtures: it calls nothing.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import { UPCOMING, DENNIS, RICH, KAREN, COASTAL_WALK, PORTFOLIO, BOARD_GAMES, BUDGETING, attendeesOf, rsvpsOf } from '../../shared/events-evidence.js';
 
 export const fixtures: Fixture[] = [];

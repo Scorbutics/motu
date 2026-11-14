@@ -4,7 +4,7 @@
 // page installs over Postgres — so cancelling here runs the same logic it runs on the events page.
 // Every assertion is on an island other than the one driven, or on what a host-fed key does to
 // several islands at once.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { CHAPTERS } from '../../shared/chapter-types.js';
 import { CLUB, EVIDENCE_DAY } from '../../shared/club-evidence.js';
 import { COASTAL_WALK, DENNIS, GUIDO } from '../../shared/events-evidence.js';

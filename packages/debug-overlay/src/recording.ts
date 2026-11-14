@@ -11,8 +11,8 @@
 //
 // READ-ONLY WHILE IT RUNS: the recorder observes `call()` and the host-fed writes, and changes
 // nothing about what the region does. Stopping is what produces the file.
-import { startSeedRecording, stopSeedRecording, type RecordedSeed } from '@motu/core';
-import { startRecording, stopRecording, type RecordedCall } from '@motu/runtime';
+import { startSeedRecording, stopSeedRecording, type RecordedSeed } from '@motujs/core';
+import { startRecording, stopRecording, type RecordedCall } from '@motujs/runtime';
 import { renderRecordedFixtures } from './model';
 import { lens } from './store';
 

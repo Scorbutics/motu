@@ -1,6 +1,6 @@
 // Mount point for LagoonFilter: it wraps the application's OWN component rather than a copy, so the
 // island cannot drift from what the app already ships.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { LagoonFilter } from '@/components/lagoon/lagoon-filter';
 
 export const element = islandElement({

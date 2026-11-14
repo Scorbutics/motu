@@ -1,4 +1,4 @@
-import { Cap, Empty, Grow, Pill, Row } from "@motu/chrome/react"
+import { Cap, Empty, Grow, Pill, Row } from "@motujs/chrome/react"
 import type { Shot } from "@/src/review/host"
 import type { ShotRef } from "@/app/console/review-region"
 

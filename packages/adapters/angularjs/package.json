@@ -1,7 +1,13 @@
 {
-  "name": "@motu/adapter-angularjs",
+  "name": "@motujs/adapter-angularjs",
   "version": "0.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/adapters/angularjs"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,7 +19,7 @@
     "./verify": "./verify.mjs"
   },
   "dependencies": {
-    "@motu/core": "workspace:*"
+    "@motujs/core": "workspace:*"
   },
   "files": [
     "dist",

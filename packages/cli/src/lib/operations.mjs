@@ -1,6 +1,6 @@
 // The BACKEND'S OWN LIST OF OPERATIONS, and how a region's ask resolves to one of them.
 //
-// motu records what a region asked for (`recordOutbound`, `@motu/core`) and has never been able to
+// motu records what a region asked for (`recordOutbound`, `@motujs/core`) and has never been able to
 // say whether the thing it asked for EXISTS. It cannot know on its own: an operation is a fact about
 // the backend, and motu has no view of one. So the list is read from a file the project already
 // maintains, and this module is everything motu knows about it.
@@ -17,7 +17,7 @@
 // ## Two kinds of name, because two doors carry an identifier
 //
 // The wire door records `route:<METHOD> <path>` and `fn:<name>` (`reachEntry()` in
-// `@motu/runtime/postgrest-fetch`). Those are the only asks that can name an operation at all — a
+// `@motujs/runtime/postgrest-fetch`). Those are the only asks that can name an operation at all — a
 // contract call is `service.method` and a traced host module is a bare function name, neither of
 // which says which backend thing answered. This module resolves the two that can, and says nothing
 // about the two that cannot.

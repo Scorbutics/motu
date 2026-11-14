@@ -27,10 +27,10 @@ import {
   clearFlood,
   floodFrames,
   type MountedIslandInfo,
-} from '@motu/core';
-// The verdict palette comes from the design tokens, not from @motu/core's re-export: these four
+} from '@motujs/core';
+// The verdict palette comes from the design tokens, not from @motujs/core's re-export: these four
 // are the kit's semantics and the lens is one of three places that used to spell them out.
-import { MOTU_VERDICT } from '@motu/chrome/tokens';
+import { MOTU_VERDICT } from '@motujs/chrome/tokens';
 import { STYLES, TAB_H } from './styles';
 import { FLAG, lens, readFlag, writeFlag } from './store';
 // THE PANEL IS GONE, and this is what it left behind. `setPicking` flips a mode and sets the page's

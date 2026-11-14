@@ -4,7 +4,7 @@
 // with nothing published it is exactly right; above a list of five repositories it is a number
 // `store.stats()` cannot produce. That is why the readout needed to be seedable: unreachable from the
 // region, it defaulted to zeros and rendered the impossible version.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { STATS } from '../shared/index-evidence.js';
 
 export const fixtures = [];

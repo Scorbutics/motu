@@ -8,7 +8,7 @@
 // EVERY ASSERTION IS ON AN ISLAND OTHER THAN THE ONE DRIVEN. Pressing RSVP in the detail panel is
 // asserted on the HEADER's count; picking a row is asserted on the DETAIL panel. A step asserting on
 // the island it drove could pass by echoing its own stimulus.
-import type { RegionScenario } from '@motu/runtime/mock';
+import type { RegionScenario } from '@motujs/runtime/mock';
 import { ALL_EVENTS } from '../../shared/event-types.js';
 import { BOARD_GAMES, COASTAL_WALK, DENNIS, KAREN, PORTFOLIO, RICH } from '../../shared/events-evidence.js';
 

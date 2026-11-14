@@ -39,7 +39,7 @@ function archipelagoSource(id, constName) {
 // sides each compose the region their own way, with nothing comparing them — which is a drift that
 // ships green.
 
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 // import { ${Base}Layout } from '@/app/${id}/${id}-layout';
 
 export const ${constName}: ArchipelagoConfig = {

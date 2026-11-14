@@ -2,7 +2,7 @@
 // mount any island offline (MockTransport) without knowing which folder backs which tag. Adding an
 // island with a `fixtures.mock.ts` = adding its two imports here.
 
-import type { Fixture, RegionScenario, Scenario } from '@motu/runtime/mock';
+import type { Fixture, RegionScenario, Scenario } from '@motujs/runtime/mock';
 import {
   fixtures as memberResults,
   roles as memberResultsRoles,

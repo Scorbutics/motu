@@ -3,7 +3,7 @@
 // Belongs to the APPLICATION. Three keys are OWNED by islands — the whole point of this screen is that
 // picking a repo changes what the list shows, picking a shot changes what the viewer shows, and
 // accepting changes the status the list renders. Everything else the page fetches.
-import type { HostRegion } from "@motu/types"
+import type { HostRegion } from "@motujs/types"
 import type { RepoSummary, Shot } from "@/src/review/host"
 
 /** A shot's identity within a repo: the island that owns it, and `<scenario>@<viewport>`. */

@@ -8,7 +8,7 @@
 // its own `contract.ambient`, a source's is `reaches` on the source — so charging one to the other
 // reports a correct declaration as a violation.
 import { createPostgrestFetch, readUnscopedRequests, readDataReach } from '../dist/postgrest-fetch.js';
-import { runWithIsland, runWithSource } from '@motu/core';
+import { runWithIsland, runWithSource } from '@motujs/core';
 
 let pass = 0, fail = 0;
 const t = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' -> ' + detail : ''}`); };

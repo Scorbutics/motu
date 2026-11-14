@@ -10,8 +10,8 @@
 // was, and the console now shares a document with the rest of the host — so it no longer installs a
 // page shell of its own.
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { applyMotuChrome, channelFrom } from "@motu/core"
-import { createRegion, nextHostBridge } from "@motu/adapter-next"
+import { applyMotuChrome, channelFrom } from "@motujs/core"
+import { createRegion, nextHostBridge } from "@motujs/adapter-next"
 import { useRouter } from "next/navigation"
 import { ELEMENT_REGISTRY } from "motu-host-islands"
 // The ARCHIPELAGO from its own module, not from the barrel beside the registry — a barrel that

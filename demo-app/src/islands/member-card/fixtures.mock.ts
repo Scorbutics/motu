@@ -9,7 +9,7 @@
 //
 // No fixtures: this island calls nothing. It is a projection of one region key plus its own display
 // props, so its whole input is the seed.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import {
   EMPTY,
   OVERFLOWING,

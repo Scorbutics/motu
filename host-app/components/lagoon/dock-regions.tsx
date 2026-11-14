@@ -10,7 +10,7 @@
 // id somebody asked for. What that means for the page is the page's business, which is the coupling
 // the region exists to declare.
 import { useCallback } from "react"
-import { List, ListItem, Row } from "@motu/chrome/react"
+import { List, ListItem, Row } from "@motujs/chrome/react"
 import type { LagoonStation } from "@/app/lagoon-view-region"
 
 export interface DockRegionsProps {

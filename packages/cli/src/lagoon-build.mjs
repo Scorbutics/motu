@@ -4,7 +4,7 @@
 // `motu lagoon publish|serve` shells out to this rather than building in-process, for the same reason
 // it used to shell out to the vite CLI: the build runs inside sync watcher and request callbacks, and
 // a subprocess keeps those call sites unchanged. What changed is WHAT is run — the config now comes
-// from @motu/cli (see lib/lagoon-vite.mjs) instead of a vite.config.ts scaffolded into the project.
+// from @motujs/cli (see lib/lagoon-vite.mjs) instead of a vite.config.ts scaffolded into the project.
 //
 // Invoked with the project as cwd; every MOTU_* input arrives through the environment, exactly as the
 // vite CLI received it.

@@ -3,7 +3,7 @@
 // WHICH IS EXACTLY WHY IT NEEDS THESE. A palette is behind a keystroke: nobody sees its empty result,
 // its long list or its ranking unless they go looking, and "go looking" is not a thing a check does.
 // Seeded open, each state is an address.
-import type { Scenario } from '@motu/runtime/mock';
+import type { Scenario } from '@motujs/runtime/mock';
 import { REPOS, REPOS_WITH_LIVE } from '../shared/index-evidence.js';
 
 export const fixtures = [];

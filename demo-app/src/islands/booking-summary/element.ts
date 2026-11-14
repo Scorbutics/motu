@@ -1,4 +1,4 @@
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { BookingSummary } from '../../ui/booking-summary/BookingSummary.js';
 
 export const element = islandElement({

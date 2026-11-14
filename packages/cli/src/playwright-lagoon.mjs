@@ -434,7 +434,7 @@ function currentNetworkEscapes() {
 }
 
 /**
- * Requests the lagoon's fake fetch (`@motu/runtime/postgrest-fetch`) could not resolve against any
+ * Requests the lagoon's fake fetch (`@motujs/runtime/postgrest-fetch`) could not resolve against any
  * declared table/fixture — accumulated in `window.__motuUnscopedRequests` by the fake itself. Read
  * the same way `window.__motuRejections` is: a call that ran against nothing scoped for it is exactly
  * as much a finding as an unhandled rejection, and both are populated by code running IN the page.
@@ -1892,7 +1892,7 @@ const CLICKABLE_ROLES = ['checkbox', 'switch', 'radio', 'menuitem', 'tab', 'link
  * Run a scenario's scripted interactions against the ALREADY-MOUNTED island — real Playwright
  * locators, scoped to the island's own element (its custom-element tag, or its React-path wrapper),
  * matched by ACCESSIBLE NAME rather than a CSS selector into the component's internals. See
- * `Scenario.interactions`'s doc comment (`@motu/runtime/mock`) for why this is a different claim
+ * `Scenario.interactions`'s doc comment (`@motujs/runtime/mock`) for why this is a different claim
  * than a region flow's `emit`, and therefore not the same "no synthetic clicks" rule.
  *
  * Playwright's locators pierce open shadow roots by default, so this works unchanged whether the
@@ -2037,7 +2037,7 @@ export async function recordLagoon({ tag, fit = 'native', port = 5199, scenarios
   return onLagoonPage({ target: `island:${tag}`, fit, port, transport, viewport: { width: 900, height: 720 }, diagnostics }, async (page, server) => {
     // Turn on recording the instant the runtime module exposes the hook — before the island's mount
     // self-fetch — so the default (first scenario) request is captured too. Also start the seed
-    // recorder (@motu/core) to capture host-fed store writes (channels + provide()).
+    // recorder (@motujs/core) to capture host-fed store writes (channels + provide()).
     await page.addInitScript(() => {
       const iv = setInterval(() => {
         if (window.__motuRecorder) {

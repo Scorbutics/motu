@@ -18,7 +18,7 @@
 // Neither is produced by an island. The bar's one output, `app-navigate`, is an EFFECT: the region
 // turns a section into a URL and hands it to the host. A handler that wrote a key instead would be
 // ownership expressed in a callback body — undrawable before it fires.
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 import { SHELL_LAYOUT } from './shell.layout.js';
 
 /** Where each section lives. The bar names sections; only the region knows they are URLs. */

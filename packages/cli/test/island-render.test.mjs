@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import { act, createElement, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { mountReactLagoon } from '@motu/react';
+import { mountReactLagoon } from '@motujs/react';
 import { installIslandRender } from '../src/lib/island-render.mjs';
 
 const install = new Function(`return (${installIslandRender.toString()})`)();

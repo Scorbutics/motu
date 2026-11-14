@@ -35,7 +35,7 @@ function notFound() {
  *
  * ```ts
  * // app/api/motu/[...call]/route.ts
- * import { createMotuRoute } from '@motu/adapter-next/server'
+ * import { createMotuRoute } from '@motujs/adapter-next/server'
  * import { services } from '@/motu/server/services'
  * export const { POST } = createMotuRoute(services)
  * export const dynamic = 'force-dynamic'

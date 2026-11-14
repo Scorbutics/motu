@@ -7,7 +7,7 @@
 // `MemberService.search` exactly as the page does: `membersSource` (the paging arithmetic, the clamp)
 // over `seedMembersPort` (the filter and the order the sandbox build runs), over the 240 rows of
 // `supabase/seed.sql`. Relative imports only — this module is read by plain node.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 import type { MemberCriteria } from '../../shared/member-types.js';
 import { membersSource } from '../../shared/members-source.js';
 import { seedMembersPort } from '../../shared/seed-members-port.js';

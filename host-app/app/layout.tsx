@@ -20,8 +20,8 @@
 // you have not read which half of the page it describes. The kit styles its own components; this only
 // has to give them a column to sit in.
 import type { ReactNode } from 'react';
-// @motu/chrome is plain ESM node; tsc reads it through allowJs.
-import { motuChromeCss, PAGE_SHELL_CSS } from '@motu/chrome';
+// @motujs/chrome is plain ESM node; tsc reads it through allowJs.
+import { motuChromeCss, PAGE_SHELL_CSS } from '@motujs/chrome';
 // The islands' own sheet. Imported ONCE, globally, rather than from each component: a component-level
 // import works, and it means an island added later is unstyled until somebody remembers.
 import 'motu-host-islands/styles.css';

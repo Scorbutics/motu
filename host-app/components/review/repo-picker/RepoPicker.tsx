@@ -1,4 +1,4 @@
-import { Empty, Gauge, Grow, List, ListItem, Pill, Row } from "@motu/chrome/react"
+import { Empty, Gauge, Grow, List, ListItem, Pill, Row } from "@motujs/chrome/react"
 import type { RepoSummary, Shot } from "@/src/review/host"
 
 /**

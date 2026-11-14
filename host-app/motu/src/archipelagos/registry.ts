@@ -4,7 +4,7 @@
 // effect, and FIRST: it configures the seam every archipelago below offers itself to.
 import './coverage.generated';
 
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 import { corpusArchipelago } from './corpus/corpus.archipelago';
 import { indexArchipelago } from './index/index.archipelago';
 import { lagoonViewArchipelago } from './lagoon-view/lagoon-view.archipelago';

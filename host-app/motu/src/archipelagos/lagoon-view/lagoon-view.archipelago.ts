@@ -11,7 +11,7 @@
 // one of them: the panel's list lighting "As seeded" whatever you pressed, the phone strip and the
 // list disagreeing about which state is showing, switching region leaving the address claiming an
 // island you had left. A key two controls read and one writes is exactly what an archipelago is for.
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry';
 // THE REGION'S ROOT — the APPLICATION's own arrangement, imported.
 import { LagoonViewLayout } from '@/app/lagoon-view-layout';

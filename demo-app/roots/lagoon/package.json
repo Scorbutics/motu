@@ -9,12 +9,12 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@motu/adapter-angularjs": "workspace:*",
-    "@motu/contract": "workspace:*",
-    "@motu/core": "workspace:*",
-    "@motu/debug-overlay": "workspace:*",
-    "@motu/react": "workspace:*",
-    "@motu/runtime": "workspace:*",
+    "@motujs/adapter-angularjs": "workspace:*",
+    "@motujs/contract": "workspace:*",
+    "@motujs/core": "workspace:*",
+    "@motujs/debug-overlay": "workspace:*",
+    "@motujs/react": "workspace:*",
+    "@motujs/runtime": "workspace:*",
     "demo-app": "workspace:*",
     "angular": "^1.8.3",
     "react": "^18.3.1",

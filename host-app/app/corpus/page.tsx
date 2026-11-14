@@ -4,7 +4,7 @@
 // NO NEW BACKEND SURFACE. `readCorpus` and `known` already existed and are already tested
 // (`test/coverage-divergence.test.ts`) — this page reads them and adds nothing, which is the rule
 // from CLAUDE.md about never widening a boundary further than the one method you need.
-import { fingerprintId } from '@motu/coverage';
+import { fingerprintId } from '@motujs/coverage';
 import { CorpusScreen } from '@/app/corpus/corpus-screen';
 import type { CorpusState } from '@/app/corpus/corpus-region';
 import { known, readCorpus } from '@/src/coverage/store';

@@ -9,7 +9,7 @@ stranger, so **the friction you hit is the result** — do not smooth it over, r
 The two applications motu has been cold-started against so far were both **pnpm monorepos**. This one
 is neither: it is a **single-package application installed with npm**. Those are the two variables
 under test, and they are not incidental — motu resolves its own packages by creating symlinks in
-`node_modules/@motu/*`, and `npm install` is documented to delete them as extraneous. If something
+`node_modules/@motujs/*`, and `npm install` is documented to delete them as extraneous. If something
 goes wrong in that area, that IS the finding.
 
 ## Your environment
@@ -46,7 +46,7 @@ what surrounds it:
 1. **Survey the page** with the `island-locate` skill: which regions become islands, which stay host,
    who owns each shared key. Write the survey into your run directory.
 2. **Adopt motu** and get a lagoon that boots. Record how many commands it took to the first state you
-   can open in a browser. Pay attention to anything involving `node_modules/@motu` — see above.
+   can open in a browser. Pay attention to anything involving `node_modules/@motujs` — see above.
 3. **Make the page a region** following your survey. It needs a DI container and a Redux store to
    render — find out where motu wants those, and how clearly it tells you.
 4. **Add ONE new island to that region** that owns a region key another island reads. `searchTerm` is
@@ -72,7 +72,7 @@ end. Add one extra section:
 ```markdown
 ## NPM / SINGLE-PACKAGE
 - anything that behaved differently from what the docs describe for a workspace project
-- anything involving node_modules/@motu/*
+- anything involving node_modules/@motujs/*
 - "nothing unusual" is a valid and useful answer
 ```
 

@@ -231,7 +231,7 @@ export async function checkCommand(argv) {
           paths.coverage?.enabled
             ? 'coverage config matches motu.config.json'
             : existsSync(resolve(paths.archipelagosDir, COVERAGE_MODULE))
-              ? 'coverage off, and nothing names @motu/coverage'
+              ? 'coverage off, and nothing names @motujs/coverage'
               : 'coverage off, and no generated module to keep in step',
         )}`,
   );

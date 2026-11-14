@@ -16,6 +16,7 @@ import { basename, dirname, relative, resolve } from 'node:path';
 import { color } from '../lib/util.mjs';
 import { applyHostRules } from '../lib/host-rules.mjs';
 import { installSkills } from './skills.mjs';
+import { CLI_VERSION, INSTALLED } from '../lib/framework.mjs';
 import {
   render,
   ISLANDS_REGISTRY,
@@ -41,35 +42,35 @@ import {
   NEXT_TAILWIND_CONFIG,
 } from '../lib/scaffold.mjs';
 
-/** What a host's Tailwind config can be called. Mirrors @motu/adapter-next's own list. */
+/** What a host's Tailwind config can be called. Mirrors @motujs/adapter-next's own list. */
 const TAILWIND_CONFIGS = ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.cjs'];
 
-/** Framework entry points, mapped by module specifier — @motu/* are raw TS with no build step. */
+/** Framework entry points, mapped by module specifier — @motujs/* are raw TS with no build step. */
 const MOTU_ENTRIES = {
   // The ONE motu module application code may import — types only, so it erases at compile time and
   // the app still ships byte-identical output without motu.
-  '@motu/types': 'packages/types/src/index.ts',
-  '@motu/core': 'packages/core/src/index.ts',
-  '@motu/react': 'packages/react/src/index.ts',
-  '@motu/react/define': 'packages/react/src/defineReactElement.ts',
-  '@motu/runtime/mock': 'packages/runtime/src/mock.ts',
-  '@motu/runtime': 'packages/runtime/src/index.ts',
-  '@motu/debug-overlay': 'packages/debug-overlay/src/index.ts',
+  '@motujs/types': 'packages/types/src/index.ts',
+  '@motujs/core': 'packages/core/src/index.ts',
+  '@motujs/react': 'packages/react/src/index.ts',
+  '@motujs/react/define': 'packages/react/src/defineReactElement.ts',
+  '@motujs/runtime/mock': 'packages/runtime/src/mock.ts',
+  '@motujs/runtime': 'packages/runtime/src/index.ts',
+  '@motujs/debug-overlay': 'packages/debug-overlay/src/index.ts',
 };
 
 const HOST_ADAPTER_ENTRY = {
-  angularjs: ['@motu/adapter-angularjs', 'packages/adapters/angularjs/src/index.ts'],
-  next: ['@motu/adapter-next', 'packages/adapters/next/src/index.ts'],
+  angularjs: ['@motujs/adapter-angularjs', 'packages/adapters/angularjs/src/index.ts'],
+  next: ['@motujs/adapter-next', 'packages/adapters/next/src/index.ts'],
 };
 
 /**
  * Vite aliases resolving the framework straight to THIS checkout's sources.
  *
- * The @motu/* packages are unpublished workspace packages whose entry point is raw TypeScript, so an
+ * The @motujs/* packages are unpublished workspace packages whose entry point is raw TypeScript, so an
  * existing project cannot simply depend on them — that is the single thing that blocks adopting motu
  * outside its own repo. The lagoon is a Vite app and transpiles TS anyway, so pointing it at the
  * sources removes the package-manager problem entirely: `motu init` produces a lagoon that boots with
- * no install step. Longest specifier first, so '@motu/runtime/mock' is not eaten by '@motu/runtime'.
+ * no install step. Longest specifier first, so '@motujs/runtime/mock' is not eaten by '@motujs/runtime'.
  */
 /** Escape a module specifier for use inside a RegExp literal. */
 function reEscape(spec) {
@@ -126,24 +127,24 @@ function relPosix(from, to) {
 }
 
 /**
- * Say when the app's OWN package.json was kept and the `@motu/*` block therefore never landed.
+ * Say when the app's OWN package.json was kept and the `@motujs/*` block therefore never landed.
  *
  * `writeNew` is non-destructive per file, which is right — but it made the one file EVERY real
  * adoption already has, `package.json`, silently skip the dependency block with it. The scaffold is
  * written for a greenfield project; an existing app is the normal case, and there the block is not
- * "kept", it is ABSENT. Measured on a cold adoption of a Next monorepo: no `@motu/adapter-next`
+ * "kept", it is ABSENT. Measured on a cold adoption of a Next monorepo: no `@motujs/adapter-next`
  * anywhere, `nextHostBridge` unresolvable, and `init` printed a green success line.
  *
  * A notice rather than a merge: editing an application's package.json is the host's call, and a
  * printed block a human can paste is honest about which side owns the file.
  */
 function keptPackageJsonNotice(appRoot, skipped, motuDependencies) {
-  // NO WORKSPACE TO SATISFY `@motu/*` — say what DOES resolve them, because nothing else will.
+  // NO WORKSPACE TO SATISFY `@motujs/*` — say what DOES resolve them, because nothing else will.
   //
   // On a single-package project the dependency block is deliberately not written (a `workspace:*`
   // range nothing can resolve breaks the next `npm install` outright). The consequence, measured on a
   // cold adoption of an npm project: `motu init` changed ZERO lines of package.json, so the only
-  // record of motu's presence was raw symlinks in `node_modules/@motu/*` — which a fresh
+  // record of motu's presence was raw symlinks in `node_modules/@motujs/*` — which a fresh
   // `npm install` deletes, leaving nothing to say what was needed or why the build then fails.
   // The CLI re-creates them on every invocation, so this is legibility, not breakage.
   if (!motuDependencies) {
@@ -152,9 +153,9 @@ function keptPackageJsonNotice(appRoot, skipped, motuDependencies) {
     // This used to end with "after `npm install` wipes them, any motu command puts them back", which
     // is true and is not a fix: the person who runs `npm install` is usually not the person who runs
     // a motu command next. Measured on shlink — `npm install` printed `removed 9 packages` and the
-    // host build then failed with `Cannot find module '@motu/react'`, an error pointing nowhere near
+    // host build then failed with `Cannot find module '@motujs/react'`, an error pointing nowhere near
     // the cause. CI and a fresh clone hit it every time.
-    console.log(color.yellow('  ! nothing in package.json records @motu/*, and `npm install` deletes them as extraneous.'));
+    console.log(color.yellow('  ! nothing in package.json records @motujs/*, and `npm install` deletes them as extraneous.'));
     console.log(color.dim('    Record them as `file:` paths, which npm creates itself and never prunes:'));
     console.log('');
     console.log('      motu link');
@@ -168,16 +169,47 @@ function keptPackageJsonNotice(appRoot, skipped, motuDependencies) {
   let already = false;
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    already = Object.keys(pkg.dependencies ?? {}).some((d) => d.startsWith('@motu/'));
+    already = Object.keys(pkg.dependencies ?? {}).some((d) => d.startsWith('@motujs/'));
   } catch {}
   if (already) return;
-  console.log(color.yellow('  ! package.json was kept, so the @motu/* dependencies were NOT added.'));
-  console.log(color.dim('    The lagoon and tsconfig resolve @motu/* without them, and the CLI links'));
-  console.log(color.dim("    node_modules/@motu/* on every run — so this is not fatal. It matters when the"));
+  console.log(color.yellow('  ! package.json was kept, so the @motujs/* dependencies were NOT added.'));
+  console.log(color.dim('    The lagoon and tsconfig resolve @motujs/* without them, and the CLI links'));
+  console.log(color.dim("    node_modules/@motujs/* on every run — so this is not fatal. It matters when the"));
   console.log(color.dim('    HOST bundler resolves them (a host adapter import). Add to its "dependencies":'));
   console.log('');
   for (const line of motuDependencies.split('\n').slice(1, -2)) console.log(color.dim('    ' + line.trim()));
   console.log('');
+}
+
+/**
+ * Add the `@motujs/*` an installed project needs to its package.json, never touching one it already
+ * declares. Returns `"<field>: <name>@<range>"` for each line added.
+ *
+ * Runtime packages go in `dependencies` — islands ship in the app's bundle. `@motujs/debug-overlay` is
+ * only ever imported by the lagoon, so it is a devDependency, beside @motujs/cli itself.
+ */
+function recordInstalledDeps(pkgPath, range, host) {
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  } catch {
+    return [];
+  }
+  const adapter = host === 'angularjs' ? '@motujs/adapter-angularjs' : host === 'next' ? '@motujs/adapter-next' : null;
+  const wanted = {
+    dependencies: ['@motujs/core', '@motujs/react', '@motujs/runtime', ...(adapter ? [adapter] : [])],
+    devDependencies: ['@motujs/debug-overlay'],
+  };
+  const added = [];
+  for (const [field, names] of Object.entries(wanted)) {
+    for (const name of names) {
+      if (pkg.dependencies?.[name] || pkg.devDependencies?.[name] || pkg.peerDependencies?.[name]) continue;
+      (pkg[field] ??= {})[name] = range;
+      added.push(`${field}: ${name}@${range}`);
+    }
+  }
+  if (added.length) writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  return added;
 }
 
 function writeNew(path, contents, created, skipped) {
@@ -251,13 +283,15 @@ export async function initCommand(argv) {
   created.push(configPath);
 
   // --- the app package: registries, barrel, the shared island sheet ---------------------------
-  const motuDep = argv.motuDep ? String(argv.motuDep) : 'workspace:*';
+  // INSTALLED FROM NPM, the range is the CLI's own version: the set is released in lockstep, so the
+  // CLI that is running is the statement of which `@motujs/*` it was built against.
+  const motuDep = argv.motuDep ? String(argv.motuDep) : INSTALLED ? `^${CLI_VERSION}` : 'workspace:*';
   // `workspace:*` IS A LIE IN A STANDALONE PROJECT, and an expensive one: the generated package.json
-  // listed three @motu packages that no workspace resolves, so `bun install` — and therefore
+  // listed three @motujs packages that no workspace resolves, so `bun install` — and therefore
   // `bun add react` — failed outright in a freshly-initialised project. A greenfield adopter could
   // not install their first dependency.
   //
-  // The packages do not belong there anyway. Nothing resolves @motu/* through node: the lagoon aliases
+  // The packages do not belong there anyway. Nothing resolves @motujs/* through node: the lagoon aliases
   // them and tsconfig `paths` maps them, which is the whole "no install step" posture. So they are
   // declared only when a workspace above the project can actually satisfy them.
   const inWorkspace = (() => {
@@ -275,16 +309,16 @@ export async function initCommand(argv) {
     return false;
   })();
   const motuDependencies =
-    inWorkspace || argv.motuDep
-      ? `  "dependencies": {\n    "@motu/core": "${motuDep}",\n    "@motu/react": "${motuDep}",` +
-        `\n    "@motu/runtime": "${motuDep}"${adapterDepFor(motuDep, host)}\n  },\n`
+    inWorkspace || argv.motuDep || INSTALLED
+      ? `  "dependencies": {\n    "@motujs/core": "${motuDep}",\n    "@motujs/react": "${motuDep}",` +
+        `\n    "@motujs/runtime": "${motuDep}"${adapterDepFor(motuDep, host)}\n  },\n`
       : '';
   // 'vite' contributes at BUILD time (packages/adapters/vite/vite.mjs), not as a runtime package,
   // so it needs no adapter dependency — the same as 'none'.
-  const adapterPkg = host === 'angularjs' ? '@motu/adapter-angularjs' : host === 'next' ? '@motu/adapter-next' : '';
+  const adapterPkg = host === 'angularjs' ? '@motujs/adapter-angularjs' : host === 'next' ? '@motujs/adapter-next' : '';
   const adapterDep = adapterPkg ? `,\n    "${adapterPkg}": "${motuDep}"` : '';
   function adapterDepFor(dep, h) {
-    const pkg = h === 'angularjs' ? '@motu/adapter-angularjs' : h === 'next' ? '@motu/adapter-next' : '';
+    const pkg = h === 'angularjs' ? '@motujs/adapter-angularjs' : h === 'next' ? '@motujs/adapter-next' : '';
     return pkg ? `,\n    "${pkg}": "${dep}"` : '';
   }
 
@@ -294,6 +328,14 @@ export async function initCommand(argv) {
     created,
     skipped,
   );
+  // INSTALLED, AN EXISTING package.json IS EDITED, not just reported on. In checkout mode the block
+  // could only ever be a `workspace:*` or a path into somebody's clone, so a printed notice was the
+  // honest move (see keptPackageJsonNotice). Installed, it is `^<version>` of packages that are on the
+  // registry — exactly what `npm i` would have written — and the adopter has just run
+  // `npm i -D @motujs/cli`, which already said yes to motu in this manifest. Leaving them out is what
+  // would break: the islands import `@motujs/react` from the app's own code, and under pnpm (or after
+  // npm stops hoisting a transitive) nothing the app declares would provide it.
+  const recorded = INSTALLED ? recordInstalledDeps(resolve(appRoot, 'package.json'), motuDep, host) : null;
   writeNew(resolve(appRoot, 'src/islands/registry.ts'), ISLANDS_REGISTRY, created, skipped);
   writeNew(resolve(appRoot, 'src/archipelagos/registry.ts'), ARCHIPELAGOS_REGISTRY, created, skipped);
   writeNew(resolve(appRoot, 'src/index.ts'), BARREL, created, skipped);
@@ -334,7 +376,7 @@ export async function initCommand(argv) {
       viteCss: host === 'next' ? render(NEXT_VITE_CSS, { hostRootFromLagoon: relPosix(lagoonDir, hostRoot) }) : '',
       // The AngularJS ocean needs a host present for islands that read host scope; the React hosts
       // need nothing — the store is the only seam.
-      hostImport: host === 'angularjs' ? "import { angularHostScopeChannel } from '@motu/adapter-angularjs';\n" : '',
+      hostImport: host === 'angularjs' ? "import { angularHostScopeChannel } from '@motujs/adapter-angularjs';\n" : '',
       // Paths the entries import by. `init` writes into the lagoon root, so these are the plain
       // relative forms; `motu lagoon dev|build` renders the SAME templates into .motu/cache and
       // overrides them with paths computed from there (see lib/lagoon-materialize.mjs).
@@ -368,7 +410,7 @@ export async function initCommand(argv) {
     // directory failed on it. Neither acme nor the review console has the file at all, which is why
     // nothing noticed. `motu lagoon eject` materializes into the project's own lagoon dir, so the
     // rendered version is what a project gets the moment it wants one on disk.
-    // Declared, not coded: what the lagoon IS lives here; what it DOES lives in @motu/react.
+    // Declared, not coded: what the lagoon IS lives here; what it DOES lives in @motujs/react.
     writeNew(resolve(lagoonDir, 'lagoon.config.json'), render(LAGOON_CONFIG, vars), created, skipped);
     writeNew(resolve(lagoonDir, 'src/lagoon.tsx'), LAGOON_OVERRIDES, created, skipped);
     if (host === 'next') {
@@ -384,7 +426,7 @@ export async function initCommand(argv) {
       );
       // ONLY IF THE HOST HAS TAILWIND. This file's whole body is `import hostConfig from
       // '../../../tailwind.config'`, so writing it for a Next app that styles itself any other way
-      // scaffolds a module that cannot resolve. @motu/adapter-next makes the same check before it
+      // scaffolds a module that cannot resolve. @motujs/adapter-next makes the same check before it
       // installs the postcss plugin; a Next host is not a Tailwind host.
       if (TAILWIND_CONFIGS.some((f) => existsSync(resolve(hostRoot, f))))
         writeNew(resolve(lagoonDir, 'tailwind.config.ts'), render(NEXT_TAILWIND_CONFIG, vars), created, skipped);
@@ -417,7 +459,13 @@ export async function initCommand(argv) {
   if (skillFiles) console.log('  ' + color.dim(`${skillFiles} skill file(s) — the detail the rules block points at (.claude/skills, .github/agents)`));
   for (const p of skillsOut.skipped) console.log('  ' + color.dim(p) + color.yellow(' (kept — differs from motu\'s; `motu skills install --force` to update)'));
   console.log('');
-  keptPackageJsonNotice(appRoot, skipped, motuDependencies);
+  if (recorded?.length) {
+    console.log(color.yellow(`  ! recorded ${recorded.length} @motujs/* package(s) in package.json — run your package manager once:`));
+    for (const r of recorded) console.log(color.dim(`      ${r}`));
+    console.log('');
+    console.log('      npm install');
+    console.log('');
+  } else if (!INSTALLED) keptPackageJsonNotice(appRoot, skipped, motuDependencies);
   if (!LEGACY_FIT_HOSTS.has(host)) {
     console.log(color.dim('  legacy fit is off for this host — islands mount directly, there is no legacy skin to fit.'));
   }

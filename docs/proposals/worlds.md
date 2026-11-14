@@ -109,7 +109,7 @@ already made for its sources: install the app's own object over answers chosen i
 - **Switching world re-aims; it does not reboot.** The lagoon remounts the regions on screen and
   reinstalls their channels with that world's args. That is the same path a scenario reset already
   takes, so a check that runs flows in three worlds pays for three remounts, not three boots.
-- **`facts` are read by stand-ins through `worldFact(name, fallback)`** from `@motu/react`. It returns
+- **`facts` are read by stand-ins through `worldFact(name, fallback)`** from `@motujs/react`. It returns
   the fallback when no world sets the fact, so a stand-in that adopts it changes nothing until a world
   uses it.
 - **The dock's States tab groups flows by world**, and shows the world beside the flow on the bar

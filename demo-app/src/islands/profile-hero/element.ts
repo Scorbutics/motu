@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { ProfileHero, type ProfileHeroProps } from '../../ui/profile-hero/ProfileHero.js';
 
 export const profileHeroElement: ElementSpec = {

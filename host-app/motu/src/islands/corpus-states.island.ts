@@ -1,5 +1,5 @@
 // Mount point for CorpusStates — the application's own component, wrapped, not copied.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { CorpusStates } from '@/components/corpus/corpus-states';
 
 export const element = islandElement({

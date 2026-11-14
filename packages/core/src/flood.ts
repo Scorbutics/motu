@@ -1,8 +1,8 @@
 // The motu chrome's one reveal: a surface ARRIVES AS WATER, coming in from whatever the human just
 // touched — the bay's panel pours out of the bay, the seam lens pours out of its tab.
 //
-// It lives here because two packages draw it (@motu/react's tideline and the dev-only
-// @motu/debug-overlay) and neither may depend on the other. A second copy of a wave is exactly the
+// It lives here because two packages draw it (@motujs/react's tideline and the dev-only
+// @motujs/debug-overlay) and neither may depend on the other. A second copy of a wave is exactly the
 // kind of thing that drifts: one of them gets a longer period, and the chrome stops reading as one
 // tool.
 //

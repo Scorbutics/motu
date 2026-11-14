@@ -6,7 +6,7 @@
 // is one the seed actually matches, so the chips shown here are chips the directory really shows.
 //
 // No fixtures: the chips call nothing.
-import type { Fixture, Scenario } from '@motu/runtime/mock';
+import type { Fixture, Scenario } from '@motujs/runtime/mock';
 
 export const fixtures: Fixture[] = [];
 

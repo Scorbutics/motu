@@ -9,8 +9,8 @@ import {
   bindEntries,
   type MountedIslandInfo,
   type IslandDefinition,
-} from '@motu/core';
-import type { CallEvent, RecordedCall } from '@motu/runtime';
+} from '@motujs/core';
+import type { CallEvent, RecordedCall } from '@motujs/runtime';
 
 /** How a declared prop is being fed. */
 export type PropState = 'bound' | 'bound-empty' | 'static' | 'default';
@@ -150,7 +150,7 @@ export function renderRecordedFixtures(calls: RecordedCall[], seed: Record<strin
       ? `\n// Host-fed store values (channels + provide) captured this session — pass as the lagoon seed so\n// the island receives REAL host config offline, not a hand-written stub.\nexport const seed: Record<string, unknown> = ${JSON.stringify(seed, null, 2)};\n`
       : '';
   return `// RECORDED in the debug overlay — request-keyed fixtures. Merge the ones you want into fixtures.mock.ts.
-import type { Fixture } from '@motu/runtime/mock';
+import type { Fixture } from '@motujs/runtime/mock';
 
 export const fixtures: Fixture[] = [
 ${rows.join('\n')}

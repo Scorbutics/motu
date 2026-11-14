@@ -2,9 +2,9 @@
 //
 // The graph is the project's, not one region's: whether `base → equipage` is a cycle depends on what
 // `equipage` references, so a single file cannot answer it. The verdict on the graph is
-// `regionRefProblems` from @motu/core — the same function the lagoon uses to refuse a placeholder — so
+// `regionRefProblems` from @motujs/core — the same function the lagoon uses to refuse a placeholder — so
 // the check and the preview cannot disagree about which references are broken.
-import { regionRefProblems } from '@motu/core';
+import { regionRefProblems } from '@motujs/core';
 import { readRegions } from './eject.mjs';
 import { regionRefsDeclared } from './lagoon-declares.mjs';
 

@@ -5,7 +5,7 @@
 // stripped instead, which leaves `createRegion(...)` behind with its imports gone and errors on
 // lines that look fine. So the Supabase client, the sources and the fetching live in `lib/` and in
 // the page; this file only binds.
-import { createRegion } from '@motu/react';
+import { createRegion } from '@motujs/react';
 // NOT FROM THE PROJECT BARREL: `demo-app`'s index pulls in every island, so an island reaching an
 // application page that composes this region would close a cycle back to here. The registry is fine
 // to take from the barrel because handing it over is the barrel's whole job.

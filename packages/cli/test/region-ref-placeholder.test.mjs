@@ -5,7 +5,7 @@
 // split exists to buy. Asked, it mounts the child from ITS config with ITS seed. A reference the lagoon
 // cannot honour REFUSES (role="alert", no load button) rather than rendering anything in its place.
 //
-// Driven through the built `@motu/react` (the same mount the gallery and `island verify` use), in
+// Driven through the built `@motujs/react` (the same mount the gallery and `island verify` use), in
 // happy-dom: rendering and a click are all this needs, and both are decidable without a browser.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register({ url: 'http://localhost/?region=parent' });
@@ -15,8 +15,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { mountReactLagoon, createRegion } from '@motu/react';
-import { getArchipelagoStore } from '@motu/core';
+import { mountReactLagoon, createRegion } from '@motujs/react';
+import { getArchipelagoStore } from '@motujs/core';
 
 const ParentLayout = ({ main, panel }) => createElement('main', null, main, createElement('aside', null, panel));
 const ChildLayout = ({ body }) => createElement('section', { className: 'child' }, body);

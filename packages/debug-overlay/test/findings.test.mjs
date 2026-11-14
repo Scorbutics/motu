@@ -131,7 +131,7 @@ test('an island on all defaults is broken outside a lagoon', () => {
 });
 
 test('inside a lagoon the same two facts are notes, not faults', async () => {
-  const { markSandbox } = await import('@motu/core');
+  const { markSandbox } = await import('@motujs/core');
   markSandbox();
   const out = findingsOf({ ...base, traced: 48, calls: 0, verdicts: new Map([['form', 'broken']]) });
 

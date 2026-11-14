@@ -1,9 +1,15 @@
 {
-  "name": "@motu/types",
+  "name": "@motujs/types",
   "version": "0.1.0",
   "description": "Shared TypeScript types for motu islands, archipelagos and region contracts.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "typescript", "types"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Scorbutics/motu.git",
+    "directory": "packages/types"
+  },
+  "homepage": "https://github.com/Scorbutics/motu#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -63,7 +63,7 @@ export function motuProvenance(alias, lagoonDir) {
       const path = JSON.stringify(file);
       return [
         `import * as __impl from ${path};`,
-        `import { traceModule } from '@motu/core';`,
+        `import { traceModule } from '@motujs/core';`,
         `export * from ${path};`,
         `const __traced = traceModule(${JSON.stringify(spec)}, __impl);`,
         ...exportedNames(code).map((n) => `export const ${n} = __traced[${JSON.stringify(n)}];`),

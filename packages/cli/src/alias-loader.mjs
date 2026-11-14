@@ -1,7 +1,7 @@
 // A node ESM resolve hook that speaks the LAGOON's aliases.
 //
 // The happy-dom path (`--fast`) is plain node, which knows nothing about `@/…`, `motu-islands` or the
-// raw-TypeScript `@motu/*` checkout — so it could not load an island that imports anything from its
+// raw-TypeScript `@motujs/*` checkout — so it could not load an island that imports anything from its
 // own app, which is every island in a real project.
 //
 // NOT tsconfig `paths`, which is the obvious answer and the wrong one: those are a TYPE resolution

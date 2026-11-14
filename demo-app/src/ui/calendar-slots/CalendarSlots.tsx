@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 import type { Calendar, DayAvailability, Timeslot } from '../../shared/availability-types.js';
 import { SLOT_KIND_LABELS } from '../../shared/availability-types.js';
 

@@ -35,7 +35,7 @@ export interface HostCall {
 
 // WHICH ISLAND ASKED. The attribution window is opened around an island's render — and, because that
 // render is flushed synchronously in debug builds, around the effects that fire its self-fetch. It
-// lives here rather than in @motu/runtime (which owns the same window for contract calls) because
+// lives here rather than in @motujs/runtime (which owns the same window for contract calls) because
 // `traced` is a core concern and core must not depend on the transport; runtime delegates to this.
 let currentIsland: string | null = null;
 
@@ -303,7 +303,7 @@ export const resetOutbound = (): void => void outbound.splice(0, outbound.length
 // The lagoon owes them that half more than an ordinary page does. It intercepts `fetch`, so the
 // browser's own Network panel is empty by construction — the same argument `traced` makes one layer
 // up: motu removed the standard instrument, so motu owes the replacement. `readWireCalls` in
-// @motu/runtime already answers it for the wire door, but only for that door, and only to a panel
+// @motujs/runtime already answers it for the wire door, but only for that door, and only to a panel
 // somebody has opened. This is the ONE feed both doors that have a URL record into, pushed to
 // whoever is watching, so chrome outside the artifact can say a call landed without polling.
 //

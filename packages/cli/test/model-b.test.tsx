@@ -17,8 +17,8 @@ import { createRoot } from 'react-dom/client';
 // on timing rather than on behaviour.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 import { ArchipelagoProvider, Island } from '../../react/src/react-island';
-import { getArchipelagoStore } from '@motu/core';
-import type { ArchipelagoConfig } from '@motu/core';
+import { getArchipelagoStore } from '@motujs/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 import type { ElementSpec } from '../../react/src/bootstrap';
 
 let failures = 0;

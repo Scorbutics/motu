@@ -1,6 +1,6 @@
 // The users region's binding. Same rule as the members one: motu and the region's own declaration,
 // nothing else — so `removal-check` can delete this file whole rather than stripping it.
-import { createRegion } from '@motu/react';
+import { createRegion } from '@motujs/react';
 import { usersArchipelago } from 'demo-app/archipelagos/users';
 import { ELEMENT_REGISTRY } from 'demo-app';
 

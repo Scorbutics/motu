@@ -14,7 +14,7 @@ create table if not exists coverage_states (
   project_id   uuid not null references projects(id) on delete cascade,
   region       text not null,
   keys_hash    text not null,
-  -- `fingerprintId(fingerprint)` — @motu/coverage's own identity for a state, not ours. The whole
+  -- `fingerprintId(fingerprint)` — @motujs/coverage's own identity for a state, not ours. The whole
   -- point of the key is that it is computed the same way on every side.
   state_id     text not null,
   fingerprint  jsonb not null,

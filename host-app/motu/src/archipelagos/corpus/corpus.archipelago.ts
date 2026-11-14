@@ -15,7 +15,7 @@
 // page's own and appear nowhere in the preview. That is the honest trade of stage 1, and it is why
 // stage 2 exists — see docs/06-composition-and-adoption.md.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry';
 // TYPE-ONLY, from the app: the page's vocabulary is the application's to name.
 import type { CorpusRegion, ProducedCorpusKeys } from '@/app/corpus/corpus-region';

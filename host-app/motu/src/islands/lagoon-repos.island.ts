@@ -1,7 +1,7 @@
 // Mount point for LagoonRepos: it wraps the application's OWN component rather than a copy, so the
 // island cannot drift from what the app already ships. The component stays where it is and keeps
 // being used directly elsewhere; this file only declares how it is mounted as an island.
-import { islandElement } from '@motu/react';
+import { islandElement } from '@motujs/react';
 import { LagoonRepos } from '@/components/lagoon/lagoon-repos';
 
 export const element = islandElement({

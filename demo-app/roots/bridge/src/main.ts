@@ -1,11 +1,11 @@
 // bridge.js composition root — the EMBEDDED mode wiring. Injected into legacy pages via one
 // <script> tag. Everything mode-specific lives here; the components and app config stay mode-agnostic.
 
-import { configure, HttpTransport } from '@motu/runtime';
-import { absorbHostTheme, setDefaultIsolation } from '@motu/core';
-import { defineMotuApp } from '@motu/react';
-import { mountDebugOverlay } from '@motu/debug-overlay';
-import { angularHostBridge, angularHttpChannel, installMotuProvide } from '@motu/adapter-angularjs';
+import { configure, HttpTransport } from '@motujs/runtime';
+import { absorbHostTheme, setDefaultIsolation } from '@motujs/core';
+import { defineMotuApp } from '@motujs/react';
+import { mountDebugOverlay } from '@motujs/debug-overlay';
+import { angularHostBridge, angularHttpChannel, installMotuProvide } from '@motujs/adapter-angularjs';
 import { ELEMENT_REGISTRY, membersArchipelago, usersArchipelago } from 'demo-app';
 import css from 'demo-app/styles.css?inline';
 

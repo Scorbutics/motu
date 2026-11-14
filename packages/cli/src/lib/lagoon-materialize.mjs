@@ -130,7 +130,7 @@ export function materializeLagoon(paths, outDir) {
     // FIRST import in both entries: host modules read process.env while being imported, so the shim
     // has to land before any of them is evaluated. An ocean has no such modules and needs no shim.
     envShim: paths.host === 'angularjs' ? '' : "import './env.js';\n",
-    hostImport: paths.host === 'angularjs' ? "import { angularHostScopeChannel } from '@motu/adapter-angularjs';\n" : '',
+    hostImport: paths.host === 'angularjs' ? "import { angularHostScopeChannel } from '@motujs/adapter-angularjs';\n" : '',
     hostOption: '',
   };
 

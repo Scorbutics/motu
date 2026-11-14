@@ -19,7 +19,7 @@
 // Both islands are still registered — the AngularJS ocean embeds the search on its own.
 //
 // Mode-specific bits (host, seed, channels) are supplied by each composition root, not here.
-import type { ArchipelagoConfig } from '@motu/core';
+import type { ArchipelagoConfig } from '@motujs/core';
 import { MEMBERS_LAYOUT } from './members.layout.js';
 
 export interface MembersArchipelagoOptions {

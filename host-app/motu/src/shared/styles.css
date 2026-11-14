@@ -254,14 +254,14 @@ main {
 
    APPEND-ONLY, and kept whole rather than merged into the rules above: what this console owns is a
    three-column desk, a phone deck, a project sheet and the picture that is the reason to open the
-   screen — none of which any other surface here has. Its vocabulary is already @motu/chrome's, so
+   screen — none of which any other surface here has. Its vocabulary is already @motujs/chrome's, so
    there is nothing to reconcile; what follows is only WHERE things sit.
    ============================================================================================= */
 /* The console's own sheet: WHERE THINGS SIT, and nothing about what they look like.
  *
- * THE VOCABULARY IS `@motu/chrome` — the water, the ink, the line, and now the SHAPES too: the bay,
+ * THE VOCABULARY IS `@motujs/chrome` — the water, the ink, the line, and now the SHAPES too: the bay,
  * the panel, the rows, the pills, the gauge, the buttons, the empty states and the meter are all the
- * kit's, installed by `installMotuChrome()` and used through `@motu/chrome/react`.
+ * kit's, installed by `installMotuChrome()` and used through `@motujs/chrome/react`.
  *
  * They used to be here, drawn by hand from literals that happened to equal motu's tokens — and the
  * seam lens had independently grown a third copy of the same set. What that costs is not effort, it

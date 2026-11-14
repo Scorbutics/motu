@@ -15,7 +15,7 @@
 // another. The button does not write any of it. It asks (`event-rsvp`, an intent), the source asks the
 // backend, and every island reads the answer. A full event, a suspended member and a started event
 // are refused by the database, and the refusal arrives the same way.
-import { archipelago } from '@motu/core';
+import { archipelago } from '@motujs/core';
 import type { ElementTypes } from '../../islands/registry.js';
 import type { EventsRegion, ProducedEventsKeys } from './events.region.js';
 import { eventsSource } from '../../shared/events-source.js';

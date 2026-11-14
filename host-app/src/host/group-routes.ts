@@ -22,9 +22,9 @@ import { store, normalizeSegment } from './store.ts'
 import { html } from './read-routes.ts'
 import type { Visible } from './read-routes.ts'
 import { upstreamOrigin, proxyToHost } from '../upstream.ts'
-// @motu/host is plain ESM node; tsc reads it through allowJs.
-import { lagoonPage, errorPage } from '@motu/host/src/views.mjs'
-import { wrapFragment, withRepoMeta } from '@motu/host/src/document.mjs'
+// @motujs/host is plain ESM node; tsc reads it through allowJs.
+import { lagoonPage, errorPage } from '@motujs/host/src/views.mjs'
+import { wrapFragment, withRepoMeta } from '@motujs/host/src/document.mjs'
 
 const NO_STORE = 'no-store'
 

@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { CalendarSlots, type CalendarSlotsProps } from '../../ui/calendar-slots/CalendarSlots.js';
 
 export const calendarSlotsElement: ElementSpec = {

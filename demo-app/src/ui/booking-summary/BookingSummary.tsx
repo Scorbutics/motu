@@ -1,4 +1,4 @@
-import type { MotuFit } from '@motu/core';
+import type { MotuFit } from '@motujs/core';
 import type { Timeslot } from '../../shared/availability-types.js';
 import { SLOT_KIND_LABELS } from '../../shared/availability-types.js';
 import type { MemberRow } from '../../shared/member-types.js';

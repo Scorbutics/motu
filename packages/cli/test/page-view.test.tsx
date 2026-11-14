@@ -18,7 +18,7 @@ GlobalRegistrator.register();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import React, { act, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { defineArchipelago, getArchipelagoStore } from '@motu/core';
+import { defineArchipelago, getArchipelagoStore } from '@motujs/core';
 import { mountReactLagoon } from '../../react/src/lagoon-react-mount';
 
 let pass = 0, fail = 0;

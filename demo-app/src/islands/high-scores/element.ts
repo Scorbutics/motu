@@ -1,4 +1,4 @@
-import type { ElementSpec } from '@motu/react';
+import type { ElementSpec } from '@motujs/react';
 import { HighScores, type HighScoresProps } from '../../ui/high-scores/HighScores.js';
 
 export const highScoresElement: ElementSpec = {

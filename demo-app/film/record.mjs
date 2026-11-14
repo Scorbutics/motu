@@ -33,7 +33,9 @@ const DRY = process.env.FILM_DRY === '1';
 // FILM_RESUME=1: a take stopped mid-build. Records a SECOND part into the same take, starting at the
 // build (Claude still working in the stage window), then every scene after it. prepare-edit joins
 // the parts; inside a 60× timelapse the gap does not show.
-const RESUME = process.env.FILM_RESUME === '1';
+// FILM_RESUME=lagoon: the build is over too — records a THIRD part, from the lagoon scene to the end.
+const RESUME = process.env.FILM_RESUME === '1' ? 'build' : (process.env.FILM_RESUME || null);
+const PART = { build: 2, lagoon: 3 }[RESUME] ?? 1;
 const DESKTOP_W = 1200; // CSS px each half of the side-by-side renders at, before scaling down
 
 // ── preflight: everything that would ruin a take is checked before the camera rolls ───────────────
@@ -137,8 +139,8 @@ async function main() {
   await obs.start();
   const markers = [];
   const mark = async (id, extra = {}) => { markers.push({ id, t: await obs.now(), ...extra }); log('●', id); };
-  const markersFile = path.join(dir, RESUME ? 'markers.part2.json' : 'markers.json');
-  const save = (extra = {}) => fs.writeFileSync(markersFile, JSON.stringify({ take, prompt: PROMPT, part: RESUME ? 2 : 1, markers, ...extra }, null, 2));
+  const markersFile = path.join(dir, PART === 1 ? 'markers.json' : `markers.part${PART}.json`);
+  const save = (extra = {}) => fs.writeFileSync(markersFile, JSON.stringify({ take, prompt: PROMPT, part: PART, markers, ...extra }, null, 2));
 
   try {
    if (!RESUME) {
@@ -179,6 +181,7 @@ async function main() {
 
     // 5 · BUILD — the part nobody scripts. Done when nothing is planned any more and Claude has been
     // still for IDLE_MS, or when you press F9.
+   if (RESUME !== 'lagoon') {
     await mark(RESUME ? 'build-resume' : 'build');
     let lastHash = '', stillSince = Date.now(), asked = false;
     if (DRY) await sleep(6000);
@@ -197,6 +200,7 @@ async function main() {
     fs.rmSync(CUE, { force: true });
     await mark('built', { planned: planned() });
     save();
+   }
 
     // 6 · LAGOON — the member screen the calendar now fills, then the agents' flow, one step address
     // at a time: pick a day, pick a slot, the summary confirms it.
@@ -298,7 +302,7 @@ async function main() {
     await obs.disconnect();
     await browser.close().catch(() => {});
     show('ctl');
-    log(`saved ${path.join(dir, 'markers.json')}${file ? `\n  recording: ${file}` : ''}`);
+    log(`saved ${markersFile}${file ? `\n  recording: ${file}` : ''}`);
     log('next: pnpm take:keep (commit the build) · pnpm prepare-edit ' + take);
   }
 }

@@ -21,7 +21,7 @@ const recordingOf = (meta, nth) => {
 };
 const duration = (f) => Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' })) * 1000;
 
-const parts = ['markers.json', 'markers.part2.json']
+const parts = ['markers.json', 'markers.part2.json', 'markers.part3.json']
   .filter((f) => fs.existsSync(path.join(dir, f)))
   .map((f, i) => {
     const meta = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));

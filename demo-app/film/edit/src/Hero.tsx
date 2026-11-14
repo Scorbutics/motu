@@ -17,7 +17,9 @@ const FONT = '"Inter", "Segoe UI", system-ui, sans-serif';
 export const plan = () => {
   let from = 0;
   return CUT.flatMap((shot) => {
-    const a = at(shot.from), b = at(shot.to);
+    const start = at(shot.from), end = at(shot.to);
+    const a = start != null && end != null && shot.tail ? Math.max(start, end - shot.tail * 1000) : start;
+    const b = a != null && end != null && shot.head ? Math.min(end, a + shot.head * 1000) : end;
     if (a == null || b == null || b <= a) return []; // a scene that did not happen is not in the film
     const rawSec = (b - a) / 1000;
     const outSec = Math.min(shot.seconds, rawSec);

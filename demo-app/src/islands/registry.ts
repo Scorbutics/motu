@@ -5,6 +5,7 @@
 import type { ElementSpec } from '@motu/react';
 import { setDefaultIsolation } from '@motu/core';
 import { appNavElement } from './app-nav/element';
+import { element as bookingSummaryElement } from './booking-summary/element';
 import { element as calendarDaysElement } from './calendar-days/element';
 import { chapterCupElement } from './chapter-cup/element';
 import { element as eventDetailElement } from './event-detail/element';
@@ -41,7 +42,7 @@ import { weeklyQuestElement } from './weekly-quest/element';
 // no host can disagree with the config: importing the registry is already what a host does, and this
 // file is generated, so a stale copy is caught the same way every other drift in it is.
 setDefaultIsolation('light');
-export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, calendarDaysElement, chapterCupElement, eventDetailElement, eventFiltersElement, eventListElement, eventsHeaderElement, freshUnlocksElement, highScoresElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberHighlightsElement, memberPlanTabsElement, memberQuickSearchElement, memberResultsElement, memberSearchNgElement, myChapterElement, myEventsElement, myStandingElement, profileHeroElement, weeklyQuestElement];
+export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, bookingSummaryElement, calendarDaysElement, chapterCupElement, eventDetailElement, eventFiltersElement, eventListElement, eventsHeaderElement, freshUnlocksElement, highScoresElement, memberActionsElement, memberCardElement, memberFilterChipsElement, memberFormElement, memberHeaderElement, memberHighlightsElement, memberPlanTabsElement, memberQuickSearchElement, memberResultsElement, memberSearchNgElement, myChapterElement, myEventsElement, myStandingElement, profileHeroElement, weeklyQuestElement];
 
 /**
  * Tag -> element spec, as a TYPE. Lets an archipelago check its wiring against the islands it names
@@ -50,6 +51,7 @@ export const ELEMENT_REGISTRY: ElementSpec[] = [appNavElement, calendarDaysEleme
  */
 export interface ElementTypes {
   'x-app-nav': typeof appNavElement;
+  'x-booking-summary': typeof bookingSummaryElement;
   'x-calendar-days': typeof calendarDaysElement;
   'x-chapter-cup': typeof chapterCupElement;
   'x-event-detail': typeof eventDetailElement;

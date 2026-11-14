@@ -9,6 +9,7 @@
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
 import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
+import type { BookingSummary as C_booking_summary } from '../ui/booking-summary/BookingSummary.js';
 import type { CalendarDays as C_calendar_days } from '../ui/calendar-days/CalendarDays.js';
 import type { ChapterCup as C_chapter_cup } from '../ui/chapter-cup/ChapterCup.js';
 import type { EventDetail as C_event_detail } from '../ui/event-detail/EventDetail.js';
@@ -36,6 +37,11 @@ export const CONTRACTS = {
   'x-app-nav': {
     input: ['section', 'dataSource', 'me'],
     output: { onNavigate: 'app-navigate', onSwitchMember: 'member-switch' },
+    effects: [],
+  },
+  'x-booking-summary': {
+    input: ['member', 'selectedDay', 'selectedSlot'],
+    output: {  },
     effects: [],
   },
   'x-calendar-days': {
@@ -181,6 +187,8 @@ type ContractFitsComponent<C, T extends Tag> = [
 
 const _app_nav: ContractFitsComponent<typeof C_app_nav, 'x-app-nav'> = true;
 void _app_nav;
+const _booking_summary: ContractFitsComponent<typeof C_booking_summary, 'x-booking-summary'> = true;
+void _booking_summary;
 const _calendar_days: ContractFitsComponent<typeof C_calendar_days, 'x-calendar-days'> = true;
 void _calendar_days;
 const _chapter_cup: ContractFitsComponent<typeof C_chapter_cup, 'x-chapter-cup'> = true;

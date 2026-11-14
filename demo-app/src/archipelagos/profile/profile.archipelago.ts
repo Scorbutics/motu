@@ -64,7 +64,6 @@ export const profileArchipelago: ArchipelagoConfig = {
     {
       slot: 'booking-summary',
       element: 'x-booking-summary',
-      planned: true,
       // A pure projection of three keys. No `writes`, no `on`: it confirms a choice, it does not
       // make one — which is what makes it the island a flow should assert on. A step that drives
       // `calendar-slots` and asserts on THIS slot cannot pass by storing what it was handed.

@@ -1757,3 +1757,14 @@
 .cl-cd__day--booked .cl-cd__count { color: var(--cl-red); font-weight: normal; }
 .cl-cd__empty { margin: 0; padding: 14px 12px; color: var(--cl-muted); }
 .cl-cd__skel { height: 52px; }
+/* ===================================================== booking summary (x-booking-summary) ====
+   What has been picked so far. A quiet card until a time is chosen, then the teal of the club's game
+   block, so the confirmed choice is the one thing in the column that reads as settled. */
+.cl-bs { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-radius: 3px; background: var(--cl-card); font-family: var(--cl-text); font-size: 13px; color: var(--cl-ink); }
+.cl-bs__title { margin: 0; font-size: 26px; line-height: 1; overflow-wrap: anywhere; }
+.cl-bs__hint { margin: 0; color: var(--cl-muted); }
+.cl-bs--picked { background: var(--cl-teal); color: var(--cl-onblk); }
+.cl-bs__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.cl-bs__fact { min-width: 0; }
+.cl-bs__fact dd { margin: 0; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cl-bs--picked .cl-label { color: inherit; opacity: .8; }

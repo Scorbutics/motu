@@ -116,4 +116,15 @@ export const scenarios: RegionScenario[] = [
       },
     ],
   },
+  {
+    // COVERAGE for `booking-summary`: the slot renders ITS island, and that island reads `member`.
+    // The sentence names the member, so a summary wired to nothing — or to a neighbour's data —
+    // loses the name and fails; a mutated stimulus loses it too, so the step can fail.
+    name: 'the booking summary names whose time is being booked',
+    seed: EMPTY_SEED,
+    steps: [
+      { expectRender: { 'booking-summary': 'Choose a member to book time with' } },
+      { provide: DENNIS_SEED, expectRender: { 'booking-summary': 'Book time with Dennis' } },
+    ],
+  },
 ];

@@ -1,11 +1,11 @@
-// Publish the `@motu/*` packages.
+// Publish the `@motujs/*` packages.
 //
 //   node scripts/release.mjs --dry-run          what would go out, and at what version
 //   node scripts/release.mjs --version 0.2.0    set every package to 0.2.0 first
 //   node scripts/release.mjs                    publish
 //
 // The set is LISTED, not derived from "every workspace package that isn't private". Deriving it is
-// how `demo-app` and `@motu/contract` — a demo app and a file generated from the demo's own ocean
+// how `demo-app` and `@motujs/contract` — a demo app and a file generated from the demo's own ocean
 // manifest — end up on the public registry: they are workspace members, and nothing about them says
 // "product" except that nobody meant to publish them. A list is also the honest answer to "what IS
 // motu", which is a question a reader of this repo may reasonably have.
@@ -14,7 +14,8 @@
 // first is broken for everyone who installs it in the seconds before its dependency lands.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +26,7 @@ const PACKAGES = [
   'packages/chrome',
   'packages/core',
   'packages/runtime',
-  // NOT optional, however internal it looks. `@motu/cli`, `@motu/debug-overlay` and `@motu/host` all
+  // NOT optional, however internal it looks. `@motujs/cli`, `@motujs/debug-overlay` and `@motujs/host` all
   // declare a dependency on it, so leaving it off this list published three packages whose install
   // resolves a package that is not on the registry. Its position is the build's (after `runtime`,
   // before `react`), because that is the order the comment above promises.
@@ -53,6 +54,31 @@ if (setVersion && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(setVersion)) {
   process.exit(2);
 }
 
+// A one-time password for an account with 2FA on writes. Optional: without it, the publish runs
+// in this terminal and npm asks for one itself (a browser link or a code prompt), which is the
+// better path for eleven packages — a TOTP code expires in ~30 s, and the browser flow offers to
+// skip the second factor for the next five minutes.
+const otpAt = argv.indexOf('--otp');
+const otp = otpAt === -1 ? null : argv[otpAt + 1];
+if (otpAt !== -1 && (!otp || !/^\d{6,8}$/.test(otp))) {
+  console.error('--otp needs the 6-digit code from your authenticator, e.g. --otp 123456');
+  process.exit(2);
+}
+
+// `--bump-only`: set the version and stop. Releasing from CI is "bump, commit, tag, push", and the
+// bump is the one step that edits eleven files — it should not need a publish attached to it.
+const bumpOnly = argv.includes('--bump-only');
+if (bumpOnly && !setVersion) {
+  console.error('--bump-only needs --version, e.g. --version 0.2.0 --bump-only');
+  process.exit(2);
+}
+
+// IN CI: GitHub Actions with npm TRUSTED PUBLISHING. There is no login and no token — npm trades
+// the workflow's OIDC identity for a one-shot publish credential — so `npm whoami` has nothing to
+// answer and must not be the gate, and every tarball gets a provenance statement tying it to the
+// commit and workflow that built it.
+const CI = process.env.GITHUB_ACTIONS === 'true';
+
 const red = (s) => `\x1b[31m${s}\x1b[0m`;
 const dim = (s) => `\x1b[2m${s}\x1b[0m`;
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
@@ -71,10 +97,27 @@ if (setVersion && !dryRun) {
     writeFileSync(p, next);
   }
   console.log(`set ${PACKAGES.length} packages to ${bold(setVersion)}\n`);
+  if (bumpOnly) {
+    console.log(dim(`  next: git commit -am "release: v${setVersion}" && git tag v${setVersion} && git push --follow-tags`));
+    process.exit(0);
+  }
 } else if (setVersion) {
   // --dry-run writes NOTHING, version bump included. A rehearsal that edits ten manifests is not a
   // rehearsal, and leaves the tree dirty for whoever runs it just to look.
   console.log(`${dim('would set')} ${PACKAGES.length} packages to ${bold(setVersion)}\n`);
+}
+
+// THE TAG IS A CLAIM ABOUT THE MANIFESTS. Pushing v0.2.0 over manifests that still say 0.1.0 would
+// either publish nothing ("already published — skipping", green) or publish the wrong number.
+if (CI && process.env.GITHUB_REF_TYPE === 'tag') {
+  const tag = process.env.GITHUB_REF_NAME ?? '';
+  const mismatched = PACKAGES.filter((pkg) => `v${manifestOf(pkg).version}` !== tag);
+  if (mismatched.length) {
+    console.error(red(`✗ tag ${tag} does not match the manifests:`));
+    for (const pkg of mismatched) console.error(`    ${manifestOf(pkg).name}  ${manifestOf(pkg).version}`);
+    console.error(dim(`  bump first: node scripts/release.mjs --version ${tag.replace(/^v/, '')} --bump-only, commit, re-tag`));
+    process.exit(1);
+  }
 }
 
 // --- 2. build ---------------------------------------------------------------------------------
@@ -122,7 +165,9 @@ if (dryRun) {
 // --- 4. auth ----------------------------------------------------------------------------------
 // Checked HERE rather than let the first publish fail: half a release is worse than none, and this
 // is the one prerequisite a script cannot satisfy for you.
-try {
+if (CI) {
+  console.log(`publishing from ${bold(process.env.GITHUB_REPOSITORY ?? 'CI')} via npm trusted publishing\n`);
+} else try {
   // stderr IGNORED: the sync exec variants pass a child's stderr through by default, so npm's own
   // four-line "need auth ... npm adduser" appears above the message below and buries it.
   const who = execFileSync('npm', ['whoami'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -135,22 +180,28 @@ try {
 }
 
 // --- 5. publish -------------------------------------------------------------------------------
-// `pnpm publish`, not `npm publish`: the manifests declare `workspace:*` for their siblings, and pnpm
-// is what rewrites those to real ranges in the published tarball. npm would ship them verbatim and
-// every install would fail on an unresolvable range.
+// TWO TOOLS, each for the part only it does. `pnpm pack` builds the tarball, because the manifests
+// declare `workspace:*` for their siblings and pnpm is what rewrites those to real ranges — npm would
+// ship them verbatim and every install would fail on an unresolvable range. `npm publish` sends it,
+// because trusted publishing (the OIDC exchange, the provenance statement) is implemented by the npm
+// CLI, and a tarball is something it publishes as-is.
+const packDir = mkdtempSync(join(tmpdir(), 'motu-release-'));
 const done = [];
 for (const { pkg, name, version } of todo) {
-  process.stdout.write(`  ${name}@${version} … `);
+  console.log(`  ${bold(`${name}@${version}`)}`);
   try {
-    execFileSync('pnpm', ['publish', '--no-git-checks', '--access', 'public'], {
-      cwd: join(ROOT, pkg), stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8',
-    });
-    console.log('✓');
+    execFileSync('pnpm', ['pack', '--pack-destination', packDir], { cwd: join(ROOT, pkg), stdio: ['ignore', 'ignore', 'inherit'] });
+    const tarball = join(packDir, `${name.replace('@', '').replace('/', '-')}-${version}.tgz`);
+    if (!existsSync(tarball)) throw new Error(`pnpm pack wrote no ${tarball}`);
+    // INHERITED stdio, not piped. An account with 2FA on writes gets EOTP unless npm can ask for
+    // the second factor, and npm can only ask a terminal it is attached to: with stdin ignored and
+    // output captured, its "open this URL to authenticate" arrived after it had already failed.
+    const args = ['publish', tarball, '--access', 'public', ...(CI ? ['--provenance'] : []), ...(otp ? ['--otp', otp] : [])];
+    execFileSync('npm', args, { stdio: 'inherit' });
+    console.log(`  ✓ ${name}@${version}\n`);
     done.push(name);
   } catch (err) {
-    console.log(red('✗'));
-    process.stderr.write(err.stdout || '');
-    process.stderr.write(err.stderr || '');
+    console.log(red(`  ✗ ${name}@${version}`));
     console.error(red(`\n✗ ${name} failed.`));
     // Say what DID go out. A partial release is a state someone has to reason about, and the worst
     // version of this message is one that only reports the failure.

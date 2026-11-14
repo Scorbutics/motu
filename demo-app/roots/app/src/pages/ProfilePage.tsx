@@ -111,10 +111,8 @@ function ProfileScreen({ memberId }: { memberId: string }) {
         is the cost of this stage and the reason `region-root` reports it without failing on it. The
         region earns the move to `root` when someone is already editing this page.
 
-        THREE SLOTS ARE MISSING FROM THIS FILE ON PURPOSE. `calendar-days`, `calendar-slots` and
-        `booking-summary` are declared `planned: true`: owned, checked for ownership, and not yet
-        built. Placing a slot whose element is not registered would render silence, so they land here
-        in the same change that registers them.
+        THE SAME TWO COLUMNS AS THE ARCHIPELAGO'S `layout`: the calendar (days over slots) on the
+        wider side, the summary that confirms the choice beside it.
       */}
       <Profile.Island slot="profile-hero" props={{ loading: state === 'loading' }} />
       {/*
@@ -124,32 +122,14 @@ function ProfileScreen({ memberId }: { memberId: string }) {
       <div className="app__profile">
         <div className="app__profile-col">
           <Profile.Island slot="calendar-days" props={{ loading: state === 'loading' }} />
-          <ProfileCalendarPlaceholder />
+          <Profile.Island slot="calendar-slots" />
+        </div>
+        <div className="app__profile-col">
+          <Profile.Island slot="booking-summary" />
         </div>
       </div>
       <ProfileFooter />
     </div>
-  );
-}
-
-/**
- * What stands where the calendar will be.
- *
- * IT NAMES THE SLOTS RATHER THAN DRAWING A FAKE CALENDAR. A placeholder that looked like the real
- * thing would be a second description of an island nobody has built — the exact invention the
- * perception check exists to catch, installed deliberately. Saying "this is declared and not built"
- * is the honest thing to render, and it disappears in the change that fills the slots.
- */
-function ProfileCalendarPlaceholder() {
-  return (
-    <section className="cl-planned" aria-label="Availability, not yet built">
-      <p className="cl-planned__tag">Declared, not built</p>
-      <p className="cl-planned__copy">
-        This region declares three more islands — <code>calendar-days</code>, <code>calendar-slots</code> and{' '}
-        <code>booking-summary</code> — as <code>planned: true</code>. Their ownership of{' '}
-        <code>selectedDay</code> and <code>selectedSlot</code> is already being enforced.
-      </p>
-    </section>
   );
 }
 

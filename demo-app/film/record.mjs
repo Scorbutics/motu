@@ -20,11 +20,20 @@ const SHELL = `${TMUX}:shell.0`;
 const CUE = path.join(TAKES, '.cue');
 const log = (...a) => console.log(`\x1b[2m${new Date().toISOString().slice(11, 19)}\x1b[0m`, ...a);
 // Island entries only (`planned: true,` on its own line) — the header comment mentions the flag too.
-const planned = () => (fs.readFileSync(ARCHIPELAGO, 'utf8').match(/^\s*planned:\s*true,/gm) ?? []).length;
+// A git merge REPLACES the file, so a read can land in the instant it is missing: that is "unknown"
+// (null), never a crash — take 1 died on exactly that.
+const planned = () => {
+  try { return (fs.readFileSync(ARCHIPELAGO, 'utf8').match(/^\s*planned:\s*true,/gm) ?? []).length; }
+  catch { return null; }
+};
 const branch = () => execFileSync('git', ['-C', REPO, 'branch', '--show-current'], { encoding: 'utf8' }).trim();
 // FILM_DRY=1: a dress rehearsal. Every scene runs and is recorded, but the prompt is typed and NOT
 // sent, and the build is skipped — no agent runs, nothing is built, any branch will do.
 const DRY = process.env.FILM_DRY === '1';
+// FILM_RESUME=1: a take stopped mid-build. Records a SECOND part into the same take, starting at the
+// build (Claude still working in the stage window), then every scene after it. prepare-edit joins
+// the parts; inside a 60× timelapse the gap does not show.
+const RESUME = process.env.FILM_RESUME === '1';
 const DESKTOP_W = 1200; // CSS px each half of the side-by-side renders at, before scaling down
 
 // ── preflight: everything that would ruin a take is checked before the camera rolls ───────────────
@@ -32,7 +41,7 @@ async function preflight() {
   const problems = [];
   const b = branch();
   if (!DRY && !b.startsWith('film/take-')) problems.push(`on branch "${b}" — start a take first: pnpm take:new`);
-  if (planned() !== 3) problems.push(`profile.archipelago.ts has ${planned()} planned island(s), expected 3 — reset the take: pnpm take:reset`);
+  if (!RESUME && planned() !== 3) problems.push(`profile.archipelago.ts has ${planned()} planned island(s), expected 3 — reset the take: pnpm take:reset`);
   for (const [name, url] of [['lagoon', LAGOON], ['app', APP]]) {
     try { await fetch(url); } catch { problems.push(`${name} not reachable at ${url}`); }
   }
@@ -111,23 +120,28 @@ async function main() {
 
   const obs = await connectObs();
   log(`take ${take} — OBS connected, recording to ${dir}`);
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  await rl.question('\nEverything is ready. Press Enter to roll (the browser goes fullscreen first)… ');
-  rl.close();
+  if (!RESUME) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    await rl.question('\nEverything is ready. Press Enter to roll (the browser goes fullscreen first)… ');
+    rl.close();
+  }
 
   const browser = await openBrowser();
   const { page } = browser;
   await browser.go(`${LAGOON}/?screen=home`, 2000);
-  await browser.reveal();
+  if (RESUME) { await browser.hide(); show('stage'); tmux('select-pane', '-t', STAGE); }
+  else await browser.reveal();
   await sleep(1500);
 
   await obs.setDir(dir);
   await obs.start();
   const markers = [];
   const mark = async (id, extra = {}) => { markers.push({ id, t: await obs.now(), ...extra }); log('●', id); };
-  const save = (extra = {}) => fs.writeFileSync(path.join(dir, 'markers.json'), JSON.stringify({ take, prompt: PROMPT, markers, ...extra }, null, 2));
+  const markersFile = path.join(dir, RESUME ? 'markers.part2.json' : 'markers.json');
+  const save = (extra = {}) => fs.writeFileSync(markersFile, JSON.stringify({ take, prompt: PROMPT, part: RESUME ? 2 : 1, markers, ...extra }, null, 2));
 
   try {
+   if (!RESUME) {
     // 1 · WALL — the lagoon: the whole app, no backend, and a flow sailing through its states.
     await mark('wall');
     await sleep(2500);
@@ -161,10 +175,11 @@ async function main() {
     await sleep(2200);
     if (DRY) tmux('send-keys', '-t', STAGE, 'C-u'); // rehearsal: wipe it instead of sending it
     else enter(STAGE);
+   }
 
     // 5 · BUILD — the part nobody scripts. Done when nothing is planned any more and Claude has been
     // still for IDLE_MS, or when you press F9.
-    await mark('build');
+    await mark(RESUME ? 'build-resume' : 'build');
     let lastHash = '', stillSince = Date.now(), asked = false;
     if (DRY) await sleep(6000);
     else for (;;) {

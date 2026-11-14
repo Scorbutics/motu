@@ -148,4 +148,24 @@ export const scenarios: RegionScenario[] = [
       },
     ],
   },
+  {
+    // THE BOOKING JOURNEY, the way a person takes it: a day, then a time, then the summary confirms.
+    // Driven by CLICKS on the islands' own controls (their accessible names), so each step goes
+    // through the component's handler rather than past it. Every step ends on an island the step did
+    // NOT drive: the day click is asserted on the slot list and the summary, the slot click on the
+    // summary — which writes nothing, so it can only show the slot by reading `selectedSlot`.
+    name: 'picking a day, then a time, is confirmed by the summary',
+    seed: EMPTY_SEED,
+    steps: [
+      { provide: DENNIS_SEED, expectRender: { 'booking-summary': "Pick a day in Dennis's calendar" } },
+      {
+        click: 'Tuesday 8 Sep, 2 free',
+        expectRender: { 'calendar-slots': '2 of 4 free', 'booking-summary': 'Pick a time on Tuesday 8 Sep' },
+      },
+      {
+        click: '16:00, Mentoring, 45 minutes',
+        expectRender: { 'booking-summary': '16:00–16:45 UTC' },
+      },
+    ],
+  },
 ];

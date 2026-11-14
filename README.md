@@ -2,25 +2,59 @@
 
 # motu
 
-**An architecture framework for building a page's regions incrementally — keeping the state between
-components coherent, the boundaries explicit, and the backend dependencies declared.**
+**Declare who owns each piece of a screen's state, and let the build refuse anything that breaks
+it — so several people, or several coding agents, can build one screen and plug it together without
+a surprise at the end.**
+
+When a screen is built by more than one hand, each component usually works on its own. The bugs live
+*between* them: two components setting the same piece of state, a component mounted in the wrong
+place, a backend call nobody knew the screen made. Every component's tests pass; the screen is wrong.
+
+motu has you write that down, once per screen, in one small file — here the demo app's events page,
+trimmed:
+
+```ts
+islands: [
+  { slot: 'event-filters', element: 'x-event-filters',
+    writes: { 'filter-changed': 'filter' } },            // the ONLY component that sets `filter`
+  { slot: 'event-list',    element: 'x-event-list',
+    bind: ['events', 'filter'],                           // reads `filter`, never sets it
+    writes: { 'event-selected': 'selectedEventId' } },
+  { slot: 'event-detail',  element: 'x-event-detail',
+    bind: ['events', 'selectedEventId'] },
+],
+```
+
+— and then holds the code to it. None of that is documentation: a second component setting `filter`
+is a build error, a slot the page does not have fails your typecheck, and a backend call nothing
+declared fails the test that made it.
+
+**See it live, nothing to install:** [every declared state of the demo app](https://motu.bulgarelli.dev/Scorbutics/motu-demo-app/latest/all?via=github), each at its own URL.
 
 In 80 seconds, no sound: a booking calendar is declared on a page of the demo app, three agents build
-it one island each, the checks refuse a second writer, and the same component answers from recorded
-fixtures and from a real Postgres.
+it one component each, the checks refuse a second writer, and the same component answers from
+recorded fixtures and from a real Postgres.
 
 https://github.com/user-attachments/assets/82439fdd-7ec2-4ccf-82de-7ff1d17b0452
 
-A region of a page is an **island**; who owns which piece of that region's state is declared in an
-**archipelago**; what the region asks of a backend is declared at its edge. None of that is
-documentation — a second island writing a key someone else owns is a build error, a slot that does
-not exist fails the host's typecheck, and a backend call nothing declared fails the flow that made it.
+### The words, once
 
-What this buys: **you can build one region at a time and integrate it without a surprise at the end.**
+motu names a handful of things, because they need names. In plain terms:
 
-The **lagoon** follows from that. Once a region has declared its state, its seed and its
-dependencies, it renders with nothing around it — so every state it can be in gets an address you can
-open in a browser, with no backend, no session and no login:
+| motu says | it means |
+|---|---|
+| **island** | one component on the screen that shows or does something (a filter bar, a list, a detail panel) |
+| **region** | one area of a screen whose components share state — the events page above |
+| **archipelago** | the file declaring a region: which island goes in which slot, who sets which key |
+| **slot** · **key** | a named place in the page · a named piece of the region's shared state |
+| **lagoon** | a viewer that renders every declared state of a region at its own URL |
+| **host** | your application — motu lives inside it and can be removed from it in one command |
+
+### Every state has a URL
+
+That is the **lagoon**, and it follows from the declaration. Once a region has declared its state,
+its starting values and what it asks of a backend, it renders with nothing around it — so every state
+it can be in gets an address you can open in a browser, with no backend, no session and no login:
 
 ```
 motu lagoon states profile
@@ -29,7 +63,8 @@ motu lagoon states profile
       /?region=profile&state=profile.scenario.x-profile-hero.fully-booked
 ```
 
-Open either one. It is the real components, still interactive, rendered from a declared seed — here the
+Open either one. It is the real components, still interactive, rendered from declared starting values
+(a **seed**) — here the
 first, from the demo app's member profile, with the lagoon's panel pinned beside it:
 
 <img src="assets/readme/lagoon-state.webp" width="100%" alt="The demo app's member profile in the lagoon at the last step of a flow: a day picked, a time picked, and the booking summary filled in; the lagoon panel beside it names the flow and shows its timeline.">
@@ -50,8 +85,8 @@ motu lagoon try events 'click Coastal walk and talk'
 
 ### Try it live!
 
-Remote public official motu "demo app" lagoon: https://motu.bulgarelli.dev/Scorbutics/motu-demo-app/latest/all
-This is representing the actual demo app running here: https://sandbox.bulgarelli.dev 
+- The demo app's lagoon, public — every state, every flow: https://motu.bulgarelli.dev/Scorbutics/motu-demo-app/latest/all?via=github
+- The demo app itself, the same components over a real Postgres: https://sandbox.bulgarelli.dev
 
 ### Does it catch anything?
 
@@ -115,7 +150,7 @@ design-system repo, not a prop-drilled tree with no coupling pain.
 
 ## What it runs on
 
-> **Status:** early. Used daily, MIT licensed, not on npm — install from a checkout.
+> **Status:** early. Used daily, MIT licensed. On npm as `@motujs/cli`; a checkout still works.
 
 | Stack | Evidence |
 |---|---|
@@ -124,7 +159,8 @@ design-system repo, not a prop-drilled tree with no coupling pain.
 | **AngularJS 1.x** | islands written in AngularJS mount like any other — `demo-app` runs one beside its React islands; [migrating a legacy app](docs/14-ocean-migration.md) |
 
 - **Required:** React 18+, TypeScript, a real `node_modules` (no Yarn PnP), Next (webpack, not
-  Turbopack) or Vite as the host bundler. npm projects run `motu link` once.
+  Turbopack) or Vite as the host bundler. Running from a checkout instead of npm, npm projects run
+  `motu link` once.
 - **Not supported:** Angular 2+, Vue, Svelte, Solid, Lit, plain-JS React, pages with no JavaScript
   layer. Islands are custom elements, so nothing in the core forbids another framework — but none
   has an adapter, and there is no partial path. Your backend language does not matter; what renders
@@ -134,18 +170,27 @@ If your stack is not in the table, assume it does not work yet.
 
 ## Try it
 
-Requires **node >= 20.11** and git.
+Requires **node >= 20.11**.
+
+```bash
+cd ~/dev/my-app                  # a Vite or Next app
+npm i -D @motujs/cli             # pulls the @motujs/* packages and the lagoon's build tools
+npx motu init . --host vite      # or --host next; records @motujs/* in package.json, installs the agent skills
+npm install                      # once, for what init recorded
+npx motu archipelago init directory
+npx motu island create phone-display --from '@/components/phone-display'
+npx playwright install chromium  # once, for the runtime checks
+npx motu island verify phone-display --runtime
+npx motu lagoon serve
+```
+
+Working on motu itself, or want the framework's source under your project? Run it from a checkout
+instead (needs git; `motu` lands on your PATH):
 
 ```bash
 git clone https://github.com/Scorbutics/motu.git
-cd motu && ./install.sh          # deps + link `motu` onto PATH + install the agent skills
-
-cd ~/dev/my-app
-motu init . --host next          # scaffolds into a subfolder; nothing else changes
-motu archipelago init directory
-motu island create phone-display --from '@/components/phone-display'
-motu island verify phone-display --runtime
-motu lagoon serve --watch
+cd motu && ./install.sh          # deps + build + link `motu` onto PATH + install the agent skills
+cd ~/dev/my-app && motu init . --host next   # then the same commands, without `npx`
 ```
 
 `--from` takes the specifier the app itself uses and writes only a mount point — on a React host an

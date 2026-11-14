@@ -9,8 +9,7 @@ In 80 seconds, no sound: a booking calendar is declared on a page of the demo ap
 it one island each, the checks refuse a second writer, and the same component answers from recorded
 fixtures and from a real Postgres.
 
-<!-- VIDEO: on github.com, edit this file, drag demo-app/film/edit/out/hero.mp4 onto this line, and
-     replace this comment with the https://github.com/user-attachments/assets/… URL GitHub inserts. -->
+https://github.com/user-attachments/assets/82439fdd-7ec2-4ccf-82de-7ff1d17b0452
 
 A region of a page is an **island**; who owns which piece of that region's state is declared in an
 **archipelago**; what the region asks of a backend is declared at its edge. None of that is

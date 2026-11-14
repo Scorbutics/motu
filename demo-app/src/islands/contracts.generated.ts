@@ -9,6 +9,7 @@
 // and baked in here so the compiler still sees literal event names.
 import { islandElement } from '@motu/react';
 import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
+import type { BookingSummary as C_booking_summary } from '../ui/booking-summary/BookingSummary.js';
 import type { ChapterCup as C_chapter_cup } from '../ui/chapter-cup/ChapterCup.js';
 import type { EventDetail as C_event_detail } from '../ui/event-detail/EventDetail.js';
 import type { EventFilters as C_event_filters } from '../ui/event-filters/EventFilters.js';
@@ -35,6 +36,11 @@ export const CONTRACTS = {
   'x-app-nav': {
     input: ['section', 'dataSource', 'me'],
     output: { onNavigate: 'app-navigate', onSwitchMember: 'member-switch' },
+    effects: [],
+  },
+  'x-booking-summary': {
+    input: ['member', 'selectedDay', 'selectedSlot'],
+    output: {  },
     effects: [],
   },
   'x-chapter-cup': {
@@ -175,6 +181,8 @@ type ContractFitsComponent<C, T extends Tag> = [
 
 const _app_nav: ContractFitsComponent<typeof C_app_nav, 'x-app-nav'> = true;
 void _app_nav;
+const _booking_summary: ContractFitsComponent<typeof C_booking_summary, 'x-booking-summary'> = true;
+void _booking_summary;
 const _chapter_cup: ContractFitsComponent<typeof C_chapter_cup, 'x-chapter-cup'> = true;
 void _chapter_cup;
 const _event_detail: ContractFitsComponent<typeof C_event_detail, 'x-event-detail'> = true;

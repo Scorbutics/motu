@@ -13,11 +13,15 @@ export const fixtures: Fixture[] = [];
 export const scenarios: Scenario[] = [
   // Defaults alone: the route has not resolved, there is no calendar yet.
   { name: 'no calendar yet', seed: {} },
-  { name: 'days to pick from', seed: { calendar: OPEN_CALENDAR, selectedDay: null, loading: false } },
-  { name: 'a day picked', seed: { calendar: OPEN_CALENDAR, selectedDay: FIRST_OPEN_DAY, loading: false } },
+  { name: 'days to pick from', seed: { calendar: OPEN_CALENDAR, selectedDay: null } },
+  { name: 'a day picked', seed: { calendar: OPEN_CALENDAR, selectedDay: FIRST_OPEN_DAY } },
   // Days exist, nothing free — every chip shown and refused, which is not the same as no days.
-  { name: 'every day booked', seed: { calendar: FULL_CALENDAR, selectedDay: null, loading: false } },
+  { name: 'every day booked', seed: { calendar: FULL_CALENDAR, selectedDay: null } },
   // A resolved calendar with no days — a different sentence from "no calendar yet" above.
-  { name: 'publishes nothing', seed: { calendar: NO_CALENDAR, selectedDay: null, loading: false } },
+  { name: 'publishes nothing', seed: { calendar: NO_CALENDAR, selectedDay: null } },
+  // `loading` is the island's own prop (the page passes it), not a region key: this one exists for
+  // the island alone. The others seed only region keys, so each is also a what-if in the region —
+  // which is why they must NOT spell out `loading: false` (the default): it made all four
+  // unreachable there.
   { name: 'loading skeleton', seed: { loading: true } },
 ];

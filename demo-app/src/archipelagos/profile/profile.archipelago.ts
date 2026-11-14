@@ -56,7 +56,6 @@ export const profileArchipelago: ArchipelagoConfig = {
     {
       slot: 'calendar-slots',
       element: 'x-calendar-slots',
-      planned: true,
       // READS `selectedDay` — deliberately does not write it. See the note above.
       bind: ['calendar', 'selectedDay', 'selectedSlot'],
       writes: { 'slot-selected': 'selectedSlot' },

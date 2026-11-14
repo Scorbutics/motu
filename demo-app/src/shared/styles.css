@@ -1768,3 +1768,22 @@
 .cl-bs__fact { min-width: 0; }
 .cl-bs__fact dd { margin: 0; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cl-bs--picked .cl-label { color: inherit; opacity: .8; }
+/* ---- the times on a chosen day (x-calendar-slots) ---- */
+.cl-cs { background: var(--cl-card); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; font-family: var(--cl-text); font-size: 13px; color: var(--cl-ink); }
+.cl-cs__title { margin: 0; font-size: 26px; line-height: 1; color: var(--cl-head); }
+.cl-cs__note { margin: 0; color: var(--cl-muted); }
+.cl-cs__count { margin: 0; font-weight: bold; color: var(--cl-teal); }
+.cl-cs__count--full { color: var(--cl-red); }
+.cl-cs__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.cl-cs__slot { width: 100%; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline; text-align: left; padding: 8px 10px;
+  background: var(--cl-well); color: var(--cl-ink); font-family: var(--cl-text); font-size: 12px; }
+.cl-cs__slot:hover:not(:disabled) { background: var(--cl-hover); }
+.cl-cs__slot--picked, .cl-cs__slot--picked:hover:not(:disabled) { background: var(--cl-teal); color: var(--cl-onblk); }
+.cl-cs__time { font-family: var(--cl-display); font-size: 22px; line-height: 1; grid-row: span 2; font-variant-numeric: tabular-nums; }
+.cl-cs__kind { font-weight: bold; }
+.cl-cs__mins, .cl-cs__taken { font-size: 11px; opacity: .85; }
+.cl-cs__taken { grid-column: 1 / -1; text-transform: uppercase; letter-spacing: .6px; font-weight: bold; }
+@media (prefers-color-scheme: dark) {
+  :where(:host, .motu-root) .cl-cs__count { color: var(--cl-link); }
+  :where(:host, .motu-root) .cl-cs__count--full { color: var(--cl-kicker); }
+}

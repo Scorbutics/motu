@@ -11,6 +11,7 @@ import { islandElement } from '@motu/react';
 import type { AppNav as C_app_nav } from '../ui/app-nav/AppNav.js';
 import type { BookingSummary as C_booking_summary } from '../ui/booking-summary/BookingSummary.js';
 import type { CalendarDays as C_calendar_days } from '../ui/calendar-days/CalendarDays.js';
+import type { CalendarSlots as C_calendar_slots } from '../ui/calendar-slots/CalendarSlots.js';
 import type { ChapterCup as C_chapter_cup } from '../ui/chapter-cup/ChapterCup.js';
 import type { EventDetail as C_event_detail } from '../ui/event-detail/EventDetail.js';
 import type { EventFilters as C_event_filters } from '../ui/event-filters/EventFilters.js';
@@ -47,6 +48,11 @@ export const CONTRACTS = {
   'x-calendar-days': {
     input: ['calendar', 'selectedDay', 'loading'],
     output: { onDaySelected: 'day-selected' },
+    effects: [],
+  },
+  'x-calendar-slots': {
+    input: ['calendar', 'selectedDay', 'selectedSlot'],
+    output: { onSlotSelected: 'slot-selected' },
     effects: [],
   },
   'x-chapter-cup': {
@@ -191,6 +197,8 @@ const _booking_summary: ContractFitsComponent<typeof C_booking_summary, 'x-booki
 void _booking_summary;
 const _calendar_days: ContractFitsComponent<typeof C_calendar_days, 'x-calendar-days'> = true;
 void _calendar_days;
+const _calendar_slots: ContractFitsComponent<typeof C_calendar_slots, 'x-calendar-slots'> = true;
+void _calendar_slots;
 const _chapter_cup: ContractFitsComponent<typeof C_chapter_cup, 'x-chapter-cup'> = true;
 void _chapter_cup;
 const _event_detail: ContractFitsComponent<typeof C_event_detail, 'x-event-detail'> = true;

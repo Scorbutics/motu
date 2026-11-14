@@ -71,6 +71,17 @@ export function BookingSummary({ member, selectedDay, selectedSlot, fit }: Booki
     );
   }
 
+  // A SUSPENDED MEMBERSHIP CANNOT BE BOOKED (the seed publishes nothing for one), so inviting a pick
+  // here would ask for something the calendar beside it can never offer.
+  if (member?.status === 'suspended') {
+    return (
+      <section className="cl-bs cl-bs--idle" aria-label="Booking summary">
+        <h2 className="cl-lg cl-bs__title">{firstName || name} can't be booked</h2>
+        <p className="cl-bs__hint">A suspended membership takes no bookings.</p>
+      </section>
+    );
+  }
+
   if (!slot) {
     return (
       <section className="cl-bs cl-bs--idle" aria-label="Booking summary">

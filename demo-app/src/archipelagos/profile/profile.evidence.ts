@@ -98,7 +98,7 @@ export const scenarios: RegionScenario[] = [
     steps: [
       {
         provide: { member: GUIDO, calendar: NO_CALENDAR },
-        expectRender: { 'profile-hero': 'Suspended' },
+        expectRender: { 'profile-hero': 'Suspended', 'booking-summary': "Guido can't be booked" },
       },
     ],
   },

@@ -36,6 +36,7 @@ import { scenarios as eventsFlows } from './archipelagos/events/events.evidence.
 import { scenarios as homeFlows } from './archipelagos/home/home.evidence.js';
 import { scenarios as calendarDaysScenarios } from './islands/calendar-days/fixtures.mock.js';
 import { scenarios as bookingSummaryScenarios } from './islands/booking-summary/fixtures.mock.js';
+import { scenarios as calendarSlotsScenarios } from './islands/calendar-slots/fixtures.mock.js';
 
 export const ALL_FIXTURES: Fixture[] = [...memberResults];
 
@@ -77,6 +78,7 @@ export const ALL_SCENARIOS: Record<string, Scenario[]> = {
   'x-my-chapter': myChapterScenarios,
   'x-calendar-days': calendarDaysScenarios,
   'x-booking-summary': bookingSummaryScenarios,
+  'x-calendar-slots': calendarSlotsScenarios,
 };
 
 /**

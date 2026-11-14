@@ -1,0 +1,8 @@
+node_modules/
+takes/*
+!takes/.gitkeep
+edit/public/take.mp4
+edit/public/take.json
+edit/out/
+.chrome-profile/
+edit/public/motu-icon.svg

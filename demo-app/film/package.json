@@ -1,0 +1,30 @@
+{
+  "name": "motu-film",
+  "private": true,
+  "type": "module",
+  "description": "Records and edits the README hero video. Standalone: NOT a workspace member (install with --ignore-workspace).",
+  "scripts": {
+    "up": "node lib/up.mjs",
+    "record": "node record.mjs",
+    "watch-worktrees": "node lib/watch-worktrees.mjs",
+    "take:new": "bash take.sh new",
+    "take:keep": "bash take.sh keep",
+    "take:reset": "bash take.sh reset",
+    "prepare-edit": "node edit/prepare.mjs",
+    "studio": "remotion studio edit/src/index.ts",
+    "render": "node edit/render.mjs"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.543",
+    "obs-websocket-js": "^5.0.8",
+    "playwright-core": "1.62.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "^4.0.543"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

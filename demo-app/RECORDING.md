@@ -1,5 +1,8 @@
 # The demo app, and how to film it
 
+**The README film is scripted:** [`film/`](film/README.md) records it (OBS, tmux, Playwright) and
+edits it (Remotion). This page is the app it films.
+
 Six screens over a real local Postgres. Everything below has been run; the numbers are what it
 actually printed.
 

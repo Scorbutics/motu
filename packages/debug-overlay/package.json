@@ -1,6 +1,6 @@
 {
   "name": "@motujs/debug-overlay",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "In-page overlay for a motu region: who owns each state key, who reads it, and what has moved.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "devtools", "debugging", "overlay"],
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@motujs/types",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared TypeScript types for motu islands, archipelagos and region contracts.",
   "keywords": ["motu", "react", "islands", "ui-architecture", "state-management", "typescript", "types"],
   "license": "MIT",

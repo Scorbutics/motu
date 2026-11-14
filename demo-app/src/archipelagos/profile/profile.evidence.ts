@@ -14,6 +14,7 @@
 // `provide` targets asserts that the lagoon stored what it was handed, which cannot fail.
 import type { RegionScenario } from '@motu/runtime/mock';
 import { DENNIS, RICH, GUIDO, OPEN_CALENDAR, FULL_CALENDAR, NO_CALENDAR } from '../../shared/profile-evidence.js';
+import { A_FREE_SLOT, FIRST_OPEN_DAY } from '../../shared/profile-evidence.js';
 import { EVIDENCE_DAY } from '../../shared/club-evidence.js';
 
 /**
@@ -98,6 +99,26 @@ export const scenarios: RegionScenario[] = [
       {
         provide: { member: GUIDO, calendar: NO_CALENDAR },
         expectRender: { 'profile-hero': 'Suspended' },
+      },
+    ],
+  },
+  {
+    // COVERAGE for `calendar-slots`: the times on the chosen day, in text that island alone produces.
+    // The day is SEEDED (its producer, `calendar-days`, is another slot) and the calendar is the
+    // stimulus, so a list that stopped reading `calendar` — or read the wrong member's — fails: the
+    // same Monday is three-of-four free for Dennis and fully taken for Rich.
+    name: 'the slot list shows the times on the chosen day',
+    seed: { ...EMPTY_SEED, selectedDay: FIRST_OPEN_DAY },
+    steps: [
+      { provide: DENNIS_SEED, expectRender: { 'calendar-slots': '3 of 4 free' } },
+      { provide: { member: RICH, calendar: FULL_CALENDAR }, expectRender: { 'calendar-slots': 'Every time on Monday is taken' } },
+      // THE PICK, through the declared output. Back on Dennis's Monday, the list emits its first free
+      // time and must show THAT one pressed — read back from `selectedSlot`, so a different slot in
+      // the detail presses a different button and this fails.
+      { provide: DENNIS_SEED, expectRender: { 'calendar-slots': '3 of 4 free' } },
+      {
+        emit: { slot: 'calendar-slots', event: 'slot-selected', detail: A_FREE_SLOT },
+        expectRender: { 'calendar-slots': '11:00, Workshop, 60 minutes pressed' },
       },
     ],
   },

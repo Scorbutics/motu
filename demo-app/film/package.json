@@ -12,7 +12,8 @@
     "take:reset": "bash take.sh reset",
     "prepare-edit": "node edit/prepare.mjs",
     "studio": "remotion studio edit/src/index.ts",
-    "render": "node edit/render.mjs"
+    "render": "node edit/render.mjs",
+    "stills": "node stills.mjs"
   },
   "devDependencies": {
     "@remotion/cli": "^4.0.543",

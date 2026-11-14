@@ -24,20 +24,29 @@ dependencies, it renders with nothing around it — so every state it can be in 
 open in a browser, with no backend, no session and no login:
 
 ```
-motu lagoon states
-  /?target=island:x-week-actions&scenario=empty-week
-  /?region=actions&flow=picking-a-shot&step=1
+motu lagoon states profile
+  picking a day, then a time, is confirmed by the summary · 3 step(s), &step=<n> stops earlier
+    /?region=profile&flow=picking-a-day-then-a-time-is-confirmed-by-the-summary
+      /?region=profile&state=profile.scenario.x-profile-hero.fully-booked
 ```
 
-Open either one. It is the real components, still interactive, rendered from a declared seed.
+Open either one. It is the real components, still interactive, rendered from a declared seed — here the
+first, from the demo app's member profile, with the lagoon's panel pinned beside it:
+
+<img src="assets/readme/lagoon-state.webp" width="100%" alt="The demo app's member profile in the lagoon at the last step of a flow: a day picked, a time picked, and the booking summary filled in; the lagoon panel beside it names the flow and shows its timeline.">
+
+A flow is a list of such addresses, one per step. The same flow, `&step=1` to `&step=3` — pick a day,
+pick a time, the summary confirms it:
+
+<img src="assets/readme/lagoon-flow.webp" width="100%" alt="The same flow, step by step: no day picked; then Tuesday 8 September picked and its times listed; then the 16:00 slot picked and the booking summary filled in.">
 
 And before you know what to assert, ask a region what happens — each step's keys, slots and calls,
 in about five seconds:
 
 ```
-motu lagoon try review 'click nothing-wrong@desktop new'
-  key   selectedShot: undefined → {"island":"load-error","shot":"nothing-wrong@desktop"}
-  slot  accept-bar: Accept this shot Accept load-error Accept all 2 pending
+motu lagoon try events 'click Coastal walk and talk'
+  key   selectedEventId: "…-000000000006" → "…-000000000004"
+  slot  event-detail: SOCIAL NORTHWEST COASTAL CHAPTER COASTAL WALK AND TALK Saturday 12 September …
 ```
 
 ### Try it live!

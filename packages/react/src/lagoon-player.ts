@@ -124,7 +124,12 @@ export function statesFor(regionIds: readonly string[], evidence: LagoonEvidence
       const tag = island.element;
       if (!tag || seen.has(tag)) continue; // one element in two slots is one island
       seen.add(tag);
-      islands.push({ tag, slot: island.slot, scenarios: stateNames(evidence?.scenarios?.[tag]) });
+      // ONLY THE WHAT-IFS THIS REGION CAN PLAY. A scenario that sets a prop the region does not bind
+      // exists for the island alone — offering it here was offering a card that refuses when opened.
+      // The island's own address (the dock's "alone") still lists it.
+      const all = (evidence?.scenarios?.[tag] ?? []) as Scenario[];
+      const scenarios = stateNames(all).filter((_, i) => !config || !unboundInRegion(config, tag, all[i]!).length);
+      islands.push({ tag, slot: island.slot, scenarios });
     }
     return { region, flows: stateNames(evidence?.flows?.[region]), islands };
   });
@@ -151,6 +156,23 @@ export function scenarioToRegion(
     else unbound.push(prop);
   }
   return { keys, unbound };
+}
+
+/**
+ * The props an island's scenario sets — on mount and after it — that this region does NOT bind. Empty
+ * means the scenario can be played inside the region; anything else means it exists for the island
+ * alone (the page passes those props directly). The ONE rule behind both the what-ifs a region offers
+ * (`statesFor`) and the refusal to play one (`playState`), so the list and the refusal cannot disagree.
+ */
+export function unboundInRegion(
+  config: ArchipelagoConfig,
+  tag: string,
+  scenario: Pick<Scenario, 'seed' | 'afterMount'>,
+): string[] {
+  return [
+    ...scenarioToRegion(config, tag, scenario.seed).unbound,
+    ...scenarioToRegion(config, tag, scenario.afterMount).unbound,
+  ];
 }
 
 /** The keys in `keys` that some OTHER island in the region declares it writes. */
@@ -252,7 +274,7 @@ async function playScenarioInRegion(
   const config = configOf(ref.region)!;
   const seed = scenarioToRegion(config, ref.island, scenario.seed);
   const later = scenarioToRegion(config, ref.island, scenario.afterMount);
-  const unbound = [...seed.unbound, ...later.unbound];
+  const unbound = unboundInRegion(config, ref.island, scenario);
   if (unbound.length) {
     // A prop the region does not bind is one the PAGE passes directly — playing the rest would show a
     // state the scenario does not describe, under its name.

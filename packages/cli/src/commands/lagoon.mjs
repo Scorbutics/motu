@@ -1343,12 +1343,14 @@ export async function lagoonStatesCommand(argv) {
         //
         // ONLY THE ONES THE REGION CAN PLAY. A scenario that sets a prop this region does not bind
         // has no region key to forge — the lagoon refuses it ("this scenario only exists for the
-        // island alone"), and it is already listed under the island's own address above.
+        // island alone"), and it is already listed under the island's own address above. The same
+        // rule as the player's `unboundInRegion`: what it sets on mount AND after (`afterMount`).
         whatIfs: (members ?? [])
           .filter((m) => !m.planned && m.element)
           .flatMap((m) =>
             (scenariosByTag.get(m.element) ?? []).flatMap((s, i) => {
-              if (!Object.keys(s.seed ?? {}).every((prop) => prop in (m.bind ?? {}))) return [];
+              const sets = [...Object.keys(s.seed ?? {}), ...Object.keys(s.afterMount ?? {})];
+              if (!sets.every((prop) => prop in (m.bind ?? {}))) return [];
               const name = s.name ?? `#${i + 1}`;
               return [{
                 island: m.element,

@@ -2,7 +2,7 @@
 // WHERE a scenario's values land. Driven against the built output (`node scripts/build-packages.mjs`).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatStateParam, parseStateParam, registerLagoonRegion, scenarioToRegion, statesFor } from '../dist/lagoon-player.js';
+import { formatStateParam, parseStateParam, registerLagoonRegion, scenarioToRegion, statesFor, unboundInRegion } from '../dist/lagoon-player.js';
 
 const REGION = {
   id: 'events',
@@ -42,4 +42,28 @@ test('statesFor lists one island once, even placed in two slots', () => {
   const [s] = statesFor(['events'], ev);
   assert.deepEqual(s.flows, ['pick']);
   assert.deepEqual(s.islands.map((i) => [i.tag, i.scenarios.length]), [['x-event-list', 0], ['x-sheet', 2]]);
+});
+
+test('a region offers only the what-ifs it can play — a scenario setting a prop it does not bind is the island alone', () => {
+  // `loading` is a prop the PAGE passes, not a region key: x-sheet does not bind it. Once listed here,
+  // such a scenario was a card the dock offered and the player then refused.
+  const ev = {
+    scenarios: {
+      'x-sheet': [
+        { name: 'open', seed: { request: { seq: 1 } } },
+        { name: 'open, spelling out a default', seed: { request: { seq: 1 }, loading: false } },
+        { name: 'loading', seed: { loading: true } },
+        { name: 'goes loading after', seed: {}, afterMount: { loading: true } },
+      ],
+    },
+    flows: {},
+  };
+  registerLagoonRegion(REGION, {});
+  const [s] = statesFor(['events'], ev);
+  assert.deepEqual(s.islands.find((i) => i.tag === 'x-sheet').scenarios, ['open']);
+});
+
+test('unboundInRegion is the one rule: what a scenario sets on mount AND after, against the bind', () => {
+  assert.deepEqual(unboundInRegion(REGION, 'x-sheet', { seed: { request: {}, events: [] } }), []);
+  assert.deepEqual(unboundInRegion(REGION, 'x-sheet', { seed: { loading: true }, afterMount: { label: 'x', request: {} } }), ['loading', 'label']);
 });

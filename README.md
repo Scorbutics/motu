@@ -5,6 +5,13 @@
 **An architecture framework for building a page's regions incrementally — keeping the state between
 components coherent, the boundaries explicit, and the backend dependencies declared.**
 
+In 80 seconds, no sound: a booking calendar is declared on a page of the demo app, three agents build
+it one island each, the checks refuse a second writer, and the same component answers from recorded
+fixtures and from a real Postgres.
+
+<!-- VIDEO: on github.com, edit this file, drag demo-app/film/edit/out/hero.mp4 onto this line, and
+     replace this comment with the https://github.com/user-attachments/assets/… URL GitHub inserts. -->
+
 A region of a page is an **island**; who owns which piece of that region's state is declared in an
 **archipelago**; what the region asks of a backend is declared at its edge. None of that is
 documentation — a second island writing a key someone else owns is a build error, a slot that does

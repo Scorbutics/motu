@@ -8,6 +8,10 @@ import take from '../public/take.json';
 type Marker = { id: string; t: number; url?: string };
 const markers = (take as { markers: Marker[] }).markers;
 const at = (id: string) => markers.find((m) => m.id === id)?.t;
+// Stretches of the build where the terminal is on screen (prepare.mjs measures them).
+const terminal = (take as { terminalOnly?: { from: string; to: string; ranges: [number, number][] } }).terminalOnly;
+
+type Piece = { startFrame: number; frames: number };
 
 const INK = '#1d2140';
 const GOLD = '#e2c48a';
@@ -17,14 +21,34 @@ const FONT = '"Inter", "Segoe UI", system-ui, sans-serif';
 export const plan = () => {
   let from = 0;
   return CUT.flatMap((shot) => {
-    const start = at(shot.from), end = at(shot.to);
+    const before = (take as { before?: { seconds: number } }).before;
+    if (shot.clip === 'before' && !before) return []; // prepared without --before: no such shot
+    const src = shot.clip === 'before' ? 'before.mp4' : 'take.mp4';
+    const start = shot.clip ? 0 : at(shot.from), end = shot.clip ? before!.seconds * 1000 : at(shot.to);
     const a = start != null && end != null && shot.tail ? Math.max(start, end - shot.tail * 1000) : start;
     const b = a != null && end != null && shot.head ? Math.min(end, a + shot.head * 1000) : end;
     if (a == null || b == null || b <= a) return []; // a scene that did not happen is not in the film
     const rawSec = (b - a) / 1000;
     const outSec = Math.min(shot.seconds, rawSec);
     const frames = Math.round(outSec * FPS);
-    const p = { shot, startFrame: Math.round((a / 1000) * FPS), rate: rawSec / outSec, frames, from, rawSec };
+    // terminalOnly: play only the kept stretches, back to back, at one rate. The badge still reports
+    // the whole span (rawSec) — that is the real time the build took.
+    let pieces: Piece[] | undefined;
+    let playRate = rawSec / outSec;
+    const kept = shot.terminalOnly && terminal?.from === shot.from && terminal.to === shot.to
+      ? terminal.ranges.map(([x, y]) => [Math.max(x, a), Math.min(y, b)] as const).filter(([x, y]) => y > x)
+      : [];
+    if (kept.length) {
+      const keptSec = kept.reduce((s, [x, y]) => s + (y - x), 0) / 1000;
+      playRate = keptSec / outSec;
+      let used = 0;
+      pieces = kept.map(([x, y], i) => {
+        const n = i === kept.length - 1 ? frames - used : Math.round(((y - x) / 1000 / playRate) * FPS);
+        used += n;
+        return { startFrame: Math.round((x / 1000) * FPS), frames: n };
+      }).filter((q) => q.frames > 0);
+    }
+    const p = { shot, src, startFrame: Math.round((a / 1000) * FPS), rate: rawSec / outSec, playRate, pieces, frames, from, rawSec };
     from += frames;
     return [p];
   });
@@ -81,13 +105,23 @@ function SpeedBadge({ rate, rawSec }: { rate: number; rawSec: number }) {
   );
 }
 
-function Footage({ startFrame, rate, frames, shot }: { startFrame: number; rate: number; frames: number; shot: Shot }) {
+function Footage({ src, startFrame, rate, frames, shot, pieces }: { src: string; startFrame: number; rate: number; frames: number; shot: Shot; pieces?: Piece[] }) {
   const f = useCurrentFrame();
   const z = shot.zoom;
   const s = z ? interpolate(f, [0, frames], [1, z.scale], { extrapolateRight: 'clamp' }) : 1;
   return (
     <AbsoluteFill style={{ transform: `scale(${s})`, transformOrigin: z ? `${z.x}% ${z.y}%` : 'center' }}>
-      <OffthreadVideo src={staticFile('take.mp4')} startFrom={startFrame} playbackRate={rate} muted />
+      {pieces
+        ? pieces.reduce<{ at: number; els: React.ReactNode[] }>((acc, q, i) => {
+            acc.els.push(
+              <Sequence key={i} from={acc.at} durationInFrames={q.frames}>
+                <OffthreadVideo src={staticFile('take.mp4')} startFrom={q.startFrame} playbackRate={rate} muted />
+              </Sequence>,
+            );
+            acc.at += q.frames;
+            return acc;
+          }, { at: 0, els: [] }).els
+        : <OffthreadVideo src={staticFile(src)} startFrom={startFrame} playbackRate={rate} muted />}
     </AbsoluteFill>
   );
 }
@@ -112,9 +146,9 @@ export const Hero: React.FC = () => {
   const endFrom = p.at(-1) ? p.at(-1)!.from + p.at(-1)!.frames : 0;
   return (
     <AbsoluteFill style={{ background: INK }}>
-      {p.map(({ shot, startFrame, rate, frames, from, rawSec }, i) => (
+      {p.map(({ shot, src, startFrame, rate, playRate, pieces, frames, from, rawSec }, i) => (
         <Sequence key={shot.from} from={from} durationInFrames={frames}>
-          <Footage startFrame={startFrame} rate={rate} frames={frames} shot={shot} />
+          <Footage src={src} startFrame={startFrame} rate={playRate} frames={frames} shot={shot} pieces={pieces} />
           <SpeedBadge rate={rate} rawSec={rawSec} />
           {markers.some((m) => m.url && m.t >= at(shot.from)! && m.t <= at(shot.to)!) && <UrlChip a={at(shot.from)!} rate={rate} />}
           <Caption shot={shot} frames={frames} first={i === 0} />

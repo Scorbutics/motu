@@ -8,6 +8,8 @@
 export type Shot = {
   from: string; // marker id where the shot starts
   to: string; //   marker id where it ends
+  /** Read from before.mp4 (prepare-edit --before) instead of the take; `from`/`to` are then labels. */
+  clip?: 'before';
   seconds: number; // length on screen; the footage is sped up to fit, never slowed down
   caption?: string;
   sub?: string;
@@ -17,16 +19,26 @@ export type Shot = {
   tail?: number;
   /** Use only the first `head` seconds after `from` — to hold on a moment and drop what follows. */
   head?: number;
+  /** Play only the stretches where the terminal is on screen (prepare.mjs measures them). */
+  terminalOnly?: boolean;
 };
 
+// BEFORE → BUILD → AFTER. A viewer must know what is being built before watching it be built: the
+// profile page and its lagoon screen are shown empty first, and the lagoon screen again once built.
 export const CUT: Shot[] = [
-  { from: 'wall', to: 'wall-end', seconds: 9, caption: 'Every state of your app.', sub: 'Each at its own URL. No backend, no login.' },
-  { from: 'real', to: 'declared', seconds: 6, caption: 'A real app. A real Postgres.' },
-  { from: 'declared', to: 'prompt', seconds: 4, caption: 'Three islands declared. None built.', sub: 'Their ownership is already enforced.', zoom: { scale: 1.35, x: 45, y: 40 } },
+  { from: 'wall', to: 'wall-end', seconds: 7, caption: 'Every state of your app.', sub: 'Each at its own URL. No backend, no login.' },
+  { from: 'real', to: 'declared', seconds: 5, caption: 'A real app. A real Postgres.' },
+  // BEFORE, 1/2: the page in the app — the goal, and the placeholder standing where it will go.
+  { from: 'declared', to: 'prompt', seconds: 5, caption: 'The goal: book time with a member.', sub: 'The calendar is declared on this page — not built.', zoom: { scale: 1.35, x: 45, y: 40 } },
+  // BEFORE, 2/2: the same screen in the lagoon (a rehearsal, recorded before any build) — empty.
+  { from: 'before', to: 'before-end', clip: 'before', seconds: 3.5, caption: 'Same screen, in the lagoon.', sub: 'Three islands declared, none built.' },
   // Claude Code's input box sits at the bottom left: anchor there, so the prompt grows into frame.
-  { from: 'prompt', to: 'build', seconds: 9, zoom: { scale: 1.3, x: 0, y: 95 } },
-  { from: 'build', to: 'built', seconds: 16, caption: 'One agent per island.', sub: 'In parallel, each in its own worktree.' },
-  { from: 'lagoon', to: 'lagoon-end', seconds: 12, caption: 'Pick a day. Pick a slot.', sub: 'The summary confirms it — every step is a URL.' },
+  { from: 'prompt', to: 'build', seconds: 8, zoom: { scale: 1.3, x: 0, y: 95 } },
+  // terminalOnly: the agents' own browser windows (their verification) strobe at 140× — dropped.
+  { from: 'build', to: 'built', seconds: 16, terminalOnly: true, caption: 'One agent per island.', sub: 'In parallel, each in its own worktree.' },
+  // AFTER: the same lagoon screen as the BEFORE shot, now filled — then the agents' flow, step by step.
+  { from: 'lagoon', to: 'step', seconds: 3.5, caption: 'Built.', sub: 'The same screen, three agents later.' },
+  { from: 'step', to: 'lagoon-end', seconds: 9, caption: 'Pick a day. Pick a slot.', sub: 'The summary confirms it — every step is a URL.' },
   // `motu check` prints when it ends (~16 s in): only its last seconds, where both PASS lines are.
   { from: 'checks', to: 'failure', seconds: 5, tail: 8, caption: 'Checked.' },
   // The one-line edit and the check running, at speed…

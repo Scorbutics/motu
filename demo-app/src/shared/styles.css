@@ -1742,3 +1742,18 @@
 /* The profile and add pages keep their own card design inside the sheet; the sheet is their margin. */
 .app__main .app__page { max-width: none; margin: 0; padding: 0; }
 @media (max-width: 720px) { .app__frame { padding: 8px 4px 32px; } }
+
+/* ---------------------------------------------------------------- profile: calendar-days island --- */
+.cl-cd__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 6px 12px; }
+.cl-cd__note { font-family: var(--cl-text); font-size: 11px; font-weight: bold; text-transform: none; letter-spacing: 0; }
+.cl-cd__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 4px; padding: 10px 12px; }
+.cl-cd__day { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 52px; padding: 6px 10px; background: var(--cl-well); color: var(--cl-ink); text-align: left; }
+.cl-cd__day:hover:not(:disabled) { background: var(--cl-hover); }
+.cl-cd__day--on, .cl-cd__day--on:hover:not(:disabled) { background: var(--cl-ox); color: var(--cl-onblk); }
+.cl-cd__day--booked { background: transparent; box-shadow: inset 0 0 0 1px var(--cl-well); color: var(--cl-muted); }
+.cl-cd__label { font-size: 18px; line-height: 1; }
+.cl-cd__count { font-size: 11px; font-weight: bold; color: var(--cl-teal); }
+.cl-cd__day--on .cl-cd__count { color: inherit; }
+.cl-cd__day--booked .cl-cd__count { color: var(--cl-red); font-weight: normal; }
+.cl-cd__empty { margin: 0; padding: 14px 12px; color: var(--cl-muted); }
+.cl-cd__skel { height: 52px; }

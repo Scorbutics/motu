@@ -49,7 +49,6 @@ export const profileArchipelago: ArchipelagoConfig = {
     {
       slot: 'calendar-days',
       element: 'x-calendar-days',
-      planned: true,
       // Reads the whole calendar and the current choice; OWNS the choice of day.
       bind: ['calendar', 'selectedDay'],
       writes: { 'day-selected': 'selectedDay' },

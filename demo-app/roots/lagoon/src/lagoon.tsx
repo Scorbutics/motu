@@ -41,6 +41,7 @@ setupLagoonAngularHost();
 const props = {
   profile: {
     'profile-hero': { loading: false },
+    'calendar-days': { loading: false },
   },
 };
 

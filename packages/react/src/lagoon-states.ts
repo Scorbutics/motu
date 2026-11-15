@@ -75,9 +75,25 @@ export interface StateRequest {
 export interface StateOutcome {
   ok: boolean;
   target: string;
-  kind: 'scenario' | 'flow' | 'dock' | 'none';
+  /**
+   * `region`: the region's PLAIN view (`?region=<id>`, no state) — reported once its islands have
+   * mounted, so a reader has something to read before believing a screenshot of it, exactly as for a
+   * named state. Without it `__motuLagoonState` stayed undefined, which a driver cannot tell from a
+   * page that has not booted.
+   */
+  kind: 'scenario' | 'flow' | 'dock' | 'region' | 'none';
   /** For a dock state: the docked island's slot, once it is INSIDE the dock. */
   placed?: string;
+  /** For the plain region view: which view was mounted (`region`, `mountpoints`, `page`). */
+  view?: string;
+  /** For the plain region view: how many island slots rendered. */
+  slots?: number;
+  /**
+   * For the plain region view: where each dock-related island is, read from the DOM — this region's
+   * own islands that dock elsewhere (`fallback` while that region is absent, `docked` when it is on
+   * screen, `nowhere` when neither) and the docks it opens (`empty` / `filled`).
+   */
+  docks?: RegionDockPlacement[];
   /** The state's declared name, as resolved (not as typed). */
   name?: string;
   /** For a flow: how many steps were applied. */
@@ -87,6 +103,11 @@ export interface StateOutcome {
   /** What this target DOES offer, whenever the request could not be met. */
   available?: string[];
 }
+
+/** One row of `StateOutcome.docks` for the plain region view. */
+export type RegionDockPlacement =
+  | { slot: string; dock: string; fallback: 'here' | 'none'; placed: 'fallback' | 'docked' | 'nowhere' }
+  | { opens: string; placed: 'empty' | 'filled' };
 
 declare global {
   interface Window {

@@ -4,14 +4,14 @@ import { reportFlowCalls } from '../../lib/flow-calls.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readRegions } from '../../lib/eject.mjs';
-import { docksOfRegion } from '../../lib/docks.mjs';
+import { composedRegionsOf, docksOfRegion } from '../../lib/docks.mjs';
 import { REPO_ROOT, TAG_PREFIX, paths } from '../../lib/util.mjs';
 import { undrivenWrites } from '../../lib/writes-coverage.mjs';
 import { probeWiring, runRegionFlows } from '../../playwright-lagoon.mjs';
 import { CLI_PKG, HARNESS, islandScenarios, readScenarios } from './island-runtime.mjs';
 import { declaredReach, operationReachCheck, operationUniverse, provenanceCheck } from './reach.mjs';
 import { emittedLiveCheck, reportStoreComplaints, sourcesLiveCheck } from './region-sources.mjs';
-import { environmentalCause, isVerbose, step } from './report.mjs';
+import { couldNotRun, isVerbose, step } from './report.mjs';
 
 /**
  * A CATALOGUE region's declared members are the members the data actually produces.
@@ -161,6 +161,50 @@ function flowDockCheck(report, id, flows) {
       }
     }
   }
+}
+
+/**
+ * A flow step that `provide`s a key a DECLARED SOURCE produces — the steps that cannot run.
+ *
+ * `provideToArchipelago` refuses such a write in the browser (a host cannot provide a sourced key:
+ * the source owns it), so the step throws and the flow never runs. That is not something a browser
+ * has to discover: the flow and the region's `sources` are both on disk. Found adopting docks in
+ * Peps: `provide: { conseilEntries: [] }` in a region flow was refused at runtime, the lane reported
+ * a WARNING "could not run declared flows", and `archipelago verify --runtime` printed PASS over a
+ * flow that had never run — the example it was copied from was in motu's own skill.
+ *
+ * Pure, so it is testable without a project: `flows` as declared, `sources` as `readRegions` reads
+ * them (`{ sourceId: { produces: [...] | null } }`; an unresolved source contributes nothing).
+ */
+export function sourcedProvides(flows, sources) {
+  const producer = new Map();
+  for (const [sourceId, s] of Object.entries(sources ?? {})) for (const key of s?.produces ?? []) producer.set(key, sourceId);
+  const found = [];
+  for (const flow of flows ?? []) {
+    for (const [i, st] of (flow.steps ?? []).entries()) {
+      for (const key of Object.keys(st?.provide ?? {})) {
+        if (producer.has(key)) found.push({ flow: flow.name ?? 'flow', step: i + 1, key, source: producer.get(key) });
+      }
+    }
+  }
+  return found;
+}
+
+/** The static half of "a flow that cannot run has not passed" — see `sourcedProvides`. */
+export function flowProvideCheck(report, id, region, flows = readScenariosFor(id)) {
+  const provides = flows.reduce((n, f) => n + (f.steps ?? []).filter((s) => s?.provide).length, 0);
+  if (!provides) return; // no step provides anything: nothing to look at, no row
+  const bad = sourcedProvides(flows, region?.sources);
+  for (const b of bad) {
+    report.error(
+      'flow-provide',
+      `flow "${b.flow}" step ${b.step} provides "${b.key}", which the declared source "${b.source}" of ${id} produces — ` +
+        `a host cannot provide() a sourced key, so the lagoon refuses this step and the flow cannot run. Reach the ` +
+        `state through the source instead: a \`world\` that re-answers "${b.source}" (named on the flow), or provide a ` +
+        `HOST-FED key the source reads`,
+    );
+  }
+  if (!bad.length) report.ok('flow-provide', 'no flow step provides a key a declared source produces', { n: provides, of: 'providing step(s)' });
 }
 
 /**
@@ -626,7 +670,9 @@ export async function regionFlowCheck(report, id, port, region) {
     reportNullIslands(report, run.flows ?? [], nulls);
     suspects = run.suspects ?? [];
     reportStoreComplaints(report, run.diagnostics, 'declared flows');
-    provenanceCheck(report, id, region, run.provenance ?? [], run.outbound ?? []);
+    // A composed flow renders ANOTHER region beside this one (`dock`): its asks are its own.
+    const composed = scenarios.some((s) => s.dock) ? composedRegionsOf(id, paths.archipelagosDir) : [];
+    provenanceCheck(report, id, region, run.provenance ?? [], run.outbound ?? [], composed);
   // Beside provenance because it reads the SAME ledger: provenance says what was asked for, this
   // says whether it exists. No extra page, no navigation — the lane reuses one.
   operationReachCheck(report, run.outbound ?? [], operationUniverse(), declaredReach({ regionId: id }));
@@ -638,10 +684,9 @@ export async function regionFlowCheck(report, id, port, region) {
     // driven — and reporting it as a warning meant the flows silently stopped running twice today
     // while the check still passed. Fail loudly for those; keep the warning for real inability.
     if (err instanceof ReferenceError || err instanceof TypeError) throw err;
-    report[environmentalCause(err) ? 'inconclusive' : 'warn'](
-      'region-flow',
-      `could not run declared flows: ${err.message}`,
-    );
+    // NOT a warning — that is how a region whose every flow was refused printed PASS. A step the page
+    // refuses is attributed to its flow inside the lane now; what still lands here never ran a flow.
+    couldNotRun(report, 'region-flow', `could not run declared flows (${scenarios.length} declared)`, err);
     return;
   }
   for (const s of suspects) {
@@ -658,6 +703,12 @@ export async function regionFlowCheck(report, id, port, region) {
       : r.mismatches.map((m) => `${m.key}: expected ${JSON.stringify(m.expected)}, got ${JSON.stringify(m.actual)}`).join('; ');
     report.error('region-flow', `"${r.scenario}" step ${r.step}: ${detail}`);
   }
+  // EVERY DECLARED FLOW HAS A VERDICT. A flow the lane produced no row for did not run — and a row
+  // count that only covers the flows that DID run is how "all steps end as declared" can be true of a
+  // region where half of them were never driven.
+  for (const name of unrunFlows(scenarios, results)) {
+    report.error('region-flow', `"${name}" did not run — the lane returned no verdict for any of its steps, so it has not held`);
+  }
   const passed = results.filter((r) => r.ok).length;
   if (passed === results.length)
     report.ok('region-flow', `${passed} declared flow step(s) end as declared`, { n: passed, of: 'step(s)' });
@@ -665,6 +716,12 @@ export async function regionFlowCheck(report, id, port, region) {
     report,
     results.map((r) => ({ where: `"${r.scenario}" step ${r.step}`, calls: r.calls, undeclared: r.undeclared })),
   );
+}
+
+/** The names of declared flows (with steps) for which `results` holds no row at all. Pure. */
+export function unrunFlows(scenarios, results) {
+  const ran = new Set((results ?? []).map((r) => r.scenario));
+  return (scenarios ?? []).filter((s) => (s.steps ?? []).length && !ran.has(s.name ?? 'flow')).map((s) => s.name ?? 'flow');
 }
 
 /** Each island's scenarios in a region, keyed by its element tag — what the chart places. */
@@ -745,10 +802,7 @@ export async function wiringProbe(report, id, port) {
     results = probe.results;
     reportStoreComplaints(report, probe.diagnostics, 'wiring probe');
   } catch (err) {
-    report[environmentalCause(err) ? 'inconclusive' : 'warn'](
-      'wiring-live',
-      `could not probe declared writes: ${err.message}`,
-    );
+    couldNotRun(report, 'wiring-live', 'could not probe declared writes', err);
     return;
   }
   const noSeam = results.filter((r) => r.reason === 'no-seam');

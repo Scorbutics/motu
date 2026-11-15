@@ -8,7 +8,8 @@ import { declaredSourcesOf } from '../../lib/declared-sources.mjs';
 import { readEffectEntries } from '../../lib/effects.mjs';
 import { exclusiveDeclared } from '../../lib/lagoon-declares.mjs';
 import { regionRefsOf } from '../../lib/region-refs.mjs';
-import { docksOfRegion } from '../../lib/docks.mjs';
+import { dockRootFindings, docksOfRegion } from '../../lib/docks.mjs';
+import { readRegions } from '../../lib/eject.mjs';
 import { exclusiveProblems, undeclaredAlternatives } from '@motujs/core';
 import { blankComments, islandComponentExport, islandComponentPath, lagoonViewports, names, paths, resolveAppImport } from '../../lib/util.mjs';
 import { auditRegionLagoon } from '../../playwright-lagoon.mjs';
@@ -502,8 +503,11 @@ export function dockCheck(report, id) {
       { n: claims.length, of: 'docked island(s)' },
     );
   }
+  // THE ROOT MUST RENDER THE DOCK PROP. Declared is not placed: a layout that dropped `{aside}` keeps
+  // every declaration consistent and gives the docked island nowhere to land.
+  const unrendered = dockRootCheck(report, id, docks, filledBy);
   const filled = Object.entries(docks).filter(([, dock]) => filledBy.some((f) => f.dock === dock));
-  if (filled.length && !errors.length) {
+  if (filled.length && !errors.length && !unrendered) {
     report.ok(
       'dock',
       `${filled.map(([prop, dock]) => `${prop} → dock ${dock}, filled by ${filledBy.filter((f) => f.dock === dock).map((f) => `${f.claimant}.${f.slot}`).join(', ')}`).join('; ')} — ` +
@@ -511,6 +515,13 @@ export function dockCheck(report, id) {
       { n: filled.length, of: 'dock(s) filled' },
     );
   }
+}
+
+function dockRootCheck(report, id, docks, filledBy) {
+  const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
+  return dockRootFindings(region, docks, filledBy, (level, check, msg) =>
+    level === 'ok' ? report.ok(check, msg, { n: 1, of: 'root(s) read' }) : report[level](check, msg),
+  );
 }
 
 /**

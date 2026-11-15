@@ -275,6 +275,14 @@ and a flow declaring `dock` opens in it. `window.__motuLagoonState` reports `{ o
 name: 'equipage.equipage-aside', placed: 'base-conseil' }` only once the island is INSIDE the dock, and
 refuses (banner, nothing mounted) an address naming a composition the declarations do not make.
 `window.__motuLagoonDocks` holds every composed outcome; `window.__motuLagoonStates.docks` lists them.
+
+The region's PLAIN view — `?region=<id>` with no `state` — reports too, once its islands have mounted:
+`{ ok: true, kind: 'region', name: '<id>', view, slots, docks? }`. `docks` reads placement from the
+DOM: for each island this region docks elsewhere, `{ slot, dock, fallback, placed: 'fallback' |
+'docked' | 'nowhere' }` (the plain view IS the absent-host state, so `fallback` is what its screenshot
+shows), and for each dock it opens, `{ opens, placed: 'empty' | 'filled' }`. Reported only when
+nothing else on that mount reports a state, and never over a state played meanwhile
+(`lagoon-player.ts` `awaitRegionView`, `lagoon-gallery.ts` `reportPlainRegion`).
 Both entries honour it — the gallery, and `lagoon.html` the checks drive (`__motuLagoonHarness.mount(t,
 { view: 'region', state: [...] })`).
 
@@ -533,7 +541,7 @@ first region on screen under it is the substitution being refused, and a screens
 a working lagoon (`:293-294`).
 
 Read `window.__motuLagoonState` before believing a screenshot (the `motu-evidence` skill). Its shape
-is `{ ok, target, kind: 'scenario'|'flow'|'none', name?, applied?, of?, error?, available? }`
+is `{ ok, target, kind: 'scenario'|'flow'|'dock'|'region'|'none', name?, applied?, of?, placed?, view?, slots?, docks?, error?, available? }`
 (`packages/react/src/lagoon-states.ts:54-67`). The whole catalogue is on the page too, as
 `window.__motuLagoonStates` (`:242-246`).
 

@@ -142,7 +142,9 @@ The rules for evidence and for looking at what you built — the detail behind t
 ## A flow the host drives, asserted on what renders
 
 A region whose islands only READ has no `emit` to declare — and it still has a promise. Use a
-`provide` step (the app moving its own state) and end on `expectRender`, not on `expect`.
+`provide` step (the app moving its own state) and end on `expectRender`, not on `expect`. Only a
+HOST-FED key can be provided: a key a declared source `produces` is the source's, the lagoon refuses
+the write, and `flow-provide` reports the step as an error — reach that state with a world.
 
 `expect` names region keys, so a step whose `expect` names the key its own `provide`/`emit` targets
 cannot fail unless the lagoon itself is broken. The assertion worth writing is what ANOTHER island
@@ -235,17 +237,29 @@ of its own, derived from the two declarations and listed by `motu lagoon states`
 
 It composes with one flow or scenario per region, refuses when it names nothing, and reports
 `{ kind: 'dock', placed: '<slot>' }` in `window.__motuLagoonState` only once the island is INSIDE the
-dock. A FLOW that asserts placement declares the composition it runs in, and asserts with `in`:
+dock. The PLAIN view reports too — `?region=<id>` with no state sets `{ ok: true, kind: 'region', name:
+'<id>', view, slots, docks }` once its islands have mounted, where `docks` lists each island this
+region docks elsewhere with where it IS (`placed: 'fallback' | 'docked' | 'nowhere'`) and each dock it
+opens (`placed: 'empty' | 'filled'`) — so the absent-host screenshot has a state to read before it is
+believed, like every other. A FLOW that asserts placement declares the composition it runs in, and
+asserts with `in`:
 
 ```ts
-{ name: 'the Conseil docks beside the rocket', dock: 'equipage.equipage-aside', seed: { … },
-  steps: [{ expectRender: { 'base-conseil': { text: 'Ton Conseil Énergie', in: 'equipage.equipage-aside' } } },
-          { provide: { conseilEntries: [] }, expectRender: { 'base-conseil': { text: 'Crée ton Conseil', in: 'equipage.equipage-aside' } } }] }
+// `conseilEntries` is what base's `teams` SOURCE produces, so a flow never `provide`s it — a host
+// cannot provide() a sourced key, and `flow-provide` refuses that statically. Reach the other state
+// through the source: a WORLD that re-answers it, named on the flow (it composes with `dock`).
+{ name: 'the Conseil docks beside the rocket', dock: 'equipage.equipage-aside',
+  steps: [{ expectRender: { 'base-conseil': { text: 'Ton Conseil Énergie', in: 'equipage.equipage-aside' } } }] },
+{ name: 'no Conseil yet — still docked', dock: 'equipage.equipage-aside', world: 'no-conseil',
+  steps: [{ expectRender: { 'base-conseil': { text: 'Crée ton Conseil', in: 'equipage.equipage-aside' } } }] },
 ```
 
 `in` without `dock` on the flow is a static error — the dock is not on screen in the mountpoints view
 the lane otherwise uses. End the flow on something the docked island renders from ITS region's keys:
-that is what fails when the island lands in the dock but answers the wrong store.
+that is what fails when the island lands in the dock but answers the wrong store. `provide` is for a
+HOST-FED key (the harbour's `stats` in `host-app`); a step providing a key a declared source produces
+is a `flow-provide` error — the step cannot run, so the flow has not held, and it is reported as an
+error, never as a warning under a PASS.
 
 ## A state no flow can reach is a WORLD, not a seed
 

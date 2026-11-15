@@ -247,7 +247,11 @@ adapter that ships a verify contribution (`commands/verify/island-runtime.mjs:10
 **Exit** — a single island: `0` pass, `1` an error finding, `2` when any finding is `inconclusive`
 (`commands/verify/island-runtime.mjs:255`). A `--all` sweep carries its **worst member's** verdict via
 `sweepExitCode` (`:1063`, `:1189`) — so an inconclusive run exits `2` there too. It used to gate on
-`errors.length` alone, which made a sweep with no Chromium exit `0`. The check inventory
+`errors.length` alone, which made a sweep with no Chromium exit `0`. The sweep's printed verdict agrees
+with its exit code: a member that could not run is marked `?` with its inconclusive rows listed, and
+the headline reads INCONCLUSIVE, not PASS. `motu check` follows the same rule — nothing contradicted
+but a member inconclusive prints INCONCLUSIVE and exits `2` — and every `--json` `pass` is false for
+a member that could not run (`inconclusive: true` says which). The check inventory
 lives in [checks and verification](07-checks-and-verification.md).
 
 ```console

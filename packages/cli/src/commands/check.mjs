@@ -20,7 +20,7 @@ import { resolve } from 'node:path';
 import { color, paths, hostStrictBoundaries } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { changedScope } from '../lib/changed.mjs';
-import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep } from './verify.mjs';
+import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep, sweepExitCode } from './verify.mjs';
 import { ejectedEntryGaps } from '../lib/lagoon-materialize.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
@@ -174,6 +174,11 @@ export async function checkCommand(argv) {
   const removal = structureOk ? await runRemovalCheck(argv, { quiet: true }) : null;
 
   const pass = structureOk && integrationOk && screensOk && worldsOk && (removal?.pass ?? false);
+  // COULD NOT RUN, across the sweep: a member whose runtime checks were inconclusive has not passed,
+  // and `pass` above only counts errors — so `motu check --runtime` printed PASS and exited 0 over a
+  // region whose flows never ran. Nothing contradicted is still not "holds": exit 2, retry.
+  const unrun = sweepExitCode([...islandResults, ...regionResults]) === 2;
+  const exitCode = pass ? (unrun ? 2 : 0) : 1;
 
   if (argv.json) {
     console.log(
@@ -188,12 +193,13 @@ export async function checkCommand(argv) {
           screens: screens?.findings ?? null,
           worlds: worlds?.findings ?? null,
           removal: removal ?? { skipped: 'structure checks failed first' },
+          inconclusive: unrun,
         },
         null,
         2,
       ),
     );
-    process.exit(pass ? 0 : 1);
+    process.exit(exitCode);
   }
 
   console.log(color.bold('\nmotu check — contracts\n'));
@@ -245,7 +251,7 @@ export async function checkCommand(argv) {
     const mark = errs.length ? color.red('✗') : warns.length ? color.yellow('!') : color.green('✓');
     console.log(
       `  ${mark} ${color.dim(r.id.padEnd(20))}` +
-        color.dim(errs.length ? `${errs.length} error(s)` : warns.length ? `${warns.length} warning(s)` : 'composed, mounted, placed, read'),
+        color.dim(errs.length ? `${errs.length} error(s)${warns.length ? `, ${warns.length} warning(s)` : ''}` : warns.length ? `${warns.length} warning(s)` : 'composed, mounted, placed, read'),
     );
     for (const f of [...errs, ...warns]) {
       const again = unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
@@ -312,7 +318,10 @@ export async function checkCommand(argv) {
     );
   }
   console.log(
-    pass
+    pass && unrun
+      ? color.yellow(color.bold('INCONCLUSIVE')) +
+        color.dim('  nothing contradicted, but some checks could not run (`?` above) — retry, do not repair')
+      : pass
       ? color.green(color.bold('PASS')) +
         color.dim(
           `  ${islandResults.length} island(s), ${regionResults.length} region(s)` +
@@ -342,5 +351,5 @@ export async function checkCommand(argv) {
   // handover is a summary of files and nobody has opened the region the work is for.
   const live = readLiveUrl();
   console.log(live ? color.dim('  look at it: ') + live : color.dim('  no live lagoon — start one with: motu lagoon serve --watch --detach'));
-  process.exit(pass ? 0 : 1);
+  process.exit(exitCode);
 }

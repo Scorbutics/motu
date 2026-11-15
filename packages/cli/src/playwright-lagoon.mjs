@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT, paths, color } from './lib/util.mjs';
 import { installIslandRender } from './lib/island-render.mjs';
+import { ENVIRONMENTAL } from './commands/verify/report.mjs';
 
 /** The framework's own lagoon dev-server runner (see lagoon-dev.mjs). */
 const LAGOON_DEV = fileURLToPath(new URL('./lagoon-dev.mjs', import.meta.url));
@@ -855,6 +856,12 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         const crashes = [];
         const onCrash = (err) => crashes.push(String(err?.message || err).split('\n')[0].slice(0, 200));
         page.on('pageerror', onCrash);
+        // A STEP THAT THROWS IS THAT STEP'S FAILURE, not the lane's. motu refuses some writes in the
+        // page — `provide()` of a key a declared source produces throws — and that rejection used to
+        // escape `runRegionFlows` whole: every flow of the region unrun, reported as one WARNING
+        // "could not run declared flows", and the verdict PASS. Attributed here, it fails the flow
+        // that asked for it, by name, and the other flows still run. An ENVIRONMENTAL rejection (the
+        // page or browser went away) is still the lane's — rethrown, so the caller says "could not run".
         const result = await page.evaluate(
           async ({ seed, step: st }) => {
             const lagoon = window.__motuLagoon;
@@ -1207,7 +1214,12 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
             return { mismatches: [...mismatches, ...renderMismatches], alive, surface, settleMs };
           },
           { seed: scenario.seed ?? {}, step },
-        );
+        ).catch((err) => {
+          const msg = String(err?.message || err);
+          if (ENVIRONMENTAL.test(msg) || /Execution context was destroyed/.test(msg)) throw err;
+          // Playwright prefixes the page's own message; keep what the page said.
+          return { error: `the step threw in the page, so it did not run: ${msg.replace(/^page\.evaluate:\s*(Error:\s*)?/, '').split('\n')[0]}`, threw: true, mismatches: [] };
+        });
         // A beat for the calls a step starts to land, then read them against the mark.
         await sleep(150);
         page.off('pageerror', onCrash);
@@ -1267,6 +1279,9 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
         if (!scenario.__nullIsland && !scenario.__killGroup && !step.__mutant && result.settleMs != null) {
           settledIn.set(`${scenario.name ?? 'flow'}#${index}`, result.settleMs);
         }
+        // A step that threw left the flow in no declared state: the steps after it would assert against
+        // whatever the throw left, so they are not run — the flow has already failed, on this step.
+        if (result.threw) break;
         // A failing step answers the group; the steps after it cannot turn "it failed" into "it held".
         if (scenario.__killGroup && !out[out.length - 1].ok) {
           killed.add(scenario.__killGroup);

@@ -31,7 +31,7 @@ export async function verifyCommand(argv) {
 
   const result = await runIslandVerify(argv, name);
   if (argv.json) {
-    console.log(JSON.stringify({ island: result.kebab, tag: result.tag, pass: result.errors.length === 0, findings: result.report.findings }, null, 2));
+    console.log(JSON.stringify({ island: result.kebab, tag: result.tag, pass: verifyExitCode(result) === 0, inconclusive: verifyExitCode(result) === 2, findings: result.report.findings }, null, 2));
   } else {
     printReport(result.report, `motu island verify — ${result.kebab} (${result.tag})`, result.errors, result.warns);
   }

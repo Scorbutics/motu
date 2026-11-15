@@ -22,7 +22,7 @@ import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motujs/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { lagoonHarness } from './lagoon-harness';
-import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef, type DockStateRef, chartRegion, exposeChart, regionChart, resolveDockState, dockComposition, awaitDockPlacement } from './lagoon-player';
+import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef, type DockStateRef, chartRegion, exposeChart, regionChart, resolveDockState, dockComposition, awaitDockPlacement, awaitRegionView } from './lagoon-player';
 import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
@@ -925,10 +925,31 @@ markSandbox();
     );
   }
 
+  /**
+   * The PLAIN region view, reported — `{ kind: 'region', name, view, slots, docks }` — when nothing
+   * else on this mount will report a state (no flow of this region, no `state=` waiting, no composed
+   * dock). Reported only if nothing else reported in the meantime: a state played while the islands
+   * were mounting is the newer truth and is not overwritten.
+   */
+  function reportPlainRegion(id: string): void {
+    // A verdict about ANOTHER target must not outlive it while this one mounts: cleared at once, as it
+    // always was ("no state is applied"), and replaced by the region's own outcome below.
+    const prior = window.__motuLagoonState;
+    if (prior && prior.target !== `archipelago:${id}`) reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
+    if (requestedStates.length || composedDocks.some((d) => d.region === id)) return;
+    const config = opts.archipelagos[id];
+    if (!config) return;
+    const before = window.__motuLagoonState;
+    const mountedView = view;
+    void awaitRegionView(config, mountedView).then((outcome) => {
+      if (current !== id || window.__motuLagoonState !== before) return;
+      reportState(outcome);
+    });
+  }
+
   function applyRequestedFlow(id: string): void {
-    if (!currentFlowName || !flowRegion) return;
-    if (id !== flowRegion) {
-      reportState({ ok: true, target: `archipelago:${id}`, kind: 'none' });
+    if (!currentFlowName || !flowRegion || id !== flowRegion) {
+      reportPlainRegion(id);
       return;
     }
     const flow = pickState(opts.evidence?.flows?.[id], currentFlowName);

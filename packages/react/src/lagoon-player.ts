@@ -18,12 +18,12 @@
 // reach. An island scenario played INSIDE a region sets that island's inputs directly — and where one
 // of those keys is PRODUCED by another island, it forges a value the app may never pair with the rest
 // of the screen. Both are playable; the outcome says which it is, and names the forged keys.
-import { archipelagoConfigs, bindEntries, composePath, dockGraph, dockStates, type DockClaim, getArchipelagoStore, getMountedIslands, writtenKeys, type HostBridge, type Store } from '@motujs/core';
+import { archipelagoConfigs, bindEntries, composePath, dockAddress, dockClaimsOf, docksOf, dockGraph, dockStates, type DockClaim, getArchipelagoStore, getMountedIslands, writtenKeys, type HostBridge, type Store } from '@motujs/core';
 import type { ArchipelagoConfig } from '@motujs/core';
 import type { RegionScenario, Scenario } from '@motujs/runtime/mock';
 import { lagoonHarness, type LagoonHarness } from './lagoon-harness';
 import { currentWorld, setWorld, worldExists, DEFAULT_WORLD } from './lagoon-worlds';
-import { pickState, replayFlow, replayInteractionsIn, slug, stateNames, type LagoonEvidence, type StateOutcome } from './lagoon-states';
+import { pickState, replayFlow, replayInteractionsIn, slug, stateNames, type LagoonEvidence, type RegionDockPlacement, type StateOutcome } from './lagoon-states';
 
 /** A declared state, addressed by the region it is played on. */
 export type StateRef =
@@ -673,6 +673,40 @@ export function dockComposition(
  * Wait until a dock state's island is INSIDE the dock, and say so — placement, not "rendered
  * somewhere". The outcome every entry reports for `kind: 'dock'`.
  */
+/**
+ * The PLAIN region view's outcome — `?region=<id>` with no state — once its islands have mounted.
+ *
+ * A named state reports itself; the plain view reported nothing, so `window.__motuLagoonState` was
+ * undefined and "read it before believing a screenshot" had nothing to read. Waits for the first
+ * island slot (or the budget), then reads, from the DOM, where every dock-related island landed: for a
+ * region whose island docks elsewhere the plain view IS the absent-host state, so its fallback
+ * placement is the thing a screenshot of it shows.
+ */
+export async function awaitRegionView(config: ArchipelagoConfig, view: string, budgetMs = 6000): Promise<StateOutcome> {
+  const id = config.id;
+  const target = `archipelago:${id}`;
+  const until = Date.now() + budgetMs;
+  const slots = () => document.querySelectorAll('[data-motu-slot]').length;
+  const esc = (v: string) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(v) : v.replace(/["\\]/g, '\\$&'));
+  while (!slots() && Date.now() < until) await new Promise((r) => setTimeout(r, 60));
+  // One more frame: placement is decided in a layout effect, before paint — this reads after it.
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+  const docks: RegionDockPlacement[] = [];
+  for (const c of dockClaimsOf(config as { slots?: Record<string, unknown> })) {
+    const address = dockAddress(c.region, c.dock);
+    const el = document.querySelector(`[data-motu-slot="${esc(c.slot)}"][data-motu-region="${esc(id)}"]`);
+    const inDock = el?.closest('[data-motu-region-dock]')?.getAttribute('data-motu-region-dock');
+    docks.push({ slot: c.slot, dock: address, fallback: c.fallback, placed: !el ? 'nowhere' : inDock === address ? 'docked' : 'fallback' });
+  }
+  for (const dock of Object.values(docksOf(config as { slots?: Record<string, unknown> }))) {
+    const el = document.querySelector(`[data-motu-region-dock="${esc(dockAddress(id, dock))}"]`);
+    docks.push({ opens: dockAddress(id, dock), placed: el?.querySelector('[data-motu-docked-in]') ? 'filled' : 'empty' });
+  }
+  // `ok` is "the address resolved and the view mounted" — as for every other kind. A region that
+  // mounted no slot (all `planned`, say) is still that region's plain view; `slots: 0` says so.
+  return { ok: true, target, kind: 'region', name: id, view, slots: slots(), ...(docks.length ? { docks } : {}) };
+}
+
 export async function awaitDockPlacement(ref: DockStateRef, slot: string, claimant: string, budgetMs = 8000): Promise<PlayOutcome & { placed?: string }> {
   const name = `${ref.host}.${ref.dock}`;
   const target = `archipelago:${ref.region}`;

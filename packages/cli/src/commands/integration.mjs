@@ -19,7 +19,7 @@ import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
 import { declaredSourcesOf } from '../lib/declared-sources.mjs';
 import { rootSlots, regionRefsDeclared, docksDeclared } from '../lib/lagoon-declares.mjs';
-import { dockGraphOnDisk } from '../lib/docks.mjs';
+import { dockGraphOnDisk, dockRootFindings } from '../lib/docks.mjs';
 import { composePath } from '@motujs/core';
 import { slotNameOfElement } from '../lib/island-placement.mjs';
 import { sourceFileAt } from '../lib/ts-project.mjs';
@@ -265,6 +265,13 @@ export function dockPlacement(region, rootNames, rootTags, sources, add) {
   if (node === null) {
     add('warn', 'dock', `${paths.rel(region.file)} could not be parsed, so its docks were not checked against the page`);
     return;
+  }
+  // The root must RENDER each dock prop it opens — the same reading `archipelago verify`'s `dock` does.
+  if (Object.keys(node.docks).length) {
+    const filledBy = Object.entries(dockGraphOnDisk(paths.archipelagosDir).graph).flatMap(([other, n]) =>
+      n.claims.filter((c) => c.region === region.id).map((c) => ({ ...c, claimant: other })),
+    );
+    dockRootFindings(region, node.docks, filledBy, add);
   }
   for (const [prop, dock] of Object.entries(node.docks)) {
     const passed = rootTags.filter(({ tag }) => new RegExp(`(^|\\s)${prop}\\s*=`).test(tag));
@@ -1206,6 +1213,11 @@ export function integrationResults(only) {
   return regions.map((r) => checkRegion(r, sources));
 }
 
+/** The mark an integrate row carries — its OWN level's, so the tally and the rows cannot disagree. */
+export function integrationMark(level) {
+  return level === 'error' ? color.red('✗') : level === 'warn' ? color.yellow('!') : color.dim('–');
+}
+
 export async function integrateCheckCommand(argv) {
   const results = integrationResults(argv._[0]);
   if (!results.length) {
@@ -1221,22 +1233,28 @@ export async function integrateCheckCommand(argv) {
   console.log(color.bold('\nmotu integrate check — is the host using what verifies green?\n'));
   let errors = 0;
   let warns = 0;
+  let skips = 0;
   for (const result of results) {
     const bad = result.findings.filter((f) => f.level === 'error').length;
     const warn = result.findings.filter((f) => f.level === 'warn').length;
     errors += bad;
     warns += warn;
     const mark = bad ? color.red('✗') : warn ? color.yellow('!') : color.green('✓');
-    console.log(`  ${mark} ${color.bold(result.id.padEnd(18))}${color.dim(bad ? `${bad} error(s)` : warn ? `${warn} warning(s)` : 'integrated')}`);
+    console.log(`  ${mark} ${color.bold(result.id.padEnd(18))}${color.dim(bad ? `${bad} error(s)${warn ? `, ${warn} warning(s)` : ''}` : warn ? `${warn} warning(s)` : 'integrated')}`);
+    // EVERY ROW CARRIES ITS OWN LEVEL'S MARK. A `skip` was printed with the warning mark and not
+    // counted as one, so a region read "1 warning(s)" over two `!` rows — the count was right and the
+    // rows lied. A skip is `–`, as in every other report, and the tally names how many there were.
     for (const f of result.findings) {
       if (f.level === 'ok') continue;
-      const m = f.level === 'error' ? color.red('✗') : color.yellow('!');
-      console.log(`      ${m} ${color.dim(f.check.padEnd(12))} ${f.msg}`);
+      const m = integrationMark(f.level);
+      console.log(`      ${m} ${color.dim(f.check.padEnd(12))} ${f.level === 'skip' ? color.dim(f.msg) : f.msg}`);
     }
+    skips += result.findings.filter((f) => f.level === 'skip').length;
   }
   console.log('');
-  if (errors) console.log(color.red(color.bold('FAIL')) + `  ${errors} error(s), ${warns} warning(s)`);
-  else console.log(color.green(color.bold('PASS')) + color.dim(`  ${results.length} region(s) integrated · ${warns} warning(s)`));
+  const skipped = skips ? color.dim(` · ${skips} skipped`) : '';
+  if (errors) console.log(color.red(color.bold('FAIL')) + `  ${errors} error(s), ${warns} warning(s)` + skipped);
+  else console.log(color.green(color.bold('PASS')) + color.dim(`  ${results.length} region(s) integrated · ${warns} warning(s)`) + skipped);
   process.exit(errors ? 1 : 0);
 }
 

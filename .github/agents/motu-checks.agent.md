@@ -80,6 +80,15 @@ in the output — because a port that never opened *because the project does not
 whatever the headline says. Verified in both directions: a missing browser gives exit 2, a missing
 import in the region's frame still gives exit 1.
 
+A DECLARED FLOW THAT DID NOT RUN HAS NOT PASSED — there is no fourth outcome where it is a warning
+under PASS. A flow INVALID as declared is caught statically: `flow-provide` (exit 1, `motu check`)
+refuses a step that `provide`s a key a declared source produces, because the lagoon refuses that write
+and the step could never run. A step the page refuses at runtime fails ITS flow (`region-flow`, exit 1)
+and the region's other flows still run. A lane that could not drive any flow is `inconclusive` (exit
+2) when the environment gave out and an error (exit 1) otherwise; a declared flow with no verdict at all
+is named as not run. `motu check --runtime` and the `--all` sweeps print INCONCLUSIVE and exit 2 when a
+member could not run, exactly as a single verify does — and their `--json` `pass` is false for it.
+
 ## Three tiers, and which one you are in
 
     motu check                        STATIC        1.4s    every change
@@ -162,6 +171,8 @@ that docks or opens a claimed dock) answers it: in each composed dock state the 
 the dock element (`[data-motu-region-dock]`), exactly once, rendering something; in the region's own
 view it must be at its fallback (or nowhere, `fallback: 'none'`). "Rendered" is not the claim — an
 island stuck at its fallback beside an empty dock renders fine and passes every other check. The static
-`dock` check (motu check) and `integrate check`'s `dock` rows cover the declarations and the page: a
-page passing B's dock prop itself is an error; a hand-rolled `createPortal` in a page or root that
+`dock` check (motu check) and `integrate check`'s `dock` rows cover the declarations and the page: B's
+root must RENDER each dock prop it opens — read from the root component's own source, so a layout that
+dropped `{aside}` is an error naming the dock and the file, before any browser; a page passing B's dock
+prop itself is an error; a hand-rolled `createPortal` in a page or root that
 composes a region is a warning that names the dock to declare instead.

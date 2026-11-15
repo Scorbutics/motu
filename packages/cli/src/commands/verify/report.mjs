@@ -3,6 +3,7 @@
 import { unchangedSinceLastRun } from '../../lib/finding-memory.mjs';
 import { readLiveUrl } from '../../lib/live-url.mjs';
 import { color } from '../../lib/util.mjs';
+import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
 
 /**
  * Say what is happening while it happens.
@@ -159,6 +160,32 @@ export function environmentalCause(err) {
   return appCause ? null : full.split('\n')[0];
 }
 
+/**
+ * A check that THREW before it examined anything — and therefore did not pass, whatever else held.
+ *
+ * Three runtime checks reported this as a WARNING (`region-flow` "could not run declared flows",
+ * `data-flow`, `responsive`) and one said nothing at all (`data-flow` without Chromium), so the
+ * verdict under them was PASS, exit 0, over evidence that never ran — the opposite of the contract
+ * (0 holds · 1 contradicted · 2 could not run). The two outcomes that remain:
+ *   - the ENVIRONMENT failed (no browser, a port, the machine out of watchers) → `inconclusive`, exit
+ *     2: retry, do not repair;
+ *   - anything else → `error`, exit 1. The cause is in the project or in motu, and a rerun will
+ *     deterministically fail the same way; the message names it so it can be repaired.
+ */
+export function couldNotRun(report, check, what, err) {
+  const msg = String(err?.message || err);
+  if (/Executable doesn't exist|playwright install/i.test(msg)) {
+    report.inconclusive(check, `${what}: Chromium not installed — run ${CHROMIUM_INSTALL}`);
+    return;
+  }
+  const env = environmentalCause(err);
+  if (env) {
+    report.inconclusive(check, `${what}: ${env} — the environment, not the project; retry, do not repair`);
+    return;
+  }
+  report.error(check, `${what}: ${msg.split('\n')[0]} — not an environmental failure, so this is not a pass: nothing was examined`);
+}
+
 export function lagoonFailure(err) {
   const full = String(err?.message || err);
   const headline = full.split('\n')[0];
@@ -199,7 +226,9 @@ export function sweepExitCode(results) {
 
 /** `--json` shape for one member of a sweep. */
 export function summaryOf(r) {
-  return { name: r.kebab, tag: r.tag, pass: r.errors.length === 0, findings: r.report.findings };
+  const code = verifyExitCode(r);
+  // `pass` is "holds": a member that could not run has not passed (`inconclusive` says which it was).
+  return { name: r.kebab, tag: r.tag, pass: code === 0, inconclusive: code === 2, findings: r.report.findings };
 }
 
 /**
@@ -213,15 +242,22 @@ export const sweepSeen = { total: 0, repeated: 0 };
 
 export function printSweep(title, results) {
   console.log(color.bold(`\n${title}\n`));
+  // COULD NOT RUN is a member's verdict too. The sweep printed only errors and warnings, so a member
+  // whose runtime checks were all inconclusive showed `✓ 0 warning(s)` under a PASS headline — while
+  // `sweepExitCode` exited 2. The printed verdict and the exit code must say the same thing.
+  const unknownOf = (r) => r.report.findings.filter((f) => f.level === 'inconclusive');
   for (const r of results) {
-    const mark = r.errors.length ? color.red('✗') : r.warns.length ? color.yellow('!') : color.green('✓');
+    const unknown = unknownOf(r);
+    const mark = r.errors.length ? color.red('✗') : unknown.length ? color.yellow('?') : r.warns.length ? color.yellow('!') : color.green('✓');
     const tally = r.errors.length
       ? color.red(`${r.errors.length} error(s)`) + color.dim(`, ${r.warns.length} warning(s)`)
-      : color.dim(`${r.warns.length} warning(s)`);
+      : unknown.length
+        ? color.yellow(`${unknown.length} could not run`) + color.dim(`, ${r.warns.length} warning(s)`)
+        : color.dim(`${r.warns.length} warning(s)`);
     console.log(`  ${mark} ${color.dim(r.kebab.padEnd(20))} ${tally}`);
     for (const f of r.report.findings) {
-      if (f.level !== 'error' && f.level !== 'warn') continue;
-      const m = f.level === 'error' ? color.red('✗') : color.yellow('!');
+      if (f.level !== 'error' && f.level !== 'warn' && f.level !== 'inconclusive') continue;
+      const m = f.level === 'error' ? color.red('✗') : f.level === 'inconclusive' ? color.yellow('?') : color.yellow('!');
       const again = unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
       sweepSeen.total++;
       if (again) sweepSeen.repeated++;
@@ -231,9 +267,12 @@ export function printSweep(title, results) {
   const failed = results.filter((r) => r.errors.length).length;
   const warned = results.reduce((n, r) => n + r.warns.length, 0);
   console.log('');
+  const unrun = results.filter((r) => !r.errors.length && unknownOf(r).length).length;
   const head = failed
-    ? color.red(color.bold('FAIL')) + `  ${failed}/${results.length} with errors`
-    : color.green(color.bold('PASS')) + `  ${results.length}/${results.length} clean`;
+    ? color.red(color.bold('FAIL')) + `  ${failed}/${results.length} with errors` + (unrun ? color.dim(`, ${unrun} could not run`) : '')
+    : unrun
+      ? color.yellow(color.bold('INCONCLUSIVE')) + `  ${unrun}/${results.length} could not run — retry, do not repair`
+      : color.green(color.bold('PASS')) + `  ${results.length}/${results.length} clean`;
   // WHAT MOVED, on the line a reader piping through `tail` will actually see.
   const { total, repeated } = sweepSeen;
   const delta =

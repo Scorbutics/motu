@@ -16,6 +16,7 @@ import React, { act, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { createRegion } from '../../react/src/create-region';
+import { awaitRegionView } from '../../react/src/lagoon-player';
 
 let pass = 0, fail = 0;
 const t = (n: string, ok: boolean, d = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${n}${d ? ` -> ${d}` : ''}`); };
@@ -51,8 +52,7 @@ function regions(fallback?: 'none') {
   const id = n++;
   const a = `base${id}`;
   const b = `crew${id}`;
-  const A = createRegion(
-    {
+  const aConfig = {
       id: a,
       root: BaseLayout,
       slots: {
@@ -60,14 +60,11 @@ function regions(fallback?: 'none') {
         panel: { region: b },
       },
       islands: [{ slot: 'col', element: 'x-column' }],
-    } as never,
-    { elements },
-  );
-  const B = createRegion(
-    { id: b, root: CrewLayout, slots: { rocket: 'rocket', aside: { dock: 'crew-aside' } }, islands: [{ slot: 'rocket', element: 'x-rocket' }] } as never,
-    { elements },
-  );
-  return { A, B, a, b };
+  };
+  const bConfig = { id: b, root: CrewLayout, slots: { rocket: 'rocket', aside: { dock: 'crew-aside' } }, islands: [{ slot: 'rocket', element: 'x-rocket' }] };
+  const A = createRegion(aConfig as never, { elements });
+  const B = createRegion(bConfig as never, { elements });
+  return { A, B, a, b, aConfig, bConfig };
 }
 
 function where(root: HTMLElement, a: string) {
@@ -81,7 +78,7 @@ function where(root: HTMLElement, a: string) {
 async function main() {
   // --- B absent, then present, then loaded, then gone --------------------------------------------
   {
-    const { A, B, a, b } = regions();
+    const { A, B, a, b, aConfig, bConfig } = regions();
     let setStage: (s: 'absent' | 'loading' | 'loaded') => void = () => {};
     // Every place the island was ever SEEN — committed DOM, sampled after each commit.
     const seen: string[] = [];
@@ -105,6 +102,13 @@ async function main() {
 
     await act(async () => root.render(<Page />));
     t('B absent: the island renders at its fallback', where(host, a).join() === 'fallback', where(host, a).join());
+    // The PLAIN region view's outcome (`?region=<a>`, no state) — what `__motuLagoonState` reports.
+    {
+      const v = await awaitRegionView(aConfig as never, 'region', 500);
+      const row = v.docks?.[0] as { slot?: string; placed?: string } | undefined;
+      t('region view: reported as kind "region", named, with the view', v.ok && v.kind === 'region' && v.name === a && v.view === 'region', JSON.stringify(v));
+      t('region view: the docked island is reported at its FALLBACK while B is absent', row?.slot === 'col' && row?.placed === 'fallback', JSON.stringify(v.docks));
+    }
 
     seen.length = 0;
     await act(async () => setStage('loading'));
@@ -118,6 +122,12 @@ async function main() {
     t('...still A\'s island (A\'s region, A\'s binding)', island.getAttribute('data-motu-region') === a && island.textContent === 'column mine');
     t('...inside B\'s own wrapper, which motu did not draw', !!island.closest('[data-part="crew-aside"]'));
     t('...marked with where it docked', island.closest('[data-motu-docked-in]')?.getAttribute('data-motu-docked-in') === `${b}.crew-aside`);
+    {
+      const va = await awaitRegionView(aConfig as never, 'region', 500);
+      const vb = await awaitRegionView(bConfig as never, 'region', 500);
+      t('region view: with B on screen the island is reported DOCKED', (va.docks?.[0] as { placed?: string })?.placed === 'docked', JSON.stringify(va.docks));
+      t("region view: B reports the dock it opens as filled", JSON.stringify(vb.docks) === JSON.stringify([{ opens: `${b}.crew-aside`, placed: 'filled' }]), JSON.stringify(vb.docks));
+    }
 
     await act(async () => setStage('absent'));
     t('B gone again: back at the fallback', where(host, a).join() === 'fallback', where(host, a).join());

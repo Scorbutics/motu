@@ -157,6 +157,7 @@ The dock element is `display: contents`, so it adds no box and B's layout keeps 
 | check | tier | catches |
 |---|---|---|
 | `dock` | static, `motu check` / `archipelago verify` | unknown target region; unknown dock; two claims on one dock; a dock declared twice in one region; docking into your own region; A does not compose B (no `{ region }` path); the claimed slot is not an island of A, or is also placed elsewhere in A; either side without `root`; a dock no region claims (warning) |
+| `dock` | static, `motu check` / `archipelago verify` **and** `integrate check` | B's root component never renders a dock prop it opens (read from the root's own source — `{aside}` dropped from the layout keeps every declaration consistent and gives the island nowhere to land) |
 | `dock` | `integrate check` | B's page passes the dock prop itself (`<Equipage.Root aside={…}>` — motu fills it); A's page never places B in the prop A declared for it; a hand-rolled `createPortal` in a region's root or page (warning: declare a dock) |
 | `dock-placement` | runtime, `archipelago verify --runtime` | in the composed state, the docked island is NOT inside B's dock element (placement, not "rendered somewhere"); in A's own state, it is not at its fallback; a region with docks but no claimant renders nothing to check (skip, never pass) |
 | flows | runtime | `expectRender: { 'base-conseil': { in: 'equipage.equipage-aside', text: '…' } }`, in a flow declared `dock: 'equipage.equipage-aside'` (it runs in that composed view) |
@@ -186,6 +187,9 @@ provider that renders nothing but that portal — so the island is still A's isl
 
 - A composition is not a store state, so it composes with one flow or scenario state per region:
   `?region=base&state=base.dock.equipage.equipage-aside&state=equipage.flow.opening-a-sphere`.
+- The plain `?region=base` reports `{ ok: true, kind: 'region', name: 'base', docks: [{ slot: 'base-conseil',
+  dock: 'equipage.equipage-aside', placed: 'fallback' }] }` once mounted, so the absent-B view has a state to
+  read too.
 - `window.__motuLagoonState` reports `{ ok, kind: 'dock', name: 'equipage.equipage-aside', placed:
   'base-conseil' }` once the island is inside the dock — and REFUSES (banner, nothing claimed) when the
   address names no declared dock, or the island never lands there.
@@ -209,3 +213,21 @@ says so.
 - **The chrome's dock panel** does not list dock states as pills yet; they are addresses, in
   `motu lagoon states` and `__motuLagoonStates`.
 - **The element (ocean) mount path.** Docks are a React-host feature; an ocean region has no root.
+
+## Found adopting it (Peps, « Ma Base » + « Mon Équipage Business »)
+
+- **A flow that could not run passed.** A dock flow whose step provided `conseilEntries` — a key base's
+  `teams` source produces — was refused in the page; the lane threw, `region-flow` WARNED "could not run
+  declared flows", and `archipelago verify --runtime` printed PASS, exit 0. The example was this
+  feature's own skill. Now: `flow-provide` refuses it statically (exit 1); a step the page refuses fails
+  its own flow; a lane that drove nothing is inconclusive (2) or an error (1), never a warning; and
+  `motu check` / the sweeps print INCONCLUSIVE and exit 2 over a member that could not run.
+- **A dock the layout never renders verified green statically.** `{aside}` removed from `EquipageLayout`
+  passed `archipelago verify` and `integrate check`; only `--runtime` noticed. Both now read the root's
+  source and fail naming the dock and the file.
+- **The plain view had no state.** `?region=base` left `__motuLagoonState` undefined; it now reports
+  `kind: 'region'` with each docked island's placement (`fallback` there).
+- **A composed state's other region's asks were this region's "unattributed".** Attributed to that
+  region when its declarations (`reaches`, `effects`) account for them and this region's do not. A
+  source that declares no `reaches` still cannot be told apart — the window that attributes an ask is
+  synchronous, and a source's fetch leaves after its first `await`.

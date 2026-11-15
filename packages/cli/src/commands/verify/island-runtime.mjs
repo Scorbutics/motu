@@ -14,7 +14,7 @@ import { sourceFileAt } from '../../lib/ts-project.mjs';
 import { HOST, MOTU_CHECKOUT, REPO_ROOT, ensureNoInstallLinks, lagoonA11y, lagoonAliases, lagoonViewports, paths } from '../../lib/util.mjs';
 import { axeLagoon, differentiateLagoon, responsiveLagoon, runLagoon } from '../../playwright-lagoon.mjs';
 import { declaredReach, portalNote, reportRuntimeDiagnostics } from './reach.mjs';
-import { environmentalCause, lagoonFailure, step } from './report.mjs';
+import { couldNotRun, environmentalCause, lagoonFailure, step } from './report.mjs';
 import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
 
 export const HARNESS = resolve(dirname(fileURLToPath(import.meta.url)), '../../runtime-harness.mjs');
@@ -152,10 +152,9 @@ export async function runtimeDifferentiationCheck(report, tag, fixturesPath, por
     const r = await step('data-flow', () => differentiateLagoon({ tag, port, scenarios }));
     reportDifferentiation(report, r);
   } catch (err) {
-    const msg = String(err?.message || err).split('\n')[0];
-    if (!/Executable doesn't exist|playwright install/i.test(msg)) {
-      report.warn('data-flow', `differentiation check could not run: ${msg}`);
-    }
+    // Was a warning — and SILENT without Chromium — so an island whose scenarios never rendered
+    // verified PASS. A comparison of declared scenarios that did not run has not held.
+    couldNotRun(report, 'data-flow', 'differentiation check could not run', err);
   }
 }
 
@@ -384,7 +383,7 @@ export async function a11yCheck(report, tag, kebab, port) {
   try {
     findings = await step('a11y', async () => axeLagoon({ tag, port, scenarios: await islandScenarios(kebab) }));
   } catch (err) {
-    report[environmentalCause(err) ? 'inconclusive' : 'warn']('a11y', `could not run axe: ${err.message}`);
+    couldNotRun(report, 'a11y', 'could not run axe', err);
     return;
   }
   const policy = lagoonA11y();
@@ -556,7 +555,7 @@ export async function responsiveCheck(report, tag, kebab, port) {
     measured = await step('responsive', async () =>
       responsiveLagoon({ tag, port, viewports, scenarios: await islandScenarios(kebab) }));
   } catch (err) {
-    report.warn('responsive', `could not measure viewports: ${err.message}`);
+    couldNotRun(report, 'responsive', 'could not measure viewports', err);
     return;
   }
   const overflowing = measured.filter((m) => m.overflow > 1);

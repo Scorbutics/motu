@@ -240,15 +240,43 @@ export function reportRuntimeDiagnostics(report, r, label, declared = null) {
  * renders content while asking for NOTHING (its data came from somewhere it did not declare), and a
  * dependency it declares but never reaches.
  */
-export function provenanceCheck(report, id, region, calls, outbound = []) {
+/**
+ * WHOSE IS AN UNATTRIBUTED ASK, when another region is composed on screen (a dock state)?
+ *
+ * A composed flow renders this region WITH another one — the dock's region loaded in place, or the
+ * claimant's island as a guest — and that region's sources ask the backend too. Their async work
+ * leaves outside any source's window like everyone's, so it landed in THIS region's "attributed to
+ * nobody" count: equipage's `business_spheres` charged to « Ma Base ». An ask that a composed
+ * region's declarations (`reaches` on its sources, `effects` on its islands) account for and this
+ * region's do not is that region's, and is owned `region:<id>`. Anything both or neither declare
+ * stays unattributed — this never guesses. Pure, so it is testable without a browser.
+ *
+ * `asks`: `[{ via, label, owner }]` · `own`: `declaredReach({ regionId: id })` · `composed`:
+ * `[{ region, reach: declaredReach({ regionId: region }) }]`.
+ */
+export function attributeComposedAsks(asks, own, composed) {
+  if (!composed?.length) return asks;
+  const mine = new Set(Object.values(own ?? {}).flat());
+  return asks.map((a) => {
+    if (a.owner !== 'unattributed' || mine.has(a.label)) return a;
+    const theirs = composed.filter((c) => Object.values(c.reach ?? {}).flat().includes(a.label));
+    return theirs.length === 1 ? { ...a, owner: `region:${theirs[0].region}` } : a;
+  });
+}
+
+export function provenanceCheck(report, id, region, calls, outbound = [], composed = []) {
   // The unified ledger when the page carries one; the traced-calls list is the fallback for a lagoon
   // built before it existed, so an older bundle still reports what it always did.
   // `args ? name(args) : name` — a wire reach's declared form (`table:shots(select)`) has no argument
   // half, and appending `()` to it would print an operation as an empty call.
   const label = (o) => (o.args ? `${o.name}(${o.args})` : o.name);
-  const asks = outbound.length
-    ? outbound.map((o) => ({ via: o.via, label: label(o), owner: o.owner }))
-    : calls.map((c) => ({ via: 'host-module', label: `${c.fn}(${(c.args ?? []).join(', ')})`, owner: `island:${c.island ?? '?'}` }));
+  const asks = attributeComposedAsks(
+    outbound.length
+      ? outbound.map((o) => ({ via: o.via, label: label(o), owner: o.owner }))
+      : calls.map((c) => ({ via: 'host-module', label: `${c.fn}(${(c.args ?? []).join(', ')})`, owner: `island:${c.island ?? '?'}` })),
+    composed.length ? declaredReach({ regionId: id }) : {},
+    composed.map((r) => ({ region: r, reach: declaredReach({ regionId: r }) })),
+  );
   if (!asks.length) {
     report.skip(
       'provenance',
@@ -287,7 +315,11 @@ export function provenanceCheck(report, id, region, calls, outbound = []) {
     report.warn(
       'provenance',
       `${unowned} ask(s) attributed to nobody — the request left while no island's and no source's ` +
-        `window was open, so nothing can say which declaration should account for it`,
+        `window was open, so nothing can say which declaration should account for it` +
+        (composed.length
+          ? ` (${composed.join(', ')} was also on screen in a composed dock state; an ask its \`reaches\` declares ` +
+            `is charged to it — declare one there to take it off this count)`
+          : ''),
     );
   }
 }

@@ -341,6 +341,12 @@ composition it runs in:
 ```
 — `host-app/motu/src/archipelagos/harbour/harbour.evidence.ts`
 
+`stats` is HOST-FED in the harbour, which is why a step may `provide` it. A key a declared source
+`produces` is the source's: `provideToArchipelago` refuses the write in the page, so a step providing
+it cannot run, and `flow-provide` (static, `motu check`) reports it as an error before a browser is
+booted. Reach that state with a `world` that re-answers the source, named on the flow — `world` and
+`dock` compose.
+
 The lane re-aims its page to the region view with that dock composed for the flow, and back afterwards
 (`packages/cli/src/playwright-lagoon.mjs`, `composeFor`). A mismatch reads `expected: rendered inside
 dock quay.quay-aside`, `actual: rendered outside every dock`. Statically, a `dock` the region does not

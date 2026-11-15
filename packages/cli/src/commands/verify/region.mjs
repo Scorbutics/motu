@@ -10,7 +10,7 @@ import { declaredReach, reportBrowserOverride, reportRuntimeDiagnostics } from '
 import { frameIsPageCheck } from './region-composition.mjs';
 import { dockPlacementCheck } from './region-docks.mjs';
 import { archipelagoConfigChecks } from './region-config.mjs';
-import { catalogueCheck, regionFlowCheck, renderCoverageCheck, wiringProbe, writesCoveredCheck } from './region-flows.mjs';
+import { catalogueCheck, flowProvideCheck, regionFlowCheck, renderCoverageCheck, wiringProbe, writesCoveredCheck } from './region-flows.mjs';
 import { channelSourceCheck, dockCheck, exclusiveCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
 import { environmentalCause, makeReport, printReport, printSweep, setProgressScope, setVerbose, step, summaryOf, sweepExitCode, verifyExitCode } from './report.mjs';
 import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
@@ -40,7 +40,7 @@ export async function archipelagoVerifyCommand(argv) {
 
   const result = await runArchipelagoVerify(argv, id);
   if (argv.json) {
-    console.log(JSON.stringify({ archipelago: result.kebab, pass: result.errors.length === 0, findings: result.report.findings }, null, 2));
+    console.log(JSON.stringify({ archipelago: result.kebab, pass: verifyExitCode(result) === 0, inconclusive: verifyExitCode(result) === 2, findings: result.report.findings }, null, 2));
   } else {
     printReport(result.report, `motu archipelago verify — ${result.kebab}`, result.errors, result.warns);
   }
@@ -70,6 +70,8 @@ export async function runArchipelagoVerify(argv, id) {
   // Static, so an uncovered slot shows up in the fast loop rather than behind a browser.
   renderCoverageCheck(report, id);
   writesCoveredCheck(report, id);
+  // A flow that CANNOT RUN as declared is a declaration error, caught here rather than by a browser.
+  flowProvideCheck(report, id, region);
 
   // Membership as data: static, so it runs whether or not a browser was asked for.
   if (region?.membership === 'catalogue') await catalogueCheck(report, id, region);

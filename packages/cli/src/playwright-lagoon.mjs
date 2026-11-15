@@ -727,9 +727,45 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       const real = settledIn.get(`${of}#${index}`);
       return real == null ? 2000 : Math.min(2000, Math.max(400, 3 * real + 250));
     };
+    // A FLOW IN A COMPOSED DOCK STATE (`dock: 'equipage.equipage-aside'`) runs in that composition —
+    // the REGION view with the dock's region loaded, or the claimant's island as a guest — because a
+    // dock is part of the arrangement and the mountpoints view frames every slot apart. The page is
+    // re-aimed for it and back afterwards; nothing else in the lane changes.
+    let composedAs = null;
+    const composeFor = async (dock) => {
+      const want = dock ? `${id}.dock.${dock}` : null;
+      if (want === composedAs) return true;
+      const ok = await page
+        .evaluate(
+          ([t, st]) => window.__motuLagoonHarness?.mount(t, st ? { view: 'region', state: [st] } : { view: 'mountpoints' }) ?? false,
+          [`archipelago:${id}`, want],
+        )
+        .catch(() => false);
+      if (!ok) return false;
+      composedAs = want;
+      await page.waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 }).catch(() => {});
+      if (want) {
+        await page
+          .waitForFunction(() => window.__motuLagoonState?.kind === 'dock' && (window.__motuLagoonState.ok || window.__motuLagoonState.error), null, { timeout: 10000 })
+          .catch(() => {});
+        const st = await page.evaluate(() => window.__motuLagoonState).catch(() => null);
+        if (!st?.ok) return st?.error ?? false;
+      }
+      await sleep(300);
+      return true;
+    };
     for (const scenario of scenarios) {
       if (scenario.__killGroup && killed.has(scenario.__killGroup)) continue;
       const scenarioStarted = Date.now();
+      const composed = await composeFor(scenario.dock ?? null);
+      if (composed !== true) {
+        out.push({
+          scenario: scenario.name ?? 'flow', step: 1, ok: false,
+          error: `could not compose dock state ${id}.dock.${scenario.dock}${typeof composed === 'string' ? ` — ${composed}` : ''}`,
+          mismatches: [], calls: 0, undeclared: [],
+        });
+        continue;
+      }
       if (!(await switchWorld(scenario.world ?? 'default'))) {
         out.push({ scenario: scenario.name ?? 'flow', step: 1, ok: false, error: `world "${scenario.world}" is not declared in the lagoon`, mismatches: [], calls: 0, undeclared: [] });
         continue;
@@ -1090,6 +1126,16 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
               return el ? perceivableWithPortals(el) : null;
             };
             /**
+             * WHICH DOCK the slot's island sits in — `region.dock`, or null outside every dock. What
+             * `expectRender: { slot: { in: 'equipage.equipage-aside' } }` compares: PLACEMENT, read
+             * from the DOM the person sees, not from where the island was declared.
+             */
+            const dockOf = (slot) => {
+              const el = document.querySelector(`[data-motu-slot="${slot}"]`);
+              const dock = el?.closest('[data-motu-region-dock]');
+              return dock ? dock.getAttribute('data-motu-region-dock') : null;
+            };
+            /**
              * CASE-INSENSITIVE, because `innerText` reports what `text-transform` produced.
              *
              * A flow asserts that DATA reached a slot. Whether the slot's stylesheet happens to
@@ -1110,7 +1156,8 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
                 const wants = typeof want === 'string' ? { text: want } : want;
                 return (
                   (wants.text == null || contains(text, wants.text)) &&
-                  (wants.notText == null || !contains(text, wants.notText))
+                  (wants.notText == null || !contains(text, wants.notText)) &&
+                  (wants.in == null || dockOf(slot) === wants.in)
                 );
               }),
             );
@@ -1128,6 +1175,14 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
               }
               if (wants.notText != null && contains(text, wants.notText)) {
                 renderMismatches.push({ key: `render:${slot}`, expected: `text NOT containing ${JSON.stringify(wants.notText)}`, actual: text });
+              }
+              if (wants.in != null && dockOf(slot) !== wants.in) {
+                const at = dockOf(slot);
+                renderMismatches.push({
+                  key: `render:${slot}`,
+                  expected: `rendered inside dock ${wants.in}`,
+                  actual: at ? `rendered inside dock ${at}` : 'rendered outside every dock',
+                });
               }
             }
             if (!Object.keys(st.expect ?? {}).length && !Object.keys(st.expectRender ?? {}).length && st.expectCalls === undefined) {
@@ -1220,6 +1275,8 @@ export async function runRegionFlows({ id, port = 5199, scenarios = [], chartWit
       }
       timings.push({ scenario: scenario.name ?? 'flow', ms: Date.now() - scenarioStarted, steps: (scenario.steps ?? []).length });
     }
+    // Back to the lane's own view, for the ledgers below and the next check on this pooled page.
+    if (composedAs) await composeFor(null);
     const scenariosMs = Date.now() - laneStarted;
     // One beat before reading: a host effect answering an island lands a tick later, and the last
     // step's assertion returns before it does.
@@ -1778,6 +1835,66 @@ export async function runArchipelagoLagoon({ id, port = 5199 }) {
 
     const ok = result.region && result.islands.length > 0 && result.islands.every((i) => i.tag);
     return { ok, ...result, diagnostics, fixtureCoverage, networkEscapes };
+  });
+}
+
+/**
+ * WHERE A DOCKED ISLAND RENDERS — placement, not "it rendered somewhere".
+ *
+ * `composed`: each declared dock state viewed from this region (`base.dock.equipage.equipage-aside`),
+ * mounted through the focused entry's harness in the REGION view (a dock is part of the arrangement;
+ * the mountpoints view frames each slot apart). For each, the claimant's island must be inside the
+ * dock element — `[data-motu-region-dock]` — exactly once, and render something.
+ *
+ * `fallbacks`: the islands this region docks elsewhere, in this region's OWN view, where the dock's
+ * region is a placeholder (not mounted). `here`: the island renders, outside every dock. `none`: it
+ * does not render at all.
+ */
+export async function dockPlacementLagoon({ id, port = 5199, composed = [], fallbacks = [] }) {
+  const diagnostics = [];
+  return onLagoonPage({ target: `archipelago:${id}`, port, viewport: { width: 1280, height: 900 }, diagnostics, view: 'region' }, async (page) => {
+    await page.waitForFunction(() => !!window.__motuLagoonHarness, null, { timeout: 15000 }).catch(() => {});
+    const target = `archipelago:${id}`;
+    const where = (slot, claimant) =>
+      page.evaluate(
+        ([slot, claimant]) => {
+          const els = [...document.querySelectorAll(`[data-motu-slot="${CSS.escape(slot)}"][data-motu-region="${CSS.escape(claimant)}"]`)];
+          return els.map((el) => {
+            const dock = el.closest('[data-motu-region-dock]');
+            return {
+              dock: dock ? dock.getAttribute('data-motu-region-dock') : null,
+              len: (el.innerHTML || '').length,
+              text: (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+            };
+          });
+        },
+        [slot, claimant],
+      );
+    const out = { composed: [], fallbacks: [], diagnostics };
+    for (const c of composed) {
+      await page.evaluate(([t, st]) => window.__motuLagoonHarness?.mount(t, { view: 'region', state: [st] }), [target, c.state]);
+      const deadline = Date.now() + paintTimeout;
+      let found = [];
+      let outcome = null;
+      while (Date.now() < deadline) {
+        outcome = await page.evaluate(() => window.__motuLagoonState ?? null).catch(() => null);
+        found = await where(c.slot, c.claimant).catch(() => []);
+        if (outcome?.kind === 'dock' && (outcome.ok || outcome.error) && found.some((f) => f.dock === c.address && f.len > 0)) break;
+        if (outcome?.kind === 'dock' && outcome.ok === false) break;
+        await sleep(150);
+      }
+      out.composed.push({ ...c, found, outcome });
+    }
+    for (const f of fallbacks) {
+      await page.evaluate((t) => window.__motuLagoonHarness?.mount(t, { view: 'region' }), target);
+      // Give the region its first paint, then read: an island at its fallback renders with the region.
+      await page.waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: paintTimeout }).catch(() => {});
+      await sleep(400);
+      out.fallbacks.push({ ...f, found: await where(f.slot, id).catch(() => []) });
+    }
+    // Put the pooled page back in its plain view for whichever check comes next.
+    await page.evaluate((t) => window.__motuLagoonHarness?.mount(t, { view: 'region' }), target).catch(() => {});
+    return out;
   });
 }
 

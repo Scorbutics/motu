@@ -8,9 +8,10 @@ import { pageRenderLagoon, runArchipelagoLagoon } from '../../playwright-lagoon.
 import { cssChecks } from './island-static.mjs';
 import { declaredReach, reportBrowserOverride, reportRuntimeDiagnostics } from './reach.mjs';
 import { frameIsPageCheck } from './region-composition.mjs';
+import { dockPlacementCheck } from './region-docks.mjs';
 import { archipelagoConfigChecks } from './region-config.mjs';
 import { catalogueCheck, regionFlowCheck, renderCoverageCheck, wiringProbe, writesCoveredCheck } from './region-flows.mjs';
-import { channelSourceCheck, exclusiveCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
+import { channelSourceCheck, dockCheck, exclusiveCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
 import { environmentalCause, makeReport, printReport, printSweep, setProgressScope, setVerbose, step, summaryOf, sweepExitCode, verifyExitCode } from './report.mjs';
 import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
 
@@ -54,6 +55,7 @@ export async function runArchipelagoVerify(argv, id) {
   // Static, and project-wide in what it reads: a cycle is a property of the graph, not of one file.
   if (existsSync(paths.archipelagoFile(id))) regionRefCheck(report, id);
   if (existsSync(paths.archipelagoFile(id))) exclusiveCheck(report, id);
+  if (existsSync(paths.archipelagoFile(id))) dockCheck(report, id);
 
   // The inbound seam: a channel that orchestrates must install the app's logic, not restate it.
   const region = readRegions(paths.archipelagosDir).find((r) => r.id === id);
@@ -102,6 +104,8 @@ export async function runArchipelagoVerify(argv, id) {
     // answer changes when the RENDERING changes rather than when a key moves.
     // One call, both questions: do the flows hold, and could they have failed.
     if (hasLayout) await regionFlowCheck(report, id, 5300 + Math.floor(Math.random() * 400), region);
+    // WHERE a docked island renders — inside the dock in the composed state, at its fallback alone.
+    if (hasLayout) await dockPlacementCheck(report, id, 5300 + Math.floor(Math.random() * 400));
     if (!hasLayout) {
       // NAME WHERE THE ARRANGEMENT WAS LOOKED FOR. The old wording ("islands are placed individually
       // across the host") describes the PAGE, and was read as a claim about the lagoon frame — so an

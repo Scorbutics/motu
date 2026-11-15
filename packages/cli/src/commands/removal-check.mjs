@@ -20,6 +20,7 @@ import { loadMotuConfig } from '../lib/config.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { ejectFile, readOutputs, readRegions, regionOfRoot } from '../lib/eject.mjs';
+import { dockGraphOnDisk } from '../lib/docks.mjs';
 
 /** The host's own typecheck, run the way the host would run it. */
 function hostTypecheck(hostRoot) {
@@ -732,6 +733,27 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     process.off('exit', onExit);
   }
 
+  // DOCKS NEED NO SURGERY, and the report says what that means. `<A.Root>` becomes A's layout with the
+  // claim's prop passed as before, so the docked island renders where A's layout places that prop —
+  // its declared fallback; `<B.Root>` becomes B's layout without its dock prop, an empty place. The app
+  // then renders the "B absent" arrangement, which is the honest meaning of "motu is not load-bearing".
+  const dockNotes = [];
+  try {
+    const { graph } = dockGraphOnDisk(paths.archipelagosDir);
+    for (const [id, node] of Object.entries(graph)) {
+      for (const c of node.claims) {
+        dockNotes.push(
+          c.fallback === 'none'
+            ? `${id}.${c.prop} (${c.slot}) is docked in ${c.region}.${c.dock} with \`fallback: 'none'\` — without motu it renders wherever ${id}'s layout places \`${c.prop}\`, so the layout must still place it`
+            : `${id}.${c.prop} (${c.slot}) renders at its fallback position in ${id}'s layout — the placement in ${c.region}.${c.dock} was motu's`,
+        );
+      }
+      for (const [prop, dock] of Object.entries(node.docks)) dockNotes.push(`${id}.${prop} (dock ${dock}) is not passed — an empty place`);
+    }
+  } catch {
+    // No archipelagos to read: no docks to describe.
+  }
+
   if (!quiet) {
     console.log(color.bold('\nmotu removal-check — is motu removable from the host application?\n'));
     for (const p of deleted) console.log(`  ${color.dim('delete ')} ${relative(hostRoot, p)} ${color.dim('(100% motu)')}`);
@@ -740,6 +762,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
       console.log(`  ${color.dim('eject  ')} ${relative(hostRoot, p)}`);
       for (const n of notes) console.log(`           ${color.dim(n)}`);
     }
+    for (const n of dockNotes) console.log(`  ${color.dim('dock   ')} ${n}`);
     console.log('');
   }
 
@@ -780,6 +803,7 @@ export function runRemovalCheck(argv, { quiet = false } = {}) {
     deleted: deleted.map((p) => relative(hostRoot, p)),
     stripped: stripped.map((p) => relative(hostRoot, p)),
     ejected: ejected.map(([p, notes]) => ({ file: relative(hostRoot, p), notes })),
+    docks: dockNotes,
     errors: [...surgeryErrors, ...real].slice(0, 15),
     surgeryErrors,
     disqualified: disqualified.map(([p, specs]) => ({ file: relative(hostRoot, p), imports: specs })),

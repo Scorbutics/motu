@@ -11,7 +11,7 @@
 // four things a host actually uses, each typed from that config. What it does NOT do is merge the two:
 // the archipelago still declares the wiring, the root still chooses the transport and the host bridge.
 // That split is what lets the lagoon mount the same region against mocks — so it stays.
-import { createElement, type ReactElement, type ReactNode } from 'react';
+import { createElement, Fragment, type ReactElement, type ReactNode } from 'react';
 import { configure, type Transport } from '@motujs/runtime';
 import {
   provideToArchipelago,
@@ -28,6 +28,7 @@ import {
   type ProducedKeys,
 } from '@motujs/core';
 import { ArchipelagoProvider, Island, useRegion as useRegionSnapshot } from './react-island';
+import { dockClaimsOf, fillDocks, placeDocked, useDockPlacements } from './docks';
 import type { ElementSpec } from './bootstrap';
 
 export interface CreateRegionOptions {
@@ -118,7 +119,10 @@ export type ExclusivePropsOf<C> = C extends { exclusive: infer E } ? ExclusiveGr
  * each `exclusive` group, at most one member non-null. Two independent ternaries over one group fail
  * to compile, which is the guarantee the single ternary had before the page moved to `root`.
  */
-export type RootPropsOf<C> = (C extends { slots?: infer S } ? { [K in keyof S]?: ReactNode } : object) &
+export type RootPropsOf<C> = (C extends { slots?: infer S }
+  ? // A DOCK prop is motu's to fill (with the island another region docks there), never the page's.
+    { [K in keyof S as S[K] extends { dock: string } ? never : K]?: ReactNode }
+  : object) &
   (C extends { hostSlots?: infer H } ? { [K in keyof H]?: H[K] extends (p: infer P) => unknown ? P : Record<string, unknown> } : object) &
   ExclusivePropsOf<C> &
   Record<string, unknown>;
@@ -143,6 +147,9 @@ export function createRegion<C extends AnyArchipelagoConfig>(
 
   // Fixed for the life of the binding, so this is one unconditional hook call, not a conditional one.
   const useHost: () => HostBridge | undefined = opts.useHost ?? (() => undefined);
+  // The islands this region DOCKS into other regions' arrangements — fixed with the config, so the
+  // placement hook in `Root` is one unconditional call.
+  const claims = dockClaimsOf(config as AnyArchipelagoConfig);
 
   function Region({ children }: { children?: ReactNode }): ReactElement {
     const host = useHost();
@@ -164,6 +171,8 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     // `C` is generic, so its optional members are not visible on the parameter's type; the CONFIG
     // interface is where they are declared, and this is the one place that has to read them.
     const declared = config as AnyArchipelagoConfig;
+    // Where each docked island renders right now — B's dock, A's fallback, or nowhere while B loads.
+    const placements = useDockPlacements(claims);
     // The page decides exclusivity ITSELF, by passing a node or null — `when`/`unless` is the lagoon's
     // way of following that decision, and is not consulted here.
     // A prop filled by ANOTHER REGION (`{ region: 'x' }`) is not wrapped: the page puts that region's
@@ -171,7 +180,7 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     // region would make the child's islands look like ours. It passes straight through, below.
     const slots = Object.fromEntries(
       Object.entries((declared.slots ?? {}) as Record<string, string | { slot: string } | { region: string }>)
-        .filter(([, e]) => regionRefOf(e) === undefined)
+        .filter(([, e]) => regionRefOf(e) === undefined && !(e && typeof e === 'object' && 'dock' in e))
         .map(([p, e]) => [p, slotNameOf(e as string | { slot: string })]),
     );
     const hostSlots = (declared.hostSlots ?? {}) as Record<string, unknown>;
@@ -222,7 +231,16 @@ export function createRegion<C extends AnyArchipelagoConfig>(
     // CHECK instead: `integrate check` compares the props on `<X.Root>` against the declared slots,
     // where a human can see the answer and decide. The LAGOON does the opposite and mounts every
     // declared slot, because there is no page there to have an opinion.
-    return createElement(declared.root as never, composed as never);
+    // DOCKS. A prop this region opens as a dock gets the dock element (another region's island lands
+    // in it); a prop this region docks ELSEWHERE keeps its island only at its fallback position, and
+    // the island is otherwise rendered as a portal into the other region's dock — from HERE, so it
+    // keeps this region's context.
+    fillDocks(declared, composed);
+    const portals = placeDocked(composed, claims, placements, config.id);
+    const rootEl = createElement(declared.root as never, composed as never);
+    // Same shape on every render once the region docks anything, so the root never remounts when a
+    // portal comes or goes.
+    return claims.length ? createElement(Fragment, null, rootEl, ...portals) : rootEl;
   }
 
   return {

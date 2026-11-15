@@ -156,3 +156,12 @@ The lagoon renders every declared slot unconditionally, so it cannot catch this 
 of them: the lagoon proves the island works, `integrate check` proves the page names it, and NOTHING
 proves the page reaches it. That gap is the honest boundary of static integration checking — closing it
 needs the page rendered, which is the host's own test runner, not motu's.
+
+A DOCKED island adds a third question — WHERE it rendered — and `dock-placement` (runtime, per region
+that docks or opens a claimed dock) answers it: in each composed dock state the island must be inside
+the dock element (`[data-motu-region-dock]`), exactly once, rendering something; in the region's own
+view it must be at its fallback (or nowhere, `fallback: 'none'`). "Rendered" is not the claim — an
+island stuck at its fallback beside an empty dock renders fine and passes every other check. The static
+`dock` check (motu check) and `integrate check`'s `dock` rows cover the declarations and the page: a
+page passing B's dock prop itself is an error; a hand-rolled `createPortal` in a page or root that
+composes a region is a warning that names the dock to declare instead.

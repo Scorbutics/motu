@@ -4,6 +4,7 @@ import { reportFlowCalls } from '../../lib/flow-calls.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readRegions } from '../../lib/eject.mjs';
+import { docksOfRegion } from '../../lib/docks.mjs';
 import { REPO_ROOT, TAG_PREFIX, paths } from '../../lib/util.mjs';
 import { undrivenWrites } from '../../lib/writes-coverage.mjs';
 import { probeWiring, runRegionFlows } from '../../playwright-lagoon.mjs';
@@ -107,11 +108,13 @@ export function renderCoverageCheck(report, id) {
   if (!slots.length) return;
 
   const asserted = new Set();
-  for (const scenario of readScenariosFor(id)) {
+  const flows = readScenariosFor(id);
+  for (const scenario of flows) {
     for (const st of scenario.steps ?? []) {
       for (const slot of Object.keys(st.expectRender ?? {})) asserted.add(slot);
     }
   }
+  flowDockCheck(report, id, flows);
   const uncovered = slots.filter((s) => !asserted.has(s));
   if (!uncovered.length) {
     report.ok('render-coverage', `every declared slot is asserted by a flow`, { n: slots.length, of: 'slot(s) asserted' });
@@ -123,6 +126,41 @@ export function renderCoverageCheck(report, id) {
       `"this slot renders its own island" from "it renders someone else's data". Add a step with ` +
       `\`expectRender: { '<slot>': '<text the island itself produces>' }\``,
   );
+}
+
+/**
+ * A flow's `dock` (the composed state it runs in) and an `expectRender`'s `in` (the dock a slot must
+ * render inside) must name what the declarations make. Static, so a typo is caught before a browser
+ * is booted to report "never landed" about a dock that never existed.
+ */
+function flowDockCheck(report, id, flows) {
+  const { states } = docksOfRegion(id, paths.archipelagosDir);
+  const composable = new Set(states.map((s) => `${s.host}.${s.dock}`));
+  for (const flow of flows) {
+    const name = flow.name ?? 'flow';
+    if (flow.dock != null && !composable.has(flow.dock)) {
+      report.error(
+        'dock',
+        `flow "${name}" runs in dock state "${flow.dock}", which ${id} does not declare — ` +
+          (composable.size ? `it can compose: ${[...composable].join(', ')}` : `${id} neither claims nor opens a claimed dock`),
+      );
+    }
+    for (const [i, st] of (flow.steps ?? []).entries()) {
+      for (const [slot, want] of Object.entries(st.expectRender ?? {})) {
+        const where = want && typeof want === 'object' ? want.in : undefined;
+        if (where == null) continue;
+        if (flow.dock == null) {
+          report.error(
+            'dock',
+            `flow "${name}" step ${i + 1} expects ${slot} in dock ${where}, and the flow is not composed — add \`dock: '${where}'\` ` +
+              `to the flow so it runs with that dock on screen`,
+          );
+        } else if (where !== flow.dock) {
+          report.error('dock', `flow "${name}" step ${i + 1} expects ${slot} in dock ${where}, and the flow composes ${flow.dock} — only that dock is on screen`);
+        }
+      }
+    }
+  }
 }
 
 /**

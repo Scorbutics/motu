@@ -1,6 +1,6 @@
 ---
 name: motu-evidence
-description: The motu rules for EVIDENCE and LOOKING, in full: island scenarios and region flows (seed, emit, click, provide, expect, expectRender, expectCalls), where evidence lives and how it is typed, the lagoon override map (layout, seed, channels, wire), worlds, state addresses (`motu lagoon states`), exploring with `motu lagoon try`, flows that can fail (flow-mutation, null-island, render coverage), undeclared calls, `motu diff`, the fresh-agent final look, visual baselines, the lens, publishing. Load before writing or changing any *.evidence.ts, lagoon override, world or flow, and before the final look.
+description: The motu rules for EVIDENCE and LOOKING, in full: island scenarios and region flows (seed, emit, click, provide, expect, expectRender, expectCalls), where evidence lives and how it is typed, the lagoon override map (layout, seed, channels, wire), worlds, state addresses (`motu lagoon states`) including composed DOCK states (`<region>.dock.<host>.<dock>`, a flow's `dock`, `expectRender`'s `in`), exploring with `motu lagoon try`, flows that can fail (flow-mutation, null-island, render coverage), undeclared calls, `motu diff`, the fresh-agent final look, visual baselines, the lens, publishing. Load before writing or changing any *.evidence.ts, lagoon override, world or flow, and before the final look.
 ---
 
 # motu-evidence — Evidence and looking
@@ -222,6 +222,30 @@ is not a data flow and is still worth making.
 Two smaller ones from the same run. Prefer an append-only LOOKUP over a ternary chain in a frame two
 people may extend. And if you use git worktrees, do not symlink `node_modules` into them: `git add -A`
 commits the symlink, the merge replaces the real directory with it, and the next build dies on ELOOP.
+
+## A docked island is looked at COMPOSED — that is a state with an address
+
+A region's own address shows it alone. For a region that docks an island into another region's
+arrangement (`dockInto`) — or that opens a dock somebody claims — the alone view IS the absent state:
+the island at its fallback, or the dock an empty, labelled place. The composition is a declared state
+of its own, derived from the two declarations and listed by `motu lagoon states`:
+
+    ?region=base&state=base.dock.equipage.equipage-aside       A, with B loaded in place
+    ?region=equipage&state=equipage.dock.equipage.equipage-aside   B, with A's island as a guest
+
+It composes with one flow or scenario per region, refuses when it names nothing, and reports
+`{ kind: 'dock', placed: '<slot>' }` in `window.__motuLagoonState` only once the island is INSIDE the
+dock. A FLOW that asserts placement declares the composition it runs in, and asserts with `in`:
+
+```ts
+{ name: 'the Conseil docks beside the rocket', dock: 'equipage.equipage-aside', seed: { … },
+  steps: [{ expectRender: { 'base-conseil': { text: 'Ton Conseil Énergie', in: 'equipage.equipage-aside' } } },
+          { provide: { conseilEntries: [] }, expectRender: { 'base-conseil': { text: 'Crée ton Conseil', in: 'equipage.equipage-aside' } } }] }
+```
+
+`in` without `dock` on the flow is a static error — the dock is not on screen in the mountpoints view
+the lane otherwise uses. End the flow on something the docked island renders from ITS region's keys:
+that is what fails when the island lands in the dock but answers the wrong store.
 
 ## A state no flow can reach is a WORLD, not a seed
 

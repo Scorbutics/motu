@@ -1,6 +1,6 @@
 ---
 name: motu-regions
-description: The motu rules for DECLARING a region, in full: island vs host, the page survey, declaring only decisions, region state and ownership (writes, bind, reads, one producer per key), useRegion/seed, foreign stores (StoreAdapter), catalogue regions, an island that IS the app's component and its providers, `planned: true`, several agents on one region, staged adoption (root, slots, exclusive), sources and ports and the adapter, unit tests for sources, removal-check, and what motu does not check. Load before creating or changing an archipelago, an island's place in a region, a source, or a page that composes a region.
+description: The motu rules for DECLARING a region, in full: island vs host, the page survey, declaring only decisions, region state and ownership (writes, bind, reads, one producer per key), useRegion/seed, foreign stores (StoreAdapter), catalogue regions, an island that IS the app's component and its providers, `planned: true`, several agents on one region, staged adoption (root, slots, exclusive), region refs and DOCKS (one region's island placed in another region's arrangement — never a hand-rolled portal), sources and ports and the adapter, unit tests for sources, removal-check, and what motu does not check. Load before creating or changing an archipelago, an island's place in a region, a source, or a page that composes a region.
 ---
 
 # motu-regions — Declaring a region
@@ -258,6 +258,38 @@ So: measure the gap in YOUR host before deciding it is small, and never read a g
 covering it. What guards that path is RLS alone, which makes the review surface the POLICY rather
 than a declaration. Routing the read through a backend operation is the fix where the read deserves
 one; where it does not, say plainly that the path is unpinned rather than describing it as narrow.
+
+## An island shown inside ANOTHER region's arrangement is a DOCK, never a portal
+
+When region A's island must render inside region B's layout — « Ma Base »'s Conseil column beside
+« Mon Équipage »'s rocket — the island is still A's: its keys, its intents, the page's callbacks on it.
+Only its DOM position is B's. Do NOT hand-roll it (`createPortal` into a `<div>` B's layout hands up by
+ref, a `useState<HTMLElement>` in the page, a "docked?" prop on A's layout): the lagoon then never shows
+the two together, `integrate check` sees the island in A only, and nothing checks the placement — a
+refactor that drops the ref leaves every check green and the column gone. DECLARE IT, ON BOTH SIDES:
+
+```ts
+// B (equipage) opens the place — a root prop motu fills, never the page:
+slots: { rocket: 'equipage-rocket', aside: { dock: 'equipage-aside' } }
+// A (base) puts its island there; A must place B (`{ region }`) somewhere on its path:
+slots: {
+  conseil: { slot: 'base-conseil', dockInto: { region: 'equipage', dock: 'equipage-aside' } },
+  businessTeamPanel: { region: 'equipage' },
+}
+```
+
+B's layout renders `{aside}` where the place is; A's layout renders `{conseil}` at its FALLBACK — where
+the island goes when B is not on screen (`fallback: 'none'` for nowhere). `<A.Root>` decides from what
+is MOUNTED: B absent → fallback; B's `<Region>` mounted but its root not yet → nowhere (no jump); B's
+dock rendered → a portal from A's tree into it, so the island keeps A's context. Mount B's `<Region>`
+with the prop that holds it and keep B's loading INSIDE it. Under SSR the docked island is absent from
+the server HTML and appears on hydration, already in place.
+
+Rules the `dock` check holds you to: one island per dock (open a second dock for a second island); A
+must compose B through `{ region }` slots; the claimed slot is one of A's islands and is placed nowhere
+else in A; both sides have a `root`. A dock nobody claims is a warning. `removal-check` needs no
+surgery: without motu the island renders at its fallback and B's dock prop is simply not passed.
+Reference: `docs/proposals/docks.md`.
 
 ## Adoption is staged, and stage 1 does not touch the page
 

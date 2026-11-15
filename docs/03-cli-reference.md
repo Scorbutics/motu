@@ -827,7 +827,7 @@ motu lagoon states [island|region] [--base <url>] [--json]
 | `--base` | Print absolute URLs against a running lagoon | paths only (`:714`, `:806`) |
 | `--json` | `{ screens, islands, regions }` | off |
 
-Four kinds of address, all against the **gallery** — the entry `serve` and `publish` build:
+Five kinds of address, all against the **gallery** — the entry `serve` and `publish` build:
 
 | Address | What opens |
 | --- | --- |
@@ -835,6 +835,7 @@ Four kinds of address, all against the **gallery** — the entry `serve` and `pu
 | `?target=island:<tag>&scenario=<name-or-slug>` | An island alone, in one of its scenarios |
 | `?region=<id>&flow=<name>` | A region, replaying one flow (`&step=<n>` stops earlier) |
 | `?region=<id>&state=<id>.scenario.<tag>.<slug>` | A **what-if**: an island's scenario played inside its region, the rest live — the dock's "anchored", and the URL its Share copies |
+| `?region=<id>&state=<id>.dock.<host>.<dock>` | A **composed dock state**: a region with a declared dock filled — the dock's region loaded in place (claimant's side) or the claimant's island as a guest (host's side). Derived from `dock`/`dockInto`, printed as `docked ·`; a flow declared in a dock state carries it in its URL |
 
 A what-if is listed only when the region can play it: a scenario that seeds a prop the region does not
 bind has no region key to forge, so the lagoon refuses it there, and it stays under the island's own

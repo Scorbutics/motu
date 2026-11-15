@@ -1304,6 +1304,10 @@ export async function lagoonStatesCommand(argv) {
     }),
   );
 
+  // COMPOSED DOCK STATES, derived from the archipelagos' own `slots` — never authored, so a dock
+  // declared on both sides is an address the moment it is declared.
+  const { allDockStates } = await import('../lib/docks.mjs');
+  const dockStates = allDockStates(paths.archipelagosDir);
   const regions = readRegions(paths.archipelagosDir)
     .filter(({ id }) => !only || id === only)
     .map(({ id, islands: members }) => {
@@ -1332,7 +1336,10 @@ export async function lagoonStatesCommand(argv) {
             // A flow in a WORLD carries it: the flow was written against that world's answers, and the
             // link must open them (the page would switch anyway; the address should say so).
             ...(f.world ? { world: f.world } : {}),
-            url: `${base}/?${q({ region: id, flow: address(name, i), ...(f.world ? { world: f.world } : {}) })}`,
+            // A flow in a DOCK STATE carries it too, for the same reason: it was written against that
+            // composition (the gallery would compose it anyway; the address should say so).
+            ...(f.dock ? { dock: f.dock } : {}),
+            url: `${base}/?${q({ region: id, flow: address(name, i), ...(f.world ? { world: f.world } : {}), ...(f.dock ? { state: `${id}.dock.${f.dock}` } : {}) })}`,
           };
         }),
         // WHAT-IFS, PLAYED IN THE REGION — what the dock calls dropping anchor at an island, and what
@@ -1363,9 +1370,19 @@ export async function lagoonStatesCommand(argv) {
               }];
             }),
           ),
+        // DOCKS, COMPOSED — this region with a dock filled: from the claimant's side the dock's region
+        // loaded in place, from the host's side the claimant's island mounted as a guest. The region's
+        // own address (above) is the dock's ABSENT state: the island at its fallback, or the dock empty.
+        docks: dockStates
+          .filter((d) => d.view === id)
+          .map((d) => ({
+            state: `${id}.dock.${d.host}.${d.dock}`,
+            island: `${d.claimant}.${d.slot}`,
+            url: `${base}/?${q({ region: id, state: `${id}.dock.${d.host}.${d.dock}` })}`,
+          })),
       };
     })
-    .filter((r) => r.states.length || r.page || r.whatIfs.length);
+    .filter((r) => r.states.length || r.page || r.whatIfs.length || r.docks.length);
 
   // SCREENS — a route, the app's layout, a region per slot. The bare address opens the first one, so
   // these are the addresses a person lands on before they pick anything.
@@ -1394,7 +1411,7 @@ export async function lagoonStatesCommand(argv) {
   }
   if (declared?.unread)
     console.log(color.yellow(`  ! ${declared.unread} screen(...) call(s) not read — write \`id\` and \`path\` as string literals`));
-  for (const { target, states, page, whatIfs } of [...islands, ...regions]) {
+  for (const { target, states, page, whatIfs, docks } of [...islands, ...regions]) {
     console.log(color.bold(target));
     if (page) {
       console.log(`  the application's own page${color.dim(' · what the page renders, not the region')}`);
@@ -1413,6 +1430,10 @@ export async function lagoonStatesCommand(argv) {
       }
       console.log(`    ${w.name}`);
       console.log(color.dim(`      ${w.url}`));
+    }
+    for (const d of docks ?? []) {
+      console.log(`  ${color.dim('docked ·')} ${d.state}${color.dim(` (${d.island} in the dock)`)}`);
+      console.log(color.dim(`    ${d.url}`));
     }
   }
   if (!base) console.log(color.dim('\n  paths are relative to a running lagoon — pass --base http://localhost:8817 for full URLs'));

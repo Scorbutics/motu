@@ -13,7 +13,7 @@
 // hands it in).
 import { configure, HttpTransport, type Transport } from '@motujs/runtime';
 import { MockTransport, type Fixture } from '@motujs/runtime/mock';
-import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago, pinRegionKeys } from '@motujs/core';
+import { setDefaultIsolation, applyMotuChrome, markSandbox, liveCalls, subscribeCalls, regionRefGraph, regionRefProblems, disposeArchipelago, defineArchipelago, pinRegionKeys, dockGraph, dockStates } from '@motujs/core';
 import { installMotuChrome } from '@motujs/chrome/css';
 import { PAGE_SHELL_CSS } from '@motujs/chrome/html';
 import { detectPrimarySettled, primaryVars } from '@motujs/chrome/primary';
@@ -22,11 +22,11 @@ import type { ReactNode } from 'react';
 import type { ArchipelagoConfig, Channel, HostBridge, IslandIsolation, MotuChromeTheme, MotuTheme } from '@motujs/core';
 import { defineLagoon, defineMotuApp, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
 import { lagoonHarness } from './lagoon-harness';
-import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef, chartRegion, exposeChart, regionChart } from './lagoon-player';
+import { activeStates, clearState, formatStateParam, parseStateParam, playState, registerLagoonRegion, regionsInView, resolveStateRef, statesFor, subscribeRegionRemount, subscribeStates, type StateRef, type DockStateRef, chartRegion, exposeChart, regionChart, resolveDockState, dockComposition, awaitDockPlacement } from './lagoon-player';
 import { resolveTransportMode, type TransportMode } from './transport-mode';
 import { mountFitToggle } from './fit-toggle';
 import type { TideFlow, TideLens, TideView } from './tideline';
-import { mountReactLagoon, regionAddress, type ReactLagoonOptions, type RegionRefOptions } from './lagoon-react-mount';
+import { mountReactLagoon, regionAddress, type DockGuest, type ReactLagoonOptions, type RegionRefOptions } from './lagoon-react-mount';
 import { mountScreen, unmountScreen } from './lagoon-screen';
 import { matchScreen, type ScreenConfig } from './screens';
 import { regionOverrides, type RegionOverrideMaps } from './lagoon-overrides';
@@ -399,7 +399,16 @@ markSandbox();
   // A REQUESTED FLOW CHOOSES THE STATION. `?flow=<name>` is an address for a state, and a state
   // belongs to exactly one region — making the visitor also know (and type) which region declares it
   // would be asking for the one thing the catalogue already knows.
-  publishStates(opts.evidence, stations.map((s) => ({ id: s.id, label: s.label })));
+  publishStates(
+    opts.evidence,
+    stations.map((s) => ({ id: s.id, label: s.label })),
+    dockStates(dockGraph(opts.archipelagos as never)).map((d) => ({
+      region: d.view,
+      state: `${d.view}.dock.${d.host}.${d.dock}`,
+      slot: d.slot,
+      claimant: d.claimant,
+    })),
+  );
   exposeChart(opts.evidence);
   const request = readStateRequest();
   let flowRegion: string | undefined;
@@ -445,12 +454,33 @@ markSandbox();
   // region (lagoon-player). Resolved BEFORE anything mounts: a state that names nothing refuses the
   // whole view, as every other lagoon address does, rather than showing the view without it.
   let requestedStates: StateRef[] = [];
+  // COMPOSED DOCK STATES — `<region>.dock.<host>.<dock>`. Not store states: they decide what the view
+  // MOUNTS (the dock's region loaded in place, or the claimant's island as a guest), so they are kept
+  // apart from `requestedStates`, applied by `mount`, and stay in the address while their region does.
+  let composedDocks: DockStateRef[] = [];
   {
     const raw = new URLSearchParams(location.search).getAll('state');
-    const parsed = raw.map(parseStateParam);
-    const bad = parsed
-      .map((r, i) => ('error' in r ? r.error : resolveStateRef(r, opts.evidence) ? `"${raw[i]}": ${resolveStateRef(r, opts.evidence)}` : null))
-      .filter((e): e is string => !!e);
+    const all = raw.map(parseStateParam);
+    composedDocks = all.filter((r): r is DockStateRef => !('error' in r) && r.kind === 'dock');
+    // A FLOW DECLARED IN A DOCK STATE (`dock: 'quay.quay-aside'`) opens in it: its steps assert where
+    // the docked island is, and replaying them over the uncomposed region shows a state nobody declared.
+    const flowDock = currentFlowName && flowRegion
+      ? (pickState(opts.evidence?.flows?.[flowRegion], currentFlowName) as { dock?: string } | null)?.dock
+      : undefined;
+    if (flowDock && flowRegion && flowDock.includes('.')) {
+      const [host, dock] = [flowDock.slice(0, flowDock.indexOf('.')), flowDock.slice(flowDock.indexOf('.') + 1)];
+      if (!composedDocks.some((d) => d.region === flowRegion && d.host === host && d.dock === dock)) {
+        composedDocks.push({ region: flowRegion, kind: 'dock', host, dock, name: flowDock });
+      }
+    }
+    const parsed = all.filter((r) => 'error' in r || r.kind !== 'dock');
+    const bad = [
+      ...parsed.map((r, i) => ('error' in r ? r.error : resolveStateRef(r, opts.evidence) ? `"${raw[i]}": ${resolveStateRef(r, opts.evidence)}` : null)),
+      ...composedDocks.map((r) => {
+        const why = resolveDockState(r, opts.archipelagos);
+        return why ? `"${formatStateParam(r)}": ${why}` : null;
+      }),
+    ].filter((e): e is string => !!e);
     const regions = parsed.filter((r): r is StateRef => !('error' in r)).map((r) => r.region);
     const twice = regions.filter((r, i) => regions.indexOf(r) !== i);
     if (twice.length) bad.push(`one state per region — ${[...new Set(twice)].join(', ')} named more than once`);
@@ -555,7 +585,9 @@ markSandbox();
   // its own station would — and a reference that cannot be honoured refuses rather than rendering
   // something else. The problems are the same `regionRefProblems` `motu archipelago verify` reports.
   const refProblems = regionRefProblems(regionRefGraph(opts.archipelagos));
-  const regionRefOptions = (): RegionRefOptions => ({
+  /** `load`: regions to load in place at once — the path a composed dock state needs. */
+  const regionRefOptions = (load: ReadonlySet<string> = new Set()): RegionRefOptions => ({
+    autoload: load.size ? (refId) => load.has(refId) : undefined,
     resolve: (refId) => {
       const config = opts.archipelagos[refId];
       if (!config) {
@@ -573,7 +605,7 @@ markSandbox();
         // The region view: it is loaded INTO an arrangement, and a grid of frames inside a page is not
         // what the page would show.
         view: 'region',
-        regionRefs: regionRefOptions(),
+        regionRefs: regionRefOptions(load),
       };
       return { ok: true, loaded: { config, opts: childOpts } };
     },
@@ -682,6 +714,23 @@ markSandbox();
       // props (an ownership flag, a role) cannot be demoed by a store write alone.
       const activeFlow = currentFlowName && flowRegion === id ? pickState(opts.evidence?.flows?.[id], currentFlowName) : null;
       const hostProps = typeof ov.hostProps === 'function' ? ov.hostProps({ ...ov.seed, ...activeFlow?.seed }) : ov.hostProps;
+      // A COMPOSED DOCK STATE for this region: load the dock's region on the way (claimant's view), or
+      // mount the claimant's island as a guest (host's view). Other regions' compositions are left.
+      composedDocks = composedDocks.filter((d) => d.region === id);
+      const load = new Set<string>();
+      const guests: DockGuest[] = [];
+      const waits: { ref: DockStateRef; slot: string; claimant: string }[] = [];
+      for (const ref of composedDocks) {
+        const comp = dockComposition(ref, opts.archipelagos);
+        if (!comp) continue;
+        comp.load.forEach((x) => load.add(x));
+        for (const g of comp.guests) {
+          const gov = regionOverrides(overrides, g.region);
+          const gHostProps = typeof gov.hostProps === 'function' ? gov.hostProps({ ...gov.seed }) : gov.hostProps;
+          guests.push({ config: opts.archipelagos[g.region]!, claim: g.claim, opts: { elements: opts.elements, host, ...gov, hostProps: gHostProps, view: 'region' } });
+        }
+        waits.push({ ref, slot: comp.slot, claimant: comp.claimant });
+      }
       // Same path the host application and `motu island verify` use, so the surface a human judges
       // here is the one that ships and the one that was verified.
       mountReactLagoon(root, opts.archipelagos[id]!, {
@@ -690,8 +739,11 @@ markSandbox();
         ...ov,
         hostProps,
         view,
-        regionRefs: regionRefOptions(),
+        regionRefs: regionRefOptions(load),
+        ...(guests.length ? { dockGuests: guests } : {}),
       });
+      // SAID ONLY ONCE THE ISLAND IS IN THE DOCK — placement, not "the view mounted".
+      if (waits.length) void reportDocks(waits);
       // A region offers `page` only when it declares one. Computed per region, on every mount, because
       // the answer changes with the station and a stale control is worse than no control.
       tide.setViews(ov.page ? ['region', 'mountpoints', 'page'] : ['region', 'mountpoints']);
@@ -1041,10 +1093,25 @@ markSandbox();
   }
   installRegionHover();
 
+  /** Every composed dock state on view, placed or refused — `window.__motuLagoonDocks`. */
+  async function reportDocks(waits: { ref: DockStateRef; slot: string; claimant: string }[]): Promise<void> {
+    const outcomes = [];
+    for (const w of waits) outcomes.push(await awaitDockPlacement(w.ref, w.slot, w.claimant));
+    (window as unknown as { __motuLagoonDocks?: unknown }).__motuLagoonDocks = outcomes;
+    const failed = outcomes.find((o) => !o.ok);
+    // Reported as THE state when it is the only one asked for, or when it failed — a composition that
+    // did not happen must not hide under a flow that did.
+    const others = requestedStates.length || (currentFlowName && flowRegion === current);
+    if (failed) reportState(failed);
+    else if (!others) reportState(outcomes[outcomes.length - 1]!);
+    writeStateAddress();
+  }
+
   /** The active states, as the address — after every change, and after a navigation keeps some. */
   function writeStateAddress(): void {
     const url = new URL(location.href);
     url.searchParams.delete('state');
+    for (const d of composedDocks) if (d.region === current) url.searchParams.append('state', formatStateParam(d));
     const inView = regionsInView();
     for (const a of activeStates()) {
       if (!inView.includes(a.ref.region)) continue;

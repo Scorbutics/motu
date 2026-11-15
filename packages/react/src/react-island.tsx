@@ -58,6 +58,10 @@ import {
   type IslandSpec
 } from '@motujs/core';
 import type { ElementSpec, ReactElementSpec } from './bootstrap';
+import { markRegionPresent } from './docks';
+
+// `useLayoutEffect` warns under SSR; presence is client-only.
+const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface ArchipelagoValue {
   config: AnyArchipelagoConfig;
@@ -266,6 +270,11 @@ export function ArchipelagoProvider({ config, elements, host, seed, channels, re
   useEffect(() => {
     value.flush();
   });
+
+  // THIS REGION IS ON SCREEN — what a dock claimed by another region reads to decide between "wait
+  // for the dock" and "render at the fallback" (see `docks.tsx`). A LAYOUT effect, so a region placed
+  // inside another one has registered before the outer root decides, in the same commit.
+  useClientLayoutEffect(() => markRegionPresent(config.id), [config.id]);
 
   // The region's lifetime — see `providerMounts`. A passive effect, so content Suspense merely HIDES
   // keeps its region; only a real unmount counts.

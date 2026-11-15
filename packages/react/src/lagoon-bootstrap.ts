@@ -13,8 +13,8 @@ import { disposeArchipelago, pinRegionKeys } from '@motujs/core';
 import type { ReactNode } from 'react';
 import type { HostBridge, MotuFit, ArchipelagoConfig, Channel, MotuChromeTheme } from '@motujs/core';
 import { defineLagoon, lagoonArchipelagoConfig, type ElementSpec, type LagoonTarget } from './bootstrap';
-import { mountReactLagoon } from './lagoon-react-mount';
-import { exposeChart } from './lagoon-player';
+import { mountReactLagoon, type DockGuest, type ReactLagoonOptions, type RegionRefOptions } from './lagoon-react-mount';
+import { awaitDockPlacement, dockComposition, exposeChart, parseStateParam, resolveDockState, type DockStateRef } from './lagoon-player';
 import { regionOverrides } from './lagoon-overrides';
 import type { LagoonOverrides } from './lagoon-gallery';
 import {
@@ -126,7 +126,7 @@ function resolveTarget(opts: LagoonBootstrapOptions): LagoonTarget {
 function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
   const w = window as unknown as { __motuLagoonHarness?: unknown };
   /** What is mounted now, so a world change re-renders the same target. */
-  let last: { target: string; options?: { fit?: string; forceError?: number; scenario?: string } } = { target: opts.target ?? '' };
+  let last: { target: string; options?: { fit?: string; forceError?: number; scenario?: string; view?: 'region' | 'mountpoints'; state?: string[] } } = { target: opts.target ?? '' };
   const harness = {
     /**
      * Switch the lagoon's world and re-render what is mounted, its channels rebuilt with the world's
@@ -138,7 +138,7 @@ function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
     world() {
       return currentWorld();
     },
-    mount(target: string, options?: { fit?: string; forceError?: number; scenario?: string }) {
+    mount(target: string, options?: { fit?: string; forceError?: number; scenario?: string; view?: 'region' | 'mountpoints'; state?: string[] }) {
       last = { target, options };
       // The transport is part of what is being asked for: 'the same island, but the backend fails'.
       configure(
@@ -152,8 +152,12 @@ function installHarness(opts: LagoonBootstrapOptions, host: HostBridge): void {
         ...opts,
         target,
         fit: options?.fit ?? opts.fit,
+        // A re-aim may ask for a VIEW: a composed dock state is the region view, and the flow lane's
+        // page is in mountpoints. Absent, the page keeps the one it booted with.
+        view: options?.view ?? opts.view,
         host,
         state: options?.scenario ? { scenario: options.scenario, flow: null, step: null, region: null } : undefined,
+        docks: options?.state ?? [],
       });
       return true;
     },
@@ -407,7 +411,10 @@ markSandbox();
   exposeChart(opts.evidence);
 
   const request = readStateRequest();
-  const el = render({ ...opts, host, state: request });
+  // COMPOSED DOCK STATES (`?state=<region>.dock.<host>.<dock>`), honoured here as on the gallery: an
+  // address only one entry honours is one a person pastes and watches render something else.
+  const docks = (urlParams?.getAll('state') ?? []).filter((raw) => raw.split('.')[1] === 'dock');
+  const el = render({ ...opts, host, state: request, docks });
 
   // A FLOW IS NOT A SEED. Its steps fire islands' declared outputs, so they need islands mounted
   // first — this cannot ride along with the initial render the way a scenario's seed does. Nothing
@@ -470,10 +477,32 @@ async function applyFlow(request: StateRequest, opts: LagoonBootstrapOptions): P
  * that name means nothing — and the refusal below would then stop a check that never asked for a
  * state at all.
  */
-function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: StateRequest }): HTMLElement {
+function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: StateRequest; docks?: string[] }): HTMLElement {
   const host = opts.host;
   const target = resolveTarget(opts);
   const mountEl = document.getElementById(opts.mountId ?? 'lagoon');
+
+  // A DOCK STATE THAT NAMES NOTHING REFUSES, before anything mounts — same rule as every address.
+  const dockRefs: DockStateRef[] = [];
+  for (const raw of opts.docks ?? []) {
+    const ref = parseStateParam(raw);
+    const why =
+      'error' in ref
+        ? ref.error
+        : ref.kind !== 'dock'
+          ? `"${raw}" is not a dock state`
+          : target.kind !== 'archipelago' || ref.region !== target.config.id
+            ? `"${raw}" composes region "${ref.region}", and this page shows ${target.kind === 'archipelago' ? `"${target.config.id}"` : 'one island'}`
+            : opts.view === 'mountpoints'
+              ? `"${raw}" composes the REGION view — the mountpoints view frames each slot apart, so there is no dock to land in`
+              : resolveDockState(ref, configsOf(opts));
+    if (why) {
+      reportState({ ok: false, target: target.kind === 'archipelago' ? `archipelago:${target.config.id}` : `island:${target.tag}`, kind: 'dock', error: why });
+      mountEl?.replaceChildren();
+      return mountEl ?? document.body;
+    }
+    dockRefs.push(ref as DockStateRef);
+  }
 
   // AN UNRESOLVABLE STATE MUST NOT RENDER SOMETHING ELSE. Asking for a scenario that does not exist
   // and getting the default state back is the failure worth engineering against: it is silent, it
@@ -584,7 +613,9 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
       // closed drawer is simply absent — and a check for "does this declared wire carry something"
       // must not depend on that.
       view: opts.view,
+      ...(dockRefs.length ? composeDocks(dockRefs, opts, host) : {}),
     });
+    if (dockRefs.length) void reportDocks(dockRefs, opts);
     return mountEl ?? document.body;
   }
 
@@ -645,3 +676,55 @@ function render(opts: LagoonBootstrapOptions & { host: HostBridge; state?: State
   return el;
 }
 
+
+// --- composed dock states ------------------------------------------------------------------------
+
+/** Every archipelago this entry knows, by id. */
+function configsOf(opts: LagoonBootstrapOptions): Record<string, ArchipelagoConfig> {
+  const out: Record<string, ArchipelagoConfig> = {};
+  for (const id of Object.keys(opts.archipelagos ?? {})) {
+    const config = opts.resolveArchipelago(id);
+    if (config) out[id] = config;
+  }
+  return out;
+}
+
+/** A region loaded in place or mounted as a guest, with ITS OWN lagoon overrides — as its station would. */
+function lagoonOptsFor(id: string, opts: LagoonBootstrapOptions, host: HostBridge, regionRefs?: RegionRefOptions): ReactLagoonOptions {
+  const ov = regionOverrides(opts.overrides, id);
+  const hostProps = typeof ov.hostProps === 'function' ? ov.hostProps({ ...ov.seed }) : ov.hostProps;
+  return { elements: opts.elements, host, ...ov, hostProps, view: 'region', ...(regionRefs ? { regionRefs } : {}) };
+}
+
+/** The mount options a set of dock states needs: regions loaded on the way, guests to mount. */
+function composeDocks(refs: DockStateRef[], opts: LagoonBootstrapOptions, host: HostBridge): Pick<ReactLagoonOptions, 'regionRefs' | 'dockGuests'> {
+  const configs = configsOf(opts);
+  const load = new Set<string>();
+  const guests: DockGuest[] = [];
+  for (const ref of refs) {
+    const comp = dockComposition(ref, configs);
+    if (!comp) continue;
+    comp.load.forEach((x) => load.add(x));
+    for (const g of comp.guests) guests.push({ config: configs[g.region]!, claim: g.claim, opts: lagoonOptsFor(g.region, opts, host) });
+  }
+  const regionRefs: RegionRefOptions = {
+    resolve: (id) => {
+      const config = configs[id];
+      return config ? { ok: true, loaded: { config, opts: lagoonOptsFor(id, opts, host, regionRefs) } } : { ok: false, error: `no region "${id}" in this lagoon` };
+    },
+    autoload: (id) => load.has(id),
+  };
+  return { regionRefs, ...(guests.length ? { dockGuests: guests } : {}) };
+}
+
+/** Report each dock state once its island is INSIDE the dock — or the refusal, when it never lands. */
+async function reportDocks(refs: DockStateRef[], opts: LagoonBootstrapOptions): Promise<void> {
+  const configs = configsOf(opts);
+  const outcomes: StateOutcome[] = [];
+  for (const ref of refs) {
+    const comp = dockComposition(ref, configs);
+    if (comp) outcomes.push(await awaitDockPlacement(ref, comp.slot, comp.claimant));
+  }
+  (window as unknown as { __motuLagoonDocks?: unknown }).__motuLagoonDocks = outcomes;
+  reportState(outcomes.find((o) => !o.ok) ?? outcomes[outcomes.length - 1]!);
+}

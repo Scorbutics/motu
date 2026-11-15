@@ -18,7 +18,7 @@
 // reach. An island scenario played INSIDE a region sets that island's inputs directly — and where one
 // of those keys is PRODUCED by another island, it forges a value the app may never pair with the rest
 // of the screen. Both are playable; the outcome says which it is, and names the forged keys.
-import { archipelagoConfigs, bindEntries, getArchipelagoStore, getMountedIslands, writtenKeys, type HostBridge, type Store } from '@motujs/core';
+import { archipelagoConfigs, bindEntries, composePath, dockGraph, dockStates, type DockClaim, getArchipelagoStore, getMountedIslands, writtenKeys, type HostBridge, type Store } from '@motujs/core';
 import type { ArchipelagoConfig } from '@motujs/core';
 import type { RegionScenario, Scenario } from '@motujs/runtime/mock';
 import { lagoonHarness, type LagoonHarness } from './lagoon-harness';
@@ -28,7 +28,25 @@ import { pickState, replayFlow, replayInteractionsIn, slug, stateNames, type Lag
 /** A declared state, addressed by the region it is played on. */
 export type StateRef =
   | { region: string; kind: 'flow'; name: string; step?: number | null }
-  | { region: string; kind: 'scenario'; island: string; name: string; step?: number | null };
+  | { region: string; kind: 'scenario'; island: string; name: string; step?: number | null }
+  | DockStateRef;
+
+/**
+ * A COMPOSED state: `region` viewed with `host`'s dock `dock` filled — `base.dock.equipage.equipage-aside`.
+ *
+ * Not a store state. It changes what is MOUNTED (the dock's region loaded into the claimant's view, or
+ * the claimant's island mounted as a guest in the host's), so it is applied when the view mounts and
+ * composes with one flow or scenario state per region. See docs/proposals/docks.md.
+ */
+export interface DockStateRef {
+  region: string;
+  kind: 'dock';
+  host: string;
+  dock: string;
+  /** Unused; present so every ref carries the same optional field. */
+  step?: null;
+  name?: string;
+}
 
 /** What playing a state did — the outcome every entry already reports, plus what kind of claim it is. */
 export interface PlayOutcome extends StateOutcome {
@@ -195,6 +213,14 @@ export async function playState(
   /** `fresh`: the caller has just mounted the region from its seed, so there is nothing to reset. */
   opts: { fresh?: boolean } = {},
 ): Promise<PlayOutcome> {
+  // A COMPOSITION is not played on a store: it decides what is mounted, so the entry applies it when it
+  // mounts the view (see `dockComposition`). Asked for here, it is refused rather than half-applied.
+  if (ref.kind === 'dock') {
+    return {
+      ok: false, target: `archipelago:${ref.region}`, kind: 'dock', name: `${ref.host}.${ref.dock}`,
+      error: 'a dock state composes the view — open it as an address (?region=…&state=…) rather than playing it on a mounted region',
+    };
+  }
   const target = ref.kind === 'flow' ? `archipelago:${ref.region}` : `island:${ref.island}`;
   // A FLOW RUNS IN ITS OWN WORLD. Switching rebuilds what is on screen (the entries listen), so the
   // region is mounted fresh with that world's answers — wait for the NEW store, then play from it.
@@ -565,6 +591,7 @@ export function exposeChart(evidence: LagoonEvidence | undefined): void {
 // reads in a chat message. A region id, a tag and a slug never contain a dot.
 
 export function formatStateParam(ref: StateRef): string {
+  if (ref.kind === 'dock') return `${ref.region}.dock.${ref.host}.${ref.dock}`;
   const step = ref.step != null ? `@${ref.step}` : '';
   return ref.kind === 'flow'
     ? `${ref.region}.flow.${slug(ref.name)}${step}`
@@ -579,15 +606,92 @@ export function parseStateParam(raw: string): StateRef | { error: string } {
   const parts = body.split('.');
   if (parts[1] === 'flow' && parts.length === 3) return { region: parts[0]!, kind: 'flow', name: parts[2]!, step };
   if (parts[1] === 'scenario' && parts.length === 4) return { region: parts[0]!, kind: 'scenario', island: parts[2]!, name: parts[3]!, step };
-  return { error: `"${raw}" is not a state address — <region>.flow.<name>[@step] or <region>.scenario.<island>.<name>[@step]` };
+  if (parts[1] === 'dock' && parts.length === 4) {
+    if (step !== null) return { error: `"${raw}": a dock state is a composition, it has no steps` };
+    return { region: parts[0]!, kind: 'dock', host: parts[2]!, dock: parts[3]!, name: `${parts[2]}.${parts[3]}` };
+  }
+  return {
+    error:
+      `"${raw}" is not a state address — <region>.flow.<name>[@step], <region>.scenario.<island>.<name>[@step] ` +
+      `or <region>.dock.<dock region>.<dock>`,
+  };
 }
 
 /** Is this ref a declared state at all? Checked BEFORE anything mounts, so a bad address refuses. */
 export function resolveStateRef(ref: StateRef, evidence: LagoonEvidence | undefined): string | null {
+  if (ref.kind === 'dock') return resolveDockState(ref);
   if (ref.kind === 'flow') {
     return pickState(evidence?.flows?.[ref.region], ref.name) ? null : `no flow "${ref.name}" in ${ref.region}`;
   }
   const config = configOf(ref.region);
   if (config && !config.islands.some((i) => i.element === ref.island)) return `${ref.island} is not an island of ${ref.region}`;
   return pickState(evidence?.scenarios?.[ref.island], ref.name) ? null : `no scenario "${ref.name}" in ${ref.island}'s evidence`;
+}
+
+/**
+ * Is this a dock composition the declarations make? Null when it is; the refusal otherwise.
+ *
+ * Only DECLARED compositions are states: the claimant's view of a dock it claims, and the host's view
+ * of a dock somebody claims. Anything else — a dock nobody opened, a claim the graph refuses — is an
+ * address that names nothing, and it refuses like every other one.
+ */
+export function resolveDockState(ref: DockStateRef, configs: Record<string, ArchipelagoConfig> = configsById()): string | null {
+  const declared = dockStates(dockGraph(configs as never));
+  const hit = declared.find((d) => d.view === ref.region && d.host === ref.host && d.dock === ref.dock);
+  if (hit) return null;
+  const mine = declared.filter((d) => d.view === ref.region).map((d) => `${d.view}.dock.${d.host}.${d.dock}`);
+  return (
+    `${ref.region} declares no composed dock state "${ref.host}.${ref.dock}"` +
+    (mine.length ? ` — it has: ${mine.join(', ')}` : ' — it neither claims nor opens a claimed dock')
+  );
+}
+
+/** Every registered archipelago, by id. */
+function configsById(): Record<string, ArchipelagoConfig> {
+  return Object.fromEntries((archipelagoConfigs() as ArchipelagoConfig[]).map((c) => [c.id, c]));
+}
+
+/**
+ * What mounting a dock state means for the region being viewed: the regions to load in place (the
+ * claimant's view) or the guests to mount (the host's view). Null when the ref names nothing.
+ */
+export function dockComposition(
+  ref: DockStateRef,
+  configs: Record<string, ArchipelagoConfig> = configsById(),
+): { load: string[]; guests: { region: string; claim: DockClaim }[]; slot: string; claimant: string } | null {
+  const graph = dockGraph(configs as never);
+  const hit = dockStates(graph).find((d) => d.view === ref.region && d.host === ref.host && d.dock === ref.dock);
+  if (!hit) return null;
+  if (ref.region === hit.claimant) {
+    return { load: composePath(graph, hit.claimant, hit.host) ?? [], guests: [], slot: hit.slot, claimant: hit.claimant };
+  }
+  const claim = graph[hit.claimant]!.claims.find((c) => c.region === hit.host && c.dock === hit.dock)!;
+  return { load: [], guests: [{ region: hit.claimant, claim }], slot: hit.slot, claimant: hit.claimant };
+}
+
+/**
+ * Wait until a dock state's island is INSIDE the dock, and say so — placement, not "rendered
+ * somewhere". The outcome every entry reports for `kind: 'dock'`.
+ */
+export async function awaitDockPlacement(ref: DockStateRef, slot: string, claimant: string, budgetMs = 8000): Promise<PlayOutcome & { placed?: string }> {
+  const name = `${ref.host}.${ref.dock}`;
+  const target = `archipelago:${ref.region}`;
+  const until = Date.now() + budgetMs;
+  for (;;) {
+    const dock = document.querySelector(`[data-motu-region-dock="${CSS.escape(`${ref.host}.${ref.dock}`)}"]`);
+    const island = dock?.querySelector(`[data-motu-slot="${CSS.escape(slot)}"][data-motu-region="${CSS.escape(claimant)}"]`);
+    if (island) return { ok: true, target, kind: 'dock', name, placed: slot };
+    if (Date.now() >= until) {
+      return {
+        ok: false,
+        target,
+        kind: 'dock',
+        name,
+        error: dock
+          ? `${claimant}'s ${slot} never landed in dock ${name} — the dock rendered and stayed empty`
+          : `dock ${name} never rendered — ${ref.host} is not mounted in this view, or its root does not place the dock's prop`,
+      };
+    }
+    await new Promise((r) => setTimeout(r, 60));
+  }
 }

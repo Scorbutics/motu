@@ -253,6 +253,31 @@ what is wrong, a console error, no load button, and nothing rendered in its plac
 (`lagoon.html`) has no resolver, so its placeholder names the region and says it cannot be loaded in
 that view.
 
+### A docked island, composed
+
+A region that docks an island into another's arrangement (`dockInto`, [05](05-archipelagos-and-regions.md#docks--an-island-placed-in-another-regions-arrangement))
+is previewed ALONE at its own address like any region — and alone is the dock's ABSENT state: the
+claimant shows the other region's placeholder with the island at its fallback; the dock's region shows
+an empty place labelled with the dock's name and a link to the composed state
+(`data-motu-region-dock-placeholder`, lagoon chrome, never a slot).
+
+The composition is a STATE, derived from the two declarations — never authored:
+
+```
+?region=base&state=base.dock.equipage.equipage-aside            the claimant: every { region } slot on the path loaded in place
+?region=equipage&state=equipage.dock.equipage.equipage-aside    the host: the claimant's island mounted as a GUEST
+```
+
+A guest is mounted from its own region's config, seed and channels in its own provider, rendering only
+the docked island — so it is still its region's island, drawn here. A composition is not a store
+state: it composes with one flow or scenario per region (`&state=base.dock.…&state=equipage.flow.…`),
+and a flow declaring `dock` opens in it. `window.__motuLagoonState` reports `{ ok: true, kind: 'dock',
+name: 'equipage.equipage-aside', placed: 'base-conseil' }` only once the island is INSIDE the dock, and
+refuses (banner, nothing mounted) an address naming a composition the declarations do not make.
+`window.__motuLagoonDocks` holds every composed outcome; `window.__motuLagoonStates.docks` lists them.
+Both entries honour it — the gallery, and `lagoon.html` the checks drive (`__motuLagoonHarness.mount(t,
+{ view: 'region', state: [...] })`).
+
 Two views, toggled from the tide line and persisted in `localStorage`
 (`packages/react/src/tideline.ts:44`, `:927-938`; `packages/react/src/lagoon-gallery.ts:138`, `:327`):
 
@@ -451,6 +476,7 @@ the view to one island.
 | `/?screen=<id>[&path=<p>]` | a SCREEN — the app's layout with each slot's region in place (experimental) |
 | `&state=<region>.flow.<slug>[@n]` | on a screen or a region view: that region put into that flow (repeatable, one per region) |
 | `&state=<region>.scenario.<tag>.<slug>[@n]` | that island's scenario played INSIDE its region — a what-if (below) |
+| `&state=<region>.dock.<dock region>.<dock>` | a DOCK composed: the claimant with the dock's region loaded, or the dock's region with the claimant's island as a guest ([above](#a-docked-island-composed)) |
 | `&world=<id>` | any of the above in that WORLD — the lagoon's answers re-named ([Worlds](#worlds--named-answers-for-the-states-no-flow-can-reach)). A flow address opens in the flow's own world without it |
 
 Read at `packages/react/src/lagoon-states.ts:111-123` (`scenario`, `flow`, `step`, `region`) and

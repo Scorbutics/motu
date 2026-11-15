@@ -78,6 +78,7 @@ The discriminator is **what the region does**, not where it sits in the DOM:
 | **Island** | It OWNS region state, *even if other islands sit inside it* (a navigator that holds the selected week). DOM nesting says nothing about ownership; `slots` declares which island fills which of its props. |
 | **Host** | It only ARRANGES — a grid, a column, a card shell, a `<section>` wrapper. |
 | **Host** | An overlay/portal anchored to a DOM id anywhere on the page. |
+| **Island, docked** | It SHOWS this region's data and is drawn INSIDE another region's arrangement (a column the design places beside a child region's centrepiece). Still this region's island — record it as a DOCK (`dockInto: { region, dock }` here, `{ dock }` there), never as a portal or a ref handed up. Its fallback position when that region is absent is part of the survey. |
 | **Host** | The composition root itself: the fetching, the seeding, the routing. |
 
 A region you cannot state a *scenario* for — "with data / empty / error" — is usually arrangement.
@@ -135,6 +136,11 @@ Two distinct questions, and the report must answer both:
   middle of the one real coupling on the page and leaves a key written for a reader outside the
   region. If two candidates share a key, they are in the same archipelago even if they sit at opposite
   ends of the screen.
+
+If the page places ANOTHER region (`{ region: '<id>' }`) and the design draws one of this page's
+islands inside that region's layout, write the dock into the report on BOTH sides — the place the
+other region opens, and this region's claim on it with its fallback — and say what renders while the
+other region is absent or still loading. A `createPortal` + `ref` pair in the existing page is the tell.
 
 If the page already has an archipelago, this step becomes: which candidates JOIN it, does any of them
 change who owns an existing key, and does any of them belong in another island's `slots`?

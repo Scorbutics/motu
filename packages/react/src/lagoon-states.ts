@@ -48,6 +48,11 @@ export interface LagoonEvidence {
   scenarios?: Record<string, Scenario[]>;
   /** Region flows by archipelago id, from `<id>.evidence.ts` beside the archipelago. */
   flows?: Record<string, RegionScenario[]>;
+  /**
+   * Composed dock states, as addresses (`?region=base&state=base.dock.equipage.equipage-aside`) —
+   * derived from the archipelagos' own `slots`, never authored.
+   */
+  docks?: { region: string; state: string; slot: string; claimant: string }[];
 }
 
 /** What the URL asked for. All three absent is the ordinary case — the lagoon's own seeded view. */
@@ -70,7 +75,9 @@ export interface StateRequest {
 export interface StateOutcome {
   ok: boolean;
   target: string;
-  kind: 'scenario' | 'flow' | 'none';
+  kind: 'scenario' | 'flow' | 'dock' | 'none';
+  /** For a dock state: the docked island's slot, once it is INSIDE the dock. */
+  placed?: string;
   /** The state's declared name, as resolved (not as typed). */
   name?: string;
   /** For a flow: how many steps were applied. */
@@ -256,12 +263,17 @@ export function reportState(outcome: StateOutcome): void {
 }
 
 /** Publish the catalogue, so a page can be asked what it can be opened in without loading a file. */
-export function publishStates(evidence: LagoonEvidence | undefined, archipelagos: LagoonRegionEntry[] = []): void {
+export function publishStates(
+  evidence: LagoonEvidence | undefined,
+  archipelagos: LagoonRegionEntry[] = [],
+  docks: NonNullable<LagoonEvidence['docks']> = [],
+): void {
   if (typeof window === 'undefined') return;
   window.__motuLagoonStates = {
     scenarios: evidence?.scenarios ?? {},
     flows: evidence?.flows ?? {},
     archipelagos,
+    docks,
   };
 }
 

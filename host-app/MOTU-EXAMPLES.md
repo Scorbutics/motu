@@ -60,3 +60,25 @@ When somebody next has a reason to edit `corpus-screen.tsx`: extract the `<main>
 
 Two things to check by hand, because no check sees them — see the hazards section in
 [`docs/06-composition-and-adoption.md`](../docs/06-composition-and-adoption.md).
+
+## A docked island — `harbour` and `quay` (`/examples/dock`)
+
+One region's island drawn inside ANOTHER region's arrangement, declared on both sides instead of
+portalled by hand. Reference: [`docs/05` — Docks](../docs/05-archipelagos-and-regions.md#docks--an-island-placed-in-another-regions-arrangement).
+
+```
+motu/src/archipelagos/harbour/harbour.archipelago.ts   readout: { slot, dockInto: { region: 'quay', dock: 'quay-aside' } } + quay: { region: 'quay' }
+motu/src/archipelagos/quay/quay.archipelago.ts         aside: { dock: 'quay-aside' } — the place, filled by motu
+app/examples/dock/harbour-layout.tsx                   `readout` at its FALLBACK (the bay); no portal, no ref
+app/examples/dock/quay-layout.tsx                      `{aside}` beside the list
+app/examples/dock/dock-screen.tsx                      the page: no useState for a DOM node, nothing threaded
+motu/src/archipelagos/*/{harbour,quay}.evidence.ts     flows declared `dock: 'quay.quay-aside'`, asserting `in`
+```
+
+| address | shows |
+|---|---|
+| `/examples/dock` | the readout docked beside the repositories |
+| `/examples/dock?quay=off` | no quay: the readout falls back into the bay |
+| lagoon `?region=harbour` | the quay-absent state (placeholder; readout in the bay) |
+| lagoon `?region=harbour&state=harbour.dock.quay.quay-aside` | the quay loaded in place, the readout in its dock |
+| lagoon `?region=quay&state=quay.dock.quay.quay-aside` | the quay, with the harbour's readout mounted as a guest |

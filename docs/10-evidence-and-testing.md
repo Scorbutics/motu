@@ -320,6 +320,34 @@ an assertion that breaks when a caption is restyled is asserting the wrong thing
 focused lagoon started applying the project's stylesheet, when every flow asserting `"changed"` failed
 against `"CHANGED"` (`packages/cli/src/playwright-lagoon.mjs:708-712`). `notText` is the negative form.
 
+### `in` and a flow's `dock`: where a docked island renders
+
+A region that docks an island into another region's arrangement ([05 — Docks](05-archipelagos-and-regions.md#docks--an-island-placed-in-another-regions-arrangement))
+asserts PLACEMENT with `in: '<dock region>.<dock>'` — the slot's island must be inside that dock
+element, read from the DOM. The dock is only on screen in the composed state, so the flow declares the
+composition it runs in:
+
+```ts
+{
+  name: 'the readout docks beside the quay and keeps the harbour data',
+  dock: 'quay.quay-aside',                       // the flow runs in ?state=harbour.dock.quay.quay-aside
+  seed: { stats: STATS, viewer: VIEWER },
+  steps: [
+    { expectRender: { 'harbour-readout': { text: 'OBJECTS 346', in: 'quay.quay-aside' } } },
+    { provide: { stats: { blobs: 12, bytes: 4096, maxRecords: 1000 } },
+      expectRender: { 'harbour-readout': { text: 'OBJECTS 12', in: 'quay.quay-aside' } } },
+  ],
+}
+```
+— `host-app/motu/src/archipelagos/harbour/harbour.evidence.ts`
+
+The lane re-aims its page to the region view with that dock composed for the flow, and back afterwards
+(`packages/cli/src/playwright-lagoon.mjs`, `composeFor`). A mismatch reads `expected: rendered inside
+dock quay.quay-aside`, `actual: rendered outside every dock`. Statically, a `dock` the region does not
+declare, or an `in` on a flow without `dock`, is a `dock` error before any browser boots. The second
+step above is what makes the flow able to fail on the right thing: an island that docks but answers the
+wrong region's store renders the first number and never the second.
+
 ### A flow step must be able to fail
 
 This is the load-bearing rule of the whole page. Every green flow in the project has, at some point,

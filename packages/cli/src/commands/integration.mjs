@@ -18,7 +18,9 @@ import { blankComments, color, paths, HOST_ROOT, APP_ROOT, resolveAppImport } fr
 import { readRegions } from '../lib/eject.mjs';
 import { SyntaxKind } from 'ts-morph';
 import { declaredSourcesOf } from '../lib/declared-sources.mjs';
-import { rootSlots, regionRefsDeclared } from '../lib/lagoon-declares.mjs';
+import { rootSlots, regionRefsDeclared, docksDeclared } from '../lib/lagoon-declares.mjs';
+import { dockGraphOnDisk } from '../lib/docks.mjs';
+import { composePath } from '@motujs/core';
 import { slotNameOfElement } from '../lib/island-placement.mjs';
 import { sourceFileAt } from '../lib/ts-project.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
@@ -243,6 +245,84 @@ export function regionRefPlacement(region, rootNames, rootTags, sources, add) {
       `${prop} is passed, but nothing in it renders <${childNames[0]}> — region "${childId}" is declared to fill ` +
         `this slot, and the page may be putting something else there. Place <${childBinding}.Region> in it ` +
         `(directly, or in a component whose own file renders it)`,
+    );
+  }
+}
+
+/**
+ * DOCKS, against the page.
+ *
+ *  - A dock this region OPENS is motu's to fill: a page passing that prop on `<B.Root>` is putting
+ *    something in a place another region's island is declared to occupy — an ERROR.
+ *  - A dock this region CLAIMS needs the dock's region on the same screen: the page must place it in
+ *    the `{ region }` prop the composition goes through (the first hop of the path). `region-ref`
+ *    already says whether that prop holds the region; this names the dock that depends on it.
+ *  - A hand-rolled `createPortal` in a page that composes this region is the shape docks replace — a
+ *    WARNING, because a portal for a dialog is ordinary and only a human can tell the two apart.
+ */
+export function dockPlacement(region, rootNames, rootTags, sources, add) {
+  const node = docksDeclared(region.file);
+  if (node === null) {
+    add('warn', 'dock', `${paths.rel(region.file)} could not be parsed, so its docks were not checked against the page`);
+    return;
+  }
+  for (const [prop, dock] of Object.entries(node.docks)) {
+    const passed = rootTags.filter(({ tag }) => new RegExp(`(^|\\s)${prop}\\s*=`).test(tag));
+    if (passed.length) {
+      add(
+        'error',
+        'dock',
+        `<${rootNames[0]}> passes ${prop}, which "${region.id}" opens as dock "${dock}" — motu fills a dock with the island ` +
+          `another region docks there, and ignores what the page passes. Remove ${prop}={…} from ${passed.map((p) => paths.rel(p.file)).join(', ')}`,
+      );
+    } else {
+      add('ok', 'dock', `${prop} is dock "${dock}" — filled by motu, not passed by the page`);
+    }
+  }
+  if (node.claims.length) {
+    const { graph } = dockGraphOnDisk(paths.archipelagosDir);
+    for (const claim of node.claims) {
+      const path = composePath(graph, region.id, claim.region);
+      if (!path) continue; // `motu check`'s `dock` reports the missing composition; nothing to place here
+      const hop = Object.entries(node.refs).find(([, id]) => id === path[0])?.[0];
+      const passed = hop && rootTags.some(({ tag }) => new RegExp(`(^|\\s)${hop}\\s*=`).test(tag));
+      if (passed) {
+        add(
+          'ok',
+          'dock',
+          `${claim.prop} (${claim.slot}) docks into ${claim.region}.${claim.dock}; ${claim.region} is reached through ${hop}` +
+            (path.length > 1 ? ` (via ${path.slice(0, -1).join(' → ')})` : '') +
+            (claim.fallback === 'none' ? '' : ` — where ${hop} holds no ${path[0]}, it renders in ${claim.prop}'s own place`),
+        );
+      } else if (hop) {
+        add(
+          'warn',
+          'dock',
+          `${claim.prop} (${claim.slot}) docks into ${claim.region}.${claim.dock}, and <${rootNames[0]}> never passes ${hop} — ` +
+            `${claim.region} is never on this page, so the island only ever renders at its fallback`,
+        );
+      }
+    }
+  }
+  // THE HAND-ROLLED SHAPE: a page or layout composing this region that portals by itself.
+  // The pages rendering the root, and the root component's own file (where the app's portal lived).
+  const rootFile = region.rootFrom ? resolveAppImport(region.file, region.rootFrom) : null;
+  const rootFiles = rootFile ? ['.tsx', '.ts', '.jsx', '.js'].map((x) => rootFile + x).filter((f) => existsSync(f)).slice(0, 1) : [];
+  const portals = [...rootTags.map(({ file }) => file), ...rootFiles]
+    .filter((f, i, all) => all.indexOf(f) === i)
+    .filter((f) => {
+      try {
+        return /\bcreatePortal\s*\(/.test(code(readFileSync(f, 'utf8')));
+      } catch {
+        return false;
+      }
+    });
+  for (const file of portals) {
+    add(
+      'warn',
+      'dock',
+      `${paths.rel(file)} calls createPortal while composing <${rootNames[0]}> — if it moves an island of one region into ` +
+        `another region's arrangement, declare a dock (\`{ dock }\` there, \`dockInto\` here) and let motu place it`,
     );
   }
 }
@@ -539,6 +619,7 @@ function checkRegion(region, sources) {
           `the region has one description and the page is not using it`,
       );
     if (rootRendered) regionRefPlacement(region, rootNames, rootTags, sources, add);
+    if (rootRendered) dockPlacement(region, rootNames, rootTags, sources, add);
   }
   // PLACED IS NOT THE SAME AS RENDERED, and the regex above cannot tell them apart. A slot written
   // inside `{isOpen && …}`, a ternary, or a `.map()` callback reads as placed and may never appear —

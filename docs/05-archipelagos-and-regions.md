@@ -352,6 +352,54 @@ A region composed by a hand-written frame instead is reported by the `region-roo
 once a project sets `"regionRoot": "required"` in its config
 (`packages/cli/src/commands/verify.mjs:2240-2257`; see [04 — Configuration](04-configuration.md)).
 
+### Docks — an island placed in another region's arrangement
+
+A region's island can render INSIDE another region's layout — « Ma Base »'s Conseil column beside «
+Mon Équipage »'s rocket — while staying its own region's island in every sense: its keys, bindings,
+`writes`, intents, sources, ownership and flows are the claimant's, and only its DOM lands in the
+other region. Declared on BOTH sides, in `slots` (`DockSlot`, `DockInto`, `dockProblems` in
+`packages/core/src/docks.ts`):
+
+```ts
+// equipage (B) OPENS a place — a root prop of EquipageLayout that motu fills, never the page
+slots: { rocket: 'equipage-rocket', aside: { dock: 'equipage-aside' } },
+
+// base (A) puts its island there — and places equipage on its own path
+slots: {
+  conseil: { slot: 'base-conseil', dockInto: { region: 'equipage', dock: 'equipage-aside' } },
+  businessTeamPanel: { region: 'equipage' },
+},
+```
+
+B's layout renders `{aside}` where the place is. A's layout renders `{conseil}` at its FALLBACK — where
+the island goes when B is not on screen; `dockInto.fallback: 'none'` renders it nowhere instead.
+`<A.Root>` decides from what is MOUNTED, not from a flag the page threads through
+(`packages/react/src/docks.tsx`):
+
+| on screen | the island renders |
+|---|---|
+| B's `<X.Region>` not mounted | at A's fallback (or nowhere, `fallback: 'none'`) |
+| B's `<X.Region>` mounted, its root has not rendered the dock yet | nowhere — waiting, so it never jumps from the flow into the dock |
+| B's dock rendered | inside it, through a React portal from A's tree — A's context, store and host bridge |
+| server render, first client render | nowhere — decided in A's root's layout effect, before the first paint |
+
+So a page mounts B's `<X.Region>` in the same commit as the prop that holds it and keeps B's loading
+INSIDE it. Under SSR the docked island is absent from the server HTML and appears on hydration,
+already in its final place. A page passing B's dock prop itself is ignored and reported.
+
+The rules, from `dockProblems` (the `dock` check, and the lagoon's refusal): one island per dock — two
+islands in one place need an order only B's layout can decide, so B opens two docks; A must compose B
+through `{ region }` slots, directly or transitively; the claimed slot is one of A's islands and is
+placed nowhere else in A (the claim's prop IS its one placement, which is why the fallback is that prop
+and not a second slot); both sides have a `root`; a dock nobody claims is a warning. A dock is a
+React-host feature — an ocean region has no root.
+
+The lagoon shows each region alone, which is the dock's ABSENT state; the composition is a declared
+state with an address of its own — [08 — Docks in the lagoon](08-lagoon.md#a-docked-island-composed).
+`removal-check` needs no surgery: `<A.Root>` becomes A's layout with the claim's prop, so the island
+renders at its fallback, and `<B.Root>` becomes B's layout without its dock prop. The reasoning and
+what is not built: [proposals/docks.md](proposals/docks.md).
+
 ## `layout`
 
 `layout?: string` is the "new design" layout: HTML arranging the island slots, rendered natively by

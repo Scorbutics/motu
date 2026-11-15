@@ -8,6 +8,7 @@ import { declaredSourcesOf } from '../../lib/declared-sources.mjs';
 import { readEffectEntries } from '../../lib/effects.mjs';
 import { exclusiveDeclared } from '../../lib/lagoon-declares.mjs';
 import { regionRefsOf } from '../../lib/region-refs.mjs';
+import { docksOfRegion } from '../../lib/docks.mjs';
 import { exclusiveProblems, undeclaredAlternatives } from '@motujs/core';
 import { blankComments, islandComponentExport, islandComponentPath, lagoonViewports, names, paths, resolveAppImport } from '../../lib/util.mjs';
 import { auditRegionLagoon } from '../../playwright-lagoon.mjs';
@@ -467,6 +468,48 @@ export function regionRefCheck(report, id) {
       n: referencedBy.length,
       of: 'slot(s) this region fills',
     });
+  }
+}
+
+/**
+ * DOCKS: `aside: { dock: 'equipage-aside' }` (this region opens a place) and `conseil: { slot,
+ * dockInto: { region, dock } }` (this region's island goes into another region's place).
+ *
+ * Refused, not composed: an unknown region or dock, a second claim on one dock, a dock opened twice,
+ * docking into your own region, a claim on a region this one never composes, a claimed slot that is
+ * not this region's island or is also placed elsewhere here, either side without a `root`. The
+ * verdict is `dockProblems` — the function the lagoon refuses a composed dock state with.
+ *
+ * Says nothing on a region that neither opens nor claims a dock: that is nearly every region, and a
+ * row there would be a check that examined nothing reporting as one that passed.
+ */
+export function dockCheck(report, id) {
+  const { docks, claims, filledBy, problems, unreadable, unreadFields } = docksOfRegion(id, paths.archipelagosDir);
+  if (unreadable) {
+    report.warn('dock', `${paths.rel(paths.archipelagoFile(id))} could not be parsed, so its docks were not read`);
+    return;
+  }
+  for (const field of unreadFields) {
+    report.error('dock', `${field} is not written as string literals — it cannot be read, so the placement is not checked. Write \`{ dock: 'name' }\` / \`dockInto: { region: 'id', dock: 'name' }\` inline`);
+  }
+  for (const p of problems) report[p.level === 'warn' ? 'warn' : 'error']('dock', p.message);
+  const errors = problems.filter((p) => p.level === 'error');
+  if (claims.length && !errors.some((p) => p.prop && claims.some((c) => c.prop === p.prop))) {
+    report.ok(
+      'dock',
+      `${claims.map((c) => `${c.prop} (${c.slot}) → ${c.region}.${c.dock}${c.fallback === 'none' ? ', no fallback' : ', fallback in place'}`).join('; ')} — ` +
+        `this region's island, placed in another region's arrangement`,
+      { n: claims.length, of: 'docked island(s)' },
+    );
+  }
+  const filled = Object.entries(docks).filter(([, dock]) => filledBy.some((f) => f.dock === dock));
+  if (filled.length && !errors.length) {
+    report.ok(
+      'dock',
+      `${filled.map(([prop, dock]) => `${prop} → dock ${dock}, filled by ${filledBy.filter((f) => f.dock === dock).map((f) => `${f.claimant}.${f.slot}`).join(', ')}`).join('; ')} — ` +
+        `another region's island lands here; it is not counted as one of this region's`,
+      { n: filled.length, of: 'dock(s) filled' },
+    );
   }
 }
 

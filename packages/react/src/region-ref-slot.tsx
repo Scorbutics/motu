@@ -32,6 +32,11 @@ export interface RegionRefSlotProps<TLoaded = unknown> {
   href?: string;
   /** Open it at its own address WITHOUT a reload, when the entry can. */
   open?: (id: string) => void;
+  /**
+   * Start LOADED. A composed dock state (`?state=<a>.dock.<b>.<dock>`) loads every region on the path
+   * to the dock — an address asked for it, so it is not the default this slot otherwise protects.
+   */
+  autoLoad?: boolean;
 }
 
 const refusedLogged = new Set<string>();
@@ -65,8 +70,8 @@ const button: CSSProperties = {
 
 /** The placeholder, and the referenced region once someone asked for it. */
 export function RegionRefSlot<TLoaded>(props: RegionRefSlotProps<TLoaded>): ReactNode {
-  const { parent, prop, refId, label, resolve, render, href, open } = props;
-  const [loaded, setLoaded] = useState(false);
+  const { parent, prop, refId, label, resolve, render, href, open, autoLoad } = props;
+  const [loaded, setLoaded] = useState(Boolean(autoLoad));
   const name = label && label !== refId ? `${label} (${refId})` : refId;
   const resolved = resolve ? resolve(refId) : null;
 

@@ -71,6 +71,8 @@ export type {
   PageDeclaration,
   PagePropsOf,
 } from './archipelago';
+export { dockOf, dockIntoOf, docksOf, dockClaimsOf, dockAddress, dockGraph, dockProblems, dockClaimant, dockStates, composePath } from './docks';
+export type { DockSlot, DockInto, DockClaim, DockNode, DockGraph, DockProblem } from './docks';
 export { defineIslandElement } from './island-element';
 export { defineArchipelagoElement } from './archipelago-element';
 export { setPreview, isPreviewOn } from './preview';

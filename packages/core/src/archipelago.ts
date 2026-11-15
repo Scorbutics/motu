@@ -2,6 +2,7 @@
 // Store, and a HostBridge for outward intents (navigation/actions). The page only drops thin
 // <motu-island slot="…"> markers; all composition lives here, shipped in the composition root.
 
+import type { DockInto, DockSlot } from './docks';
 import { Store, declareProducers, declareReaders, noteIslandOutput } from './store';
 import { installChannels, noteChannelReads, rawStore, type Channel } from './channel';
 import { offerRegionToCoverage } from './sandbox';
@@ -314,8 +315,18 @@ export interface ArchipelagoConfig<TRegion = Record<string, unknown>, TTag exten
    * PLACEHOLDER naming it, loaded in place only on request, so this region's flows and snapshots do
    * not depend on how the other one renders. An unknown id, a cycle, or a reference from a region with
    * no `root` is refused — see `regionRefProblems`.
+   *
+   * DOCKS — one region's island placed inside ANOTHER region's arrangement, declared on both sides:
+   *
+   *   // equipage (B) opens a place:      aside:   { dock: 'equipage-aside' }
+   *   // base (A) puts its island there:  conseil: { slot: 'base-conseil', dockInto: { region: 'equipage', dock: 'equipage-aside' } }
+   *
+   * The island stays A's in every sense (keys, bindings, intents, ownership); only its DOM lands in B's
+   * dock, through a portal from A's tree. When B is not on screen it renders where A's root places the
+   * claim's prop (`fallback: 'none'` to render nowhere). B's root receives the dock prop from motu,
+   * never from the page. See `dockProblems` and docs/proposals/docks.md.
    */
-  slots?: Record<string, string | { slot: string; when?: string; unless?: string } | RegionRef>;
+  slots?: Record<string, string | { slot: string; when?: string; unless?: string; dockInto?: DockInto } | RegionRef | DockSlot>;
   /**
    * Root props the HOST fills, and the application component that fills them: prop -> component.
    *

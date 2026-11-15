@@ -12,3 +12,5 @@ export { corpusArchipelago } from './archipelagos/corpus/corpus.archipelago';
 export { signinArchipelago } from './archipelagos/signin/signin.archipelago';
 export { indexArchipelago } from './archipelagos/index/index.archipelago';
 export { reviewArchipelago } from './archipelagos/review/review.archipelago';
+export { harbourArchipelago } from './archipelagos/harbour/harbour.archipelago';
+export { quayArchipelago } from './archipelagos/quay/quay.archipelago';

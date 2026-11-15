@@ -40,6 +40,8 @@ import type { DeclaredChannel } from '@motujs/core';
 import { ArchipelagoProvider, Island, setNullIsland, useRegion } from './react-island';
 import { renderArchipelagoLayout } from './archipelago-layout';
 import { RegionRefSlot, type ResolvedRegionRef } from './region-ref-slot';
+import { dockClaimsOf, fillDocks, placeDocked, useDockPlacements } from './docks';
+import { dockAddress, type DockClaim } from '@motujs/core';
 import type { ElementSpec } from './bootstrap';
 
 /** One React root per container, so a re-mount replaces rather than stacks. */
@@ -103,6 +105,20 @@ export interface ReactLagoonOptions {
    * cannot be loaded in this view.
    */
   regionRefs?: RegionRefOptions;
+  /**
+   * ANOTHER REGION'S ISLANDS that dock into this one, mounted as GUESTS — what a composed dock state
+   * viewed from the dock's host (`?region=b&state=b.dock.b.<dock>`) needs. Each guest is mounted from
+   * ITS region's config and lagoon options, in that region's own provider, rendering nothing but the
+   * docked island — so the island is still its own region's island, only drawn here.
+   */
+  dockGuests?: DockGuest[];
+}
+
+/** One island docked into the region being viewed, from the region that owns it. */
+export interface DockGuest {
+  config: ArchipelagoConfig;
+  opts: ReactLagoonOptions;
+  claim: DockClaim;
 }
 
 /** See `ReactLagoonOptions.regionRefs`. */
@@ -115,6 +131,8 @@ export interface RegionRefOptions {
   open?: (id: string) => void;
   /** A display name for an id. */
   label?: (id: string) => string;
+  /** Regions to load in place at once — the path a composed dock state needs. */
+  autoload?: (id: string) => boolean;
 }
 
 /** `?region=<id>` on this page, with every state parameter that belonged to the region being left. */
@@ -239,8 +257,44 @@ function RegionRoot({
   // "no island mounted under slot login-form", because the region had moved and the arrangement had
   // not. A component, so it re-renders with the store like everything else here does.
   const region = useRegion<Record<string, unknown>>();
+  // Where each island this region docks elsewhere renders — the same decision `<X.Root>` makes.
+  const placements = useDockPlacements(dockClaimsOf(config));
   const refNode = (prop: string, id: string) => regionRefNode(config.id, prop, id, regionRefs);
-  return renderRegionRoot(config, islandNode, hostProps, region as Record<string, unknown>, refNode) ?? null;
+  return renderRegionRoot(config, islandNode, hostProps, region as Record<string, unknown>, refNode, placements) ?? null;
+}
+
+/**
+ * An empty dock, as the lagoon shows it: the region is previewed alone, so nobody's island is there.
+ * Lagoon chrome — never a slot, never counted — naming the address that composes it.
+ */
+function emptyDock(region: string, prop: string, dock: string): ReactNode {
+  const href = (() => {
+    if (typeof location === 'undefined') return undefined;
+    const url = new URL(location.href);
+    url.searchParams.delete('state');
+    url.searchParams.set('region', region);
+    url.searchParams.append('state', `${region}.dock.${region}.${dock}`);
+    return `${url.pathname}${url.search}`;
+  })();
+  return (
+    <div
+      data-motu-chrome=""
+      data-motu-region-dock-placeholder={dockAddress(region, dock)}
+      style={{
+        border: '1px dashed color-mix(in srgb, currentColor 30%, transparent)',
+        borderRadius: 10,
+        padding: '10px 12px',
+        font: '12px/1.5 system-ui, sans-serif',
+        color: 'color-mix(in srgb, currentColor 70%, transparent)',
+      }}
+    >
+      <span style={{ font: '500 11px/1.5 ui-monospace, monospace', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        {prop} → dock {dock}
+      </span>{' '}
+      — another region's island docks here.{' '}
+      {href ? <a href={href}>Open it composed</a> : null}
+    </div>
+  );
 }
 
 /** The placeholder for a root prop another region fills — see `RegionRefSlot`. */
@@ -255,6 +309,7 @@ function regionRefNode(parent: string, prop: string, id: string, regionRefs: Reg
     render: (loaded) => regionTree(loaded.config, loaded.opts),
     href: (regionRefs?.href ?? regionAddress)(id),
     open: regionRefs?.open,
+    autoLoad: regionRefs?.autoload?.(id),
   });
 }
 
@@ -264,6 +319,7 @@ function renderRegionRoot(
   hostProps: Record<string, unknown> | undefined,
   state: Record<string, unknown> | undefined,
   refNode: (prop: string, id: string) => ReactNode,
+  placements: ReturnType<typeof useDockPlacements> = {},
 ): ReactNode | undefined {
   const declared = config as {
     root?: unknown;
@@ -284,6 +340,8 @@ function renderRegionRoot(
       composed[prop] = refNode(prop, ref);
       continue;
     }
+    // A DOCK this region opens: filled below with the dock element, never with an island of ours.
+    if (entry && typeof entry === 'object' && 'dock' in entry) continue;
     const island = entry as string | { slot: string; when?: string; unless?: string };
     composed[prop] = slotShows(island, state ?? {}) ? islandNode(slotNameOf(island)) : null;
   }
@@ -301,7 +359,15 @@ function renderRegionRoot(
   // has no page, so it filled every member it could and drew the accept bar beside the "sign in to
   // accept" link — a screen the archipelago declares impossible. The first member that is still
   // standing (after `when`/`unless`) is the one shown, in the order the group is written.
-  return createElement(declared.root as never, keepOneAlternative(declared, composed) as never);
+  // DOCKS: our open places get their dock element (with the lagoon's placeholder while empty), and an
+  // island of ours docked elsewhere is portalled there when that region is on screen — exactly what
+  // `<X.Root>` does on the page, so the preview cannot place it differently.
+  fillDocks(config, composed, (prop, dock) => emptyDock(config.id, prop, dock));
+  const props = keepOneAlternative(declared, composed);
+  const claims = dockClaimsOf(config);
+  const portals = placeDocked(props, claims, placements, config.id);
+  const rootEl = createElement(declared.root as never, props as never);
+  return claims.length ? createElement(Fragment, null, rootEl, ...portals) : rootEl;
 }
 
 /**
@@ -380,7 +446,8 @@ export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions):
 
   // EVERY VIEW MOUNTS ITS REGIONS HERE, so this is where the state player learns what is on screen.
   registerLagoonRegion(config, { seed: opts.seed, host: opts.host });
-  return (
+  for (const guest of opts.dockGuests ?? []) registerLagoonRegion(guest.config, { seed: guest.opts.seed, host: guest.opts.host });
+  const tree = (
     <ArchipelagoProvider
       config={config}
       elements={opts.elements}
@@ -406,6 +473,36 @@ export function regionTree(config: ArchipelagoConfig, opts: ReactLagoonOptions):
       </RegionRemount>
     </ArchipelagoProvider>
   );
+  if (!opts.dockGuests?.length) return tree;
+  // AFTER the host region, so its dock has registered by the time each guest decides (layout effects
+  // run in tree order) — the guest lands in the dock on the first paint.
+  return (
+    <>
+      {tree}
+      {opts.dockGuests.map((guest) => (
+        <ArchipelagoProvider
+          key={`guest:${guest.config.id}:${guest.claim.prop}`}
+          config={guest.config}
+          elements={guest.opts.elements}
+          host={guest.opts.host}
+          seed={guest.opts.seed}
+          channels={guest.opts.channels}
+        >
+          <DockedGuest guest={guest} />
+        </ArchipelagoProvider>
+      ))}
+    </>
+  );
+}
+
+/** One guest island, portalled into the dock it claims — and nowhere else (`fallback: 'none'`). */
+function DockedGuest({ guest }: { guest: DockGuest }): ReactNode {
+  const claim = { ...guest.claim, fallback: 'none' as const };
+  const placements = useDockPlacements([claim]);
+  const { slot } = claim;
+  const el = <Island key={slot} slot={slot} fit={guest.opts.fit} props={guest.opts.props?.[slot]} />;
+  const composed: Record<string, unknown> = { [claim.prop]: guest.opts.providers ? guest.opts.providers(el, slot) : el };
+  return <>{placeDocked(composed, [claim], placements, guest.config.id)}</>;
 }
 
 /**

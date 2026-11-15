@@ -198,6 +198,13 @@ export interface RegionScenario {
    * the states no flow could otherwise reach.
    */
   world?: string;
+  /**
+   * The COMPOSED DOCK STATE this flow runs in — `'<dock region>.<dock>'`, e.g. `'equipage.equipage-aside'`.
+   * Absent, a flow runs in the mountpoints view (every slot framed apart); present, it runs in the
+   * region view with that dock filled (the dock's region loaded, or the claimant's island as a guest),
+   * which is the only view where `expectRender`'s `in` can hold.
+   */
+  dock?: string;
   name?: string;
   /** Region keys to establish before the flow runs. */
   seed?: Record<string, unknown>;
@@ -234,8 +241,11 @@ export interface RegionStep {
    * and every shadcn component on it — already wires those, so nothing in the application needs
    * annotating. Content inside another slot is never collected: one island's overlay can never satisfy
    * another island's assertion, which is the coupling this check exists to catch.
+   *
+   * `in: '<region>.<dock>'` asserts PLACEMENT: the slot's island is rendered inside that dock element
+   * (a docked island — see the archipelago's `dockInto`). Only meaningful in a flow declaring `dock`.
    */
-  expectRender?: Record<string, string | { text?: string; notText?: string }>;
+  expectRender?: Record<string, string | { text?: string; notText?: string; in?: string }>;
   /**
    * The backend calls this step may make — and ONLY these. `[]` says it asks for nothing.
    *

@@ -6,6 +6,8 @@ import './coverage.generated';
 
 import type { ArchipelagoConfig } from '@motujs/core';
 import { corpusArchipelago } from './corpus/corpus.archipelago';
+import { harbourArchipelago } from './harbour/harbour.archipelago';
+import { quayArchipelago } from './quay/quay.archipelago';
 import { indexArchipelago } from './index/index.archipelago';
 import { lagoonViewArchipelago } from './lagoon-view/lagoon-view.archipelago';
 import { reviewArchipelago } from './review/review.archipelago';
@@ -13,6 +15,8 @@ import { signinArchipelago } from './signin/signin.archipelago';
 
 export const ARCHIPELAGOS: Record<string, ArchipelagoConfig> = {
   [corpusArchipelago.id]: corpusArchipelago,
+  [harbourArchipelago.id]: harbourArchipelago,
+  [quayArchipelago.id]: quayArchipelago,
   [indexArchipelago.id]: indexArchipelago,
   [lagoonViewArchipelago.id]: lagoonViewArchipelago,
   [reviewArchipelago.id]: reviewArchipelago,

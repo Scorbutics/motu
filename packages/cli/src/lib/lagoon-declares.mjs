@@ -375,6 +375,82 @@ export function regionRefsDeclared(file) {
 }
 
 /**
+ * What a region declares about DOCKS, as the plain data `dockProblems` (from @motujs/core) reads — the
+ * same `DockNode` the lagoon builds from live configs, so the check and the preview cannot disagree:
+ *
+ *   docks       prop -> dock name it OPENS             (`aside: { dock: 'equipage-aside' }`)
+ *   claims      islands it DOCKS into another region  (`conseil: { slot, dockInto: { region, dock } }`)
+ *   refs        prop -> region id, its `{ region }` slots — the composition a claim must follow
+ *   islandSlots every island entry's `slot`
+ *   placements  every slot it places: root `slots` (island forms) and islands' nested `slots`
+ *
+ * `null` when the file does not parse — "could not tell", never "declares none". A `dock`/`dockInto`
+ * written as anything but string literals is reported in `unreadable`: an unread claim is a placement
+ * nobody is checking.
+ */
+export function docksDeclared(file) {
+  if (!existsSync(file)) return null;
+  let sf;
+  try {
+    const project = new Project({ useInMemoryFileSystem: true, skipAddingFilesFromTsConfig: true });
+    sf = project.createSourceFile('archipelago.ts', readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+  const config = configLiteral(sf);
+  if (!config) return null;
+  const docks = {};
+  const claims = [];
+  const refs = {};
+  const placements = [];
+  const unreadable = [];
+  for (const prop of propInit(config, 'slots')?.asKind(SyntaxKind.ObjectLiteralExpression)?.getProperties() ?? []) {
+    const name = nameOf(prop);
+    const init = prop.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+    if (!name || !init) continue;
+    const direct = str(init);
+    if (direct) {
+      placements.push({ slot: direct, where: `slots.${name}` });
+      continue;
+    }
+    const obj = init.asKind(SyntaxKind.ObjectLiteralExpression);
+    if (!obj) continue;
+    const region = str(propInit(obj, 'region'));
+    if (region) refs[name] = region;
+    const dockNode = propInit(obj, 'dock');
+    if (dockNode) {
+      const dock = str(dockNode);
+      if (dock) docks[name] = dock;
+      else unreadable.push(`slots.${name}.dock`);
+    }
+    const slot = str(propInit(obj, 'slot'));
+    if (slot) placements.push({ slot, where: `slots.${name}` });
+    const intoNode = propInit(obj, 'dockInto');
+    if (intoNode) {
+      const into = intoNode.asKind(SyntaxKind.ObjectLiteralExpression);
+      const target = str(propInit(into, 'region'));
+      const dock = str(propInit(into, 'dock'));
+      const fallback = str(propInit(into, 'fallback'));
+      if (!into || !target || !dock) unreadable.push(`slots.${name}.dockInto`);
+      else claims.push({ prop: name, slot: slot ?? '', region: target, dock, fallback: fallback === 'none' ? 'none' : 'here' });
+    }
+  }
+  const islandSlots = [];
+  for (const entry of propInit(config, 'islands')?.asKind(SyntaxKind.ArrayLiteralExpression)?.getElements() ?? []) {
+    const obj = entry.asKind(SyntaxKind.ObjectLiteralExpression);
+    const slot = str(propInit(obj, 'slot'));
+    if (slot) islandSlots.push(slot);
+    for (const nested of propInit(obj, 'slots')?.asKind(SyntaxKind.ObjectLiteralExpression)?.getProperties() ?? []) {
+      const n = nameOf(nested);
+      const ni = nested.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+      const s = str(ni) ?? str(propInit(ni?.asKind(SyntaxKind.ObjectLiteralExpression), 'slot'));
+      if (s) placements.push({ slot: s, where: `${slot ?? '?'}.slots.${n}` });
+    }
+  }
+  return { root: Boolean(config.getProperty('root')), docks, claims, refs, islandSlots, placements, unreadable };
+}
+
+/**
  * Every slot this region DECLARES — the `slot` of each island entry.
  *
  * Read from the island entries rather than from every `slot:` in the file. The regex it replaces took

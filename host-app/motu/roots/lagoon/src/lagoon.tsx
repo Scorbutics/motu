@@ -6,6 +6,8 @@
 // data lives with the rest of the evidence in `src/shared/`.
 import type { LagoonOverrides } from '@motujs/react';
 import { corpusRegion } from './regions/corpus.js';
+import { harbourRegion } from './regions/harbour.js';
+import { quayRegion } from './regions/quay.js';
 import { indexRegion } from './regions/index.js';
 import { lagoonViewRegion } from './regions/lagoon-view.js';
 import { reviewRegion } from './regions/review.js';
@@ -19,7 +21,9 @@ import { signinRegion } from './regions/signin.js';
  */
 export const regions: LagoonOverrides['regions'] = [
   corpusRegion,
+  harbourRegion,
   indexRegion,
+  quayRegion,
   lagoonViewRegion,
   reviewRegion,
   signinRegion,

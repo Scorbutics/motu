@@ -40,3 +40,27 @@ export function sourceFileAt(path, compilerOptions) {
   if (existing) return existing;
   return project.addSourceFileAtPath(path);
 }
+
+/**
+ * `sf.getDescendantsOfKind(kind)`, walked once per file per kind for the life of the command.
+ *
+ * The integration check asks the SAME files the same questions once per region — where islands are
+ * placed, which are conditional, what the page passes — and each question walked every host file's
+ * whole tree again. On Peps (24 regions, every host source) that was 78s of a 106s static
+ * `motu check`, nearly all of it inside ts-morph's descendant iterator. The files come from the shared
+ * project above, which is read-only by contract, so the walk's answer cannot change under it.
+ */
+const descendantCache = new WeakMap();
+export function descendantsOfKind(sf, kind) {
+  let byKind = descendantCache.get(sf);
+  if (!byKind) {
+    byKind = new Map();
+    descendantCache.set(sf, byKind);
+  }
+  let nodes = byKind.get(kind);
+  if (!nodes) {
+    nodes = sf.getDescendantsOfKind(kind);
+    byKind.set(kind, nodes);
+  }
+  return nodes;
+}

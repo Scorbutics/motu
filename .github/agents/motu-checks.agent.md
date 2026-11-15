@@ -36,11 +36,12 @@ a handover, because the thing the work is for is a rendered region and nobody ha
    `props-match` and `ownership` exist because each caught real coupling. It is STATIC and fast: verify
    answers "has this drifted from what it declares?", which is a question about source.
 
- - `motu check --runtime` (or `motu island verify <name> --runtime`) adds what only a browser can
-   answer: the island mounts, its scenarios differ, it fits every declared viewport, axe finds nothing
-   in it, and every declared write reaches its key. It costs SECONDS PER ISLAND — a browser pass per
-   scenario × viewport — so it is a PUNCTUAL gate: before handing work over, in CI, or nightly across
-   the project. Not the dev loop. While you work, iterate in the lagoon and lean on the static checks;
+ - The RUNTIME pass adds what only a browser can answer: the island mounts, its scenarios differ, it
+   fits every declared viewport, axe finds nothing in it, every declared write reaches its key, and a
+   region's flows end as declared. It costs SECONDS PER ISLAND and far more per region, so it is
+   SCOPED to what you added or reshaped — `motu check --region <id>` / `--island <name>` — and the
+   whole-project `motu check --runtime` is the scheduled CI's, never an agent's step. Not the dev
+   loop either. While you work, iterate in the lagoon and lean on the static checks;
    `--verbose` names each runtime step with what it cost. The lane opens ONE lagoon page for the whole
    run and re-aims it per island (data in, declared outputs fired), so the cost is the first boot, not
    a boot per island — do not add checks that navigate or restart it. Viewports and the a11y severity policy are
@@ -91,63 +92,77 @@ member could not run, exactly as a single verify does — and their `--json` `pa
 
 ## Three tiers, and which one you are in
 
-    motu check                        STATIC        1.4s    every change
-    motu island verify <n> --runtime  ONE ISLAND    ~15s    while you work
-    motu archipelago verify <id> --runtime  ONE REGION ~25s  while you work
-    motu lagoon try <id> [step…]      EXPLORE       ~5s    before you know what to assert
-    motu check --runtime --fast       NO BROWSER   44.0s    while you work (5.9s with --changed)
-    motu check --runtime              DOES IT WORK 103.5s    before handing work over
-    motu check --audit                IS IT USABLE          before integrating, and in CI
+    motu check                              STATIC       1.4s    every change — the gate you close on
+    motu check --region <id>                ONE REGION   ~25s    you added or reshaped a region
+    motu check --island <name>              ONE ISLAND   ~15s    you added or reshaped an island
+    motu lagoon try <id> [step…]            EXPLORE      ~5s     before you know what to assert
+    motu check --fast --region <id>         NO BROWSER   ~5s     while you work (islands only, happy-dom)
+    motu check --runtime                    EVERYTHING   minutes the scheduled CI — NOT an agent's step
+    motu check --audit                      IS IT USABLE         the scheduled CI, and before integrating
     motu island snapshot --all --remote      DID IT MOVE    89s    before handing work over
     motu archipelago snapshot --all --remote DID THE PAGE   18s    before handing work over
 
-(measured on a 16-island, 2-region project; the snapshots on a 20-island, 3-region one)
+(the scoped and static rows measured on a 16-island, 2-region project; the snapshots on a 20-island,
+3-region one. On Peps — 80 islands, 23 regions — static is ~45s, `--region <id>` adds its runtime on
+top (~20s warm), and the whole-project `--runtime` is ~26 minutes cold)
 
-NAME WHAT YOU TOUCHED. While you are working on a region, the runtime check you run is that region and
-its islands — `motu archipelago verify login --runtime`, `motu island verify login-form --runtime` —
-not the whole project. The full `motu check --runtime` re-drives a browser for every island in the
-repo to tell you about the one you changed; run it ONCE, before handing work over, and after that only
-if you changed something shared.
+THE WHOLE-PROJECT BROWSER PASS IS CI'S, NOT YOURS. `motu check --runtime` re-drives a browser for every
+island and every region in the repository — every flow, every flow mutant, every flow replayed with
+each asserted island nulled. It grows with slots × flows, not with what you changed, and on a project
+of any size it is the run that makes an agent's session wait on motu. It runs on a schedule (nightly)
+where its cost is nobody's critical path. Do not run it to close a task, and do not run it "once,
+before handing over" — the static `motu check` plus `motu integrate check` is the gate you close on.
 
-`--changed` IS NOT THAT SCOPING, and reaching for it instead will cost you the run. It narrows only
-while EVERY changed file maps to an island or a region, and widens back to everything the moment one
-does not — loudly, which is the design: a check that quietly examined less than you think is the worse
-failure. What does not map is most of a real session: the page, the screen that installs a source, the
-app-side region type, `roots/lagoon/src/lagoon.tsx`, a shared evidence module, the generated barrels.
+SCOPE THE BROWSER TO WHAT YOU BUILT. When you add or reshape UI — a new region, a new island, a new
+part of a screen, a flow — the runtime check you run is THAT, named:
 
-Measured on this project, mid-session: 16 changed files unattributable, so a full run. Files that
-provably cannot reach a render (`.claude/`, `.vscode/`, `.idea/`, `.github/`, `*.md`) no longer widen
-it and the lagoon's per-region module now maps to its region — that took it to 14 unattributable, and
-it STILL ran everything, because `app/dashboard/profile/page.tsx` and four app-side files remained.
+    motu check --region login              # the region + its member islands, in the browser
+    motu check --island login-form         # one island (comma-separate several of either)
 
-So: `--changed` is worth passing, and it is not a plan. The plan is naming the region.
+The static checks still cover the whole project in the same run, and the verdict line says what the
+browser drove and what it did not (`runtime: 6 re-proved · 0 replayed · 98 static only`). A change that
+moves no rendering (a rename, a declaration, a type) needs no browser at all. `motu archipelago verify
+<id> --runtime` and `motu island verify <name> --runtime` are the same scoped checks, one target each.
 
-THE LAST THING YOU DO, both of them, with `--changed`. Scoped to one touched island that is 11s and
-15s — cheaper than the `--fast` loop — because `--changed` maps a changed island to the regions that
-declare it, and a region's picture is its members composed. Unscoped they cost about what
-`check --runtime` costs, which is why they belong in the same slot: the punctual gate, not the loop,
-and not a nightly job — drift detected a day later has a dozen changes behind it and can no longer be
-attributed to any of them.
+THE CI RUN IS SPREAD OVER LANES. `--jobs <n|auto>` (default auto: half the cores, at most 4) runs the
+browser pass on several worker processes, each with its own lagoon and browser, longest targets first;
+the verdict is the same as on one lane. A lane that dies leaves its target INCONCLUSIVE (exit 2).
 
-`--changed` widens back to everything, loudly, when a changed file belongs to no single island; and a
-scoped sweep that pictured nothing exits 2 with NOTHING TO PICTURE rather than green.
+A REPLAYED VERDICT IS A VERDICT. Every runtime result is stored against a fingerprint of what it
+depends on — the target's import graph (the app's own files it reaches, its islands, the regions it
+docks with), the framework, the browser, the configs and the flags. When none of those moved since a
+run that held, the verdict is replayed and SAID: `· runtime replayed — inputs unchanged since proved 3h
+ago`. Only clean verdicts are kept: an error or an INCONCLUSIVE always re-runs. Something that reads the
+clock is re-proved daily. `--no-cache` re-proves everything; `--max-age 7d` re-proves what is older.
+
+`--changed` IS NOT THAT SCOPING. It narrows by git path, only while EVERY changed file maps to an island
+or a region, and widens back to everything the moment one does not — loudly, which is the design: a
+check that quietly examined less than you think is the worse failure. What does not map is most of a
+real session: the page, an app-side source, `roots/lagoon/src/lagoon.tsx`, a shared evidence module.
+Name the region instead.
+
+`--changed` IS RIGHT FOR THE SNAPSHOTS, the last thing you do: scoped to one touched island they are
+11s and 15s, because `--changed` maps a changed island to the regions that declare it. Unscoped they
+cost about what the whole runtime pass costs. A scoped sweep that pictured nothing exits 2 with NOTHING
+TO PICTURE rather than green.
 
 `--fast` means NO BROWSER: islands mount under happy-dom in node. It used to be an island-only flag
 whose REGIONS still booted chromium — 43s of an 87s run — because a region's flows, mutation and render
 are browser-only. They are now skipped and said (`– region-runtime`), so the loop is genuinely
-browser-free and the browser work happens once, at the end.
+browser-free and the browser work happens once, scoped, at the end.
 
 What the browser still owns, and why it cannot move: layout (`responsive`), accessibility (`a11y`), and
-everything about a REGION — a flow only exists where islands are mounted together. Those are the last
-step before handover, not the loop.
+everything about a REGION — a flow only exists where islands are mounted together. For what you built,
+that is `motu check --region <id>` before handover; for the project, it is CI.
 
 `--runtime` answers whether the region does what it declares: islands mount, scenarios differ, declared
 writes reach their key, flows end as promised, and every step could have failed. `--audit` adds
 `responsive` and `a11y` — the two most expensive per-island checks, whose answer changes when the
 
 RENDERING changes, not when a key moves. Running them on every edit buys nothing and costs half the
-run; running them never is how a region ships unusable on a phone. So they are a gate, not a loop, and
-a run without them says so (`– audit  responsive + a11y not run`) rather than staying quiet.
+run; running them never is how a region ships unusable on a phone. So they are a gate — the scheduled
+CI's, and `--audit --region <id>` for a region you built for a phone — not a loop, and a run without
+them says so (`– audit  responsive + a11y not run`) rather than staying quiet.
 
 `--audit` implies `--runtime`: asking whether a UI is usable at every viewport only means something
 against something that rendered.

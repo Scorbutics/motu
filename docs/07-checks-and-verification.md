@@ -312,16 +312,18 @@ From the `motu-checks` skill "Three tiers, and which one you are in". **Measured
 
 | Command | Question it answers | Cost | When |
 |---|---|---|---|
-| `motu check` | Has anything drifted from what it declares? | **1.4s** | every change |
-| `motu island verify <n> --runtime` | Does this one island still behave? | **~15s** | while you work |
-| `motu archipelago verify <id> --runtime` | Does this one region still behave? | **~25s** | while you work |
-| `motu check --runtime --fast` | (no browser) | **44.0s** — **5.9s with `--changed`** | while you work |
-| `motu check --runtime` | Does it work? | **103.5s** | before handing work over |
-| `motu check --audit` | Is it usable? | — | before integrating, and in CI |
+| `motu check` | Has anything drifted from what it declares? | **1.4s** | every change, and closing a task |
+| `motu check --island <n>` | Does this one island still behave? | **~15s** | you added or reshaped it |
+| `motu check --region <id>` | Does this one region (and its islands) still behave? | **~25s** | you added or reshaped it |
+| `motu check --fast --region <id>` | (no browser) | seconds | while you work |
+| `motu check --runtime` | Does the whole project work? | **103.5s** here, **~26 min** cold on 80 islands / 23 regions | the scheduled CI — not an agent's step |
+| `motu check --audit` | Is it usable? | — | the scheduled CI, and before integrating (`--region <id>`) |
 | `motu island snapshot --all --remote` | Did it move? | **89s** | before handing work over |
 | `motu archipelago snapshot --all --remote` | Did the page move? | **18s** | before handing work over |
 
-**Name what you touched.** While working on a region, the runtime check you run is that region and its islands — `motu archipelago verify login --runtime`, `motu island verify login-form --runtime` — not the whole project. The full `motu check --runtime` re-drives a browser for every island in the repo to tell you about the one you changed. Run it once, before handover.
+**Name what you built.** The runtime check an agent runs is the region or island it added or reshaped — `motu check --region login`, `motu check --island login-form` — the browser for those, the static checks for everything else, one verdict. The whole-project `motu check --runtime` re-drives a browser for every island and region in the repo, grows with slots × flows rather than with the change, and belongs to the scheduled CI.
+
+**Unchanged is replayed.** A runtime verdict that held is stored against a fingerprint of its inputs (its import graph as the lagoon resolves it, its islands, the regions it docks with, the framework, the browser, the configs and the tier); the next run with the same fingerprint replays it and says so on its line. Errors and inconclusives are never stored. `--no-cache` re-drives everything; `--max-age <n>` re-drives what is older. See `motu check` in the CLI reference.
 
 For the snapshots, `--changed` is the point: scoped to one touched island they cost **11s and 15s**, cheaper than the `--fast` loop, because `--changed` maps a changed island to the regions that declare it.
 

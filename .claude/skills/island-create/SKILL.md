@@ -93,19 +93,21 @@ motu island verify <name> --audit       # before integrating: + responsive + a11
 
 ### Which level, when
 
-    motu check                          STATIC        ~1.4s   every change, in the loop
+    motu check                          STATIC        1.4s    every change — the gate you close on
     motu island verify <n> --fast       NO BROWSER            while building one island
-    motu island verify <n> --runtime    ONE ISLAND    ~15s    the island you are on
-    motu archipelago verify <id> --runtime  ONE REGION ~25s   the region you are on
-    motu lagoon try <id> [step…]        EXPLORE       ~5s    before you know what to assert
-    motu check --runtime                EVERYTHING   ~104s    once, before handing work over
-    motu check --audit                  IS IT USABLE          before integrating, and in CI
+    motu check --island <n>             ONE ISLAND    ~15s    the island you built, in the browser
+    motu check --region <id>            ONE REGION    ~25s    the region it joined (+ its islands)
+    motu lagoon try <id> [step…]        EXPLORE       ~5s     before you know what to assert
+    motu check --runtime                EVERYTHING   minutes  the scheduled CI — NOT your step
+    motu check --audit                  IS IT USABLE          the scheduled CI, and before integrating
 
 (seconds measured on a 16-island, 2-region project)
 
-NAME WHAT YOU TOUCHED. The runtime check you run while working is the island or the region you are on,
-not the project: `motu check --runtime` re-drives a browser for every island in the repo to tell you
-about the one you changed. `--changed` is not a substitute — it narrows only while every changed file
+NAME WHAT YOU BUILT. The browser pass you run is the island you created and the region it joined —
+`motu check --island <n> --region <id>`: those in the browser, everything else statically, one
+verdict. Never the whole-project `motu check --runtime`: it re-drives a browser for every island and
+region in the repo to tell you about the one you changed, and it is the scheduled CI's job. An
+unchanged target is replayed, not re-driven (`· runtime replayed`). `--changed` is not a substitute — it narrows only while every changed file
 maps to an island or a region, and a session that has touched a page, a source, a lagoon stub or the
 shared evidence gets no scoping from it (it says so, and runs everything).
 
@@ -113,8 +115,8 @@ shared evidence gets no scoping from it (it says so, and runs everything).
 and render, and says so — those only exist where islands are mounted together. `--audit` adds
 `responsive` and `a11y`, whose answer changes when the rendering changes, not when a key moves.
 
-So: iterate on `--fast`, and pay for the browser ONCE, at the end — for the coupling (region flows),
-the layout and the accessibility. Running `--runtime` on every edit is the single easiest way to make
+So: iterate on `--fast`, and pay for the browser ONCE, at the end, scoped to what you built — for the
+coupling (region flows), the layout and the accessibility. Running `--runtime` on every edit is the single easiest way to make
 an agent stop running checks at all.
 
 Fix every `✗` until **PASS**. Then, BEFORE integrating, explicitly write down the integration risks the
@@ -136,7 +138,7 @@ pnpm motu island integrate <name> --archipelago <id> [--slot <slot>]
 - The `<motu-island>` / `<motu-archipelago>` custom-element tags are a runtime contract — unaffected
   by source layout; you only add the marker where the island should mount.
 
-- A `flow-calls` error from `--runtime` is a backend call nothing declared: add the fixture, table or
+- A `flow-calls` error from the runtime pass is a backend call nothing declared: add the fixture, table or
   route it names. Do not catch the error in the island to make the check pass.
 - Coverage on, and this ships to production: `motu coverage doctor --url <production origin>` after the
   deploy (`motu coverage init` first if there is no route).

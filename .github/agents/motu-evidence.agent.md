@@ -53,7 +53,7 @@ The rules for evidence and for looking at what you built — the detail behind t
 
  - A region declares its FLOWS in `<id>.evidence.ts` beside the archipelago: a seed, an island's
    declared `emit`, and the keys the region must hold afterwards. That is where a coupling becomes
-   something that runs — `motu archipelago verify --runtime` fails when a flow no longer ends as
+   something that runs — `motu check --region <id>` fails when a flow no longer ends as
    declared. A flow may only fire a declared output; if you reach for a selector, you have left the
    harness and written a browser test.
 
@@ -160,7 +160,8 @@ it. A failure a fixture asks for (`status: 500`) does not count. `expectCalls` o
 half — the calls that state may make, and only those (`[]`: it asks for nothing), answered or not. Screens are held to it too, since the
 app's layout makes calls no region's flow does, and a screen can declare flows of its own
 (`src/screens/screens.evidence.ts`: `click` the app's link or `navigate`, then `expectScreen` /
-`expectRender`). `motu screen verify [id]`; `motu check --runtime` includes it.
+`expectRender`). `motu screen verify [id]`; the whole-project `motu check --runtime` (CI) includes it, a scoped
+`--region` run does not.
 
 With coverage on, prove production reports arrive: `motu coverage doctor --url <production origin>`
 after a deploy names the failing hop. `motu coverage init` writes the route (`--mode log` for a server

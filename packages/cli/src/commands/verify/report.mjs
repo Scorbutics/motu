@@ -4,6 +4,11 @@ import { unchangedSinceLastRun } from '../../lib/finding-memory.mjs';
 import { readLiveUrl } from '../../lib/live-url.mjs';
 import { color } from '../../lib/util.mjs';
 import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
+import { ageOf } from '../../lib/verdict-cache.mjs';
+
+/** "· runtime replayed — unchanged since proved 3h ago": a replay is said on the line it replaces. */
+export const replayNote = (cached) =>
+  cached ? color.dim(`  · runtime replayed — inputs unchanged since proved ${ageOf(cached.at)} (${cached.fp.slice(0, 8)})`) : '';
 
 /**
  * Say what is happening while it happens.
@@ -228,7 +233,7 @@ export function sweepExitCode(results) {
 export function summaryOf(r) {
   const code = verifyExitCode(r);
   // `pass` is "holds": a member that could not run has not passed (`inconclusive` says which it was).
-  return { name: r.kebab, tag: r.tag, pass: code === 0, inconclusive: code === 2, findings: r.report.findings };
+  return { name: r.kebab, tag: r.tag, pass: code === 0, inconclusive: code === 2, cached: r.cached ?? null, findings: r.report.findings };
 }
 
 /**
@@ -254,7 +259,7 @@ export function printSweep(title, results) {
       : unknown.length
         ? color.yellow(`${unknown.length} could not run`) + color.dim(`, ${r.warns.length} warning(s)`)
         : color.dim(`${r.warns.length} warning(s)`);
-    console.log(`  ${mark} ${color.dim(r.kebab.padEnd(20))} ${tally}`);
+    console.log(`  ${mark} ${color.dim(r.kebab.padEnd(20))} ${tally}${replayNote(r.cached)}`);
     for (const f of r.report.findings) {
       if (f.level !== 'error' && f.level !== 'warn' && f.level !== 'inconclusive') continue;
       const m = f.level === 'error' ? color.red('✗') : f.level === 'inconclusive' ? color.yellow('?') : color.yellow('!');
@@ -309,7 +314,8 @@ export function printReport(report, title, errors, warns) {
     // UNCHANGED SINCE THE LAST RUN OF THIS SAME COMMAND. Half of everything read in the check loop
     // was a repeat; saying so is what lets a reader skip it and look at the delta instead.
     const again = f.level === 'ok' || f.level === 'skip' ? '' : unchangedSinceLastRun(f) ? color.dim('  · unchanged') : '';
-    console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${again}${at}`);
+    const replayed = f.cached ? color.dim('  · replayed') : '';
+    console.log(`  ${mark} ${color.dim(f.check.padEnd(18))} ${f.msg}${seen}${again}${replayed}${at}`);
   };
 
   // THE PASSES COLLAPSE; EVERYTHING ELSE DOES NOT.
@@ -331,6 +337,14 @@ export function printReport(report, title, errors, warns) {
     // even collapsed — "data-flow" passing on a dialog is a different claim from passing on the subtree.
     const named = (f) => (/\bportals?\b/.test(`${f.examinedOf ?? ''} ${f.msg}`) ? `${f.check} (incl. portal)` : f.check);
     console.log(`    ${color.dim(passed.map(named).join(', '))}`);
+  }
+  const replayedFrom = report.findings.find((f) => f.cached)?.cached;
+  if (replayedFrom) {
+    console.log(
+      `  ${color.dim('–')} ${color.dim('runtime'.padEnd(18))} ${color.dim(
+        `replayed: inputs unchanged since this verdict was proved ${ageOf(replayedFrom.at)} (${replayedFrom.fp.slice(0, 8)}) — --no-cache re-proves it`,
+      )}`,
+    );
   }
   console.log('');
   const unknown = report.findings.filter((f) => f.level === 'inconclusive');

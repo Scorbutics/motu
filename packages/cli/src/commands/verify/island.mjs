@@ -6,6 +6,8 @@ import { LEGACY_FIT, islandComponentExport, islandComponentPath, names, paths } 
 import { a11yCheck, adapterChecks, inputCoverageCheck, readScenarios, responsiveCheck, runtimeCheckBrowser, runtimeCheckFast, runtimeDifferentiationCheck, runtimeErrorCheck, seedTransportCheck } from './island-runtime.mjs';
 import { configChecks, cssChecks, islandOwnCss, staticChecks } from './island-static.mjs';
 import { reportBrowserOverride } from './reach.mjs';
+import { projectFingerprints } from '../../lib/fingerprint.mjs';
+import { cachePolicy, withVerdictCache } from '../../lib/verdict-cache.mjs';
 import { makeReport, printReport, printSweep, setProgressScope, setVerbose, summaryOf, sweepExitCode, verifyExitCode } from './report.mjs';
 
 export async function verifyCommand(argv) {
@@ -87,7 +89,35 @@ export async function runIslandVerify(argv, name) {
   // different question ("does it still behave?") and a different cost — a few seconds per island, so a
   // migrated project pays minutes for a check most edits do not need. It belongs in `--runtime`
   // (and in `motu check --runtime`), where someone asked for it.
+  let cache = null;
   if (argv.runtime === true || argv.audit === true) {
+    // AN UNCHANGED ISLAND IS NOT RE-DRIVEN. Everything below is a function of the island's import
+    // graph, the framework, the browser and the flags (lib/fingerprint.mjs); a clean verdict for the
+    // same fingerprint is replayed, marked, instead of booting a browser to prove it again.
+    const fps = await projectFingerprints({ mode: runtimeMode(argv) });
+    cache = await withVerdictCache(
+      { kind: `island-${runtimeMode(argv)}`, id: kebab, report, fingerprint: fps.island(kebab), policy: cachePolicy(argv) },
+      () => islandRuntime(argv, report, kebab, resolvedTag),
+    );
+  }
+
+  return {
+    kebab,
+    tag: resolvedTag,
+    report,
+    cached: cache?.cached ?? null,
+    runtimeRan: cache !== null,
+    errors: report.findings.filter((f) => f.level === 'error'),
+    warns: report.findings.filter((f) => f.level === 'warn'),
+  };
+}
+
+/** Which runtime tier a run is — part of every fingerprint, since each tier runs different checks. */
+export const runtimeMode = (argv) => (argv.fast ? 'fast' : argv.audit ? 'audit' : 'runtime');
+
+/** The island's runtime checks (browser, or happy-dom under `--fast`). */
+async function islandRuntime(argv, report, kebab, resolvedTag) {
+  {
     // Randomize the base port so parallel/back-to-back verifies don't collide on a strict port.
     let port = 5300 + Math.floor(Math.random() * 400);
     const fixturesPath = existsSync(paths.fixturesFile(kebab)) ? paths.fixturesFile(kebab) : '';
@@ -124,12 +154,4 @@ export async function runIslandVerify(argv, name) {
       report.skip('audit', 'responsive + a11y not run — they are the `--audit` gate (before integrating, and in CI)');
     }
   }
-
-  return {
-    kebab,
-    tag: resolvedTag,
-    report,
-    errors: report.findings.filter((f) => f.level === 'error'),
-    warns: report.findings.filter((f) => f.level === 'warn'),
-  };
 }

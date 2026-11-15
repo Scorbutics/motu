@@ -1,7 +1,9 @@
 // An island's runtime checks: the harness, the browser lane, scenarios, viewports, axe.
 // Split out of commands/verify.mjs; verify.mjs re-exports the public surface.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { loadMotuConfig } from '../../lib/config.mjs';
+import { evidenceFingerprint } from '../../lib/fingerprint.mjs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SyntaxKind } from 'ts-morph';
@@ -106,7 +108,53 @@ export async function runtimeCheckFast(report, tag, fixturesPath, fit) {
  * resolves the island's assets); `--fast` uses the in-process happy-dom harness. Silent when fewer than
  * two scenarios are declared.
  */
+/**
+ * READ ONCE. Each read is a node + tsx boot (~1s), and one run used to read the same file up to four
+ * times per region (render-coverage, writes-covered, the flow lane, the what-if chart) and twice per
+ * island. Within a process the answer is memoised by the file's own mtime; across runs it is kept on
+ * disk against the evidence file's GRAPH fingerprint when one has been computed (lib/fingerprint.mjs)
+ * — a shared fixture module changing re-reads every file that imports it, and nothing else.
+ */
+const scenarioMemo = new Map();
+const SCENARIO_CACHE = resolve(loadMotuConfig().cacheDir, 'scenarios');
+
 export function readScenarios(fixturesPath) {
+  let mtime = 0;
+  try {
+    mtime = statSync(fixturesPath).mtimeMs;
+  } catch {
+    /* missing: the harness says so */
+  }
+  const memoKey = `${fixturesPath}:${mtime}`;
+  // A COPY each time: the answer is shared now, and a caller that mutates a step must not leak it
+  // into the next reader.
+  if (scenarioMemo.has(memoKey)) return structuredClone(scenarioMemo.get(memoKey));
+  const fp = evidenceFingerprint(fixturesPath);
+  const diskFile = fp ? resolve(SCENARIO_CACHE, `${fp}.json`) : null;
+  if (diskFile && existsSync(diskFile)) {
+    try {
+      const scenarios = parseEvidence(readFileSync(diskFile, 'utf8'))?.scenarios ?? [];
+      scenarioMemo.set(memoKey, scenarios);
+      return structuredClone(scenarios);
+    } catch {
+      /* unreadable: read it the slow way */
+    }
+  }
+  const { scenarios, line } = readScenariosUncached(fixturesPath);
+  scenarioMemo.set(memoKey, scenarios);
+  // Only a read that produced something is kept: an empty answer may be a harness that failed.
+  if (diskFile && line && scenarios.length) {
+    try {
+      mkdirSync(SCENARIO_CACHE, { recursive: true });
+      writeFileSync(diskFile, line);
+    } catch {
+      /* a read-only cache costs speed, never correctness */
+    }
+  }
+  return structuredClone(scenarios);
+}
+
+function readScenariosUncached(fixturesPath) {
   const args = ['--import', 'tsx', HARNESS, '', fixturesPath, 'native', 'scenarios'];
   // Node has to be able to resolve @motujs/* from the project's own files before it can load them.
   ensureNoInstallLinks(REPO_ROOT, MOTU_CHECKOUT);
@@ -116,12 +164,12 @@ export function readScenarios(fixturesPath) {
     // cwd is the CLI package so `--import tsx` resolves; MOTU_PROJECT_ROOT says which project to load.
     env: { ...process.env, MOTU_PROJECT_ROOT: REPO_ROOT },
   });
-  if (res.status !== 0) return [];
+  if (res.status !== 0) return { scenarios: [], line: null };
   const jsonLine = (res.stdout || '').trim().split('\n').filter(Boolean).pop();
   // parseEvidence, not JSON.parse: the harness marks Dates on the way out so they arrive as Dates
   // rather than ISO strings. Before that, any island formatting a date threw on mount and every
   // seeded scenario reported "rendered NOTHING" — see lib/evidence-json.mjs.
-  return parseEvidence(jsonLine)?.scenarios ?? [];
+  return { scenarios: parseEvidence(jsonLine)?.scenarios ?? [], line: jsonLine ?? null };
 }
 
 export async function runtimeDifferentiationCheck(report, tag, fixturesPath, port, fast) {

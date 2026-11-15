@@ -106,9 +106,20 @@ ${color.bold('removal-check flags:')}
   ${color.dim('an unchanged repo skips the application typecheck, which is nearly all of the cost.')}
 
 ${color.bold('check flags:')}
-  --runtime       also drive the lagoon in a browser (mount, data-flow, viewports, axe, live wiring)
+  --region <id,…>   drive THESE regions (+ their islands) in the browser; static for the rest
+  --island <name,…> drive these islands in the browser; static for the rest
+  --runtime       drive EVERY island and region in the browser — the scheduled CI's run, not the loop
+  --audit         add responsive + a11y (implies the runtime pass; combines with --region/--island)
+  --fast          no browser: islands under happy-dom, region runtime skipped and said
+  --changed [base]  only what git says this branch touched — widens to everything, loudly
+  --jobs <n|auto> lanes for the browser pass: each its own lagoon + browser (default auto: half the
+                  cores, at most 4, memory permitting — one lane when there are few targets to drive)
+  --no-cache      re-drive every runtime target, even one whose inputs did not change
+  --max-age <n>   re-drive a stored verdict older than n (30m, 12h, 7d)
   --verbose       name each runtime step as it runs, with what it cost
   --json          machine-readable verdict: islands, regions, removal
+  ${color.dim('a runtime verdict that held is replayed while its inputs (import graph, framework, browser, flags)')}
+  ${color.dim('are unchanged, and says so; errors and inconclusives always re-run.')}
   ${color.dim('motu check runs MOTU\'s gates only. Your typecheck/linter are yours: `<host build> && motu check`.')}
 
 ${color.bold('verify flags:')}

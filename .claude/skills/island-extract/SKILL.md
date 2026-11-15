@@ -15,8 +15,9 @@ Which judgement that is depends on Step 0, and getting it wrong is the one mista
 that no check will catch — a forked component drifts silently, and a rewritten one is a second copy
 nobody diffs.
 
-Iterate with `--fast` (happy-dom, no browser); spend the browser once at the end with `--runtime`, and
-`--audit` before integrating. See "Which level, when" in `island-create.agent.md`.
+Iterate with `--fast` (happy-dom, no browser); spend the browser once at the end, SCOPED to the island
+you extracted and its region (`motu check --island <name> --region <id>`), and `--audit` on the same
+scope before integrating. The whole-project `motu check --runtime` is the scheduled CI's. See "Which level, when" in `island-create.agent.md`.
 
 Read `README.md` first (the loop), then `docs/01-concepts.md` (terminology) and `docs/15-design-and-limits.md` (non-goals, limits).
 Do **not** invent rules — the authoritative, mechanical rule set is whatever `motu island verify`

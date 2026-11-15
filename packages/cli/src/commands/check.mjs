@@ -21,13 +21,20 @@ import { color, paths, hostStrictBoundaries } from '../lib/util.mjs';
 import { listIslands } from '../lib/islands.mjs';
 import { changedScope } from '../lib/changed.mjs';
 import { profiledMs, runIslandVerify, runArchipelagoVerify, summaryOf, printSweep, sweepExitCode } from './verify.mjs';
-import { ejectedEntryGaps } from '../lib/lagoon-materialize.mjs';
+import { ejectedEntryGaps, resolveLagoonRoot } from '../lib/lagoon-materialize.mjs';
 import { runRemovalCheck } from './removal-check.mjs';
 import { contractsDrift } from '../lib/contracts.mjs';
 import { renderCoverageModule, COVERAGE_MODULE } from '../lib/archipelagos.mjs';
 import { integrationResults } from './integration.mjs';
 import { unchangedSinceLastRun } from '../lib/finding-memory.mjs';
 import { names, islandComponentPath, islandComponentExport } from '../lib/util.mjs';
+import { readRegions } from '../lib/eject.mjs';
+import { loadMotuConfig } from '../lib/config.mjs';
+import { projectFingerprints } from '../lib/fingerprint.mjs';
+import { runtimeMode } from './verify/island.mjs';
+import { readScenariosFor } from './verify/region-flows.mjs';
+import { laneCount, runOnWorkers, workerMain } from '../lib/check-workers.mjs';
+import { cachePolicy, lookupVerdict } from '../lib/verdict-cache.mjs';
 
 /** Is `contracts.generated.ts` what the components say it should be? */
 function islands0Drift() {
@@ -65,14 +72,33 @@ function coverageDrift() {
 }
 
 export async function checkCommand(argv) {
+  // A LANE of a parallel runtime sweep — driven over IPC by the parent (lib/check-workers.mjs).
+  if (argv.worker) return workerMain();
   const startedAt = Date.now();
   // `--runtime` opts IN, the same way it does for a single `verify` — the sub-checks read the flag
   // directly, so this only has to pass it through.
-  const runtime = argv.runtime === true;
+  // SCOPED RUNTIME: `--region <id>[,<id>]` and `--island <name>[,<name>]` drive the browser for what
+  // they name — a region brings its member islands — and keep the STATIC checks over everything. The
+  // full `--runtime` sweep belongs to CI; the scoped one is what you run on the region you just built.
+  const scope = runtimeScope(argv);
+  if (scope?.unknown.length) {
+    console.error(
+      color.red(`motu check: no such ${scope.unknown.map((u) => `${u.kind} "${u.id}"`).join(', ')}`) +
+        color.dim(` — regions: ${scope.allRegions.join(', ') || '(none)'}`),
+    );
+    process.exit(2);
+  }
   // `--audit` implies `--runtime`: asking whether the UI is usable at every viewport, for everyone,
-  // only means anything against something that rendered.
+  // only means anything against something that rendered. A scope implies it too.
   const audit = argv.audit === true;
+  const runtime = argv.runtime === true || Boolean(scope);
   const sub = { ...argv, runtime: runtime || audit, audit, fast: argv.fast };
+  const staticOnly = { ...argv, runtime: false, audit: false };
+  const inScope = (kind, id) => !scope || scope[kind].has(id);
+
+  // ONE graph pass for the whole run (~2s on 80 islands + 24 regions): every runtime verdict is keyed
+  // on it, and so is every evidence read — which is what makes the static sweep cheap on a warm tree.
+  await projectFingerprints({ mode: runtimeMode(sub) }).catch(() => null);
 
   // The generated half, first and cheaply: every island's contract is READ from its component, so the
   // only way it can be wrong is by being stale. One comparison answers that for the whole project.
@@ -83,14 +109,11 @@ export async function checkCommand(argv) {
   // `--changed`: verify what this branch touched. Widens back to everything the moment a change
   // cannot be attributed to one island or region, and says so — a run that is fast because it skipped
   // your change is worse than a slow one.
-  const scope = argv.changed ? changedScope(typeof argv.changed === 'string' ? argv.changed : undefined) : null;
-  if (scope && !scope.scoped) {
-    console.log(color.dim(`  --changed: running everything — ${scope.reason}`));
+  const changed = argv.changed ? changedScope(typeof argv.changed === 'string' ? argv.changed : undefined) : null;
+  if (changed && !changed.scoped) {
+    console.log(color.dim(`  --changed: running everything — ${changed.reason}`));
   }
-  const islands = scope?.scoped ? allIslands.filter((i) => scope.islands.includes(i.kebab)) : allIslands;
-
-  const islandResults = [];
-  for (const island of islands) islandResults.push(await runIslandVerify(sub, island.kebab));
+  const islands = changed?.scoped ? allIslands.filter((i) => changed.islands.includes(i.kebab)) : allIslands;
 
   const regionIds = existsSync(paths.archipelagosDir)
     ? readdirSync(paths.archipelagosDir, { withFileTypes: true })
@@ -98,15 +121,31 @@ export async function checkCommand(argv) {
         .map((e) => e.name)
     : [];
   // A touched ISLAND is a touched region too: its contract is what the region declares against.
-  const regionsToRun = scope?.scoped ? regionIds.filter((id) => scope.regions.includes(id)) : regionIds;
-  const regionResults = [];
-  for (const id of regionsToRun) regionResults.push(await runArchipelagoVerify(sub, id));
+  const regionsToRun = changed?.scoped ? regionIds.filter((id) => changed.regions.includes(id)) : regionIds;
 
-  if (scope?.scoped) {
+  // THE PLAN, then the run. Every target that will actually DRIVE a browser — runtime asked for, and
+  // no clean verdict to replay — can go to a lane of its own (lib/check-workers.mjs); static ones and
+  // replays are milliseconds and stay here. Results come back in the order the plan lists them.
+  const plan = [
+    ...islands.map((i) => ({ kind: 'island', id: i.kebab, argv: inScope('islands', i.kebab) ? sub : staticOnly })),
+    ...regionsToRun.map((id) => ({ kind: 'region', id, argv: inScope('regions', id) ? sub : staticOnly })),
+  ];
+  const drives = await drivingTasks(plan);
+  const lanes = laneCount(argv, drives.length);
+  const remote = lanes > 1 ? await laneResults(drives, lanes, argv) : new Map();
+  const islandResults = [];
+  const regionResults = [];
+  for (const t of plan) {
+    const r =
+      remote.get(`${t.kind}:${t.id}`) ??
+      (t.kind === 'island' ? await runIslandVerify(t.argv, t.id) : await runArchipelagoVerify(t.argv, t.id));
+    (t.kind === 'island' ? islandResults : regionResults).push(r);
+  }
+  if (changed?.scoped) {
     console.log(
       color.dim(
         `  --changed: ${islands.length}/${allIslands.length} island(s), ` +
-          `${regionsToRun.length}/${regionIds.length} region(s) — from ${scope.files} changed file(s)`,
+          `${regionsToRun.length}/${regionIds.length} region(s) — from ${changed.files} changed file(s)`,
       ),
     );
     // NOTHING CHECKED IS NOT A PASS. `--changed` with no changes verified zero islands and printed
@@ -153,7 +192,8 @@ export async function checkCommand(argv) {
   const screens = screenFindings();
   // AT RUNTIME, the screens are opened too: the app's own layout makes calls no region's flow does
   // (Peps' badge counts and feature grants), and screen flows click its links and navigate.
-  if (screens && (runtime || audit)) screens.findings.push(...((await screenRuntimeFindings()) ?? []));
+  // Project-wide, so not part of a scoped run — which says so below.
+  if (screens && (runtime || audit) && !scope) screens.findings.push(...((await screenRuntimeFindings()) ?? []));
   const screensOk = !screens || screens.findings.every((f) => f.level !== 'error');
   // WORLDS: every name resolves, every world has a caller, nothing pins a source's key. Null (and not
   // printed) when the project declares none.
@@ -186,6 +226,8 @@ export async function checkCommand(argv) {
         {
           pass,
           runtime,
+          runtimeScope: scope ? { regions: [...scope.regions], islands: [...scope.islands] } : null,
+          replayed: runtimeTally(islandResults, regionResults).replayed,
           contracts: drift,
           islands: islandResults.map(summaryOf),
           archipelagos: regionResults.map(summaryOf),
@@ -317,6 +359,14 @@ export async function checkCommand(argv) {
       ),
     );
   }
+  // WHAT THE RUNTIME HALF ACTUALLY DID, on the line before the verdict — scoped, replayed or re-proved.
+  if (runtime || audit) {
+    const t = runtimeTally(islandResults, regionResults);
+    const parts = [`${t.proved} re-proved`, `${t.replayed} replayed (inputs unchanged)`];
+    if (scope) parts.push(`${t.staticOnly} static only (outside --region/--island)`);
+    console.log(color.dim(`  runtime: ${parts.join(' · ')}${t.replayed ? ' — --no-cache re-proves all' : ''}`));
+    if (scope) console.log(color.dim('  scoped: the full runtime sweep is CI\'s (`motu check --runtime`); screens were not opened'));
+  }
   console.log(
     pass && unrun
       ? color.yellow(color.bold('INCONCLUSIVE')) +
@@ -352,4 +402,83 @@ export async function checkCommand(argv) {
   const live = readLiveUrl();
   console.log(live ? color.dim('  look at it: ') + live : color.dim('  no live lagoon — start one with: motu lagoon serve --watch --detach'));
   process.exit(exitCode);
+}
+
+/**
+ * The targets of `plan` that will drive a browser: runtime asked for, and no clean verdict to replay.
+ * Each carries a rough COST so the lanes start on the long ones — a region's lane is its flows times
+ * the islands null-island replays them against; an island is one unit.
+ */
+async function drivingTasks(plan) {
+  const out = [];
+  for (const t of plan) {
+    if (!(t.argv.runtime || t.argv.audit)) continue;
+    if (t.kind === 'region' && t.argv.fast) continue; // --fast skips every region runtime check
+    const mode = runtimeMode(t.argv);
+    const fps = await projectFingerprints({ mode });
+    const fp = t.kind === 'island' ? fps.island(t.id) : fps.region(t.id);
+    if (lookupVerdict(`${t.kind}-${mode}`, t.id, fp?.fp, cachePolicy(t.argv))) continue;
+    let cost = 1;
+    if (t.kind === 'region') {
+      const region = readRegions(paths.archipelagosDir).find((r) => r.id === t.id);
+      cost = 5 + readScenariosFor(t.id).length * ((region?.islands?.length ?? 0) + 1);
+    }
+    out.push({ ...t, cost });
+  }
+  return out;
+}
+
+/** Run the driving targets on `lanes` workers, after materialising the lagoon once, here. */
+async function laneResults(drives, lanes, argv) {
+  // One writer for the generated lagoon entry: every lane would otherwise race to render it.
+  resolveLagoonRoot(loadMotuConfig());
+  if (!argv.json) console.log(color.dim(`  runtime: ${drives.length} target(s) to drive, on ${lanes} lanes (--jobs 1 for one)`));
+  return runOnWorkers(drives, lanes, { verbose: Boolean(argv.verbose) });
+}
+
+/** How many runtime verdicts were driven, replayed, or not asked for. */
+function runtimeTally(islandResults, regionResults) {
+  const all = [...islandResults, ...regionResults];
+  const replayed = all.filter((r) => r.cached).length;
+  const proved = all.filter((r) => r.runtimeRan && !r.cached).length;
+  return { replayed, proved, staticOnly: all.length - replayed - proved };
+}
+
+/**
+ * `--region a,b --island x`: which runtime targets a scoped run drives. Null when none is named.
+ * A region brings its member islands, because a region's picture is its members composed.
+ */
+export function runtimeScope(argv) {
+  const list = (v) => (typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : []);
+  const wantRegions = list(argv.region);
+  const wantIslands = list(argv.island);
+  if (!wantRegions.length && !wantIslands.length) {
+    if (argv.region === true || argv.island === true) {
+      console.error(color.red('motu check: --region / --island need a name (comma-separated for several)'));
+      process.exit(2);
+    }
+    return null;
+  }
+  const all = readRegions(paths.archipelagosDir);
+  const kebabs = listIslands(paths.islandsDir).map((i) => i.kebab);
+  const unknown = [];
+  const regions = new Set();
+  const islands = new Set();
+  for (const id of wantRegions) {
+    const r = all.find((x) => x.id === id);
+    if (!r) {
+      unknown.push({ kind: 'region', id });
+      continue;
+    }
+    regions.add(id);
+    for (const i of r.islands ?? []) {
+      const k = kebabs.find((kb) => names(kb).tag === i.element);
+      if (k) islands.add(k);
+    }
+  }
+  for (const k of wantIslands) {
+    if (kebabs.includes(k)) islands.add(k);
+    else unknown.push({ kind: 'island', id: k });
+  }
+  return { regions, islands, unknown, allRegions: all.map((r) => r.id) };
 }

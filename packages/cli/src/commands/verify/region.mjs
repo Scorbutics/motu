@@ -14,6 +14,9 @@ import { catalogueCheck, flowProvideCheck, regionFlowCheck, renderCoverageCheck,
 import { channelSourceCheck, dockCheck, exclusiveCheck, regionAuditCheck, regionRefCheck } from './region-sources.mjs';
 import { environmentalCause, makeReport, printReport, printSweep, setProgressScope, setVerbose, step, summaryOf, sweepExitCode, verifyExitCode } from './report.mjs';
 import { CHROMIUM_INSTALL } from '../../lib/framework.mjs';
+import { projectFingerprints } from '../../lib/fingerprint.mjs';
+import { cachePolicy, withVerdictCache } from '../../lib/verdict-cache.mjs';
+import { runtimeMode } from './island.mjs';
 
 export async function archipelagoVerifyCommand(argv) {
   const id = argv._[0];
@@ -51,6 +54,7 @@ export async function runArchipelagoVerify(argv, id) {
   setVerbose(argv?.verbose);
   setProgressScope(id);
   const report = makeReport();
+  let cache = null;
   const hasLayout = archipelagoConfigChecks(report, id);
   // Static, and project-wide in what it reads: a cycle is a property of the graph, not of one file.
   if (existsSync(paths.archipelagoFile(id))) regionRefCheck(report, id);
@@ -93,6 +97,29 @@ export async function runArchipelagoVerify(argv, id) {
       'flows, mutation and the region render need a browser — re-run without --fast before handing over',
     );
   } else if (argv.runtime === true || argv.audit === true) {
+    // AN UNCHANGED REGION IS NOT RE-DRIVEN — its flows, mutants and renders are a function of its
+    // graph, its islands' graphs, the regions it docks with, the framework, the browser and the flags
+    // (lib/fingerprint.mjs). A clean verdict for the same fingerprint is replayed, marked.
+    const fps = await projectFingerprints({ mode: runtimeMode(argv) });
+    cache = await withVerdictCache(
+      { kind: `region-${runtimeMode(argv)}`, id, report, fingerprint: fps.region(id), policy: cachePolicy(argv) },
+      () => regionRuntime(argv, report, id, region, hasLayout),
+    );
+  }
+
+  return {
+    kebab: id,
+    report,
+    cached: cache?.cached ?? null,
+    runtimeRan: cache !== null,
+    errors: report.findings.filter((f) => f.level === 'error'),
+    warns: report.findings.filter((f) => f.level === 'warn'),
+  };
+}
+
+/** The region's browser checks: wiring, flows + mutants, docks, the composed render, the page. */
+async function regionRuntime(argv, report, id, region, hasLayout) {
+  {
     reportBrowserOverride(report);
     // FIRST, before anything that drives the mountpoints view. The lane reuses one page and a warm
     // re-aim keeps whatever view it already had, so running this after the wiring probe measured a
@@ -251,13 +278,6 @@ export async function runArchipelagoVerify(argv, id) {
       }
     }
   }
-
-  return {
-    kebab: id,
-    report,
-    errors: report.findings.filter((f) => f.level === 'error'),
-    warns: report.findings.filter((f) => f.level === 'warn'),
-  };
 }
 
 /**

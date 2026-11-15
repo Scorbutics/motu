@@ -22,7 +22,7 @@ import { rootSlots, regionRefsDeclared, docksDeclared } from '../lib/lagoon-decl
 import { dockGraphOnDisk, dockRootFindings } from '../lib/docks.mjs';
 import { composePath } from '@motujs/core';
 import { slotNameOfElement } from '../lib/island-placement.mjs';
-import { sourceFileAt } from '../lib/ts-project.mjs';
+import { descendantsOfKind, sourceFileAt } from '../lib/ts-project.mjs';
 import { hostSourceFiles, describeSources } from '../lib/host-sources.mjs';
 import { loadMotuConfig } from '../lib/config.mjs';
 
@@ -54,7 +54,7 @@ export function channelSourceIds(file, regionId) {
   }
   const wanted = archConst(regionId);
   const ids = [];
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+  for (const call of descendantsOfKind(sf, SyntaxKind.CallExpression)) {
     if (call.getExpression().getText() !== 'channelFrom') continue;
     const spec = call.getArguments()[0];
     if (spec?.getKind() !== SyntaxKind.ObjectLiteralExpression) continue;
@@ -106,7 +106,17 @@ export function hostSources() {
 }
 
 /** Comments blanked, so a commented-out `<X.Island>` never counts as a placement. */
-const code = blankComments;
+// Memoised by text: every region asks it of every host file, and the files do not change mid-run
+// (a changed file is a different string, so a long-running caller still sees the edit).
+const blanked = new Map();
+const code = (text) => {
+  let out = blanked.get(text);
+  if (out === undefined) {
+    out = blankComments(text);
+    blanked.set(text, out);
+  }
+  return out;
+};
 
 /** Every store key an island produces (the `writes` values, both shapes). */
 /** Where a JSX opening tag ends, from its `<` — so an attribute scan stops at the element it is on. */
@@ -500,8 +510,8 @@ function checkRegion(region, sources) {
       continue;
     }
     const elements = [
-      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
-      ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+      ...descendantsOfKind(sf, SyntaxKind.JsxSelfClosingElement),
+      ...descendantsOfKind(sf, SyntaxKind.JsxOpeningElement),
     ];
     for (const el of elements) {
       const tag = el.getTagNameNode().getText();
@@ -1007,8 +1017,8 @@ function elementProps(sources, binding) {
       continue;
     }
     const opens = [
-      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
-      ...sf.getDescendantsOfKind(SyntaxKind.JsxElement).map((e) => e.getOpeningElement?.()).filter(Boolean),
+      ...descendantsOfKind(sf, SyntaxKind.JsxSelfClosingElement),
+      ...descendantsOfKind(sf, SyntaxKind.JsxElement).map((e) => e.getOpeningElement?.()).filter(Boolean),
     ];
     for (const open of opens) {
       if (open.getTagNameNode?.().getText() !== `${binding}.Island`) continue;
@@ -1073,7 +1083,7 @@ function passedProps(sources, islandNames, code, rootSlots) {
     } catch {
       continue;
     }
-    for (const el of sf.getDescendantsOfKind(SyntaxKind.JsxElement)) {
+    for (const el of descendantsOfKind(sf, SyntaxKind.JsxElement)) {
       const open = el.getOpeningElement?.();
       if (!islandNames.includes(open?.getTagNameNode?.().getText())) continue;
       const slot = open
@@ -1104,8 +1114,8 @@ function passedProps(sources, islandNames, code, rootSlots) {
     // the `<X.Island>` form reported two of the actions region's keys as never established the moment
     // that page stopped writing slots, when the page was passing them exactly as before.
     for (const el of [
-      ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
-      ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+      ...descendantsOfKind(sf, SyntaxKind.JsxSelfClosingElement),
+      ...descendantsOfKind(sf, SyntaxKind.JsxOpeningElement),
     ]) {
       if (el.getTagNameNode?.().getText().split('.').pop() !== 'Root') continue;
       for (const attr of el.getAttributes?.() ?? []) {
@@ -1165,7 +1175,7 @@ export function conditionallyPlaced(sources, islandNames, code) {
       continue; // unparseable here is not a finding — `placed` already read it as text
     }
     for (const kind of [SyntaxKind.JsxOpeningElement, SyntaxKind.JsxSelfClosingElement]) {
-      for (const el of sf.getDescendantsOfKind(kind)) {
+      for (const el of descendantsOfKind(sf, kind)) {
         if (!islandNames.includes(el.getTagNameNode?.().getText())) continue;
         // `getName()` is not the accessor here — on a JsxAttribute the name is a node, and reading it
         // the wrong way returned undefined for EVERY element, so the whole check silently found

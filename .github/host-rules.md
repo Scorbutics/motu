@@ -31,8 +31,9 @@ Evidence
 
 Checks
 - Before saying UI work is done: the host's own typecheck and tests (motu checks neither), `motu check`,
-  then `motu integrate check`. Runtime checks are a punctual gate: name the region you touched
-  (`motu archipelago verify <id> --runtime`); `motu check --runtime` once, before handing over.
+  then `motu integrate check`. The browser pass is SCOPED and only for UI you added or reshaped (a new
+  region, island or part of a screen): `motu check --region <id>` / `--island <name>`. Never run the
+  whole-project `motu check --runtime` — that is the scheduled CI's job.
 - Exit codes: 0 holds · 1 contradicted → repair · 2 could not run → retry, do NOT repair. A check that
   examined nothing has not passed.
 - Several agents on one region: you own ONE slot; do not repair shared infrastructure (report exit 2);

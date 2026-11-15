@@ -1045,12 +1045,18 @@ it is meant to run on every change. It runs **motu's** gates only: your typechec
 composed as `<host build> && motu check` (`commands/check.mjs:1-13`).
 
 ```console
-motu check [--runtime] [--audit] [--fast] [--changed [base]] [--verbose] [--json]
+motu check [--runtime | --region <id,…> | --island <name,…>] [--audit] [--fast] [--changed [base]]
+           [--jobs <n|auto>] [--no-cache] [--max-age <n>(m|h|d)] [--verbose] [--json]
 ```
 
 | Flag | Meaning | Default |
 | --- | --- | --- |
-| `--runtime` | Add the lagoon lane to every island and region | off (`:65`) |
+| `--runtime` | Add the lagoon lane to every island and region — the whole project, so the scheduled CI's run | off |
+| `--region <id,…>` | Runtime for THESE regions and their member islands; static for everything else, in one verdict. Implies the runtime pass for them; combines with `--audit` / `--fast` | off |
+| `--island <name,…>` | Runtime for these islands; static for everything else | off |
+| `--jobs <n\|auto>` | Lanes for the browser pass. Each lane is a worker process with its own lagoon and browser, pulling targets most-expensive first; the parent prints, orders and judges exactly as one lane does. `auto` (the default) is half the cores, at most 4, bounded by memory, and one lane when fewer than 6 targets need driving. On Peps, 4 regions + 31 islands: 410s on one lane, 177s on four, identical verdicts | auto |
+| `--no-cache` | Re-drive every runtime target, even one whose inputs are unchanged since a run that held | cache on |
+| `--max-age <n>` | Re-drive a target whose stored verdict is older than this (`30m`, `12h`, `7d`; a bare number is hours) | no limit |
 | `--audit` | Implies `--runtime`, and adds `responsive` + `a11y` per island plus the composed-page audit (`:68`) | off |
 | `--fast` | No browser: islands mount under happy-dom, region runtime checks are skipped and said (`:69`) | off |
 | `--changed [base]` | Narrow to what this branch touched; widens back to everything, loudly, when a file maps to no island or region (`:80-84`, `lib/changed.mjs:73-113`) | off |
@@ -1070,13 +1076,27 @@ structure checks held, because that one rewrites the host on disk and costs a fu
 (`:122-135`). It also audits `noUncheckedIndexedAccess` in the host's tsconfig, as a warning it never
 enforces (`:159-176`).
 
-**Exit** — `2` when `--changed` narrowed to nothing (`NOTHING TO CHECK`: a run that examined nothing has
+**Replayed runtime verdicts.** Every runtime verdict that held — no error, no inconclusive — is stored in
+`.motu/cache/verdicts/` against a fingerprint of everything it depends on (`lib/fingerprint.mjs`): the
+target's import graph as the lagoon resolves it (the app's own files it reaches, a region's member
+islands, the regions it docks with, the versions of the packages it imports), the framework, the
+browser, `lagoon.config.json` minus its labels, `motu.config.json`, the style configs, every `MOTU_*`
+variable and the tier (`--fast` / `--runtime` / `--audit`). A target whose fingerprint matches is
+replayed instead of re-driven, and says so on its line (`· runtime replayed — inputs unchanged since
+proved 3h ago`); the verdict line counts what was re-proved, replayed and left static. A graph that
+reads the clock or a random source is keyed on the date as well, so it is re-proved daily; a graph
+with an import no static reader can follow (`import.meta.glob`, a computed `import()`) is never cached.
+The fingerprint pass costs ~2s on an 80-island, 24-region project. Evidence reads (`*.evidence.ts`,
+a tsx boot each) are cached the same way in `.motu/cache/scenarios/`.
+
+**Exit** — `2` when `--region` / `--island` names something that does not exist, or when `--changed` narrowed to nothing (`NOTHING TO CHECK`: a run that examined nothing has
 not passed, `:106-116`); otherwise `1` on failure, `0` on pass.
 
 ```console
 motu check
-motu check --runtime --fast --changed
-motu check --audit --json
+motu check --region login                 # login in the browser + its islands; the rest static
+motu check --island login-form,login-error --audit
+motu check --runtime --max-age 7d --json  # the scheduled CI
 ```
 
 What it prints — five sections, each answering a different question. Real output from this
@@ -1238,12 +1258,12 @@ a 20-island / 3-region one).
 
 | Situation | Command | Cost | What it answers |
 | --- | --- | --- | --- |
-| Every change | `motu check` | 1.4s | Has anything drifted from what it declares? |
-| Working on one island | `motu island verify <n> --runtime` | ~15s | Does this island still mount, differentiate and wire? |
-| Working on one region | `motu archipelago verify <id> --runtime` | ~25s | Do this region's flows still end as declared? |
-| Iterating, browser-free | `motu check --runtime --fast` | 44.0s (5.9s with `--changed`) | Everything a happy-dom mount can answer. |
-| Before handing work over | `motu check --runtime` | 103.5s | Does the whole project still work? |
-| Before integrating, and in CI | `motu check --audit` | + responsive/a11y | Is it usable — at every viewport, for everyone? |
+| Every change, and closing a task | `motu check` | 1.4s (~45s on 80 islands / 23 regions) | Has anything drifted from what it declares? |
+| Added or reshaped an island | `motu check --island <n>` | ~15s | Does this island still mount, differentiate and wire? |
+| Added or reshaped a region / part of a screen | `motu check --region <id>` | ~25s | Do this region's flows still end as declared? |
+| Iterating, browser-free | `motu check --fast --region <id>` | seconds | Everything a happy-dom mount can answer. |
+| Scheduled CI (nightly) | `motu check --runtime` | minutes (~26 min on 80 islands / 23 regions, cold) | Does the whole project still work? Unchanged targets replay. |
+| Scheduled CI, and before integrating a region | `motu check --audit` (`--region <id>`) | + responsive/a11y | Is it usable — at every viewport, for everyone? |
 | Before handing work over | `motu island snapshot --all --remote` | 89s | Did any island move? |
 | Before handing work over | `motu archipelago snapshot --all --remote` | 18s | Did the composed page move? |
 | Before saying an integration is done | `motu integrate check <id>` | static | Does the **host** compose, place and read the region? |

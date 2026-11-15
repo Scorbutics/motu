@@ -30,7 +30,43 @@ import { readGeneratedContracts } from './contracts.mjs';
  * Parsed from source rather than imported: the config is TypeScript with app imports, and eject runs
  * in node with no bundler. Only literal shapes are read — anything computed is reported, not guessed.
  */
+/**
+ * READ ONCE PER CHANGE. Every check asks for the regions — a static `motu check` on Peps called this
+ * ~1,000 times, re-parsing all 24 archipelagos each time (~23s). The answer depends on the directory
+ * listing, each archipelago file, and the source modules `producesOf` reads; the memo is keyed on all
+ * of them (path + mtime + size), so a long-running watch still sees an edit. A copy is returned each
+ * time, because callers are free to mutate what they get.
+ */
+const regionsMemo = new Map();
+let producesDeps = null;
+const stamp = (f) => {
+  try {
+    const st = statSync(f);
+    return `${f}:${st.mtimeMs}:${st.size}`;
+  } catch {
+    return `${f}:-`;
+  }
+};
 export function readRegions(archipelagosDir) {
+  const listing = existsSync(archipelagosDir)
+    ? readdirSync(archipelagosDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => resolve(archipelagosDir, e.name, `${e.name}.archipelago.ts`))
+    : [];
+  const hit = regionsMemo.get(archipelagosDir);
+  const key = listing.map(stamp).join('|');
+  if (hit && hit.key === key && hit.deps.every((d) => stamp(d.file) === d.stamp)) return structuredClone(hit.regions);
+  producesDeps = new Set();
+  try {
+    const regions = readRegionsUncached(archipelagosDir);
+    regionsMemo.set(archipelagosDir, { key, deps: [...producesDeps].map((file) => ({ file, stamp: stamp(file) })), regions });
+    return structuredClone(regions);
+  } finally {
+    producesDeps = null;
+  }
+}
+
+function readRegionsUncached(archipelagosDir) {
   const regions = [];
   if (!existsSync(archipelagosDir)) return regions;
   for (const entry of readdirSync(archipelagosDir, { withFileTypes: true })) {
@@ -266,6 +302,7 @@ function resolveSourceFile(spec, fromFile) {
 /** The `produces: [...]` of a named export in a source module. */
 function producesOf(file, ident) {
   if (!file) return null;
+  producesDeps?.add(file);
   let text;
   try {
     text = readFileSync(file, 'utf8');

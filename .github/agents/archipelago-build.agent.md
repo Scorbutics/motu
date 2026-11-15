@@ -133,18 +133,19 @@ flow makes.
 
 ### Which level, when
 
-    motu check                              STATIC       every change
-    motu check --runtime --fast             NO BROWSER   the loop (~6s scoped, 44s whole)
+    motu check                              STATIC       every change — the gate you close on
+    motu check --fast --region <id>         NO BROWSER   the loop (islands under happy-dom)
     motu lagoon try <id> [step…]            EXPLORE      what a step moves, before you assert (~5s)
-    motu archipelago verify <id> --runtime  ONE REGION   the region you are building (~25s)
-    motu check --runtime                    EVERYTHING   once, before handing over (~104s)
-    motu check --audit                      layout + a11y — before integrating, and in CI
+    motu check --region <id>                ONE REGION   the region you built + its islands (~25s)
+    motu check --runtime                    EVERYTHING   the scheduled CI — NOT your step
+    motu check --audit --region <id>        layout + a11y of the region you built, before integrating
 
-Fan-out agents iterate on the first two. The browser is paid once, by you, at steps 4 and 5.
+Fan-out agents iterate on the first two. The browser is paid once, by you, at steps 4 and 5 — scoped.
 
-THE REGION YOU ARE BUILDING IS THE ONE YOU CHECK. `motu archipelago verify <id> --runtime` drives that
-region's flows, mutation and render; `motu check --runtime` drives every island in the repository to
-tell you the same thing. `--changed` reads like the answer and is not: it widens back to everything
+THE REGION YOU ARE BUILDING IS THE ONE YOU CHECK. `motu check --region <id>` drives that region's
+flows, mutation and render, its islands in the browser, and everything else statically; the
+whole-project `motu check --runtime` drives every island and region in the repository to tell you the
+same thing, and belongs to the scheduled CI. `--changed` reads like the answer and is not: it widens back to everything
 whenever a changed file belongs to no island or region, which a page, a source or a shared evidence
 module always does.
 

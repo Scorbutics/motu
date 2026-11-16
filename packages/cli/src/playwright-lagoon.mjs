@@ -1567,6 +1567,33 @@ export async function captureLagoon({ tag, port = 5199, scenarios = [], viewport
  * Overflow of the DOCUMENT, not of the region — the same signal the island check uses, for the same
  * reason: a card that scrolls its own table on purpose is fine, a page the reader has to pan is not.
  */
+/**
+ * WHAT A MOUNTED SLOT LOOKS LIKE, on every mount path. The React path stamps `[data-motu-slot]`; the
+ * custom-element path (an AngularJS ocean, `<motu-archipelago>`) renders `<motu-island>` markers and
+ * stamps nothing. Waiting on the React marker alone timed out silently on every element-path region,
+ * then measured anyway — 25s per state spent proving nothing.
+ */
+const MOUNTED_SLOT = '[data-motu-slot], motu-island';
+
+/**
+ * IS THE ISLAND STYLESHEET ON THE PAGE, whichever path put it there. Evaluated in the browser.
+ *   - React path:                 <style id="motu-island-styles">           (lagoon-bootstrap / gallery / screen)
+ *   - <motu-archipelago> light:   <style id="motu-arch-light-style">        (core/archipelago-element)
+ *   - a standalone light island:  <style data-motu-light>                   (core/island)
+ *   - shadow isolation:           a shadow root with an adopted sheet       (core/island, core/archipelago-element)
+ * Only the first was recognised, so every element-path region was reported as rendered unstyled —
+ * "could not run" over a page carrying 112KB of island CSS (demo-app, every nightly audit).
+ */
+function islandStylesPresent() {
+  if (document.getElementById('motu-island-styles')) return true;
+  const light = document.getElementById('motu-arch-light-style') ?? document.querySelector('style[data-motu-light]');
+  if (light && light.textContent && light.textContent.trim()) return true;
+  for (const el of document.querySelectorAll('*')) {
+    if (el.shadowRoot && el.shadowRoot.adoptedStyleSheets && el.shadowRoot.adoptedStyleSheets.length) return true;
+  }
+  return false;
+}
+
 export async function auditRegionLagoon({ id, port = 5199, states = [], viewports = [], a11y = true }) {
   const { chromium } = await import('playwright');
   const { createRequire } = await import('node:module');
@@ -1578,7 +1605,7 @@ export async function auditRegionLagoon({ id, port = 5199, states = [], viewport
     async (page) => {
       await page.waitForFunction(() => !!window.__motuLagoon, null, { timeout: 15000 }).catch(() => {});
       await page
-        .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 15000 })
+        .waitForFunction((sel) => document.querySelectorAll(sel).length > 0, MOUNTED_SLOT, { timeout: 15000 })
         .catch(() => {});
 
       const out = [];
@@ -1586,7 +1613,7 @@ export async function auditRegionLagoon({ id, port = 5199, states = [], viewport
       for (const state of list) {
         await page.evaluate(() => window.__motuLagoon?.remount?.()).catch(() => {});
         await page
-          .waitForFunction(() => document.querySelectorAll('[data-motu-slot]').length > 0, null, { timeout: 10000 })
+          .waitForFunction((sel) => document.querySelectorAll(sel).length > 0, MOUNTED_SLOT, { timeout: 10000 })
           .catch(() => {});
         await page.evaluate((seed) => {
           const l = window.__motuLagoon;
@@ -1597,23 +1624,23 @@ export async function auditRegionLagoon({ id, port = 5199, states = [], viewport
           await page.setViewportSize({ width: vp.width, height: 900 });
           // Two beats: one for the resize to land, one for anything that re-measures on it.
           await sleep(220);
-          const m = await page.evaluate(() => {
+          const styled = await page.evaluate(islandStylesPresent);
+          const m = await page.evaluate((sel) => {
             const doc = document.documentElement;
             return {
               overflow: doc.scrollWidth - doc.clientWidth,
               client: doc.clientWidth,
-              slots: document.querySelectorAll('[data-motu-slot]').length,
+              slots: document.querySelectorAll(sel).length,
               // What the region view actually put on the page, for when the measurement disagrees
               // with a human looking at the same URL.
               // The ARRANGEMENT's own element, by class — `body.firstElementChild` is a mount
               // container in both views and tells you nothing about which one you are in.
               frame: !!document.querySelector('.rv, [class*="Frame"], main, aside'),
               widest: Math.max(0, ...[...document.body.querySelectorAll('*')].map((e) => e.scrollWidth)),
-              styled: !!document.getElementById('motu-island-styles'),
               cols: getComputedStyle(document.querySelector('.rv-body') ?? document.body).gridTemplateColumns,
             };
-          });
-          out.push({ scenario: state.name ?? 'default', viewport: vp.name, width: vp.width, ...m });
+          }, MOUNTED_SLOT);
+          out.push({ scenario: state.name ?? 'default', viewport: vp.name, width: vp.width, ...m, styled });
         }
       }
 
